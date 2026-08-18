@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 #
 #   - Hop-by-hop (RFC 7230 §6.1): connection-scoped, must not be proxied.
 #   - Length / framing: reflecting client-controlled values enables HTTP
-#     request smuggling against downstream servers. httpx computes
+#     request smuggling against downstream servers. httpx2 computes
 #     Content-Length from the body anyway.
 #   - Identity / authority: forwarding these lets the operator impersonate
 #     the original requester or hijack downstream authentication, which is

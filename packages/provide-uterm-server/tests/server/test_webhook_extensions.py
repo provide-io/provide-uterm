@@ -9,7 +9,7 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
-from httpx import Response
+from httpx2 import Response
 from starlette.testclient import TestClient
 
 from provide.uterm.server.authorization import AuthorizationService, WebhookAuthorizationProvider
@@ -22,16 +22,16 @@ from provide.uterm.server.bridge.hub.ext import (
     WebhookTelemetrySink,
 )
 from provide.uterm.server.webhook_signing import verify_webhook_signature
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_policy_gate_allow() -> None:
     url = "https://fleet.example.com/policy"
     gate = WebhookPolicyGate(url=url, secret="shhh")
 
-    route = respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    route = http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
 
     ctx = PolicyContext(worker_id="w1", client_id="alice", role="admin", action="input")
     result = await gate.intercept_input("ls -la", ctx)
@@ -49,29 +49,29 @@ async def test_webhook_policy_gate_allow() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_policy_gate_deny_or_error() -> None:
     url = "https://fleet.example.com/policy"
     gate = WebhookPolicyGate(url=url)
 
     # Explicit deny
-    respx.post(url).mock(return_value=Response(200, json={"allow": False}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": False}))
     result = await gate.intercept_input("rm -rf /", PolicyContext(worker_id="w1"))
     assert result.action == "deny"
 
     # HTTP Error
-    respx.post(url).mock(return_value=Response(500))
+    http_mock.post(url).mock(return_value=Response(500))
     result = await gate.intercept_input("hello", PolicyContext(worker_id="w1"))
     assert result.action == "deny"
 
     # Exception (timeout/network)
-    respx.post(url).mock(side_effect=Exception("connection reset"))
+    http_mock.post(url).mock(side_effect=Exception("connection reset"))
     result = await gate.intercept_input("hello", PolicyContext(worker_id="w1"))
     assert result.action == "deny"
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_authz_provider_checks() -> None:
     url = "https://fleet.example.com/authz"
     provider = WebhookAuthorizationProvider(url=url)
@@ -87,40 +87,40 @@ async def test_webhook_authz_provider_checks() -> None:
     session.session_id = "sess1"
 
     # Test can_read_session
-    route1 = respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    route1 = http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
     assert await authz.can_read_session(principal, session) is True
     assert json.loads(route1.calls.last.request.content)["action"] == "session.read"
 
     # Test direct capability and owner checks
-    respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
     assert await provider.has_capability(principal, "session.read") is True
-    respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
     assert await provider.is_owner(principal, session) is True
 
     # Test can_mutate_session
-    route2 = respx.post(url).mock(return_value=Response(200, json={"allow": False}))
+    route2 = http_mock.post(url).mock(return_value=Response(200, json={"allow": False}))
     assert await authz.can_mutate_session(principal, session, "session.control.delete") is False
     assert json.loads(route2.calls.last.request.content)["action"] == "session.control.delete"
 
     # Test can_read_recording
-    respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
     assert await authz.can_read_recording(principal, session) is True
 
     # Test can_create_session
-    respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
     assert await authz.can_create_session(principal) is True
 
     # Test line 181 (status not 200)
-    respx.post(url).mock(return_value=Response(403))
+    http_mock.post(url).mock(return_value=Response(403))
     assert await authz.can_read_session(principal, session) is False
 
     # Test _check exception path
-    respx.post(url).mock(side_effect=Exception("fail"))
+    http_mock.post(url).mock(side_effect=Exception("fail"))
     assert await provider.can_create_session(principal) is False
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_authz_provider_sends_configured_secret_header() -> None:
     url = "https://fleet.example.com/authz"
     # This test asserts the *request* is signed with the secret; response-signature
@@ -137,7 +137,7 @@ async def test_webhook_authz_provider_sends_configured_secret_header() -> None:
     session = MagicMock()
     session.session_id = "sess1"
 
-    route = respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    route = http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
 
     assert await provider.can_read_session(principal, session) is True
     assert route.called
@@ -149,7 +149,7 @@ async def test_webhook_authz_provider_sends_configured_secret_header() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_authz_provider_profile_and_role() -> None:
     url = "https://fleet.example.com/authz"
     provider = WebhookAuthorizationProvider(url=url)
@@ -167,28 +167,28 @@ async def test_webhook_authz_provider_profile_and_role() -> None:
     session.session_id = "sess1"
 
     # can_read_profile
-    respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
     assert await provider.can_read_profile(principal, profile) is True
 
     # can_mutate_profile
-    respx.post(url).mock(return_value=Response(200, json={"allow": False}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": False}))
     assert await provider.can_mutate_profile(principal, profile) is False
 
     # resolve_browser_role
-    respx.post(url).mock(return_value=Response(200, json={"role": "operator"}))
+    http_mock.post(url).mock(return_value=Response(200, json={"role": "operator"}))
     assert await provider.resolve_browser_role(principal, session) == "operator"
 
     # resolve_browser_role fallback
-    respx.post(url).mock(return_value=Response(500))
+    http_mock.post(url).mock(return_value=Response(500))
     assert await provider.resolve_browser_role(principal, session) == "viewer"
 
     # resolve_browser_role exception path
-    respx.post(url).mock(side_effect=Exception("network error"))
+    http_mock.post(url).mock(side_effect=Exception("network error"))
     assert await provider.resolve_browser_role(principal, session) == "viewer"
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_authz_provider_capabilities() -> None:
     url = "https://fleet.example.com/authz"
     provider = WebhookAuthorizationProvider(url=url)
@@ -197,28 +197,28 @@ async def test_webhook_authz_provider_capabilities() -> None:
     principal.subject_id = "alice"
 
     # Success
-    respx.post(url).mock(return_value=Response(200, json={"capabilities": ["session.read", "test"]}))
+    http_mock.post(url).mock(return_value=Response(200, json={"capabilities": ["session.read", "test"]}))
     caps = await provider.capabilities_for(principal)
     assert "session.read" in caps
     assert "test" in caps
 
     # Error fallback (e.g. 404)
-    respx.post(url).mock(return_value=Response(404))
+    http_mock.post(url).mock(return_value=Response(404))
     assert await provider.capabilities_for(principal) == frozenset()
 
     # Exception path
-    respx.post(url).mock(side_effect=Exception("fail"))
+    http_mock.post(url).mock(side_effect=Exception("fail"))
     assert await provider.capabilities_for(principal) == frozenset()
 
 
 # ---------------------------------------------------------------------------
-# Perf fix: WebhookAuthorizationProvider reuses ONE httpx.AsyncClient across
+# Perf fix: WebhookAuthorizationProvider reuses ONE httpx2.AsyncClient across
 # calls (keep-alive / connection pooling) instead of opening one per request.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_authz_provider_reuses_single_client() -> None:
     """All three webhook paths must share the one client built in __init__,
     so HTTP keep-alive / connection pooling is preserved across calls."""
@@ -238,10 +238,10 @@ async def test_webhook_authz_provider_reuses_single_client() -> None:
     client = provider._client
     assert client is not None
 
-    respx.post(url).mock(return_value=Response(200, json={"allow": True, "capabilities": ["session.read"]}))
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": True, "capabilities": ["session.read"]}))
 
     # Drive every method that performs a POST and assert each used the *same*
-    # client object — i.e. no per-call ``async with httpx.AsyncClient(...)``.
+    # client object — i.e. no per-call ``async with httpx2.AsyncClient(...)``.
     await provider._check(principal, "session.read")
     assert provider._client is client
     await provider.capabilities_for(principal)
@@ -253,7 +253,7 @@ async def test_webhook_authz_provider_reuses_single_client() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_authz_provider_aclose_closes_client() -> None:
     """aclose() must close the shared client so the connection pool is released."""
     url = "https://fleet.example.com/authz"
@@ -265,7 +265,7 @@ async def test_webhook_authz_provider_aclose_closes_client() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_authz_service_aclose_forwards_to_provider() -> None:
     """AuthorizationService.aclose() must forward to a provider that defines it,
     so the FastAPI lifespan releases the webhook connection pool on shutdown."""
@@ -289,7 +289,7 @@ async def test_authz_service_aclose_noop_without_provider_aclose() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_node_registry_heartbeat_logic() -> None:
     from provide.uterm.server.app import create_server_app
     from provide.uterm.server.config import default_server_config
@@ -299,7 +299,7 @@ async def test_node_registry_heartbeat_logic() -> None:
     config.governance.registry_webhook_url = url
     config.governance.registry_webhook_interval_s = 0.01  # Fast!
 
-    route = respx.post(url).mock(return_value=Response(200))
+    route = http_mock.post(url).mock(return_value=Response(200))
 
     app = create_server_app(config, api_only=True)
 
@@ -314,7 +314,7 @@ async def test_node_registry_heartbeat_logic() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_node_registry_heartbeat_error_handling() -> None:
     from provide.uterm.server.app import create_server_app
     from provide.uterm.server.config import default_server_config
@@ -325,7 +325,7 @@ async def test_node_registry_heartbeat_error_handling() -> None:
     config.governance.registry_webhook_interval_s = 0.01
 
     # Mock a failure
-    respx.post(url).mock(side_effect=Exception("network fail"))
+    http_mock.post(url).mock(side_effect=Exception("network fail"))
 
     app = create_server_app(config, api_only=True)
     with TestClient(app):
@@ -420,14 +420,14 @@ async def test_authz_service_fallback_paths() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_policy_gate_redacts_input_data() -> None:
     """intercept_input must redact the keystroke stream before POSTing it to
     the governance webhook so secrets do not leak verbatim to an external
     endpoint."""
     url = "https://fleet.example.com/policy"
     gate = WebhookPolicyGate(url=url)
-    route = respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    route = http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
 
     secret = "mysql --password=hunter2supersecret -h db"  # pragma: allowlist secret
     result = await gate.intercept_input(secret, PolicyContext(worker_id="w1"))
@@ -439,14 +439,14 @@ async def test_webhook_policy_gate_redacts_input_data() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_fanout_gate_redacts_command() -> None:
     """intercept_fanout must redact the forwarded command the same way."""
     from provide.uterm.server.bridge.hub.ext import WebhookFanOutPolicyGate
 
     url = "https://fleet.example.com/fanout"
     gate = WebhookFanOutPolicyGate(url=url)
-    route = respx.post(url).mock(return_value=Response(200, json={"action": "allow"}))
+    route = http_mock.post(url).mock(return_value=Response(200, json={"action": "allow"}))
 
     secret = "mysql --password=hunter2supersecret -h db"  # pragma: allowlist secret
     result = await gate.intercept_fanout(secret, PolicyContext(worker_id="w1"), group_id="g1")

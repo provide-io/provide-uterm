@@ -10,7 +10,7 @@ import asyncio
 import time
 from unittest.mock import AsyncMock
 
-import httpx
+import httpx2
 import pytest
 from fastapi import FastAPI
 
@@ -159,7 +159,7 @@ async def test_rest_send_route_uses_owner_reservation_before_delivery() -> None:
             last_heartbeat=now,
         )
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://test") as client:
         send_task = asyncio.create_task(
             client.post(
                 f"/worker/{worker_id}/hijack/{hijack_id}/send",
@@ -195,7 +195,7 @@ async def test_rest_step_route_blocks_expiry_transition_until_delivery() -> None
             last_heartbeat=now,
         )
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://test") as client:
         step_task = asyncio.create_task(client.post(f"/worker/{worker_id}/hijack/{hijack_id}/step"))
         await asyncio.wait_for(worker.entered.wait(), timeout=1.0)
         async with hub._lock:

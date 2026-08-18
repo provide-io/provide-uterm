@@ -11,7 +11,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 import asyncssh
-import httpx
+import httpx2
 import websockets
 
 from provide.uterm.transports.ssh import start_ssh_server
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 class TestReferenceServerApp:
     async def _wait_for_connected(self, base_url: str, session_id: str) -> None:
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             deadline = time.monotonic() + 5.0
             while time.monotonic() < deadline:
                 resp = await http.get(f"/api/sessions/{session_id}")
@@ -40,7 +40,7 @@ class TestReferenceServerApp:
         raise AssertionError(f"session did not become connected: {session_id}")
 
     async def test_api_lists_demo_session_and_pages_load(self, live_reference_server: str) -> None:
-        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+        async with httpx2.AsyncClient(base_url=live_reference_server) as http:
             health = await http.get("/api/health")
             assert health.status_code == 200
             assert health.json()["ok"] is True
@@ -112,7 +112,7 @@ class TestReferenceServerApp:
         assert len(hello["resume_token"]) > 10
 
     async def test_metrics_prometheus_endpoint(self, live_reference_server: str) -> None:
-        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+        async with httpx2.AsyncClient(base_url=live_reference_server) as http:
             resp = await http.get("/api/metrics/prometheus")
         assert resp.status_code == 200
         assert "text/plain" in resp.headers.get("content-type", "")
@@ -130,7 +130,7 @@ class TestReferenceServerApp:
 
     async def test_metrics_include_ws_disconnect_and_hijack_counters(self, live_reference_server: str) -> None:
         await self._wait_for_connected(live_reference_server, "provide-shell")
-        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+        async with httpx2.AsyncClient(base_url=live_reference_server) as http:
             before = (await http.get("/api/metrics")).json()["metrics"]
             base_disconnect = int(before.get("ws_disconnect_browser_total", 0))
             assert "hijack_conflicts_total" in before
@@ -138,13 +138,13 @@ class TestReferenceServerApp:
         async with websockets.connect(_ws_url(live_reference_server, "/ws/browser/provide-shell/term")) as browser:
             assert await _drain_until(browser, "hello", timeout=5.0) is not None
         await asyncio.sleep(0.15)
-        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+        async with httpx2.AsyncClient(base_url=live_reference_server) as http:
             after = (await http.get("/api/metrics")).json()["metrics"]
             assert int(after.get("ws_disconnect_browser_total", 0)) >= base_disconnect + 1
 
     async def test_hijack_conflict_counter_increments_on_second_acquire(self, live_reference_server: str) -> None:
         await self._wait_for_connected(live_reference_server, "provide-shell")
-        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+        async with httpx2.AsyncClient(base_url=live_reference_server) as http:
             # Default session is open mode; switch to hijack so REST acquire works.
             # Restore in a try/finally so test-order randomization (pytest-randomly)
             # doesn't leak hijack mode into sibling tests that assert open mode.
@@ -168,7 +168,7 @@ class TestReferenceServerApp:
                 await http.post("/api/sessions/provide-shell/mode", json={"input_mode": "open"})
 
     async def test_mode_changes_and_create_session_flow(self, live_reference_server: str) -> None:
-        async with httpx.AsyncClient(base_url=live_reference_server) as http:
+        async with httpx2.AsyncClient(base_url=live_reference_server) as http:
             created = await http.post(
                 "/api/sessions",
                 json={
@@ -217,12 +217,12 @@ class TestReferenceServerApp:
             # Use a fresh client with retries to avoid stale connection pooling.
             for attempt in range(5):
                 try:
-                    async with httpx.AsyncClient(base_url=live_reference_server, timeout=10.0) as dl_http:
+                    async with httpx2.AsyncClient(base_url=live_reference_server, timeout=10.0) as dl_http:
                         download = await dl_http.get("/api/sessions/scratch/recording/download")
                         assert download.status_code == 200
                         assert "log_start" in download.text
                         break
-                except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError, httpx.ReadTimeout):
+                except (httpx2.RemoteProtocolError, httpx2.ReadError, httpx2.ConnectError, httpx2.ReadTimeout):
                     if attempt == 4:
                         raise
                     await asyncio.sleep(0.5 * (attempt + 1))
@@ -247,7 +247,7 @@ class TestReferenceServerApp:
             host_key_path=tmp_path,
         )
         try:
-            async with httpx.AsyncClient(base_url=live_reference_server) as http:
+            async with httpx2.AsyncClient(base_url=live_reference_server) as http:
                 created = await http.post(
                     "/api/sessions",
                     json={
@@ -308,7 +308,7 @@ class TestReferenceServerApp:
             host_key_path=tmp_path,
         )
         try:
-            async with httpx.AsyncClient(base_url=live_reference_server) as http:
+            async with httpx2.AsyncClient(base_url=live_reference_server) as http:
                 created = await http.post(
                     "/api/sessions",
                     json={
@@ -359,7 +359,7 @@ class TestReferenceServerApp:
             host_key_path=tmp_path,
         )
         try:
-            async with httpx.AsyncClient(base_url=live_reference_server) as http:
+            async with httpx2.AsyncClient(base_url=live_reference_server) as http:
                 created = await http.post(
                     "/api/sessions",
                     json={

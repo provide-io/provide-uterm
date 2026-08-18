@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 from playwright.sync_api import Page, expect
 
 _DEFAULT_REPORT_PATH = Path(".tmp-frontend-coverage/frontend-v8-coverage.json")
@@ -97,7 +97,7 @@ class TestFrontendV8Coverage:
         assert ratio >= 1.0, f"{terminal_asset} V8 coverage too low: {ratio:.3%}"
 
     def test_hijack_asset_meets_v8_coverage_threshold(self, page: Page, example_server: str) -> None:
-        with httpx.Client(base_url=example_server, timeout=5.0) as http:
+        with httpx2.Client(base_url=example_server, timeout=5.0) as http:
             reset = http.post("/demo/session/provide-shell/reset")
             assert reset.status_code == 200
             mode = http.post("/demo/session/provide-shell/mode", json={"input_mode": "hijack"})

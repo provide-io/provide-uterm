@@ -2,12 +2,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.server.auth import WebhookIdentityProvider, _filter_known_roles
 from provide.uterm.server.webhook_signing import verify_webhook_signature
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 
 
 @pytest.mark.parametrize(
@@ -28,7 +28,7 @@ def test_filter_known_roles_case_folds_admin(raw):
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_resolve_success():
     url = "https://auth.example.com/resolve"
     # This test predates 1f response-signature verification and mocks an
@@ -39,8 +39,8 @@ async def test_webhook_idp_resolve_success():
         require_signed_response=False,
     )
 
-    respx.post(url).mock(
-        return_value=httpx.Response(
+    http_mock.post(url).mock(
+        return_value=httpx2.Response(
             200,
             json={
                 "subject_id": "user-123",
@@ -64,13 +64,13 @@ async def test_webhook_idp_resolve_success():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_resolve_error():
     """Finding #7: default failure mode is ``deny`` → None (was: viewer)."""
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url)
 
-    respx.post(url).mock(return_value=httpx.Response(500))
+    http_mock.post(url).mock(return_value=httpx2.Response(500))
 
     class MockConnection:
         headers = {}
@@ -81,13 +81,13 @@ async def test_webhook_idp_resolve_error():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_resolve_timeout():
     """Finding #7: default failure mode is ``deny`` → None on timeout."""
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url, timeout_s=0.1)
 
-    respx.post(url).mock(side_effect=httpx.TimeoutException("Too slow"))
+    http_mock.post(url).mock(side_effect=httpx2.TimeoutException("Too slow"))
 
     class MockConnection:
         headers = {}
@@ -98,13 +98,13 @@ async def test_webhook_idp_resolve_timeout():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_resolve_error_viewer_on_failure():
     """Finding #7: ``on_failure='viewer'`` preserves legacy fail-open."""
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url, on_failure="viewer")
 
-    respx.post(url).mock(return_value=httpx.Response(500))
+    http_mock.post(url).mock(return_value=httpx2.Response(500))
 
     class MockConnection:
         headers = {}
@@ -117,15 +117,15 @@ async def test_webhook_idp_resolve_error_viewer_on_failure():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_sends_signed_headers_not_cleartext_secret():
     """IDP requests carry X-Uterm-Timestamp + X-Uterm-Signature, no X-Webhook-Secret."""
     url = "https://auth.example.com/resolve"
     secret = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
     idp = WebhookIdentityProvider(url=url, secret=secret)
 
-    route = respx.post(url).mock(
-        return_value=httpx.Response(
+    route = http_mock.post(url).mock(
+        return_value=httpx2.Response(
             200,
             json={"subject_id": "user-1", "roles": ["viewer"]},
         )
@@ -147,7 +147,7 @@ async def test_webhook_idp_sends_signed_headers_not_cleartext_secret():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_filters_unknown_roles():
     """Fix 1e: roles returned by the webhook IDP are filtered to the known
     allow-list — a compromised/MITM'd webhook cannot inject bogus roles
@@ -155,8 +155,8 @@ async def test_webhook_idp_filters_unknown_roles():
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url, require_signed_response=False)
 
-    respx.post(url).mock(
-        return_value=httpx.Response(
+    http_mock.post(url).mock(
+        return_value=httpx2.Response(
             200,
             json={"subject_id": "x", "roles": ["admin", "superuser", "root"]},
         )
@@ -172,14 +172,14 @@ async def test_webhook_idp_filters_unknown_roles():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_empty_after_filter_falls_back_to_viewer():
     """Fix 1e: if every returned role is filtered out, fall back to viewer."""
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url, require_signed_response=False)
 
-    respx.post(url).mock(
-        return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["nonsense"]}),
+    http_mock.post(url).mock(
+        return_value=httpx2.Response(200, json={"subject_id": "x", "roles": ["nonsense"]}),
     )
 
     class MockConnection:
@@ -192,14 +192,14 @@ async def test_webhook_idp_empty_after_filter_falls_back_to_viewer():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_keeps_legitimate_role():
     """Fix 1e: a single legitimate role passes through unchanged."""
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url, require_signed_response=False)
 
-    respx.post(url).mock(
-        return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["operator"]}),
+    http_mock.post(url).mock(
+        return_value=httpx2.Response(200, json={"subject_id": "x", "roles": ["operator"]}),
     )
 
     class MockConnection:
@@ -212,7 +212,7 @@ async def test_webhook_idp_keeps_legitimate_role():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_case_folds_mixed_case_admin_role():
     """L24 regression: a webhook IDP returning a mixed-case ``Admin`` role
     resolves to an admin Principal — the role is case-folded to the canonical
@@ -220,8 +220,8 @@ async def test_webhook_idp_case_folds_mixed_case_admin_role():
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url, require_signed_response=False)
 
-    respx.post(url).mock(
-        return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["Admin"]}),
+    http_mock.post(url).mock(
+        return_value=httpx2.Response(200, json={"subject_id": "x", "roles": ["Admin"]}),
     )
 
     class MockConnection:
@@ -234,7 +234,7 @@ async def test_webhook_idp_case_folds_mixed_case_admin_role():
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_failure_emits_audit_event(monkeypatch):
     """Fix 1g: a webhook-IDP failure emits a structured audit event so the
     fail-open/attack signal lands in the audit trail, not just a log warning."""
@@ -243,7 +243,7 @@ async def test_webhook_idp_failure_emits_audit_event(monkeypatch):
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url, on_failure="deny")
 
-    respx.post(url).mock(side_effect=httpx.ConnectError("network down"))
+    http_mock.post(url).mock(side_effect=httpx2.ConnectError("network down"))
 
     captured: list[tuple[str, dict]] = []
 
@@ -270,14 +270,14 @@ async def test_webhook_idp_failure_emits_audit_event(monkeypatch):
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_no_secret_sends_no_signing_headers():
     """When no secret is configured, no signing headers are sent."""
     url = "https://auth.example.com/resolve"
     idp = WebhookIdentityProvider(url=url)
 
-    route = respx.post(url).mock(
-        return_value=httpx.Response(
+    route = http_mock.post(url).mock(
+        return_value=httpx2.Response(
             200,
             json={"subject_id": "user-1", "roles": ["viewer"]},
         )

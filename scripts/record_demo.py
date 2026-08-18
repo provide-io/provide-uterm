@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 import uvicorn
 
 from provide.uterm.server import create_server_app, default_server_config
@@ -64,7 +64,7 @@ def _start_server() -> tuple[str, Any]:
     return base_url, server
 
 
-async def demo_fanout(http: httpx.AsyncClient) -> None:
+async def demo_fanout(http: httpx2.AsyncClient) -> None:
     """Demonstrate fan-out: create sessions, group, broadcast."""
     print("\n\033[1;36m=== Fan-Out Demo ===\033[0m\n")
 
@@ -114,7 +114,7 @@ async def demo_fanout(http: httpx.AsyncClient) -> None:
     print(f"  Failed sessions: {result['failed_sessions']}")
 
 
-async def demo_annotation(http: httpx.AsyncClient) -> None:
+async def demo_annotation(http: httpx2.AsyncClient) -> None:
     """Demonstrate annotation: agent self-annotation + pattern detection."""
     print("\n\033[1;36m=== Annotation Demo ===\033[0m\n")
 
@@ -138,7 +138,7 @@ async def demo_annotation(http: httpx.AsyncClient) -> None:
         print(f"    [{data.get('severity', '?')}] {data.get('label', '?')}: {data.get('description', '')[:60]}")
 
 
-async def demo_session_api(http: httpx.AsyncClient) -> None:
+async def demo_session_api(http: httpx2.AsyncClient) -> None:
     """Demonstrate core session API."""
     print("\n\033[1;36m=== Session API Demo ===\033[0m\n")
 
@@ -169,7 +169,7 @@ async def run_demo() -> None:
     base_url, server = _start_server()
     print(f"\n  Server running at {base_url}\n")
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0) as http:
         await demo_session_api(http)
         await demo_fanout(http)
         await demo_annotation(http)

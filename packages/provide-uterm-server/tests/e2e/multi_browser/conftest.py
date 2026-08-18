@@ -12,7 +12,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.client import connect_async_ws
@@ -143,5 +143,5 @@ async def long_poll(
     if pattern:
         params["pattern"] = pattern
     h = {**(headers or {}), **ADMIN_H}
-    async with httpx.AsyncClient(base_url=base_url, headers=h, timeout=30.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=h, timeout=30.0) as http:
         return await http.get(f"/api/sessions/{session_id}/events/watch", params=params)

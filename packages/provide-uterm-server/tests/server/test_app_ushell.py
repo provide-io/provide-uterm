@@ -13,7 +13,7 @@ import time
 from typing import Any
 from weakref import WeakKeyDictionary
 
-import httpx
+import httpx2
 import pytest
 import websockets
 
@@ -100,7 +100,7 @@ def ushell_server() -> Any:
 
 class TestUshellE2E:
     async def _create_ushell(self, base_url: str, session_id: str) -> None:
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             r = await http.post(
                 "/api/sessions",
                 json={"session_id": session_id, "connector_type": "ushell", "auto_start": True},
@@ -108,7 +108,7 @@ class TestUshellE2E:
             assert r.status_code == 200
 
     async def _wait_connected(self, base_url: str, session_id: str) -> None:
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             deadline = time.monotonic() + 5.0
             while time.monotonic() < deadline:
                 resp = await http.get(f"/api/sessions/{session_id}")
@@ -118,7 +118,7 @@ class TestUshellE2E:
         raise AssertionError(f"session did not become connected: {session_id}")
 
     async def test_ushell_created_via_api(self, ushell_server: str) -> None:
-        async with httpx.AsyncClient(base_url=ushell_server) as http:
+        async with httpx2.AsyncClient(base_url=ushell_server) as http:
             r = await http.post(
                 "/api/sessions",
                 json={"session_id": "ushell-create", "connector_type": "ushell", "auto_start": True},

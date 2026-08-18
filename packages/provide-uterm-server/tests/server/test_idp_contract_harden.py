@@ -17,27 +17,27 @@ from __future__ import annotations
 
 import json
 
-import httpx
+import httpx2
 import pytest
 from pydantic import ValidationError
 
 from provide.uterm.server.auth import WebhookIdentityProvider
 from provide.uterm.server.models import AuthConfig, ServerConfig
 from provide.uterm.server.webhook_signing import build_webhook_signature, verify_webhook_signature
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 
 _SECRET = "uterm-test-secret-32-byte-minimum-key"  # pragma: allowlist secret
 _URL = "https://auth.example.com/resolve"
 
 
-def _signed_response(payload: dict, *, secret: str = _SECRET) -> httpx.Response:
-    """Build an httpx.Response signed exactly the way the IdP must sign it."""
+def _signed_response(payload: dict, *, secret: str = _SECRET) -> httpx2.Response:
+    """Build an httpx2.Response signed exactly the way the IdP must sign it."""
     body = json.dumps(payload, separators=(",", ":")).encode()
     import time
 
     ts = str(time.time())
     sig = build_webhook_signature(secret, body, ts)
-    return httpx.Response(
+    return httpx2.Response(
         200,
         content=body,
         headers={
@@ -60,10 +60,10 @@ class _Conn:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_valid_response_signature_builds_principal() -> None:
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True)
-    respx.post(_URL).mock(return_value=_signed_response({"subject_id": "user-1", "roles": ["operator"]}))
+    http_mock.post(_URL).mock(return_value=_signed_response({"subject_id": "user-1", "roles": ["operator"]}))
     principal = await idp.resolve_principal(_Conn())
     assert principal is not None
     assert principal.subject_id == "user-1"
@@ -71,25 +71,25 @@ async def test_valid_response_signature_builds_principal() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_missing_response_signature_denied() -> None:
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True, on_failure="deny")
     # Unsigned 200 response (no X-Uterm-Signature / X-Uterm-Timestamp headers).
-    respx.post(_URL).mock(return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["admin"]}))
+    http_mock.post(_URL).mock(return_value=httpx2.Response(200, json={"subject_id": "x", "roles": ["admin"]}))
     principal = await idp.resolve_principal(_Conn())
     assert principal is None
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_invalid_response_signature_denied() -> None:
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True, on_failure="deny")
     body = json.dumps({"subject_id": "x", "roles": ["admin"]}, separators=(",", ":")).encode()
     import time
 
     ts = str(time.time())
-    respx.post(_URL).mock(
-        return_value=httpx.Response(
+    http_mock.post(_URL).mock(
+        return_value=httpx2.Response(
             200,
             content=body,
             headers={
@@ -103,15 +103,15 @@ async def test_invalid_response_signature_denied() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_expired_response_signature_denied() -> None:
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True, on_failure="deny")
     body = json.dumps({"subject_id": "x", "roles": ["admin"]}, separators=(",", ":")).encode()
     # Timestamp far in the past → fails freshness window in verify_webhook_signature.
     stale_ts = "1.0"
     sig = build_webhook_signature(_SECRET, body, stale_ts)
-    respx.post(_URL).mock(
-        return_value=httpx.Response(
+    http_mock.post(_URL).mock(
+        return_value=httpx2.Response(
             200,
             content=body,
             headers={"X-Uterm-Timestamp": stale_ts, "X-Uterm-Signature": sig},
@@ -164,7 +164,7 @@ def test_verify_webhook_signature_whitespace_secret_is_false() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_provider_with_no_secret_rejects_forged_signed_response() -> None:
     """A provider built directly with secret=None + require_signed_response=True
     must REJECT a response carrying an attacker-forged empty-key signature.
@@ -179,8 +179,8 @@ async def test_provider_with_no_secret_rejects_forged_signed_response() -> None:
     ts = str(time.time())
     # Attacker forges a signature with an empty key (what self.secret or "" would use).
     forged = build_webhook_signature("", body, ts)
-    respx.post(_URL).mock(
-        return_value=httpx.Response(
+    http_mock.post(_URL).mock(
+        return_value=httpx2.Response(
             200,
             content=body,
             headers={"X-Uterm-Timestamp": ts, "X-Uterm-Signature": forged},
@@ -192,10 +192,10 @@ async def test_provider_with_no_secret_rejects_forged_signed_response() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_invalid_response_signature_viewer_on_failure() -> None:
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True, on_failure="viewer")
-    respx.post(_URL).mock(return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["admin"]}))
+    http_mock.post(_URL).mock(return_value=httpx2.Response(200, json={"subject_id": "x", "roles": ["admin"]}))
     principal = await idp.resolve_principal(_Conn())
     assert principal is not None
     assert principal.subject_id == "anonymous"
@@ -203,12 +203,12 @@ async def test_invalid_response_signature_viewer_on_failure() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_invalid_response_signature_emits_audit_event(monkeypatch) -> None:
     import provide.uterm.server.auth as auth_mod
 
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True, on_failure="deny")
-    respx.post(_URL).mock(return_value=httpx.Response(200, json={"subject_id": "x", "roles": ["admin"]}))
+    http_mock.post(_URL).mock(return_value=httpx2.Response(200, json={"subject_id": "x", "roles": ["admin"]}))
 
     captured: list[tuple[str, dict]] = []
     monkeypatch.setattr(auth_mod, "audit_event", lambda action, **kw: captured.append((action, kw)))
@@ -219,23 +219,23 @@ async def test_invalid_response_signature_emits_audit_event(monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_require_signed_response_false_accepts_unsigned() -> None:
     """Legacy behaviour: when verification disabled, an unsigned response is trusted."""
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=False)
-    respx.post(_URL).mock(return_value=httpx.Response(200, json={"subject_id": "legacy", "roles": ["viewer"]}))
+    http_mock.post(_URL).mock(return_value=httpx2.Response(200, json={"subject_id": "legacy", "roles": ["viewer"]}))
     principal = await idp.resolve_principal(_Conn())
     assert principal is not None
     assert principal.subject_id == "legacy"
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_valid_signature_uses_verified_response_bytes() -> None:
     """The principal is built from the same RAW bytes that were signature-verified."""
     payload = {"subject_id": "raw-bytes-user", "roles": ["admin"], "claims": {"k": "v"}}
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=True)
-    respx.post(_URL).mock(return_value=_signed_response(payload))
+    http_mock.post(_URL).mock(return_value=_signed_response(payload))
     principal = await idp.resolve_principal(_Conn())
     assert principal is not None
     assert principal.subject_id == "raw-bytes-user"
@@ -286,7 +286,7 @@ def test_local_idp_require_signed_response_no_secret_ok() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_only_allowlisted_headers_and_cookies_forwarded() -> None:
     idp = WebhookIdentityProvider(
         url=_URL,
@@ -295,7 +295,7 @@ async def test_only_allowlisted_headers_and_cookies_forwarded() -> None:
         forward_headers=frozenset({"authorization", "x-uterm-principal"}),
         forward_cookies=frozenset({"uterm_token"}),
     )
-    route = respx.post(_URL).mock(return_value=httpx.Response(200, json={"subject_id": "u", "roles": ["viewer"]}))
+    route = http_mock.post(_URL).mock(return_value=httpx2.Response(200, json={"subject_id": "u", "roles": ["viewer"]}))
     conn = _Conn(
         headers={
             "Authorization": "Bearer abc",
@@ -317,7 +317,7 @@ async def test_only_allowlisted_headers_and_cookies_forwarded() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_operator_extended_forward_header_passes() -> None:
     idp = WebhookIdentityProvider(
         url=_URL,
@@ -326,7 +326,7 @@ async def test_operator_extended_forward_header_passes() -> None:
         forward_headers=frozenset({"authorization", "x-tenant"}),
         forward_cookies=frozenset(),
     )
-    route = respx.post(_URL).mock(return_value=httpx.Response(200, json={"subject_id": "u", "roles": ["viewer"]}))
+    route = http_mock.post(_URL).mock(return_value=httpx2.Response(200, json={"subject_id": "u", "roles": ["viewer"]}))
     conn = _Conn(headers={"X-Tenant": "acme", "X-Other": "drop"})
     await idp.resolve_principal(conn)
     sent = json.loads(route.calls.last.request.content)
@@ -336,7 +336,7 @@ async def test_operator_extended_forward_header_passes() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_empty_allowlists_forward_nothing() -> None:
     idp = WebhookIdentityProvider(
         url=_URL,
@@ -345,7 +345,7 @@ async def test_empty_allowlists_forward_nothing() -> None:
         forward_headers=frozenset(),
         forward_cookies=frozenset(),
     )
-    route = respx.post(_URL).mock(return_value=httpx.Response(200, json={"subject_id": "u", "roles": ["viewer"]}))
+    route = http_mock.post(_URL).mock(return_value=httpx2.Response(200, json={"subject_id": "u", "roles": ["viewer"]}))
     conn = _Conn(headers={"Authorization": "Bearer abc"}, cookies={"uterm_token": "tok"})
     await idp.resolve_principal(conn)
     sent = json.loads(route.calls.last.request.content)
@@ -354,12 +354,12 @@ async def test_empty_allowlists_forward_nothing() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_default_allowlists_empty_when_unset() -> None:
     """When the provider is constructed without explicit allow-lists, it forwards
     nothing (secure default) rather than every header/cookie."""
     idp = WebhookIdentityProvider(url=_URL, secret=_SECRET, require_signed_response=False)
-    route = respx.post(_URL).mock(return_value=httpx.Response(200, json={"subject_id": "u", "roles": ["viewer"]}))
+    route = http_mock.post(_URL).mock(return_value=httpx2.Response(200, json={"subject_id": "u", "roles": ["viewer"]}))
     conn = _Conn(headers={"Authorization": "Bearer abc"}, cookies={"uterm_token": "tok"})
     await idp.resolve_principal(conn)
     sent = json.loads(route.calls.last.request.content)

@@ -166,7 +166,7 @@ class TestPamIntegrationGaps:
 
         bridges: dict[str, object] = {}
         with (
-            patch("httpx.AsyncClient", return_value=mock_client),
+            patch("httpx2.AsyncClient", return_value=mock_client),
             patch("provide.uterm.server.pam_tunnel.PamTunnelBridge", return_value=bridge_mock),
         ):
             await _on_open(ev, cfg, registry, bridges)
@@ -319,7 +319,7 @@ class TestPamIntegrationGaps:
         )
 
         bridges: dict[str, object] = {}
-        with patch("httpx.AsyncClient", return_value=mock_client):
+        with patch("httpx2.AsyncClient", return_value=mock_client):
             await _on_open(ev, cfg, registry, bridges)
 
         # No bridge created because connector was None

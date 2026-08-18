@@ -10,13 +10,13 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
-from httpx import Response
+from httpx2 import Response
 
 # Capture the real _resolve_cached at import time, before any fixture can replace it.
 # Tests that need to exercise the real caching logic restore the module attribute to
 # this reference before running.
 import provide.uterm.server.egress as _egress_mod_for_capture
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 
 _REAL_RESOLVE_CACHED = _egress_mod_for_capture._resolve_cached
 
@@ -410,7 +410,7 @@ async def test_webhook_authz_resolve_browser_role_metadata_url_returns_viewer() 
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_policy_gate_benign_host_posts(monkeypatch: pytest.MonkeyPatch) -> None:
     """WebhookPolicyGate with a benign host still posts normally."""
     from provide.uterm.server import egress as egress_mod
@@ -419,7 +419,7 @@ async def test_webhook_policy_gate_benign_host_posts(monkeypatch: pytest.MonkeyP
     url = "https://gov.example.com/policy"
     monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
 
-    route = respx.post(url).mock(return_value=Response(200, json={"action": "allow"}))
+    route = http_mock.post(url).mock(return_value=Response(200, json={"action": "allow"}))
     gate = WebhookPolicyGate(url=url)
     ctx = PolicyContext(worker_id="w1", client_id="alice")
     result = await gate.intercept_input("ls", ctx)
@@ -428,7 +428,7 @@ async def test_webhook_policy_gate_benign_host_posts(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_idp_benign_host_posts(monkeypatch: pytest.MonkeyPatch) -> None:
     """WebhookIdentityProvider with a benign host still posts normally."""
     from provide.uterm.server import egress as egress_mod
@@ -437,7 +437,7 @@ async def test_webhook_idp_benign_host_posts(monkeypatch: pytest.MonkeyPatch) ->
     url = "https://auth.example.com/resolve"
     monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
 
-    route = respx.post(url).mock(return_value=Response(200, json={"subject_id": "user-1", "roles": ["viewer"]}))
+    route = http_mock.post(url).mock(return_value=Response(200, json={"subject_id": "user-1", "roles": ["viewer"]}))
 
     class MockConn:
         headers: dict = {}
@@ -452,7 +452,7 @@ async def test_webhook_idp_benign_host_posts(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_authz_benign_host_posts(monkeypatch: pytest.MonkeyPatch) -> None:
     """WebhookAuthorizationProvider with a benign host still posts normally."""
     from unittest.mock import MagicMock
@@ -463,7 +463,7 @@ async def test_webhook_authz_benign_host_posts(monkeypatch: pytest.MonkeyPatch) 
     url = "https://authz.example.com/check"
     monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
 
-    route = respx.post(url).mock(return_value=Response(200, json={"allow": True}))
+    route = http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))
 
     provider = WebhookAuthorizationProvider(url=url)
     principal = MagicMock()
@@ -478,7 +478,7 @@ async def test_webhook_authz_benign_host_posts(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_authz_rejects_unsigned_when_secret_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """With a shared secret, unsigned authz responses must fail closed."""
     from unittest.mock import MagicMock
@@ -488,7 +488,7 @@ async def test_webhook_authz_rejects_unsigned_when_secret_set(monkeypatch: pytes
 
     url = "https://authz.example.com/check"
     monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
-    respx.post(url).mock(return_value=Response(200, json={"allow": True}))  # no signature headers
+    http_mock.post(url).mock(return_value=Response(200, json={"allow": True}))  # no signature headers
 
     provider = WebhookAuthorizationProvider(url=url, secret="shared-authz-secret-32bytes!!")  # pragma: allowlist secret
     principal = MagicMock()
@@ -506,7 +506,7 @@ async def test_webhook_authz_rejects_unsigned_when_secret_set(monkeypatch: pytes
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_output_policy_gate_non_200_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     """A non-200 webhook response must fail CLOSED: return the built-in
     default_rules() so redaction continues rather than dropping all rules."""
@@ -516,7 +516,7 @@ async def test_webhook_output_policy_gate_non_200_fails_closed(monkeypatch: pyte
 
     url = "https://gov.example.com/output"
     monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
-    respx.post(url).mock(return_value=Response(503))
+    http_mock.post(url).mock(return_value=Response(503))
 
     gate = WebhookOutputPolicyGate(url=url)
     rules = await gate.get_redaction_rules(PolicyContext(worker_id="w1"))
@@ -525,11 +525,11 @@ async def test_webhook_output_policy_gate_non_200_fails_closed(monkeypatch: pyte
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_output_policy_gate_connect_error_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     """A transport/connect error (except Exception branch) must fail CLOSED to
     the built-in default_rules()."""
-    import httpx
+    import httpx2
 
     from provide.uterm.server import egress as egress_mod
     from provide.uterm.server.bridge.hub.ext import PolicyContext, WebhookOutputPolicyGate
@@ -537,7 +537,7 @@ async def test_webhook_output_policy_gate_connect_error_fails_closed(monkeypatch
 
     url = "https://gov.example.com/output"
     monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
-    respx.post(url).mock(side_effect=httpx.ConnectError("refused"))
+    http_mock.post(url).mock(side_effect=httpx2.ConnectError("refused"))
 
     gate = WebhookOutputPolicyGate(url=url)
     rules = await gate.get_redaction_rules(PolicyContext(worker_id="w1"))
@@ -546,7 +546,7 @@ async def test_webhook_output_policy_gate_connect_error_fails_closed(monkeypatch
 
 
 @pytest.mark.asyncio
-@respx.mock
+@http_mock.mock
 async def test_webhook_output_policy_gate_200_returns_parsed_rules(monkeypatch: pytest.MonkeyPatch) -> None:
     """A 200 response with rules returns exactly those parsed rules (existing
     behavior preserved — the webhook's rules are NOT replaced by defaults)."""
@@ -555,7 +555,7 @@ async def test_webhook_output_policy_gate_200_returns_parsed_rules(monkeypatch: 
 
     url = "https://gov.example.com/output"
     monkeypatch.setattr(egress_mod, "_resolve_cached", AsyncMock(return_value=("93.184.216.34",)))
-    respx.post(url).mock(return_value=Response(200, json={"rules": [{"pattern": "secret", "replacement": "[X]"}]}))
+    http_mock.post(url).mock(return_value=Response(200, json={"rules": [{"pattern": "secret", "replacement": "[X]"}]}))
 
     gate = WebhookOutputPolicyGate(url=url)
     rules = await gate.get_redaction_rules(PolicyContext(worker_id="w1"))

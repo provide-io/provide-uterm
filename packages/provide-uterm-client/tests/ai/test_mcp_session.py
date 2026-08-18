@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
-from httpx import ASGITransport
+from httpx2 import ASGITransport
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
 from provide.uterm.server.bridge.hub import TermHub

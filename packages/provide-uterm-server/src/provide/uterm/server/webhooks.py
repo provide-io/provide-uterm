@@ -32,7 +32,7 @@ permission is computed by the app factory (config key OR loopback bind) — see
 
 Mutation-enforced at killed==100 (see [tool.mutmut].source_paths). The bound
 suite is tests/server/test_webhooks_mutation_killing.py, which mocks ALL egress
-(socket.getaddrinfo + httpx + asyncio.sleep) so mutmut's forked workers never drive
+(socket.getaddrinfo + httpx2 + asyncio.sleep) so mutmut's forked workers never drive
 the real C resolver/network — required because doing so segfaults the worker. It also
 bounds the loop/cancel awaits with asyncio.wait_for so a mutant that breaks loop
 termination fails fast instead of stalling the worker past its per-test timeout.

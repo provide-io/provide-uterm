@@ -10,7 +10,7 @@ import asyncio
 import json
 from contextlib import suppress
 
-import httpx
+import httpx2
 import pytest
 import websockets.server
 
@@ -42,7 +42,7 @@ class TestRunInspectIntegration:
     @pytest.mark.timeout(15)
     async def test_basic_get_forward(self, inspect_proxy: int, mock_tunnel_ws: TunnelWSServer):
         """GET through proxy forwards and produces http_req + http_res."""
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/hello")
         assert resp.status_code == 200
         body = resp.json()
@@ -63,7 +63,7 @@ class TestRunInspectIntegration:
         import base64
 
         payload = {"user": "admin", "action": "login"}
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.post(
                 f"http://127.0.0.1:{inspect_proxy}/api/data",
                 json=payload,
@@ -81,7 +81,7 @@ class TestRunInspectIntegration:
     @pytest.mark.timeout(15)
     async def test_get_with_query_string(self, inspect_proxy: int, mock_tunnel_ws: TunnelWSServer):
         """Query string is forwarded to target and appears in http_req frame."""
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/search?q=hello&page=1")
         assert resp.status_code == 200
         body = resp.json()
@@ -123,8 +123,8 @@ class TestRunInspectIntegration:
     async def test_intercept_forward(self, inspect_proxy_intercept: int, mock_tunnel_ws: TunnelWSServer):
         """With intercept on, sending 'forward' action lets request through."""
 
-        async def _do_request() -> httpx.Response:
-            async with httpx.AsyncClient() as client:
+        async def _do_request() -> httpx2.Response:
+            async with httpx2.AsyncClient() as client:
                 return await client.get(f"http://127.0.0.1:{inspect_proxy_intercept}/intercepted")
 
         req_task = asyncio.create_task(_do_request())
@@ -143,8 +143,8 @@ class TestRunInspectIntegration:
     async def test_intercept_drop(self, inspect_proxy_intercept: int, mock_tunnel_ws: TunnelWSServer):
         """With intercept on, sending 'drop' action returns 502."""
 
-        async def _do_request() -> httpx.Response:
-            async with httpx.AsyncClient() as client:
+        async def _do_request() -> httpx2.Response:
+            async with httpx2.AsyncClient() as client:
                 return await client.get(f"http://127.0.0.1:{inspect_proxy_intercept}/should-drop")
 
         req_task = asyncio.create_task(_do_request())
@@ -178,7 +178,7 @@ class TestRunInspectIntegration:
         )
         await _wait_for_port(proxy_port)
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx2.AsyncClient() as client:
                 resp = await client.get(f"http://127.0.0.1:{proxy_port}/fail")
             assert resp.status_code == 502
             assert b"Bad Gateway" in resp.content
@@ -191,7 +191,7 @@ class TestRunInspectIntegration:
     async def test_inspect_toggle_off(self, inspect_proxy: int, mock_tunnel_ws: TunnelWSServer):
         """Toggle inspect off — no more http_req/http_res frames."""
         # First, make a normal request to confirm frames are flowing
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/before")
         assert resp.status_code == 200
         await mock_tunnel_ws.wait_for_frame("http_req")
@@ -204,7 +204,7 @@ class TestRunInspectIntegration:
         # Clear collected frames
         before_count = len(mock_tunnel_ws.frames)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/after")
         assert resp.status_code == 200
 
@@ -220,8 +220,8 @@ class TestRunInspectIntegration:
     ):
         """Toggling intercept off while a request is pending forwards it."""
 
-        async def _do_request() -> httpx.Response:
-            async with httpx.AsyncClient() as client:
+        async def _do_request() -> httpx2.Response:
+            async with httpx2.AsyncClient() as client:
                 return await client.get(f"http://127.0.0.1:{inspect_proxy_intercept}/pending")
 
         req_task = asyncio.create_task(_do_request())
@@ -246,7 +246,7 @@ class TestRunInspectIntegration:
         await asyncio.sleep(0.2)
 
         # Proxy should still work
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/still-works")
         assert resp.status_code == 200
 
@@ -256,7 +256,7 @@ class TestRunInspectIntegration:
         await mock_tunnel_ws.send_text_action({"type": "unknown_msg", "data": "x"})
         await asyncio.sleep(0.2)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/ok")
         assert resp.status_code == 200
 
@@ -265,8 +265,8 @@ class TestRunInspectIntegration:
         """Intercept modify action changes headers and body before forwarding."""
         import base64
 
-        async def _do_request() -> httpx.Response:
-            async with httpx.AsyncClient() as client:
+        async def _do_request() -> httpx2.Response:
+            async with httpx2.AsyncClient() as client:
                 return await client.post(
                     f"http://127.0.0.1:{inspect_proxy_intercept}/modify-me",
                     content=b"original body",
@@ -297,7 +297,7 @@ class TestRunInspectIntegration:
 
         We verify the proxy still works after any non-http scope would be seen.
         """
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/ok")
         assert resp.status_code == 200
 
@@ -310,7 +310,7 @@ class TestRunInspectIntegration:
         await asyncio.sleep(0.2)
 
         # Proxy still works
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/after-non-http")
         assert resp.status_code == 200
 
@@ -323,7 +323,7 @@ class TestRunInspectIntegration:
         await asyncio.sleep(0.2)
 
         # Proxy still works
-        async with httpx.AsyncClient() as client:
+        async with httpx2.AsyncClient() as client:
             resp = await client.get(f"http://127.0.0.1:{inspect_proxy}/after-short")
         assert resp.status_code == 200
 
@@ -390,8 +390,8 @@ class TestRunInspectIntegration:
     async def test_intercept_modify_headers_only(self, inspect_proxy_intercept: int, mock_tunnel_ws: TunnelWSServer):
         """Modify action with only headers (no body) still forwards correctly."""
 
-        async def _do_request() -> httpx.Response:
-            async with httpx.AsyncClient() as client:
+        async def _do_request() -> httpx2.Response:
+            async with httpx2.AsyncClient() as client:
                 return await client.get(f"http://127.0.0.1:{inspect_proxy_intercept}/modify-headers")
 
         req_task = asyncio.create_task(_do_request())
@@ -420,8 +420,8 @@ class TestRunInspectIntegration:
         await asyncio.sleep(0.2)
 
         # Proxy still works
-        async def _do_request() -> httpx.Response:
-            async with httpx.AsyncClient() as client:
+        async def _do_request() -> httpx2.Response:
+            async with httpx2.AsyncClient() as client:
                 return await client.get(f"http://127.0.0.1:{inspect_proxy_intercept}/ok")
 
         req_task = asyncio.create_task(_do_request())

@@ -22,7 +22,7 @@ Requires:
     - provide-uterm-platform installed (pip install -e packages/provide-uterm-platform)
     - pywrangler available (pip install pywrangler)
     - websockets (pip install websockets)
-    - httpx (pip install httpx)
+    - httpx2 (pip install httpx2)
 
 On Linux only: libuterm_capture.so must be built:
     make -C packages/provide-uterm-platform/native/capture/

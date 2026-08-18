@@ -32,7 +32,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 
 LANGUAGE = "python"
 #: What this driver can do, in the vocabulary scenarios use to require things.
@@ -126,9 +126,9 @@ def _await_ready(server: Any, base_url: str, token: str, timeout_s: float = 30.0
     headers = {"Authorization": f"Bearer {token}"}
     while time.monotonic() < deadline:
         try:
-            with httpx.Client(base_url=base_url, timeout=2.0) as client:
+            with httpx2.Client(base_url=base_url, timeout=2.0) as client:
                 sessions = client.get("/api/sessions", headers=headers).json()
-        except (httpx.HTTPError, ValueError):
+        except (httpx2.HTTPError, ValueError):
             sessions = None
         if isinstance(sessions, list) and all(
             not entry.get("auto_start") or entry.get("lifecycle_state") != "stopped" for entry in sessions
@@ -155,7 +155,7 @@ def _stop_on_stdin_close(server: Any) -> Any:
 # --------------------------------------------------------------------------
 
 
-class _Recorder(httpx.AsyncBaseTransport):
+class _Recorder(httpx2.AsyncBaseTransport):
     """The status a client library answers ``(ok, body)`` over.
 
     Every port's client drops the status code, so a 401, a 403 and a 404 all
@@ -164,11 +164,11 @@ class _Recorder(httpx.AsyncBaseTransport):
     """
 
     def __init__(self) -> None:
-        self._inner = httpx.AsyncHTTPTransport()
+        self._inner = httpx2.AsyncHTTPTransport()
         self.status: int | None = None
         self.body: Any = None
 
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+    async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
         response = await self._inner.handle_async_request(request)
         await response.aread()
         self.status = response.status_code
@@ -179,7 +179,7 @@ class _Recorder(httpx.AsyncBaseTransport):
         await self._inner.aclose()
 
 
-def _body_of(response: httpx.Response) -> Any:
+def _body_of(response: httpx2.Response) -> Any:
     """The response body as JSON, or the one name a non-JSON body has."""
     try:
         return response.json()
@@ -291,7 +291,7 @@ _ABSENT = object()
 
 async def _raw_step(step: dict[str, Any], base_url: str, token: str) -> dict[str, Any]:
     """One step performed straight over HTTP, for surfaces no method reaches."""
-    async with httpx.AsyncClient(base_url=base_url, timeout=20.0) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=20.0) as client:
         headers = _headers(step.get("auth", "token"), token)
         if step["action"] == "http_get":
             response = await client.get(str(step["path"]), headers=headers)

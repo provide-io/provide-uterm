@@ -16,7 +16,7 @@ import contextlib
 import tempfile
 from typing import Any
 
-import httpx
+import httpx2
 import uvicorn
 
 from provide.uterm.server.app import create_server_app
@@ -107,7 +107,7 @@ async def _start_and_get_runtime(
     session_id: str,
 ) -> Any:
     """Start a session via REST and return the runtime with an active logger."""
-    async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
         resp = await http.post(f"/api/sessions/{session_id}/connect")
         assert resp.status_code == 200
 
@@ -124,7 +124,7 @@ async def _start_and_get_runtime(
 
 async def _get_annotations(base_url: str, session_id: str) -> list[dict[str, Any]]:
     """Query recording entries for annotation events."""
-    async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
         resp = await http.get(f"/api/sessions/{session_id}/recording/entries?event=annotation")
         assert resp.status_code == 200
         return resp.json()
@@ -132,7 +132,7 @@ async def _get_annotations(base_url: str, session_id: str) -> list[dict[str, Any
 
 async def _get_all_entries(base_url: str, session_id: str) -> list[dict[str, Any]]:
     """Query all recording entries (no event filter)."""
-    async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
         resp = await http.get(f"/api/sessions/{session_id}/recording/entries")
         assert resp.status_code == 200
         return resp.json()
@@ -276,7 +276,7 @@ async def test_agent_self_annotation_via_rest() -> None:
     async with _live_server_with_recording([_session("rest1")]) as (registry, base_url):
         runtime = await _start_and_get_runtime(registry, base_url, "rest1")
 
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             resp = await http.post(
                 "/api/sessions/rest1/annotate",
                 json={
@@ -341,7 +341,7 @@ async def test_annotations_visible_in_recording_download() -> None:
         if runtime._logger:
             await runtime._logger.flush()
 
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             resp = await http.get("/api/sessions/dl1/recording/download")
             assert resp.status_code == 200
 

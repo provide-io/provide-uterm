@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 
 from provide.uterm.client import connect_async_ws
 from tests.e2e._live_server import wait_for_subscribers
@@ -51,7 +51,7 @@ async def test_three_role_browsers_all_receive_snapshot_eventbus_delivers(live_s
             for ws in (viewer, op, admin):
                 await drain_all(ws)
 
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 poll_task = asyncio.create_task(
                     http.get(
                         "/api/sessions/s1/events/watch",
@@ -101,7 +101,7 @@ async def test_five_browsers_join_leave_eventbus_stable(live_server: Any) -> Non
         await worker.recv()  # snapshot_req
 
         # Start the EventBus long-poll first (it will watch for 3 snapshots)
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=20.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=20.0) as http:
             poll_task = asyncio.create_task(
                 http.get(
                     "/api/sessions/s1/events/watch",

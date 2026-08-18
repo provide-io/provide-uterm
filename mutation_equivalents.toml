@@ -185,7 +185,7 @@ reason = "Same as _rollback_browser_quota__mutmut_17 but in _update_lock_state's
 # this is the sole genuine equivalent.
 # --- webhooks.py (SSRF guard + EventBus delivery) -------------------------
 # Re-enabled at killed==100 via a fully network-mocked kill suite
-# (test_webhooks_mutation_killing.py): the real socket.getaddrinfo / httpx are
+# (test_webhooks_mutation_killing.py): the real socket.getaddrinfo / HTTP client are
 # never driven in a mutmut-forked child, which removes the 307/406-mutant
 # segfault that deferred this file. Six residual equivalents:
 #

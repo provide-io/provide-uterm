@@ -11,7 +11,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -63,7 +63,7 @@ async def run_terminal_demo() -> None:
 
     info("Demonstrating MCP tool calls via HTTP API:")
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         # list_sessions
         r = await client.get("/api/sessions")
         r.raise_for_status()

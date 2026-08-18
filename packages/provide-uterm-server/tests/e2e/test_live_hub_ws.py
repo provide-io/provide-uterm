@@ -16,7 +16,7 @@ import json
 import time
 from typing import Any
 
-import httpx
+import httpx2
 
 from provide.uterm.client import connect_async_ws
 
@@ -238,7 +238,7 @@ class TestRestHijackCycle:
         async with connect_async_ws(_ws_url(base_url, "/ws/worker/r1/term")) as worker:
             await worker.recv()  # snapshot_req
 
-            async with httpx.AsyncClient(base_url=base_url) as http:
+            async with httpx2.AsyncClient(base_url=base_url) as http:
                 r = await http.post("/worker/r1/hijack/acquire", json={"owner": "test", "lease_s": 60})
                 assert r.status_code == 200
 
@@ -252,7 +252,7 @@ class TestRestHijackCycle:
         async with connect_async_ws(_ws_url(base_url, "/ws/worker/r2/term")) as worker:
             await worker.recv()  # snapshot_req (sent on connect)
 
-            async with httpx.AsyncClient(base_url=base_url) as http:
+            async with httpx2.AsyncClient(base_url=base_url) as http:
                 r = await http.post("/worker/r2/hijack/acquire", json={"owner": "test", "lease_s": 60})
                 hijack_id = r.json()["hijack_id"]
                 await _drain_until(worker, "control")  # pause control
@@ -277,7 +277,7 @@ class TestRestHijackCycle:
         async with connect_async_ws(_ws_url(base_url, "/ws/worker/r3/term")) as worker:
             await worker.recv()  # snapshot_req
 
-            async with httpx.AsyncClient(base_url=base_url) as http:
+            async with httpx2.AsyncClient(base_url=base_url) as http:
                 r = await http.post("/worker/r3/hijack/acquire", json={"owner": "test", "lease_s": 60})
                 hijack_id = r.json()["hijack_id"]
                 await worker.recv()  # pause
@@ -295,7 +295,7 @@ class TestRestHijackCycle:
         async with connect_async_ws(_ws_url(base_url, "/ws/worker/r4/term")) as worker:
             await worker.recv()
 
-            async with httpx.AsyncClient(base_url=base_url) as http:
+            async with httpx2.AsyncClient(base_url=base_url) as http:
                 r = await http.post("/worker/r4/hijack/acquire", json={"owner": "test", "lease_s": 60})
                 hijack_id = r.json()["hijack_id"]
                 await worker.recv()  # pause
@@ -312,7 +312,7 @@ class TestRestHijackCycle:
         async with connect_async_ws(_ws_url(base_url, "/ws/worker/r5/term")) as worker:
             await worker.recv()
 
-            async with httpx.AsyncClient(base_url=base_url) as http:
+            async with httpx2.AsyncClient(base_url=base_url) as http:
                 r = await http.post("/worker/r5/hijack/acquire", json={"owner": "test", "lease_s": 60})
                 data = r.json()
                 hijack_id = data["hijack_id"]

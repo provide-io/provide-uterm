@@ -13,7 +13,7 @@ import threading
 import time
 from typing import Any
 
-import httpx
+import httpx2
 import uvicorn
 from playwright.sync_api import sync_playwright
 
@@ -127,7 +127,7 @@ def run_proof():
         page = browser.new_page()
 
         # Register session via REST
-        resp = httpx.post(
+        resp = httpx2.post(
             f"{base_url}/api/sessions",
             json={"session_id": worker_id, "display_name": "Proof", "connector_type": "websocket"},
         )

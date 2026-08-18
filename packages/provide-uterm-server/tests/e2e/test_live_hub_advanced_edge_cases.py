@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 
 from provide.uterm.client import connect_async_ws
 
@@ -26,7 +26,7 @@ class TestInputValidation:
         _, base_url = live_hub
         async with (
             connect_async_ws(_ws_url(base_url, "/ws/worker/iv2/term")) as worker,
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()
 
@@ -54,7 +54,7 @@ class TestGuardChecking:
         _, base_url = live_hub
         async with (
             connect_async_ws(_ws_url(base_url, "/ws/worker/gc1/term")) as worker,
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()
 
@@ -83,7 +83,7 @@ class TestGuardChecking:
         _, base_url = live_hub
         async with (
             connect_async_ws(_ws_url(base_url, "/ws/worker/gc2/term")) as worker,
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()
 
@@ -113,7 +113,7 @@ class TestWorkerOffline:
     async def test_acquire_fails_if_no_worker(self, live_hub: Any) -> None:
         """Acquire returns 409 when no worker is online."""
         _, base_url = live_hub
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             # No worker connected for this worker_id
             r = await http.post("/worker/wo1/hijack/acquire", json={"owner": "test", "lease_s": 60})
             # When no worker is connected, acquire fails with 409
@@ -122,7 +122,7 @@ class TestWorkerOffline:
     async def test_send_fails_if_worker_disconnects(self, live_hub: Any) -> None:
         """Send fails with 409 after worker disconnects."""
         _, base_url = live_hub
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             async with connect_async_ws(_ws_url(base_url, "/ws/worker/wo2/term")) as worker:
                 await worker.recv()
                 r = await http.post("/worker/wo2/hijack/acquire", json={"owner": "test", "lease_s": 60})
@@ -154,7 +154,7 @@ class TestInvalidSession:
     async def test_send_with_invalid_hijack_id(self, live_hub: Any) -> None:
         """Send with nonexistent hijack_id returns 404."""
         _, base_url = live_hub
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             r = await http.post(
                 "/worker/is1/hijack/00000000-0000-0000-0000-000000000000/send",
                 json={"keys": "test", "timeout_ms": 500},
@@ -164,7 +164,7 @@ class TestInvalidSession:
     async def test_snapshot_with_invalid_hijack_id(self, live_hub: Any) -> None:
         """GET /snapshot with bad hijack_id returns 404."""
         _, base_url = live_hub
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             # Use a valid UUID format that doesn't exist
             r = await http.get("/worker/is2/hijack/00000000-0000-0000-0000-000000000000/snapshot")
             assert r.status_code == 404, f"Invalid hijack_id should return 404, got {r.status_code}: {r.text}"
@@ -174,7 +174,7 @@ class TestInvalidSession:
         _, base_url = live_hub
         async with (
             connect_async_ws(_ws_url(base_url, "/ws/worker/is3/term")) as worker,
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()
 

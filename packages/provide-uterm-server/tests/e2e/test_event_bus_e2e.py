@@ -21,7 +21,7 @@ import json
 import time
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.client import connect_async_ws
@@ -95,7 +95,7 @@ async def test_worker_snapshot_arrives_via_long_poll(live_app_with_bus: Any) -> 
         assert snap_req is not None, "worker did not receive snapshot_req"
 
         # Start long-poll in background — will block until an event arrives
-        async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_HEADERS, timeout=15.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_HEADERS, timeout=15.0) as http:
             poll_task = asyncio.create_task(
                 http.get("/api/sessions/s1/events/watch", params={"timeout_ms": 5000, "max_events": 1})
             )
@@ -124,7 +124,7 @@ async def test_worker_disconnect_terminates_long_poll(live_app_with_bus: Any) ->
     _hub, base_url = live_app_with_bus
     ws_url = _ws_url(base_url, "/ws/worker/s1/term")
 
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_HEADERS, timeout=15.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_HEADERS, timeout=15.0) as http:
         async with connect_async_ws(ws_url):
             # Start long-poll
             poll_task = asyncio.create_task(http.get("/api/sessions/s1/events/watch", params={"timeout_ms": 8000}))
@@ -147,7 +147,7 @@ async def test_event_types_filter_excludes_non_matching(live_app_with_bus: Any) 
     async with connect_async_ws(ws_url) as worker:
         await _drain_until_type(worker, "snapshot_req", timeout=3.0)
 
-        async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_HEADERS, timeout=15.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_HEADERS, timeout=15.0) as http:
             poll_task = asyncio.create_task(
                 http.get(
                     "/api/sessions/s1/events/watch",

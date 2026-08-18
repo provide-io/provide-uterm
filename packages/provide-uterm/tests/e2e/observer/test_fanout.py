@@ -17,7 +17,7 @@ import asyncio
 import time
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 from provide.uterm.client import connect_async_ws
 
@@ -72,7 +72,7 @@ async def test_five_concurrent_subscribers_all_receive(live_server: Any) -> None
 
     async with (
         connect_async_ws(ws_url(base_url, "/ws/worker/obs1/term")) as worker,
-        httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=20.0) as http,
+        httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=20.0) as http,
     ):
         await worker.recv()  # snapshot_req
 
@@ -128,7 +128,7 @@ async def test_worker_reconnect_new_subscription_works(live_server: Any) -> None
     # Second worker connects
     async with (
         connect_async_ws(ws_url(base_url, "/ws/worker/obs1/term")) as worker2,
-        httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http,
+        httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http,
     ):
         await worker2.recv()  # snapshot_req
 

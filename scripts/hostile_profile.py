@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
-import httpx
+import httpx2
 import websockets
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
@@ -59,7 +59,7 @@ ERROR = "error"  # server error (5xx / 1011) or an unexpected probe failure
 
 async def _health(base_url: str, timeout_s: float) -> bool:
     try:
-        async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s) as client:
+        async with httpx2.AsyncClient(base_url=base_url, timeout=timeout_s) as client:
             resp = await client.get("/api/health")
             return resp.status_code == 200
     except Exception:

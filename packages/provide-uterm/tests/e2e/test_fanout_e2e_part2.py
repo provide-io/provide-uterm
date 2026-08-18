@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 from typing import Any
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from ._live_server import live_server_with_bus
@@ -30,7 +30,7 @@ async def test_group_crud_lifecycle() -> None:
     wids = [s["session_id"] for s in sessions]
 
     async with live_server_with_bus(sessions, label="fanout_crud") as (_hub, base_url):
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             # Create
             resp = await http.post(
                 "/api/fanout/groups",
@@ -63,7 +63,7 @@ async def test_group_crud_lifecycle() -> None:
             assert resp.status_code == 204
 
         # List as grantee — fresh client with bob's identity
-        async with httpx.AsyncClient(
+        async with httpx2.AsyncClient(
             base_url=base_url,
             headers={"X-Uterm-Principal": "bob", "X-Uterm-Role": "admin"},
             timeout=10.0,
@@ -74,12 +74,12 @@ async def test_group_crud_lifecycle() -> None:
             assert any(g["group_id"] == group_id for g in bob_groups)
 
         # Delete and verify — individual requests to avoid stale connection reuse
-        transport = httpx.AsyncHTTPTransport(retries=2)
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0, transport=transport) as http:
+        transport = httpx2.AsyncHTTPTransport(retries=2)
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0, transport=transport) as http:
             resp = await http.delete(f"/api/fanout/groups/{group_id}")
             assert resp.status_code == 204
 
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0, transport=transport) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0, transport=transport) as http:
             resp = await http.get("/api/fanout/groups")
             assert resp.status_code == 200
             remaining = resp.json()
@@ -96,7 +96,7 @@ async def test_max_group_size_enforcement() -> None:
     sessions = _sessions(60, prefix="mx")
 
     async with live_server_with_bus(sessions, label="fanout_max_size") as (_hub, base_url):
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             worker_ids = [session["session_id"] for session in sessions]
             resp = await http.post(
                 "/api/fanout/groups",
@@ -129,7 +129,7 @@ async def test_empty_input_broadcast() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={
@@ -181,7 +181,7 @@ async def test_rapid_fire_broadcast() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=30.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=30.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={
@@ -246,7 +246,7 @@ async def test_concurrent_broadcasts_different_groups() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 # Create two groups
                 resp_a = await http.post(
                     "/api/fanout/groups",
@@ -344,7 +344,7 @@ async def test_worker_reconnect_between_sends() -> None:
         await _drain_initial(ws2)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={

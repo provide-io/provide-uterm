@@ -12,7 +12,7 @@ import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx2
 import pytest
 
 from provide.uterm.server.bridge.hub import EventBus, TermHub
@@ -158,7 +158,7 @@ async def test_deliver_posts_to_url() -> None:
         resp.is_success = True
         return resp
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ hello"})
@@ -196,7 +196,7 @@ async def test_deliver_adds_hmac_signature() -> None:
         return resp
 
     secret = "uterm-test-secret-32-byte-minimum-key"
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register("s1", "https://example.com/hook", secret=secret, event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ signed"})
@@ -227,7 +227,7 @@ async def test_deliver_no_signature_when_no_secret() -> None:
         resp.is_success = True
         return resp
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ unsigned"})
@@ -263,7 +263,7 @@ async def test_hmac_signature_is_correct() -> None:
         return resp
 
     secret = "uterm-test-secret-32-byte-minimum-key"
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register("s1", "https://example.com/hook", secret=secret, event_bus=bus)
         await asyncio.sleep(0.05)
         await hub.append_event("s1", "snapshot", {"screen": "$ check"})
@@ -306,7 +306,7 @@ async def test_deliver_retries_on_5xx() -> None:
     # Patch _RETRY_DELAYS to near-zero so retries are fast without affecting
     # the test's own asyncio.sleep calls.
     with (
-        patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
+        patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
         patch("provide.uterm.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
     ):
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
@@ -338,7 +338,7 @@ async def test_deliver_gives_up_after_max_retries() -> None:
         return resp
 
     with (
-        patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
+        patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
         patch("provide.uterm.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
     ):
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
@@ -366,13 +366,13 @@ async def test_deliver_retries_on_network_error() -> None:
         nonlocal call_count
         call_count += 1
         if call_count < 3:
-            raise httpx.ConnectError("refused")
+            raise httpx2.ConnectError("refused")
         resp = MagicMock()
         resp.is_success = True
         return resp
 
     with (
-        patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
+        patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)),
         patch("provide.uterm.server.webhooks._RETRY_DELAYS", (0.001, 0.001, 0.001)),
     ):
         await manager.register("s1", "https://example.com/hook", event_bus=bus)
@@ -419,7 +419,7 @@ async def test_deliver_rejects_dns_names_resolving_to_blocked_addresses(blocked_
     )
 
     post = AsyncMock()
-    with patch("httpx.AsyncClient.post", new=post):
+    with patch("httpx2.AsyncClient.post", new=post):
         await manager._deliver(cfg, _make_event())
 
     post.assert_not_awaited()
@@ -439,7 +439,7 @@ async def test_deliver_allows_dns_names_resolving_to_public_addresses() -> None:
     resp.is_success = True
 
     post = AsyncMock(return_value=resp)
-    with patch("httpx.AsyncClient.post", new=post):
+    with patch("httpx2.AsyncClient.post", new=post):
         await manager._deliver(cfg, _make_event())
 
     post.assert_awaited_once()
@@ -464,7 +464,7 @@ async def test_event_types_filter_drops_unmatched() -> None:
         resp.is_success = True
         return resp
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register("s1", "https://example.com/hook", event_types=["hijack_acquired"], event_bus=bus)
         await asyncio.sleep(0.05)
         # snapshot should be filtered
@@ -503,7 +503,7 @@ async def test_pattern_filter_drops_non_matching() -> None:
         resp.is_success = True
         return resp
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register(
             "s1",
             "https://example.com/hook",
@@ -546,7 +546,7 @@ async def test_delivery_loop_stops_on_worker_disconnect() -> None:
         resp.is_success = True
         return resp
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         cfg = await manager.register("s1", "https://example.com/hook", event_bus=bus)
         await asyncio.sleep(0.05)
         bus.close_worker("s1")
@@ -603,7 +603,7 @@ async def test_multiple_webhooks_both_receive_events() -> None:
         resp.is_success = True
         return resp
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
+    with patch("httpx2.AsyncClient.post", new=AsyncMock(side_effect=_mock_post)):
         await manager.register("s1", "https://example.com/a", event_bus=bus)
         await manager.register("s1", "https://example.com/b", event_bus=bus)
         await asyncio.sleep(0.05)
@@ -667,7 +667,7 @@ async def test_repeated_blocked_deliveries_auto_unregister() -> None:
     await fake_task
 
     post = AsyncMock()
-    with patch("httpx.AsyncClient.post", new=post):
+    with patch("httpx2.AsyncClient.post", new=post):
         for _ in range(3):
             await manager._deliver(cfg, _make_event())
         # Allow the scheduled unregister task to run.
@@ -703,7 +703,7 @@ async def test_successful_delivery_resets_block_counter() -> None:
     resp = MagicMock()
     resp.is_success = True
     post = AsyncMock(return_value=resp)
-    with patch("httpx.AsyncClient.post", new=post):
+    with patch("httpx2.AsyncClient.post", new=post):
         await manager._deliver(cfg, _make_event())  # blocked → count=1
         assert manager._blocked_counts[cfg.webhook_id] == 1
         await manager._deliver(cfg, _make_event())  # allowed → reset

@@ -11,7 +11,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any
 
-import httpx
+import httpx2
 import uvicorn
 from fastapi import FastAPI
 
@@ -154,7 +154,7 @@ class TestLeaseExpiry:
         _, base_url = live_hub
         async with (
             connect_async_ws(_ws_url(base_url, "/ws/worker/le1/term")) as worker,
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()  # snapshot_req
 
@@ -220,7 +220,7 @@ class TestWorkerReconnect:
     async def test_active_hijack_cleared_on_worker_disconnect(self, live_hub: Any) -> None:
         """REST acquire, then worker disconnects; second acquire succeeds."""
         _, base_url = live_hub
-        async with httpx.AsyncClient(base_url=base_url) as http:
+        async with httpx2.AsyncClient(base_url=base_url) as http:
             async with connect_async_ws(_ws_url(base_url, "/ws/worker/wr2/term")) as worker:
                 await worker.recv()  # snapshot_req
 
@@ -248,7 +248,7 @@ class TestRestHijackAdvanced:
         _, base_url = live_hub
         async with (
             connect_async_ws(_ws_url(base_url, "/ws/worker/rha1/term")) as worker,
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()  # snapshot_req
 
@@ -271,7 +271,7 @@ class TestRestHijackAdvanced:
         _, base_url = live_hub
         async with (
             connect_async_ws(_ws_url(base_url, "/ws/worker/rha2/term")) as worker,
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()
 
@@ -305,7 +305,7 @@ class TestRestHijackAdvanced:
             await worker.recv()
 
             async def acquire(client_id: int):
-                async with httpx.AsyncClient(base_url=base_url) as http:
+                async with httpx2.AsyncClient(base_url=base_url) as http:
                     r = await http.post(
                         "/worker/rha3/hijack/acquire", json={"owner": f"client{client_id}", "lease_s": 60}
                     )
@@ -373,7 +373,7 @@ class TestInputModeLifecycle:
         _, base_url = live_hub
         async with (
             connect_async_ws(_ws_url(base_url, "/ws/worker/im1/term")) as worker,
-            httpx.AsyncClient(base_url=base_url) as http,
+            httpx2.AsyncClient(base_url=base_url) as http,
         ):
             await worker.recv()
 

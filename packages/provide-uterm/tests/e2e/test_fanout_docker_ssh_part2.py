@@ -21,7 +21,7 @@ import re
 import shutil
 import subprocess
 
-import httpx
+import httpx2
 import pytest
 
 from .test_fanout_docker_ssh_part1 import (
@@ -68,7 +68,7 @@ pytestmark = [
 async def test_fanout_uname(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out `uname -a` — all return Linux."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="uname-test")
         body = await _send_command(http, group_id, "uname -a\n")
         assert len(body["results"]) == _NUM_CONTAINERS
@@ -81,7 +81,7 @@ async def test_fanout_uname(docker_server: tuple[str, list[str]]) -> None:
 async def test_fanout_identical_output(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out `echo hello` — all sessions return 'hello'."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="identical-test", divergence_threshold=0.3)
         body = await _send_command(http, group_id, "echo hello\n")
         assert len(body["results"]) == _NUM_CONTAINERS
@@ -96,7 +96,7 @@ async def test_fanout_divergent_output(docker_server: tuple[str, list[str]]) -> 
     base_url, wids = docker_server
     marker_re = re.compile(r"\b(divergent-\d+)\b")
 
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="divergent-test", divergence_threshold=0.99)
         body = await _send_command(
             http,
@@ -121,7 +121,7 @@ async def test_fanout_divergent_output(docker_server: tuple[str, list[str]]) -> 
 async def test_fanout_sequential(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out `whoami` in sequential mode — all return 'root'."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="sequential-test", mode="sequential")
         body = await _send_command(http, group_id, "whoami\n", quiesce_ms=2000, max_response_ms=30000)
         assert len(body["results"]) == _NUM_CONTAINERS
@@ -134,7 +134,7 @@ async def test_fanout_sequential(docker_server: tuple[str, list[str]]) -> None:
 async def test_fanout_large_output(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out large output — verify substantial output per session."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="large-output-test")
         body = await _send_command(
             http,
@@ -153,7 +153,7 @@ async def test_fanout_large_output(docker_server: tuple[str, list[str]]) -> None
 async def test_fanout_pipeline(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out multi-command pipeline — verify Alpine in output."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="pipeline-test")
         body = await _send_command(http, group_id, "cat /etc/os-release\n")
         assert len(body["results"]) == _NUM_CONTAINERS
@@ -166,7 +166,7 @@ async def test_fanout_pipeline(docker_server: tuple[str, list[str]]) -> None:
 async def test_fanout_file_creation(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out file creation — verify 'fanout-test' in output."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="file-test")
         body = await _send_command(http, group_id, "echo fanout-test > /tmp/f.txt && cat /tmp/f.txt\n")
         assert len(body["results"]) == _NUM_CONTAINERS
@@ -179,7 +179,7 @@ async def test_fanout_file_creation(docker_server: tuple[str, list[str]]) -> Non
 async def test_fanout_env_isolation(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out env variable — verify 'bar' in each output."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="env-test")
         body = await _send_command(http, group_id, "export FOO=bar && echo $FOO\n")
         assert len(body["results"]) == _NUM_CONTAINERS
@@ -203,7 +203,7 @@ async def test_fanout_partial_failure(docker_ssh_fleet: list[tuple[str, int]]) -
         subprocess.run(["docker", "stop", f"{_CONTAINER_PREFIX}-{stopped_idx}"], capture_output=True, timeout=30)
         await asyncio.sleep(3.0)
 
-        async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
             group_id = await _create_group(http, wids, name="partial-fail-test")
             body = await _send_command(http, group_id, "echo alive\n", quiesce_ms=2000, max_response_ms=10000)
             assert len(body["results"]) == _NUM_CONTAINERS
@@ -235,7 +235,7 @@ async def test_fanout_partial_failure(docker_ssh_fleet: list[tuple[str, int]]) -
 async def test_fanout_rapid_commands(docker_server: tuple[str, list[str]]) -> None:
     """3 sequential sends — all succeed."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=90.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=90.0) as http:
         group_id = await _create_group(http, wids, name="rapid-test")
         for i in range(3):
             body = await _send_command(http, group_id, f"echo rapid-{i}\n", quiesce_ms=1000, max_response_ms=5000)
@@ -250,7 +250,7 @@ async def test_fanout_concurrent_groups(docker_server: tuple[str, list[str]]) ->
     group_a_wids = wids[:2]
     group_b_wids = wids[1:]  # overlapping
 
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         gid_a = await _create_group(http, group_a_wids, name="group-a")
         gid_b = await _create_group(http, group_b_wids, name="group-b")
 
@@ -270,7 +270,7 @@ async def test_fanout_concurrent_groups(docker_server: tuple[str, list[str]]) ->
 async def test_fanout_adaptive_quiesce(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out with delayed output — verify adaptive wait captures it."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="quiesce-test")
         body = await _send_command(
             http,

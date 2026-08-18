@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 
-import httpx
+import httpx2
 from playwright.sync_api import Page, expect
 
 
@@ -17,7 +17,7 @@ def _example_url(base_url: str) -> str:
 
 
 def _example_reset(base_url: str, mode: str = "hijack") -> None:
-    with httpx.Client(base_url=base_url, timeout=5.0) as http:
+    with httpx2.Client(base_url=base_url, timeout=5.0) as http:
         reset = http.post("/demo/session/provide-shell/reset")
         assert reset.status_code == 200
         switch = http.post("/demo/session/provide-shell/mode", json={"input_mode": mode})
@@ -25,7 +25,7 @@ def _example_reset(base_url: str, mode: str = "hijack") -> None:
 
 
 def _example_state(base_url: str) -> dict[str, object]:
-    with httpx.Client(base_url=base_url, timeout=5.0) as http:
+    with httpx2.Client(base_url=base_url, timeout=5.0) as http:
         resp = http.get("/demo/session/provide-shell")
         resp.raise_for_status()
         return resp.json()

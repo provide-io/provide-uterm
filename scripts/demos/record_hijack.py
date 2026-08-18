@@ -11,7 +11,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -57,7 +57,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
         # Switch provide-shell to hijack input mode (required for REST hijack)
         info("Switching provide-shell to hijack input mode...")
         r = await http.patch("/api/sessions/provide-shell", json={"input_mode": "hijack"})
@@ -151,7 +151,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # Pre-populate terminal, then switch to hijack mode
     send_to_session(base_url, "provide-shell", "echo 'session ready for hijack'\r", wait_s=0.8)
     send_to_session(base_url, "provide-shell", "uptime\r", wait_s=0.8)
-    with httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
+    with httpx2.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
         http.patch("/api/sessions/provide-shell", json={"input_mode": "hijack"})
 
     cast_path = asciinema_record(__file__, feat_dir / "terminal.cast")

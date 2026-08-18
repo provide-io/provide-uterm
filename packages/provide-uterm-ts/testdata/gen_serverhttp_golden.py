@@ -46,7 +46,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 
 OUT = Path(__file__).resolve().parent / "serverhttp_golden.json"
 
@@ -135,7 +135,7 @@ def _mask_one(node: Any, segments: list[str]) -> None:
             node[key] = VOLATILE
 
 
-def _body(response: httpx.Response) -> Any:
+def _body(response: httpx2.Response) -> Any:
     """The parsed body, or the one name a body nobody can parse has."""
     try:
         return response.json()
@@ -153,9 +153,9 @@ def _start(host: str, port: int, listener: socket.socket, app: Any) -> Any:
     deadline = time.monotonic() + 30.0
     while time.monotonic() < deadline:
         try:
-            if httpx.get(f"http://{host}:{port}/api/health", timeout=1.0).status_code == 200:
+            if httpx2.get(f"http://{host}:{port}/api/health", timeout=1.0).status_code == 200:
                 return server
-        except httpx.HTTPError:  # pragma: no cover - the server is still binding
+        except httpx2.HTTPError:  # pragma: no cover - the server is still binding
             pass
         time.sleep(0.05)
     raise RuntimeError("the reference server did not become healthy")  # pragma: no cover
@@ -191,7 +191,7 @@ def main() -> None:
 
     records: list[dict[str, Any]] = []
     try:
-        with httpx.Client(base_url=f"http://{host}:{port}", timeout=20.0) as client:
+        with httpx2.Client(base_url=f"http://{host}:{port}", timeout=20.0) as client:
             for probe in PROBES:
                 response = client.request(
                     str(probe["method"]),

@@ -15,7 +15,7 @@ import json
 import statistics
 import time
 
-import httpx
+import httpx2
 import websockets
 
 
@@ -31,7 +31,7 @@ def _percentile(values: list[float], p: float) -> float:
 # ---------------------------------------------------------------------------
 
 
-async def _wait_connected(client: httpx.AsyncClient, session_id: str, timeout_s: float) -> float:
+async def _wait_connected(client: httpx2.AsyncClient, session_id: str, timeout_s: float) -> float:
     start = time.perf_counter()
     deadline = start + timeout_s
     while time.perf_counter() < deadline:
@@ -42,7 +42,7 @@ async def _wait_connected(client: httpx.AsyncClient, session_id: str, timeout_s:
     raise TimeoutError(f"session {session_id} did not reconnect within {timeout_s}s")
 
 
-async def _run_restart(client: httpx.AsyncClient, session_id: str, rounds: int, timeout_s: float) -> int:
+async def _run_restart(client: httpx2.AsyncClient, session_id: str, rounds: int, timeout_s: float) -> int:
     durations: list[float] = []
     for _ in range(rounds):
         restart = await client.post(f"/api/sessions/{session_id}/restart")
@@ -103,7 +103,7 @@ async def _run_ws_flap(base_url: str, worker_id: str, rounds: int, timeout_s: fl
 # ---------------------------------------------------------------------------
 
 
-async def _run_lease_expiry(client: httpx.AsyncClient, worker_id: str, rounds: int, timeout_s: float) -> int:
+async def _run_lease_expiry(client: httpx2.AsyncClient, worker_id: str, rounds: int, timeout_s: float) -> int:
     """Acquire a short-lived hijack, let it expire without a heartbeat.
 
     Expiry is detected by polling re-acquire: if a second acquire succeeds (200)
@@ -160,7 +160,7 @@ async def _run_lease_expiry(client: httpx.AsyncClient, worker_id: str, rounds: i
 
 
 async def run(base_url: str, session_id: str, scenario: str, rounds: int, timeout_s: float) -> int:
-    async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s + 10) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=timeout_s + 10) as client:
         health = await client.get("/api/health")
         if health.status_code != 200 and (health.status_code != 404 or scenario not in {"ws_flap", "lease_expiry"}):
             # Demo server has no /api/health; treat 404 as OK for WS-only scenarios.

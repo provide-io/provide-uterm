@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 from typing import Any
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from ._live_server import live_server_with_bus, wait_for_subscribers
@@ -79,7 +79,7 @@ async def test_parallel_broadcast_5_sessions() -> None:
             for ws in workers:
                 await _drain_initial(ws)
 
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 # Create group
                 resp = await http.post(
                     "/api/fanout/groups",
@@ -142,7 +142,7 @@ async def test_parallel_broadcast_with_disconnected_workers() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={
@@ -202,7 +202,7 @@ async def test_sequential_broadcast_order() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={
@@ -272,7 +272,7 @@ async def test_sequential_stop_on_error() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={
@@ -350,7 +350,7 @@ async def test_divergence_detection() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={

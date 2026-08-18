@@ -125,7 +125,7 @@ async def test_webhook_policy_gate_allows_on_200_allow_true():
     client.__aenter__.return_value = client
     client.post.return_value = response
 
-    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=client) as async_client:
+    with patch("provide.uterm.manager.ext.httpx2.AsyncClient", return_value=client) as async_client:
         assert await gate.intercept_spawn("agent_123", "config.yaml", {"worker_type": "shell"}) is True
 
     async_client.assert_called_once_with(timeout=0.5)
@@ -150,7 +150,7 @@ async def test_webhook_policy_gate_signs_body_when_secret_set():
     client.__aenter__.return_value = client
     client.post.return_value = response
 
-    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=client):
+    with patch("provide.uterm.manager.ext.httpx2.AsyncClient", return_value=client):
         assert await gate.intercept_spawn("a1", "/cfg/a.yaml", {"k": "v"}) is True
 
     _, kwargs = client.post.call_args
@@ -171,7 +171,7 @@ async def test_webhook_policy_gate_unsigned_when_no_secret():
     client.__aenter__.return_value = client
     client.post.return_value = response
 
-    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=client):
+    with patch("provide.uterm.manager.ext.httpx2.AsyncClient", return_value=client):
         assert await gate.intercept_spawn("a1", "/cfg/a.yaml", {"k": "v"}) is True
 
     _, kwargs = client.post.call_args
@@ -186,10 +186,10 @@ async def test_webhook_policy_gate_rejects_non_200_or_exception():
     client.__aenter__.return_value = client
     client.post.return_value = response
 
-    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=client):
+    with patch("provide.uterm.manager.ext.httpx2.AsyncClient", return_value=client):
         assert await gate.intercept_spawn("agent_123", "config.yaml", {}) is False
 
     failing_client = AsyncMock()
     failing_client.__aenter__.side_effect = RuntimeError("network down")
-    with patch("provide.uterm.manager.ext.httpx.AsyncClient", return_value=failing_client):
+    with patch("provide.uterm.manager.ext.httpx2.AsyncClient", return_value=failing_client):
         assert await gate.intercept_spawn("agent_123", "config.yaml", {}) is False

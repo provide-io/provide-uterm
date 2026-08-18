@@ -11,7 +11,7 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -49,7 +49,7 @@ async def run_terminal_demo() -> None:
 
     banner(DESCRIPTION)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as client:
         # Post basic lifecycle annotations
         info("Posting lifecycle annotations...")
         for label, severity in [("demo_started", "info"), ("deploy_begin", "warning")]:

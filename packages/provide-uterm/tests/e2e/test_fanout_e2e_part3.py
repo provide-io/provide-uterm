@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 import time
 
-import httpx
+import httpx2
 from provide.uterm.client import connect_async_ws
 
 from ._live_server import live_server_with_bus
@@ -39,7 +39,7 @@ async def test_large_output_collection() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={
@@ -101,7 +101,7 @@ async def test_adaptive_quiesce_fast_return() -> None:
             await _drain_initial(ws)
 
         try:
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=15.0) as http:
                 resp = await http.post(
                     "/api/fanout/groups",
                     json={
@@ -153,7 +153,7 @@ async def test_send_to_nonexistent_group() -> None:
     sessions = _sessions(1, prefix="ne")
 
     async with live_server_with_bus(sessions, label="fanout_404") as (_hub, base_url):
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             resp = await http.post(
                 "/api/fanout/groups/nonexistent-id/send",
                 json={
@@ -176,7 +176,7 @@ async def test_delete_nonexistent_group() -> None:
     sessions = _sessions(1, prefix="dn")
 
     async with live_server_with_bus(sessions, label="fanout_del_404") as (_hub, base_url):
-        async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+        async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
             resp = await http.delete("/api/fanout/groups/does-not-exist")
             assert resp.status_code == 404
             assert "not found" in resp.json()["error"]

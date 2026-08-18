@@ -5,7 +5,7 @@
 """HijackClient path-injection guard.
 
 Caller/LLM-supplied ``worker_id`` / ``hijack_id`` / ``session_id`` are
-interpolated into request paths. An id like ``../../api/keys`` would let httpx
+interpolated into request paths. An id like ``../../api/keys`` would let httpx2
 resolve the URL to a *different* server route, escaping the per-method authz
 model. ``_safe_id`` rejects anything that is not a single safe path segment,
 before any HTTP request is issued.

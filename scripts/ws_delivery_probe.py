@@ -17,7 +17,7 @@ import statistics
 import time
 from dataclasses import dataclass
 
-import httpx
+import httpx2
 import websockets
 
 
@@ -62,7 +62,7 @@ async def _probe(base_url: str, worker_id: str, timeout_s: float) -> DeliveryRes
             if hello is None:
                 return DeliveryResult(0.0, 0.0, False, "no hello frame received")
 
-            async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s) as http:
+            async with httpx2.AsyncClient(base_url=base_url, timeout=timeout_s) as http:
                 t0 = time.perf_counter()
                 acquire = await http.post(
                     f"/worker/{worker_id}/hijack/acquire",
@@ -86,7 +86,7 @@ async def _probe(base_url: str, worker_id: str, timeout_s: float) -> DeliveryRes
 
 
 async def run(base_url: str, worker_id: str, rounds: int, timeout_s: float) -> int:
-    async with httpx.AsyncClient(base_url=base_url, timeout=timeout_s) as http:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=timeout_s) as http:
         health = await http.get("/api/health")
         if health.status_code not in {200, 404}:
             print(f"server unreachable: status={health.status_code}")

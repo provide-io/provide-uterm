@@ -3,9 +3,9 @@
 """
 Webhook dispatcher stress script for memray profiling.
 
-Exercises the JSON-serialization + HMAC-signing + httpx POST hot path of
+Exercises the JSON-serialization + HMAC-signing + httpx2 POST hot path of
 ``WebhookManager._deliver`` for many events fanning out to multiple webhooks.
-The network layer is short-circuited with ``httpx.MockTransport`` so we only
+The network layer is short-circuited with ``httpx2.MockTransport`` so we only
 measure dispatcher-side allocations, not socket / TLS noise.
 
 Workload: 10 webhooks x 5_000 events.
@@ -18,13 +18,13 @@ import asyncio
 import logging
 from typing import Any
 
-import httpx
+import httpx2
 
 from provide.uterm.server import webhooks as _webhooks_mod
 from provide.uterm.server.webhooks import WebhookConfig, WebhookManager
 
 # Silence per-request HTTP logging — measurable allocations otherwise.
-logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 NUM_WEBHOOKS = 10
@@ -32,22 +32,22 @@ NUM_EVENTS = 5_000
 
 
 def _install_mock_transport() -> None:
-    """Replace ``httpx.AsyncClient`` in the webhooks module with a stub that
+    """Replace ``httpx2.AsyncClient`` in the webhooks module with a stub that
     returns ``200 OK`` immediately. Avoids real DNS / sockets / TLS so the
     measured allocations isolate the dispatcher's own work.
     """
 
-    def _handler(_request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=b"")
+    def _handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, content=b"")
 
-    transport = httpx.MockTransport(_handler)
+    transport = httpx2.MockTransport(_handler)
 
-    class _StubClient(httpx.AsyncClient):
+    class _StubClient(httpx2.AsyncClient):
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             kwargs["transport"] = transport
             super().__init__(*args, **kwargs)
 
-    _webhooks_mod.httpx.AsyncClient = _StubClient  # type: ignore[misc]
+    _webhooks_mod.httpx2.AsyncClient = _StubClient  # type: ignore[misc]
 
 
 async def _fake_resolver(_hostname: str) -> tuple[str, ...]:

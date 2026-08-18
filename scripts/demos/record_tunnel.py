@@ -29,7 +29,7 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -70,7 +70,7 @@ def _create_tunnel(base_url: str, ttl_s: int = 3600) -> dict[str, str]:
     and ``expires_at``. The plain tokens are present here exactly once;
     server-side storage retains only their BLAKE2b digests.
     """
-    with httpx.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
+    with httpx2.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
         r = http.post("/api/tunnels", json={"tunnel_type": "terminal", "ttl_s": ttl_s})
         r.raise_for_status()
         return dict(r.json())

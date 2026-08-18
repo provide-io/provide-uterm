@@ -10,7 +10,7 @@ import asyncio
 import time
 from contextlib import asynccontextmanager
 
-import httpx
+import httpx2
 import uvicorn
 from fastapi import FastAPI
 
@@ -52,7 +52,7 @@ class TestRestAcquireRateLimit:
         async with _tight_rate_hub(acquire_rate=1.0) as (_hub, base_url):
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl1/term")) as worker,
-                httpx.AsyncClient(base_url=base_url) as http,
+                httpx2.AsyncClient(base_url=base_url) as http,
             ):
                 await worker.recv()  # snapshot_req
 
@@ -75,7 +75,7 @@ class TestRestAcquireRateLimit:
         async with _tight_rate_hub(acquire_rate=1.0) as (_hub, base_url):
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl2/term")) as worker,
-                httpx.AsyncClient(base_url=base_url) as http,
+                httpx2.AsyncClient(base_url=base_url) as http,
             ):
                 await worker.recv()
 
@@ -118,7 +118,7 @@ class TestRestSendRateLimit:
         async with _tight_rate_hub(send_rate=2.0) as (_hub, base_url):
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl3/term")) as worker,
-                httpx.AsyncClient(base_url=base_url) as http,
+                httpx2.AsyncClient(base_url=base_url) as http,
             ):
                 await worker.recv()
 
@@ -154,7 +154,7 @@ class TestRestSendRateLimit:
         async with _tight_rate_hub(send_rate=1.0) as (_hub, base_url):
             async with (
                 connect_async_ws(_ws_url(base_url, "/ws/worker/rrl4/term")) as worker,
-                httpx.AsyncClient(base_url=base_url) as http,
+                httpx2.AsyncClient(base_url=base_url) as http,
             ):
                 await worker.recv()
 

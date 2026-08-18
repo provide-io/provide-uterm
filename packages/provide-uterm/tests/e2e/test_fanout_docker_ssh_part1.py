@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 import pytest
 import uvicorn
 
@@ -209,7 +209,7 @@ def docker_server(docker_ssh_fleet: list[tuple[str, int]]) -> Any:  # type: igno
         hub._event_bus = EventBus()
 
     # Create and connect SSH sessions
-    import httpx as _httpx
+    import httpx2 as _httpx
 
     wids = []
     with _httpx.Client(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
@@ -283,7 +283,7 @@ def _live_server_ctx(fleet: list[tuple[str, int]], wids: list[str], prefix: str 
     if hub.event_bus is None:
         hub._event_bus = EventBus()
 
-    import httpx as _httpx
+    import httpx2 as _httpx
 
     with _httpx.Client(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         for i, (host, sshport) in enumerate(fleet):
@@ -347,7 +347,7 @@ def _ssh_session_configs(fleet: list[tuple[str, int]], prefix: str = "ssh") -> l
 
 
 async def _create_and_connect_sessions(
-    http: httpx.AsyncClient,
+    http: httpx2.AsyncClient,
     sessions: list[dict[str, Any]],
     timeout: float = 60.0,
 ) -> None:
@@ -370,7 +370,7 @@ async def _create_and_connect_sessions(
 
 
 async def _create_group(
-    http: httpx.AsyncClient,
+    http: httpx2.AsyncClient,
     worker_ids: list[str],
     *,
     name: str = "test-group",
@@ -387,7 +387,7 @@ async def _create_group(
 
 
 async def _send_command(
-    http: httpx.AsyncClient,
+    http: httpx2.AsyncClient,
     group_id: str,
     data: str,
     *,
@@ -411,7 +411,7 @@ async def _send_command(
 async def test_fanout_hostname(docker_server: tuple[str, list[str]]) -> None:
     """Fan-out `hostname` — each container returns a different hostname."""
     base_url, wids = docker_server
-    async with httpx.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=_ADMIN_H, timeout=60.0) as http:
         group_id = await _create_group(http, wids, name="hostname-test")
         body = await _send_command(http, group_id, "hostname\n")
         assert len(body["results"]) == _NUM_CONTAINERS

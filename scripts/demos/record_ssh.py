@@ -13,7 +13,7 @@ import time
 from typing import TYPE_CHECKING
 
 import asyncssh
-import httpx
+import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -92,7 +92,7 @@ async def run_terminal_demo() -> None:
     base_url, server = start_server()
     await asyncio.sleep(1.5)
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
         banner(DESCRIPTION)
 
         info(f"Starting inline SSH server on 127.0.0.1:{ssh_port}...")
@@ -183,7 +183,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     # setup on this thread so it never blocks the SSH server's loop.
     ssh_srv, ssh_port = asyncio.run_coroutine_threadsafe(_start_ssh_server(), loop).result(timeout=15)
     base_url, srv = start_server()
-    with httpx.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
+    with httpx2.Client(base_url=base_url, timeout=30.0, headers=dev_bearer_headers()) as http:
         http.post(
             "/api/sessions",
             json={

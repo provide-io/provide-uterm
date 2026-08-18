@@ -38,7 +38,7 @@ async def test_forward_to_relay_posts_event() -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.post = AsyncMock(return_value=mock_response)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         await _forward_to_relay(
             {"event": "open", "username": "alice", "pid": 1},
             "https://cf.example.com",
@@ -62,7 +62,7 @@ async def test_forward_to_relay_trailing_slash_stripped() -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.post = AsyncMock()
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         await _forward_to_relay({"event": "close"}, "https://cf.example.com/", "tok")
 
     url = mock_client.post.call_args[0][0]
@@ -72,16 +72,16 @@ async def test_forward_to_relay_trailing_slash_stripped() -> None:
 async def test_forward_to_relay_swallows_network_error() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    import httpx
+    import httpx2
 
     from provide.uterm.server.pam_integration import _forward_to_relay
 
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.post = AsyncMock(side_effect=httpx.ConnectError("unreachable"))
+    mock_client.post = AsyncMock(side_effect=httpx2.ConnectError("unreachable"))
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         await _forward_to_relay({"event": "open"}, "https://x.example.com", "tok")  # must not raise
 
 
@@ -100,7 +100,7 @@ async def test_create_relay_tunnel_returns_token_and_endpoint() -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.post = AsyncMock(return_value=mock_response)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         result = await _create_relay_tunnel("https://cf.example.com", "tok", "pam-alice-3", "alice (/dev/pts/3)")
 
     assert result == ("wt-123", "wss://cf.example.com/tunnel/abc")
@@ -112,16 +112,16 @@ async def test_create_relay_tunnel_returns_token_and_endpoint() -> None:
 async def test_create_relay_tunnel_returns_none_on_error() -> None:
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    import httpx
+    import httpx2
 
     from provide.uterm.server.pam_integration import _create_relay_tunnel
 
     mock_client = MagicMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
-    mock_client.post = AsyncMock(side_effect=httpx.ConnectError("unreachable"))
+    mock_client.post = AsyncMock(side_effect=httpx2.ConnectError("unreachable"))
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         result = await _create_relay_tunnel("https://cf.example.com", "tok", "s1", "name")
 
     assert result is None
@@ -157,7 +157,7 @@ async def test_on_open_forwards_to_cf_when_configured() -> None:
         )
     )
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         await _on_open(ev, cfg, registry)
 
     assert mock_client.post.await_count >= 1
@@ -188,7 +188,7 @@ async def test_on_close_forwards_to_cf_when_configured() -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.post = AsyncMock()
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         await _on_close(ev, cfg, registry)
 
     mock_client.post.assert_awaited_once()
@@ -392,7 +392,7 @@ async def test_on_open_bridge_start_failure_cleans_up() -> None:
 
     bridges: dict[str, object] = {}
     with (
-        patch("httpx.AsyncClient", return_value=mock_client),
+        patch("httpx2.AsyncClient", return_value=mock_client),
         patch("provide.uterm.server.pam_tunnel.PamTunnelBridge", return_value=bridge_mock),
     ):
         await _on_open(ev, cfg, registry, bridges)
@@ -419,7 +419,7 @@ async def test_forward_to_relay_blocked_for_metadata_ip_no_post() -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.post = AsyncMock()
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         # Literal metadata IP → assert_webhook_target_allowed raises EgressBlockedError.
         await _forward_to_relay({"event": "open"}, "https://169.254.169.254/", "tok")  # must not raise
 
@@ -438,7 +438,7 @@ async def test_forward_to_relay_allows_benign_url_posts() -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.post = AsyncMock()
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         await _forward_to_relay({"event": "open"}, "https://cf.example.com", "tok")
 
     mock_client.post.assert_awaited_once()
@@ -456,7 +456,7 @@ async def test_create_relay_tunnel_blocked_for_metadata_ip_returns_none() -> Non
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.post = AsyncMock()
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         result = await _create_relay_tunnel("https://169.254.169.254/", "tok", "s1", "name")
 
     assert result is None
@@ -477,7 +477,7 @@ async def test_create_relay_tunnel_allows_benign_url() -> None:
     mock_client.__aexit__ = AsyncMock(return_value=None)
     mock_client.post = AsyncMock(return_value=mock_response)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("httpx2.AsyncClient", return_value=mock_client):
         result = await _create_relay_tunnel("https://cf.example.com", "tok", "s1", "name")
 
     assert result == ("wt", "wss://x")

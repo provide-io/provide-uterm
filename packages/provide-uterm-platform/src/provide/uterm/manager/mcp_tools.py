@@ -44,10 +44,10 @@ class _ToolRegistrar(Protocol):
 
 async def _http_request(base_url: str, method: str, path: str, **kwargs: Any) -> tuple[bool, dict[str, Any]]:
     """Call the manager REST API and normalize the response."""
-    import httpx
+    import httpx2
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx2.AsyncClient(timeout=20) as client:
             response = await client.request(method, f"{base_url}{path}", **kwargs)
         data = response.json()
         if response.status_code >= 400:

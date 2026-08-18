@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx2 import ASGITransport, AsyncClient
 
 from provide.uterm.server.bridge.hub import TermHub
 

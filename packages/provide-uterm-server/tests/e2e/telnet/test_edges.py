@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 
 from .conftest import (
     ADMIN_H,
@@ -64,7 +64,7 @@ async def test_session_survives_telnet_server_drop(live_telnet_server: Any) -> N
     await asyncio.sleep(0.5)
 
     # The uterm server must still respond to API requests
-    async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=5.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=5.0) as http:
         resp = await http.get("/api/sessions")
 
     assert resp.status_code == 200, f"API returned {resp.status_code} after telnet server drop"

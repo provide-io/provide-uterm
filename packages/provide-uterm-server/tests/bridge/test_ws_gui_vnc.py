@@ -187,7 +187,7 @@ def _connect_close_code(client: TestClient, path: str = PATH) -> int | None:
         code = getattr(exc, "code", None)
         if code is not None:
             return int(code)
-        # httpx/starlette sometimes wraps: "WebSocket is not connected. Need to call "accept" first"?
+        # httpx2/starlette sometimes wraps: "WebSocket is not connected. Need to call "accept" first"?
         # Fall through — none means test fails with a clear assertion.
     return None
 

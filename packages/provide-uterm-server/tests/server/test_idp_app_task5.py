@@ -2,14 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-from httpx import Response
+from httpx2 import Response
 from starlette.testclient import TestClient
 
 from provide.uterm.server.app import create_server_app
 from provide.uterm.server.auth import LocalIdentityProvider, WebhookIdentityProvider
 from provide.uterm.server.bridge.identity import Principal
 from provide.uterm.server.models import AuthConfig, ServerConfig
-from tests.helpers import http_mock as respx
+from tests.helpers import http_mock
 from tests.helpers.fastapi_routes import find_effective_api_route
 
 
@@ -136,7 +136,7 @@ def test_webhook_idp_route_level_failure_modes_require_auth(monkeypatch) -> None
         assert client.get("/api/sessions").status_code == 401
 
 
-@respx.mock
+@http_mock.mock
 def test_webhook_idp_e2e_route_auth_success_and_failure() -> None:
     webhook_url = "https://idp.example.test/resolve"
     config = ServerConfig(
@@ -150,7 +150,7 @@ def test_webhook_idp_e2e_route_auth_success_and_failure() -> None:
 
     app = create_server_app(config, api_only=True)
     with TestClient(app) as client:
-        route_ok = respx.post(webhook_url).mock(
+        route_ok = http_mock.post(webhook_url).mock(
             return_value=Response(
                 200,
                 json={
@@ -164,7 +164,7 @@ def test_webhook_idp_e2e_route_auth_success_and_failure() -> None:
         assert ok.status_code == 200
         assert route_ok.called
 
-        respx.post(webhook_url).mock(return_value=Response(500))
+        http_mock.post(webhook_url).mock(return_value=Response(500))
         denied = client.get("/api/sessions")
         assert denied.status_code == 401
 

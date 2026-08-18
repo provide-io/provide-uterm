@@ -22,7 +22,7 @@ dev = [
     "codespell>=2.4.2",
     "detect-secrets>=1.5.0",
     "fastapi>=0.141.1",
-    "httpx>=0.27",
+    "httpx2>=2.10",
     "hypothesis>=6.165.2",
     "memray>=1.20.0; sys_platform != 'win32'",
     "mutmut>=3.7.0",
@@ -62,7 +62,6 @@ dev = [
     "xenon>=0.9.3",
     "mcp>=2.0.0",
     "pytest-textual-snapshot>=1.0.0",
-    "respx>=0.23.1",
     "pytest-pyodide>=0.59.2",
 ]
 
@@ -255,7 +254,6 @@ markers = [
     "requires_pam_auth: tests performing actual PAM authentication",
     "limit_memory: tests with memory usage constraints",
     "dependency: tests with ordering dependencies",
-    "respx: tests using respx for HTTP mocking",
     "timeout: tests with custom timeout constraints",
 ]
 
@@ -333,9 +331,9 @@ source_paths = [
     #   obstacle: with the 8 test_webhooks_part*.py suites wired it measured 21% because
     #   307/406 mutants SEGFAULT — those suites call the REAL socket.getaddrinfo at
     #   registration time, so a mutant perturbing the resolver/delivery args drives the C
-    #   resolver (or real httpx + real sleeps) in a mutmut-forked child, crashing it. Fix:
+    #   resolver (or real HTTP + real sleeps) in a mutmut-forked child, crashing it. Fix:
     #   a dedicated FULLY NETWORK-MOCKED kill suite (test_webhooks_mutation_killing.py,
-    #   wired into pytest selection) whose autouse getaddrinfo MagicMock + patched httpx/sleep
+    #   wired into pytest selection) whose autouse getaddrinfo MagicMock + patched HTTP/sleep
     #   keep all egress out of the forked child (segfault 307 -> 0). 400 killed + 6
     #   documented equivalents excused via mutation_equivalents.toml. The 7 part suites
     #   stay the normal-pytest coverage suite (real DNS is safe without forking), UNWIRED.
@@ -687,7 +685,7 @@ pytest_add_cli_args_test_selection = [
     # mutated trampoline (not the original source) is exercised.
     "packages/provide-uterm-server/tests/server/test_models_mutation_killing.py",
     # webhooks.py kill-suite: fully network-mocked (autouse getaddrinfo MagicMock +
-    # patched httpx) so mutmut's forked workers NEVER drive the real C resolver/HTTP
+    # patched HTTP) so mutmut's forked workers NEVER drive the real C resolver/HTTP
     # — that real-DNS-in-a-forked-child path is what segfaulted 307/406 mutants and
     # deferred this file. The 7 test_webhooks_part*.py suites stay the normal-pytest
     # coverage suite (real DNS is safe without forking) and are NOT wired here.

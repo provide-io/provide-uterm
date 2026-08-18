@@ -163,7 +163,7 @@ class WebhookIdentityProvider(IdentityProvider):
         all_cookies = dict(getattr(connection, "cookies", {}))
 
         # 1d: forward only the curated allow-list of credentials. Header keys are
-        # matched case-insensitively (Starlette/httpx lower-case keys, but a
+        # matched case-insensitively (Starlette/httpx2 lower-case keys, but a
         # mixed-case mapping may reach us in tests/embedders); cookies match by
         # exact name.
         headers = {k: v for k, v in all_headers.items() if k.lower() in self.forward_headers}

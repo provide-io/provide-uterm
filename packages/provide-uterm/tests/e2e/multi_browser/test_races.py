@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 import uvicorn
 from fastapi import FastAPI
 from provide.uterm.client import connect_async_ws
@@ -105,7 +105,7 @@ async def test_mode_switch_during_active_hijack() -> None:
             await drain_until(worker, "control", timeout=3.0)
 
             # REST PATCH: switch to open mode
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http:
                 resp = await http.patch(
                     "/api/sessions/mode1",
                     json={"input_mode": "open"},
@@ -116,7 +116,7 @@ async def test_mode_switch_during_active_hijack() -> None:
             await asyncio.sleep(0.5)
 
             # Verify via REST that the mode changed
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http2:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http2:
                 status_resp = await http2.get("/api/sessions/mode1")
                 assert status_resp.status_code == 200
                 session_data = status_resp.json()
@@ -125,7 +125,7 @@ async def test_mode_switch_during_active_hijack() -> None:
 
             # The mode is now "open" — verify a second acquire would fail
             # (open mode doesn't allow hijack)
-            async with httpx.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http3:
+            async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=10.0) as http3:
                 acq_resp = await http3.post(
                     "/worker/mode1/hijack/acquire",
                     json={"owner": "should-fail", "lease_s": 10},

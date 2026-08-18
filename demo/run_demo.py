@@ -32,7 +32,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
-import httpx
+import httpx2
 import uvicorn
 from playwright.async_api import Page, async_playwright
 
@@ -118,7 +118,7 @@ class _StaticHandler(BaseHTTPRequestHandler):
 # ---------------------------------------------------------------------------
 
 
-async def _wait_for_worker(http: httpx.AsyncClient, session_id: str, timeout: float = 15.0) -> None:
+async def _wait_for_worker(http: httpx2.AsyncClient, session_id: str, timeout: float = 15.0) -> None:
     """Poll until the session's hosted runtime reports connected=True."""
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
@@ -148,7 +148,7 @@ async def drive_demo(
     """Drive all demo scenarios after browsers are open and workers online."""
     page_a1, _page_a2, _page_a3, page_b = pages
 
-    async with httpx.AsyncClient(base_url=base_url, timeout=10.0) as http:
+    async with httpx2.AsyncClient(base_url=base_url, timeout=10.0) as http:
         # Wait for telnet workers to finish connecting
         print("[demo] Waiting for telnet workers…")
         await asyncio.gather(

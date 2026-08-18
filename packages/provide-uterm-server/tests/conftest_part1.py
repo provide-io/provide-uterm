@@ -125,13 +125,8 @@ _install_testclient_dev_token_autoauth()
 
 
 @pytest.fixture
-def respx_mock() -> Iterator[Any]:
-    """Drop-in for respx's fixture of the same name, backed by tests.helpers.http_mock.
-
-    respx is being removed (it is pinned to httpx and cannot mock httpx2), but
-    its fixture name is load-bearing in three test signatures. Keeping the name
-    means those tests convert without touching their bodies.
-    """
+def http_mock_router() -> Iterator[Any]:
+    """An active http_mock router, for tests that take it as a fixture."""
     from tests.helpers import http_mock
 
     with http_mock.mock as router:
@@ -150,14 +145,14 @@ def _install_httpx_dev_principal_autoauth() -> None:
     exercise unauthenticated or non-admin paths still can by passing their
     own ``X-Uterm-Principal``/``X-Uterm-Role`` explicitly.
 
-    BOTH httpx and httpx2 are patched, and that is load-bearing rather than
-    belt-and-braces. ``starlette.testclient.TestClient`` subclasses
-    ``httpx2.Client``, not ``httpx.Client`` -- they are unrelated classes from
-    two separately-installed distributions (httpx 0.28 and httpx2 2.x, the
-    latter pulled in by ``mcp``). Patching only httpx left every TestClient
-    without the admin headers, so header-mode auth resolved ``anonymous`` and
-    323 server tests failed with 401. Either module may legitimately be absent
-    from a given environment, hence the per-module import guard.
+    Patch httpx2's Client and AsyncClient -- the classes
+    ``starlette.testclient.TestClient`` actually subclasses. This used to patch
+    httpx instead, and when starlette moved its TestClient to httpx2 (a
+    separate distribution with an unrelated class hierarchy) no TestClient
+    received the admin headers, header-mode auth resolved ``anonymous``, and
+    323 server tests failed with 401 while line coverage stayed green. The repo
+    is now single-stack, so there is one module to patch and no way for the two
+    to drift apart again.
     """
     _defaults = {"X-Uterm-Principal": "admin", "X-Uterm-Role": "admin"}
 
@@ -175,13 +170,10 @@ def _install_httpx_dev_principal_autoauth() -> None:
         cls.__init__ = _patched_init  # type: ignore[method-assign]
         cls._uterm_devprincipal_patched = True  # type: ignore[attr-defined]
 
-    for module_name in ("httpx", "httpx2"):
-        try:
-            module = importlib.import_module(module_name)
-        except ImportError:  # pragma: no cover — module absent in this env
-            continue
-        _patch(module.Client)
-        _patch(module.AsyncClient)
+    import httpx2
+
+    _patch(httpx2.Client)
+    _patch(httpx2.AsyncClient)
 
 
 _install_httpx_dev_principal_autoauth()
