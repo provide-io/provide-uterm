@@ -2,19 +2,20 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""HTTP-mode and _http_request tests for create_manager_mcp_tools."""
+"""HTTP-mode and _http_request tests for register_manager_tools."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp.server.mcpserver import MCPServer
 
-from provide.uterm.manager.mcp_tools import create_manager_mcp_tools
+from provide.uterm.manager.mcp_tools import register_manager_tools
 
 
 async def _call(mcp_app, tool_name: str, args: dict | None = None) -> dict:
-    """Call a tool on the FastMCP app and return structured_content."""
+    """Call a tool on the MCP app and return structured_content."""
     result = await mcp_app.call_tool(tool_name, args or {})
     return result.structured_content
 
@@ -121,7 +122,9 @@ class TestHttpRequest:
 
 @pytest.fixture
 def http_app():
-    return create_manager_mcp_tools(base_url="http://manager:2272")
+    app = MCPServer("test-manager-tools")
+    register_manager_tools(app, base_url="http://manager:2272")
+    return app
 
 
 def _mock_http(ok: bool, data: dict) -> AsyncMock:
