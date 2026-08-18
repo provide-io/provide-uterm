@@ -19,10 +19,11 @@ Usage::
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable  # noqa: TC003
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from provide.uterm.manager.core import AgentManager
 
 TOOL_COUNT = 15
@@ -33,12 +34,12 @@ class _ToolRegistrar(Protocol):
 
     Matches any app that exposes a tool() decorator factory (e.g.
     mcp.server.mcpserver.MCPServer) without importing a concrete server class
-    directly. The permissive *args/**kwargs signature is deliberate: it's
-    what makes structural matching accept a concrete class's more specific
-    tool() signature.
+    directly. Only the no-argument ``tool()`` call this module actually makes
+    is declared, so an app whose ``tool()`` requires positional arguments is
+    rejected at type-check time instead of at registration time.
     """
 
-    def tool(self, *args: Any, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+    def tool(self) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
 async def _http_request(base_url: str, method: str, path: str, **kwargs: Any) -> tuple[bool, dict[str, Any]]:
@@ -91,8 +92,6 @@ def register_manager_tools(
     if manager is None and not base_url:
         raise ValueError("Provide either manager (in-process) or base_url (HTTP)")
 
-    mcp = app
-
     _http_initialized = False
 
     async def _http(method: str, path: str, **kw: Any) -> tuple[bool, dict[str, Any]]:
@@ -108,7 +107,7 @@ def register_manager_tools(
     # Swarm-level tools
     # ------------------------------------------------------------------
 
-    @mcp.tool()
+    @app.tool()
     async def swarm_status(include_telemetry: bool = False) -> dict[str, Any]:
         """Get current swarm status: agent counts by state, desired agents, pause state, uptime.
 
@@ -128,7 +127,7 @@ def register_manager_tools(
                     agent.pop(field, None)
         return data
 
-    @mcp.tool()
+    @app.tool()
     async def swarm_spawn_batch(
         config_paths: list[str],
         group_size: int = 5,
@@ -182,7 +181,7 @@ def register_manager_tools(
         )
         return data if ok else {"error": data.get("error", "Failed to spawn batch")}
 
-    @mcp.tool()
+    @app.tool()
     async def swarm_pause() -> dict[str, Any]:
         """Pause the entire swarm — marks active agents as paused."""
         if manager is not None:
@@ -190,7 +189,7 @@ def register_manager_tools(
         ok, data = await _http("POST", "/swarm/pause")
         return data if ok else {"error": data.get("error", "Failed to pause swarm")}
 
-    @mcp.tool()
+    @app.tool()
     async def swarm_resume() -> dict[str, Any]:
         """Resume a paused swarm."""
         if manager is not None:
@@ -198,7 +197,7 @@ def register_manager_tools(
         ok, data = await _http("POST", "/swarm/resume")
         return data if ok else {"error": data.get("error", "Failed to resume swarm")}
 
-    @mcp.tool()
+    @app.tool()
     async def swarm_kill_all() -> dict[str, Any]:
         """Cancel pending spawns and terminate all running agent processes."""
         if manager is not None:
@@ -206,7 +205,7 @@ def register_manager_tools(
         ok, data = await _http("POST", "/swarm/kill-all")
         return data if ok else {"error": data.get("error", "Failed to kill all")}
 
-    @mcp.tool()
+    @app.tool()
     async def swarm_clear() -> dict[str, Any]:
         """Kill all processes and remove all agent registrations."""
         if manager is not None:
@@ -214,7 +213,7 @@ def register_manager_tools(
         ok, data = await _http("POST", "/swarm/clear")
         return data if ok else {"error": data.get("error", "Failed to clear swarm")}
 
-    @mcp.tool()
+    @app.tool()
     async def swarm_prune() -> dict[str, Any]:
         """Remove agents in terminal states (stopped/error/completed)."""
         if manager is not None:
@@ -222,7 +221,7 @@ def register_manager_tools(
         ok, data = await _http("POST", "/swarm/prune")
         return data if ok else {"error": data.get("error", "Failed to prune")}
 
-    @mcp.tool()
+    @app.tool()
     async def swarm_set_desired(count: int) -> dict[str, Any]:
         """Set the desired agent count for auto-scaling enforcement."""
         if manager is not None:
@@ -236,7 +235,7 @@ def register_manager_tools(
     # Per-agent tools
     # ------------------------------------------------------------------
 
-    @mcp.tool()
+    @app.tool()
     async def agent_list(state: str | None = None) -> dict[str, Any]:
         """List all agents, optionally filtered by state."""
         if manager is not None:
@@ -250,7 +249,7 @@ def register_manager_tools(
         ok, data = await _http("GET", "/agents", params=params or None)
         return data if ok else {"error": data.get("error", "Failed to list agents")}
 
-    @mcp.tool()
+    @app.tool()
     async def agent_status(agent_id: str) -> dict[str, Any]:
         """Get status of a single agent."""
         if manager is not None:
@@ -261,7 +260,7 @@ def register_manager_tools(
         ok, data = await _http("GET", f"/agent/{agent_id}/status")
         return data if ok else {"error": data.get("error", f"Agent {agent_id} not found")}
 
-    @mcp.tool()
+    @app.tool()
     async def agent_kill(agent_id: str) -> dict[str, Any]:
         """Terminate an agent process and remove it."""
         if manager is not None:
@@ -279,7 +278,7 @@ def register_manager_tools(
         ok, data = await _http("DELETE", f"/agent/{agent_id}")
         return data if ok else {"error": data.get("error", f"Failed to kill {agent_id}")}
 
-    @mcp.tool()
+    @app.tool()
     async def agent_pause(agent_id: str) -> dict[str, Any]:
         """Pause a single agent."""
         if manager is not None:
@@ -292,7 +291,7 @@ def register_manager_tools(
         ok, data = await _http("POST", f"/agent/{agent_id}/pause")
         return data if ok else {"error": data.get("error", f"Failed to pause {agent_id}")}
 
-    @mcp.tool()
+    @app.tool()
     async def agent_resume(agent_id: str) -> dict[str, Any]:
         """Resume a paused agent."""
         if manager is not None:
@@ -305,7 +304,7 @@ def register_manager_tools(
         ok, data = await _http("POST", f"/agent/{agent_id}/resume")
         return data if ok else {"error": data.get("error", f"Failed to resume {agent_id}")}
 
-    @mcp.tool()
+    @app.tool()
     async def agent_restart(agent_id: str) -> dict[str, Any]:
         """Queue a restart command for an agent."""
         if manager is not None:
@@ -320,7 +319,7 @@ def register_manager_tools(
         ok, data = await _http("POST", f"/agent/{agent_id}/restart")
         return data if ok else {"error": data.get("error", f"Failed to restart {agent_id}")}
 
-    @mcp.tool()
+    @app.tool()
     async def agent_events(agent_id: str) -> dict[str, Any]:
         """Get recent events (actions, errors, status changes) for an agent."""
         if manager is not None:
