@@ -17,8 +17,11 @@ dependencies = [
 
 [project.optional-dependencies]
 pty = ["provide-uterm>=0.5.0"]
-manager = ["fastapi>=0.110", "uvicorn>=0.24", "pydantic>=2.0", "pyyaml>=6.0"]
-all = ["provide-uterm>=0.5.0", "fastapi>=0.110", "uvicorn>=0.24", "pydantic>=2.0", "pyyaml>=6.0"]
+# ``httpx`` is an import-time requirement, not an optional nicety: manager/ext.py
+# imports it at module scope and ext.py is reached eagerly from
+# ``provide.uterm.manager`` via app -> process -> process_impl / _monitor.
+manager = ["fastapi>=0.110", "uvicorn>=0.24", "pydantic>=2.0", "pyyaml>=6.0", "httpx>=0.27"]
+all = ["provide-uterm>=0.5.0", "fastapi>=0.110", "uvicorn>=0.24", "pydantic>=2.0", "pyyaml>=6.0", "httpx>=0.27"]
 dev = [
     "pytest>=9.0",
     "pytest-asyncio>=1.3",
@@ -33,6 +36,11 @@ dev = [
     "uvicorn>=0.24",
     "pydantic>=2.0",
     "pyyaml>=6.0",
+    "httpx>=0.27",
+    # The manager MCP tests build a real mcp.server.mcpserver.MCPServer to
+    # register the tools onto. The production module only needs the structural
+    # _ToolRegistrar protocol, so mcp is a test-only dependency.
+    "mcp>=2.0.0",
 ]
 
 [project.scripts]

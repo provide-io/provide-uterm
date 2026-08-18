@@ -2078,6 +2078,7 @@ dependencies = [
 [package.optional-dependencies]
 all = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "provide-uterm" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -2086,6 +2087,8 @@ all = [
 dev = [
     { name = "bandit" },
     { name = "fastapi" },
+    { name = "httpx" },
+    { name = "mcp" },
     { name = "mypy" },
     { name = "provide-uterm" },
     { name = "psutil" },
@@ -2100,6 +2103,7 @@ dev = [
 ]
 manager = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "uvicorn" },
@@ -2114,6 +2118,10 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.110" },
     { name = "fastapi", marker = "extra == 'dev'", specifier = ">=0.110" },
     { name = "fastapi", marker = "extra == 'manager'", specifier = ">=0.110" },
+    { name = "httpx", marker = "extra == 'all'", specifier = ">=0.27" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
+    { name = "httpx", marker = "extra == 'manager'", specifier = ">=0.27" },
+    { name = "mcp", marker = "extra == 'dev'", specifier = ">=2.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.19" },
     { name = "provide-uterm", editable = "packages/provide-uterm" },
     { name = "provide-uterm", marker = "extra == 'all'", editable = "packages/provide-uterm" },
