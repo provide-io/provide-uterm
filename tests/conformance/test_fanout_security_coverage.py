@@ -75,13 +75,17 @@ def test_contract_contains_semantic_inputs_expectations_and_exact_status_matrix(
     contract = _contract()
 
     assert contract["schema_version"] == 1
-    assert set(contract["backends"]) == BACKENDS  # type: ignore[arg-type]
+    # Subset, not equality: SERVER_IMPL narrows BACKENDS to the one backend a
+    # live-matrix leg is exercising, while the contract always describes all
+    # four. Equality passed only in the unset (all-backends) case and failed
+    # every matrix leg with {'csharp','go','python','typescript'} == {'python'}.
+    assert set(contract["backends"]) >= BACKENDS  # type: ignore[arg-type]
     scenarios = contract["scenarios"]
     assert isinstance(scenarios, list) and scenarios
     for scenario in scenarios:
         assert set(scenario) >= {"id", "input", "expected", "backends"}
         assert set(scenario["expected"]) == EXPECTED_FIELDS
-        assert set(scenario["backends"]) == BACKENDS
+        assert set(scenario["backends"]) >= BACKENDS
         for backend in BACKENDS:
             claim = scenario["backends"][backend]
             assert set(claim) == {"status", "expected"}
