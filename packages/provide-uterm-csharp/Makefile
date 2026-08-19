@@ -34,8 +34,22 @@ DOTNET ?= dotnet
 # Floor is set by the Windows run: platform-conditional Linux-only arms
 # (IsWindows-gated Connector/DevIdp/TunnelClient branches) sit in the denominator
 # but cannot execute on Windows, so csharp-quality-windows tops out ~97.46% while
-# Ubuntu covers them. 97.4 keeps both green without excluding whole files.
-COVER_THRESHOLD ?= 97.4
+# Ubuntu covers them.
+#
+# 97.3 rather than 97.4 because the Windows number is not stable run to run. Four
+# consecutive runs of the same tree measured 17287, 17289, 17283 and 17281 lines
+# of 17745 -- a spread of eight lines around a threshold that demands 17284, so
+# the gate passed twice and failed twice on identical code (the second failure
+# was a re-run of the first). 97.4 left ~10 lines of headroom against ~8 lines of
+# variance; 97.3 needs 17266 and clears the observed minimum by 15. Linux is
+# unaffected either way, measuring 17292.
+#
+# This buys stability, not correctness: the variance itself is unexplained, and
+# the surgical fix is to identify the nondeterministic lines and add them to the
+# residual list in ci/coverage_gate.py, the way the Gateway ObjectDisposedException
+# arm already is. That needs the Windows job to publish its cobertura output,
+# which it does not do today.
+COVER_THRESHOLD ?= 97.3
 CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test conformance-test mutation-gate
