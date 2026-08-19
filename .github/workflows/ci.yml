@@ -685,6 +685,19 @@ jobs:
       # the built frontend assets. They are gitignored build output, so a job
       # that only installs dependencies errors every cell in the matrix.
       - run: npm run build:frontend
+      # Build the Go live driver up front. conformance/live/harness/registry.py
+      # prefers packages/provide-uterm-go/bin/uterm-live-driver and falls back to
+      # `go run ./cmd/uterm-live-driver` when it is absent. That fallback compiles
+      # *and downloads modules* inside each cell's handshake window, so on a cold
+      # module cache the driver never announces a base_url and every cell reports
+      # "go server driver did not announce a base_url (exit None)". Mirrors the
+      # C# prebuild the multi-backend job already does for the same reason.
+      - name: Prebuild the Go live driver
+        if: matrix.server_impl == 'go'
+        env:
+          GOWORK: "off"
+        working-directory: packages/provide-uterm-go
+        run: go build -o bin/uterm-live-driver ./cmd/uterm-live-driver
       # The harness's own unit tests: what an expectation means, how two cells
       # are compared, and which drivers exist. A broken harness would agree
       # with itself in every cell.
