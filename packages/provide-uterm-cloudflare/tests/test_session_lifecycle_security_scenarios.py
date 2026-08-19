@@ -58,28 +58,56 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _node22_bin() -> Path:
+# The worker runtime needs a Node at least this new; it is not pinned to one
+# major. This used to demand a literal "v22." prefix, which silently meant
+# "whatever .nvmrc happens to say" -- so bumping .nvmrc to 26 failed the test in
+# CI while it kept passing locally off a stray homebrew node@22. Verified
+# directly: the adapter boots and every scenario passes under Node 26 with no
+# v22 binary present.
+_MIN_NODE_MAJOR = 22
+
+
+def _node_major(executable: Path) -> int | None:
+    """The major version `executable` reports, or None if it is not usable."""
+    result = subprocess.run([str(executable), "--version"], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        return None
+    version = result.stdout.strip().removeprefix("v")
+    major, _, _ = version.partition(".")
+    return int(major) if major.isdigit() else None
+
+
+def _worker_node_bin() -> Path:
+    """The directory holding a Node new enough to run the Python Worker."""
     candidates: list[Path] = []
-    configured = os.environ.get("NODE22_BIN")
+    configured = os.environ.get("UTERM_WORKER_NODE_BIN")
     if configured:
         configured_path = Path(configured)
         candidates.append(configured_path / "node" if configured_path.is_dir() else configured_path)
     current = shutil.which("node")
     if current:
         candidates.append(Path(current))
+    # Fallbacks for machines whose ambient node predates the floor.
     candidates.extend(
         [
             Path("/opt/homebrew/opt/node@22/bin/node"),
             Path("/usr/local/opt/node@22/bin/node"),
         ]
     )
+    seen: list[str] = []
     for candidate in candidates:
         if not candidate.is_file():
             continue
-        result = subprocess.run([str(candidate), "--version"], capture_output=True, text=True, check=False)
-        if result.returncode == 0 and result.stdout.strip().startswith("v22."):
+        major = _node_major(candidate)
+        if major is None:
+            continue
+        seen.append(f"{candidate}=v{major}")
+        if major >= _MIN_NODE_MAJOR:
             return candidate.parent
-    raise AssertionError("Node 22 is required for the native Cloudflare lifecycle adapter")
+    raise AssertionError(
+        f"the native Cloudflare lifecycle adapter needs Node >= {_MIN_NODE_MAJOR}; "
+        f"found {seen or 'no usable node'}. Set UTERM_WORKER_NODE_BIN to override."
+    )
 
 
 def _locked_pywrangler() -> Path:
@@ -185,7 +213,7 @@ def _worker_server(jwks_url: str, *, resume_enabled: bool = True) -> Iterator[st
     _prepare_worker_vendor_tree()
     pywrangler = _locked_pywrangler()
     uv = _selected_uv()
-    node_bin = _node22_bin()
+    node_bin = _worker_node_bin()
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
     command = [

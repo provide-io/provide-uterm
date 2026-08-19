@@ -145,7 +145,7 @@ describe("a listener somebody connects to", () => {
     await withGateway({}, async (running) => {
       const socket = await client(running.port);
       let seen = Buffer.alloc(0);
-      socket.on("data", (chunk) => {
+      socket.on("data", (chunk: Buffer) => {
         seen = Buffer.concat([seen, chunk]);
       });
       await until(() => seen.length >= 6);
@@ -253,7 +253,7 @@ describe("a listener somebody connects to", () => {
     await withGateway({}, async (running, opened) => {
       const socket = await client(running.port);
       const chunks: Buffer[] = [];
-      socket.on("data", (chunk) => chunks.push(chunk));
+      socket.on("data", (chunk: Buffer) => chunks.push(chunk));
       socket.write(ttypeIs("vt100"));
       socket.write(environIs);
       await until(() => opened.length === 1);
@@ -297,7 +297,7 @@ describe("a listener somebody connects to", () => {
     await withGateway({}, async (running) => {
       const socket = await client(running.port);
       const chunks: Buffer[] = [];
-      socket.on("data", (chunk) => chunks.push(chunk));
+      socket.on("data", (chunk: Buffer) => chunks.push(chunk));
       await until(() => chunks.length > 0);
       socket.write(Buffer.from([IAC, WILL, TTYPE]));
       expect(await until(() => Buffer.concat(chunks).includes(Buffer.from([IAC, SB, TTYPE, 1, IAC, SE])))).toBe(true);
