@@ -20,7 +20,10 @@ def _uid() -> str:
 
 def _navigate(page: Page, base_url: str, worker_id: str) -> None:
     if multi_backend_env():
-        install_multi_backend_routes(page)
+        # spinner_mock=True serves the mock-xterm harness, which is what defines
+        # window._widget. Without it multi-backend serves the real UI, where
+        # _force_close_ws below has no widget to reach through.
+        install_multi_backend_routes(page, spinner_mock=True)
     page.goto(f"{base_url}/test-page/{worker_id}", wait_until="domcontentloaded")
 
 
@@ -50,7 +53,7 @@ class TestClientRecovery:
             "window.__deepQuery('#statustext')?.textContent !== 'Connecting…'",
             timeout=5000,
         )
-        page.evaluate("if (window._widget && window._widget._ensureTerm) window._widget._ensureTerm()")
+        page.evaluate("window._widget._ensureTerm()")
 
         # Force a simulated hostile disconnect of the browser's WebSocket
         _force_close_ws(page)
