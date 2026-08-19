@@ -320,3 +320,77 @@ whenever `spec.kind === "literal"` is true at this call site, \
 branch is the only source of that error string, and it always uses that \
 exact string), so forcing the second operand to `true` changes nothing \
 observable. See the LogicalOperator entry above for the full reasoning."""
+
+# --- src/mcp/authorization.ts ------------------------------------------------
+# Added to the perimeter alongside these entries. The file is the MCP identity
+# chokepoint and had been outside stryker.config.mjs's `mutate` list, so the two
+# defects fixed in it recently were never mutation-tested. Everything below is
+# equivalent; nothing here is an untested branch.
+
+[[equivalent]]
+file = "src/mcp/authorization.ts"
+mutator = "MethodExpression"
+code = "for (const role of principal.roles.slice(1)) {"
+original = "principal.roles.slice(1)"
+replacement = "principal.roles"
+reason = """\
+primaryRole seeds `best` with `principal.roles[0]` before the loop, so the \
+slice only skips re-examining that same element. Iterating from index 0 adds \
+exactly one comparison, `roleRank(roles[0]) > roleRank(best)` where `best` IS \
+`roles[0]` -- a value compared against itself, which is never `>`. `best` is \
+therefore unchanged and every later iteration is identical, so the function \
+returns the same role for every input. The slice is a readability choice, not \
+a correctness one.\
+"""
+
+[[equivalent]]
+file = "src/mcp/authorization.ts"
+mutator = "ConditionalExpression"
+code = "if (context === undefined) {"
+original = "context === undefined"
+replacement = "false"
+reason = """\
+resolvePrincipal's undefined-context guard. Forcing it false lets an undefined \
+context reach `context.getAuthInfo()`, which throws a TypeError, which the \
+catch immediately below turns into the same `fallback` this guard returns. The \
+comment above the guard states precisely this -- it exists so that "nobody was \
+passed" is an answer rather than an accident, and it says outright that no \
+test can tell the two paths apart. Observably equivalent; the value is that \
+the intent is stated in code.\
+"""
+
+[[equivalent]]
+file = "src/mcp/authorization.ts"
+mutator = "BlockStatement"
+code = "if (context === undefined) {"
+original = """\
+{
+    return fallback;
+  }\
+"""
+replacement = "{}"
+reason = """\
+Same guard as the ConditionalExpression entry above, mutated from the other \
+side: emptying `{ return fallback; }` skips the early return exactly as \
+forcing the condition to false does, and reaches the same TypeError -> catch \
+-> fallback. See that entry.\
+"""
+
+[[equivalent]]
+file = "src/mcp/authorization.ts"
+mutator = "BlockStatement"
+code = "} catch {"
+original = """\
+{
+    return fallback;
+  }\
+"""
+replacement = "{}"
+reason = """\
+Emptying the catch body does not swallow the failure: `authInfo` is declared \
+before the try and left at its initial `undefined`, so control reaches the \
+`if (authInfo === undefined) return fallback;` two lines below and returns the \
+same value. The catch's own return is a short-circuit for a case the next \
+check already covers.\
+"""
+

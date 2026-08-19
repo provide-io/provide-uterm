@@ -54,6 +54,7 @@ export default {
     "src/serverconfig/server-defaults.ts",
     "src/serverconfig/validators.ts",
     "src/ratelimit/ratelimit.ts",
+    "src/mcp/authorization.ts",
   ],
 
   vitest: {
