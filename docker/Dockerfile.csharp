@@ -51,7 +51,13 @@ RUN dotnet publish packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj -c Relea
     /p:UseAppHost=true
 
 # ---- runtime ---------------------------------------------------------------
-FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
+# Debian 13 (trixie) to match the SDK image's glibc. .NET 10 publishes no
+# bookworm tags -- Debian 12 was dropped for that release -- so the AOT binary
+# links against glibc 2.38+, and cc-debian12 (glibc 2.36) refused to start it:
+#   ./uterm: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.38' not found
+# The Go image pins its builder to bookworm to match its runtime instead; that
+# option does not exist here, so the runtime moves forward.
+FROM gcr.io/distroless/cc-debian13:nonroot AS runtime
 
 WORKDIR /app
 
