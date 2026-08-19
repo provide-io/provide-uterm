@@ -156,7 +156,16 @@ _cover_batch_3d:
 build-binaries:
 	@rm -rf bin
 	@mkdir -p bin
-	$(DOTNET) publish cmd/Uterm/Uterm.csproj -c $(CONFIGURATION) -o bin --no-self-contained
+	@# Uterm.csproj carries PublishAot/PublishTrimmed for the container build
+	@# (docker/Dockerfile.csharp publishes it self-contained and installs the
+	@# clang/zlib toolchain AOT needs). Those two properties contradict
+	@# --no-self-contained, and the SDK now rejects the combination outright:
+	@# "NETSDK1102: Optimizing assemblies for size is not supported for the
+	@# selected publish configuration". These ship binaries are deliberately
+	@# framework-dependent, so turn both off for this publish rather than
+	@# dropping them from the csproj and de-optimizing the image.
+	$(DOTNET) publish cmd/Uterm/Uterm.csproj -c $(CONFIGURATION) -o bin --no-self-contained \
+	  /p:PublishAot=false /p:PublishTrimmed=false
 	$(DOTNET) publish cmd/Uterm.Manager/Uterm.Manager.csproj -c $(CONFIGURATION) -o bin --no-self-contained
 	@# Guard: lowercase ship names (uterm / uterm-manager). On case-insensitive
 	@# macOS APFS, `test ! -e bin/Uterm` is false when bin/uterm exists, so we
