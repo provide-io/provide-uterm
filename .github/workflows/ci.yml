@@ -176,6 +176,22 @@ jobs:
           dotnet-version: "10.0.x"
       # Build, conformance vectors, full test suite, coverlet floor, ship binaries.
       - run: make -C packages/provide-uterm-csharp quality-gate
+      # Keep the cobertura reports. The C# line count drifts a few lines between
+      # runs of identical code, and the only way that was ever diagnosed was by
+      # diffing two reports (which found six lines in Hub/Lease.Expiry.cs that
+      # ran only when a lifecycle transition happened to be in flight). Without
+      # this the next drift has to be re-derived from scratch, and the failing
+      # run -- the one worth looking at -- is exactly the one whose numbers are
+      # gone. `always()` because a gate failure is when these are wanted, and
+      # run_attempt keeps a re-run from colliding with the attempt it should be
+      # compared against.
+      - name: Upload coverage reports (linux)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-csharp-linux-attempt${{ github.run_attempt }}
+          path: packages/provide-uterm-csharp/coverage-out/**/coverage.cobertura.xml
+          if-no-files-found: warn
 
   csharp-quality-windows:
     runs-on: windows-latest
@@ -213,6 +229,22 @@ jobs:
           PYTHON: python
           CI: "true"
         run: make quality-gate
+      # Keep the cobertura reports. The C# line count drifts a few lines between
+      # runs of identical code, and the only way that was ever diagnosed was by
+      # diffing two reports (which found six lines in Hub/Lease.Expiry.cs that
+      # ran only when a lifecycle transition happened to be in flight). Without
+      # this the next drift has to be re-derived from scratch, and the failing
+      # run -- the one worth looking at -- is exactly the one whose numbers are
+      # gone. `always()` because a gate failure is when these are wanted, and
+      # run_attempt keeps a re-run from colliding with the attempt it should be
+      # compared against.
+      - name: Upload coverage reports (windows)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-csharp-windows-attempt${{ github.run_attempt }}
+          path: packages/provide-uterm-csharp/coverage-out/**/coverage.cobertura.xml
+          if-no-files-found: warn
       # Mutation perimeter (Policy/DeckMux/Sgr/Filters) — proves the gate scripts
       # on Windows paths + python launcher, not only Ubuntu. Changed-only, same
       # as the Ubuntu csharp-mutation-gate job: a full run tests ~630 mutants and
