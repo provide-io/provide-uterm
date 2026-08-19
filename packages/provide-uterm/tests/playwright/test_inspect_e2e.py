@@ -283,6 +283,41 @@ class TunnelWorker:
 # ---------------------------------------------------------------------------
 
 
+def _send_until_listed(
+    worker: TunnelWorker,
+    locator: Any,
+    method: str,
+    url: str,
+    *,
+    intercepted: bool = False,
+    attempts: int = 8,
+) -> None:
+    """Send an http_req frame until the inspect UI shows it.
+
+    The tunnel relay is live, not buffered. A frame the worker sends before the
+    server has registered this browser as a subscriber is broadcast to nobody and
+    dropped, and no `expect` timeout afterwards can recover it -- which is why
+    the failure read as "0 requests" rather than as a slow row.
+
+    Waiting for the UI to say "Connected" is not enough: that is the browser's
+    own socket state, not proof the server finished wiring the relay. The gap is
+    small enough that the fixed sleep this replaces hid it on the Python and Go
+    servers, while csharp failed about one run in three.
+
+    Each attempt uses a fresh id because inspectStore.addRequest appends without
+    deduplicating, so resending one id would stack rows and trip Playwright's
+    strict mode. Callers assert against `.first` for the same reason.
+    """
+    for attempt in range(attempts):
+        worker.send_http_req(f"r{attempt}", method, url, intercepted=intercepted)
+        try:
+            expect(locator).to_be_visible(timeout=1500)
+            return
+        except AssertionError:
+            if attempt == attempts - 1:
+                raise
+
+
 @pytest.mark.playwright
 class TestInspectE2E:
     """E2E tests for the inspect/intercept browser UI."""
@@ -346,10 +381,13 @@ class TestInspectE2E:
         _goto_inspect(page, base_url, worker_id, jwt)
         expect(page.get_by_text("Connected")).to_be_visible(timeout=15000)
 
-        worker.send_http_req("r1", "POST", "/api/data", intercepted=True)
-        time.sleep(0.5)
-
-        expect(page.get_by_text("PAUSED")).to_be_visible(timeout=8000)
+        _send_until_listed(
+            worker,
+            page.get_by_text("PAUSED").first,
+            "POST",
+            "/api/data",
+            intercepted=True,
+        )
 
         worker.stop()
 
