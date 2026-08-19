@@ -74,7 +74,20 @@ dev = [
 # `ModuleNotFoundError: No module named 'tests.helpers'` — the suite collects
 # against caio's tests package instead of its own. 0.12.2 is the latest
 # release, so there is nothing newer to move to; 0.9.25 was in the lock before
-# and is unaffected. Reached via py-key-value-aio -> aiofile -> caio.
+# and is unaffected.
+#
+# Nothing in the current lock reaches caio any more: py-key-value-aio and
+# aiofile, the path this was written for, are both gone, and `uv.lock` carries
+# no caio [[package]] entry -- only the echo of this constraint. The constraint
+# is kept anyway, and is deliberately not "dead config": a uv constraint binds
+# only if the package is resolved, so an inert one costs nothing, while caio
+# 0.12.2 is still the latest release and still ships tests/ at the top level.
+# The hazard is unfixed upstream; this is the guard against it coming back
+# through some future transitive dependency, where it would resurface as
+# `ModuleNotFoundError: No module named 'tests.helpers'` -- which reads as a
+# broken repo rather than a packaging conflict, and cost real time to diagnose
+# the first time.
+#
 # Drop this once caio stops shipping tests/ at the top level.
 constraint-dependencies = ["caio<0.12"]
 
