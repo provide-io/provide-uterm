@@ -36,20 +36,24 @@ DOTNET ?= dotnet
 # but cannot execute on Windows, so csharp-quality-windows tops out ~97.46% while
 # Ubuntu covers them.
 #
-# 97.3 rather than 97.4 because the Windows number is not stable run to run. Four
-# consecutive runs of the same tree measured 17287, 17289, 17283 and 17281 lines
-# of 17745 -- a spread of eight lines around a threshold that demands 17284, so
-# the gate passed twice and failed twice on identical code (the second failure
-# was a re-run of the first). 97.4 left ~10 lines of headroom against ~8 lines of
-# variance; 97.3 needs 17266 and clears the observed minimum by 15. Linux is
-# unaffected either way, measuring 17292.
+# Back to 97.4 now that the Windows number is stable. It had been lowered to 97.3
+# because coverage moved run to run: four runs of one tree measured 17287, 17289,
+# 17283 and 17281 lines of 17745, straddling the 17284 this threshold demands, so
+# the gate passed twice and failed twice on identical code.
 #
-# This buys stability, not correctness: the variance itself is unexplained, and
-# the surgical fix is to identify the nondeterministic lines and add them to the
-# residual list in ci/coverage_gate.py, the way the Gateway ObjectDisposedException
-# arm already is. That needs the Windows job to publish its cobertura output,
-# which it does not do today.
-COVER_THRESHOLD ?= 97.3
+# The cause was six lines in Hub/Lease.Expiry.cs that only ran when a lifecycle
+# transition happened to be in flight; ResumeLifecycleIntegrationTests
+# .ExpiryBehindAnInFlightTransitionQueuesBehindIt now forces that arm, and three
+# consecutive local runs measured an identical total. Windows measures 17291 on
+# the first run after the fix -- higher than any observation before it, and seven
+# lines above this threshold.
+#
+# Seven lines is thinner than the ">=0.2pt headroom" the note above asks for
+# before *raising* the number, which is why this is written down: the gate is now
+# expected to fail only when coverage genuinely drops, not on noise. If it starts
+# flapping again, diff two cobertura runs before touching the threshold -- that is
+# what found the last cause.
+COVER_THRESHOLD ?= 97.4
 CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test conformance-test mutation-gate
