@@ -1,7 +1,7 @@
 # uterm Risk-Ranked Action Plan (Living)
 
-Date: 2026-08-15  
-Branch: `main` (`origin/main`)  
+Date: 2026-08-15
+Branch: `main` (`origin/main`)
 Owner of this document: Architecture + release owners
 
 Purpose
@@ -66,11 +66,11 @@ Purpose
 ## Execution roles and cadence
 
 - **Week cadence:** execute one risk column per sprint block.
-- **Review cadence:**  
-  - Weekly: one risk item status update.  
-  - Monthly: hard-priority reclassification if risk behavior changed.  
-- **Completion criteria:**  
-  - Every P0/P1 item includes commands + evidence + tests in PRs.  
+- **Review cadence:**
+  - Weekly: one risk item status update.
+  - Monthly: hard-priority reclassification if risk behavior changed.
+- **Completion criteria:**
+  - Every P0/P1 item includes commands + evidence + tests in PRs.
   - No new "served parity" claim without implementation + harness updates.
 
 ## Backlog of "ready next" tasks
