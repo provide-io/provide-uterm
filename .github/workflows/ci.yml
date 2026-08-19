@@ -698,6 +698,15 @@ jobs:
           GOWORK: "off"
         working-directory: packages/provide-uterm-go
         run: go build -o bin/uterm-live-driver ./cmd/uterm-live-driver
+      # Same reasoning for C#. registry.py runs the driver as `dotnet run
+      # --project src/Provide.Uterm.LiveDriver`, which restores and compiles on
+      # first use -- inside the first cell's handshake window. Unlike the Go
+      # entry there is no built-binary fast path to fall back to, so the build
+      # has to happen before the harness starts timing.
+      - name: Prebuild the C# live driver
+        if: matrix.server_impl == 'csharp'
+        working-directory: packages/provide-uterm-csharp
+        run: dotnet build src/Provide.Uterm.LiveDriver -c Release
       # The harness's own unit tests: what an expectation means, how two cells
       # are compared, and which drivers exist. A broken harness would agree
       # with itself in every cell.
