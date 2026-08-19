@@ -18,7 +18,6 @@
 #
 
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
-ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0
 ARG NODE_IMAGE=node:22-slim
 
 # ---- frontend-build: same Vite artifacts as Dockerfile.server ---------------
@@ -41,27 +40,40 @@ RUN npm run build:frontend
 # ---- build -----------------------------------------------------------------
 FROM ${SDK_IMAGE} AS build
 
-RUN apt-get update && apt-get install -y clang zlib1g-dev
-
 WORKDIR /src
 
 COPY packages/provide-telemetry/ packages/provide-telemetry/
 COPY packages/provide-uterm-csharp/ packages/provide-uterm-csharp/
-RUN dotnet publish packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj -c Release -o /app/publish \
-    /p:UseAppHost=true
+# Self-contained rather than native AOT. The runtime stage is distroless, which
+# carries no .NET runtime, so the publish has to bring its own either way --
+# but AOT additionally disables reflection-based System.Text.Json, and this
+# server answers with anonymous types in 31 places. That threw while writing
+# the response, after the handler had already logged 200, so every JSON
+# endpoint returned `500` with an empty body. Self-contained keeps the JIT and
+# reflection, at the cost of a larger image.
+ARG TARGETARCH
+RUN RID="linux-$(if [ "$TARGETARCH" = "arm64" ]; then echo arm64; else echo x64; fi)" && \
+    dotnet publish packages/provide-uterm-csharp/cmd/Uterm/Uterm.csproj \
+      -c Release -r "$RID" --self-contained true -o /app/publish
 
 # ---- runtime ---------------------------------------------------------------
-# Debian 13 (trixie) to match the SDK image's glibc. .NET 10 publishes no
-# bookworm tags -- Debian 12 was dropped for that release -- so the AOT binary
-# links against glibc 2.38+, and cc-debian12 (glibc 2.36) refused to start it:
-#   ./uterm: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.38' not found
-# The Go image pins its builder to bookworm to match its runtime instead; that
-# option does not exist here, so the runtime moves forward.
-FROM gcr.io/distroless/cc-debian13:nonroot AS runtime
+# runtime-deps is the base Microsoft publishes for self-contained apps: it
+# carries the native libraries the .NET runtime needs but no runtime of its own,
+# which is what a self-contained publish wants. `chiseled` keeps the distroless
+# properties this image had before -- no shell, no package manager, non-root by
+# default. `-extra` is the variant that includes ICU; the plain chiseled image
+# omits it, and without ICU the runtime FailFasts on the first culture-sensitive
+# call:
+#   Couldn't find a valid ICU package installed on the system.
+#
+# This replaces gcr.io/distroless/cc-debian12, which had two problems: it ships
+# glibc 2.36 while .NET 10 builds against 2.38+ (Debian 12 was dropped for that
+# release, so no matching SDK tag exists), and it carries no ICU at all.
+FROM mcr.microsoft.com/dotnet/runtime-deps:10.0-noble-chiseled-extra AS runtime
 
 WORKDIR /app
 
-COPY --from=build /app/publish/uterm ./uterm
+COPY --from=build /app/publish/ ./
 # Baked SPA/static assets (hijack.html, terminal.html, assets/, vite-manifest.json)
 COPY --from=frontend-build \
     /src/packages/provide-uterm-server/src/provide/uterm/server/frontend/ \
@@ -69,7 +81,7 @@ COPY --from=frontend-build \
 COPY docker/server.toml /etc/uterm/server.toml
 
 EXPOSE 27780
-USER 65532:65532
+USER $APP_UID
 
 ENV ASPNETCORE_URLS=http://0.0.0.0:27780 \
     UTERM_FRONTEND_DIR=/app/frontend
