@@ -3,12 +3,12 @@ revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'emscripten'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version >= '3.15' and sys_platform != 'emscripten'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten'",
     "python_full_version < '3.12'",
 ]
@@ -1882,14 +1882,14 @@ wheels = [
 
 [[package]]
 name = "provide-telemetry"
-version = "0.7.2"
+version = "0.8.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/00/a2/155d4e24485fd626a6c6d08c5eb6909b5b214adda61cd3c549373d4db918/provide_telemetry-0.7.2.tar.gz", hash = "sha256:517eba521bd109209f3866e74d145c4092eda7194c528f8cf557ed9f52aed484", size = 134796, upload-time = "2026-08-17T03:45:28.482Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/60/b32c671910e75785a459130accfb4c040a1babc6ccd35483d959a1d03b30/provide_telemetry-0.8.0.tar.gz", hash = "sha256:bba0f711dfaa5a6958dc5a71c4b48756046bc56d8a28b562827c1b558cd965da", size = 137307, upload-time = "2026-08-20T04:33:32.08Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/dd/0ad52a8a06355d89f596444febefec2871ec90b17dcb336c25d5a362c6df/provide_telemetry-0.7.2-py3-none-any.whl", hash = "sha256:ba1ead53b3a755c43903b5bb331e6a3ef2cdaca63e2f18d19e26c1f0a563a5c0", size = 134647, upload-time = "2026-08-17T03:45:26.97Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/15/29ae4ef6cd20327b34b565915d78efc2f793ae34e60a8e55320ad8a0b9f1/provide_telemetry-0.8.0-py3-none-any.whl", hash = "sha256:9afb779f2ef455bd3f7f8e22877a656388a6487375a30ddb79ebd7daa29a1f38", size = 137800, upload-time = "2026-08-20T04:33:30.558Z" },
 ]
 
 [[package]]
@@ -2803,12 +2803,12 @@ version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'emscripten'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
-    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version >= '3.15' and sys_platform != 'emscripten'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.13.*' and sys_platform != 'emscripten'",
+    "python_full_version == '3.12.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.12.*' and sys_platform != 'emscripten'",
 ]
 dependencies = [
@@ -2864,8 +2864,8 @@ version = "314.0.5"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version >= '3.15' and sys_platform == 'emscripten'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version >= '3.15' and sys_platform != 'emscripten'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/95/ff/22556c4c96d2ddb5e2d14f5f36182b1cc900bf6f8f277a887b923d13adc9/pyodide_py-314.0.5.tar.gz", hash = "sha256:4e8cb554205e3237eee60ded3665014eef62fac64a8ccb412eba277ec01cc857", size = 62814, upload-time = "2026-08-17T06:54:49.481Z" }
