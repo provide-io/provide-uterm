@@ -121,25 +121,12 @@ public static class ServerFactory
                 // receiver's freshness window rejects deliveries for a reason
                 // that appears nowhere in either log.
                 Now = () => serverClock.Wall(),
-                // The warn/error arms show as uncovered, and are left that way
-                // deliberately. What they dispatch is asserted exactly --
-                // WebhookDeliveryRetryAndShutdownTests pins both the level and
-                // the message text of webhook_delivery_blocked and
-                // webhook_auto_unregistered -- but against a WebhookManager the
-                // test constructs itself. Reaching *this* delegate means driving
-                // a blocked delivery through a ServerFactory-built server, and
-                // its bus is fed by MessageRouter.AppendEvent rather than any
-                // REST call, so it would take a live session to emit the events.
-                // That is a large test for a four-line level dispatch whose
-                // behaviour is already covered; provide-telemetry exposes no
-                // Log(level, message) that would collapse the chain.
+                // One parser at the boundary rather than a dispatch chain whose
+                // arms only run when that severity occurs. Levels.Parse falls
+                // back to Info for anything unrecognised, which is what the
+                // chain's final else did.
                 OnLog = (level, message) =>
-                {
-                    if (level == "debug") log.Debug(message);
-                    else if (level == "warn" || level == "warning") log.Warn(message);
-                    else if (level == "error") log.Error(message);
-                    else log.Info(message);
-                },
+                    log.Log(Provide.Telemetry.Levels.Parse(level), message),
             });
         var profiles = new InMemoryProfileStore();
         // `api_keys_enabled` used to be forced on here whenever it was false,
