@@ -39,7 +39,7 @@ from typing import Final
 
 # Paths this repo does not own or does not ship.
 EXCLUDED_PREFIXES: Final[tuple[str, ...]] = (
-    "packages/provide-telemetry/",  # git submodule, released independently
+    "packages/provide-telemetry/",  # separate repo; only present for local dev
     "scripts/check_single_http_stack.py",  # this file names both on purpose
 )
 

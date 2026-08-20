@@ -7,7 +7,8 @@
 
 Shared by the SPDX walker and the docs-accuracy checker, which both need the
 same answer and got it wrong in the same way when packages/provide-telemetry
-became a submodule.
+was vendored in as a submodule. It is a published package now, but the path can
+still appear in a working tree during telemetry development.
 """
 
 from __future__ import annotations
