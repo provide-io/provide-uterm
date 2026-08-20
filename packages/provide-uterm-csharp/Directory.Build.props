@@ -15,37 +15,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
   </PropertyGroup>
 
-  <!-- provide-telemetry: Local source override with NuGet fallback -->
-  <PropertyGroup>
-    <ProvideTelemetryPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../provide-telemetry/csharp/src/Provide.Telemetry/Provide.Telemetry.csproj'))</ProvideTelemetryPath>
-    <UseTelemetrySource Condition="Exists('$(ProvideTelemetryPath)')">true</UseTelemetrySource>
-    <DefineConstants>$(DefineConstants);HAS_TELEMETRY</DefineConstants>
-  </PropertyGroup>
-
-  <!-- If submodule is checked out, use live source code -->
-  <ItemGroup Condition="'$(UseTelemetrySource)' == 'true'">
-    <ProjectReference Include="$(ProvideTelemetryPath)" />
-  </ItemGroup>
-
   <!--
-    If the submodule is NOT checked out, say so.
+    provide-telemetry is consumed as a published NuGet package, pinned like
+    every other dependency in this repo.
 
-    This used to fall back to `<PackageReference Include="Provide.Telemetry"
-    Version="*" />`, which cannot work: Provide.Telemetry is not published to
-    nuget.org, so the fallback's only possible outcome is NU1101 naming a
-    package nobody can install. That is an unusually bad error to hand
-    someone, because it points at NuGet and says nothing about the submodule
-    that is actually missing, and it is the error every CI job hit, since
-    actions/checkout does not fetch submodules unless a workflow asks it to.
+    It used to be a git submodule wired in via a ProjectReference guarded by
+    Exists(), which made the build shape depend on whether a directory
+    happened to be present on disk: local builds compiled live source, while
+    CI compiled against nothing unless that workflow remembered to set
+    `submodules: true` on actions/checkout, in 30 separate places. That is the
+    same "works on my machine" divergence the Python side already avoids by
+    resolving provide-telemetry from PyPI.
+
+    To develop against a local telemetry checkout, temporarily swap this for a
+    ProjectReference to ../provide-telemetry/csharp/src/Provide.Telemetry/ and
+    do not commit it, mirroring the [tool.uv.sources] note in CLAUDE.md.
 
     (No double hyphens anywhere in this comment: XML forbids them inside a
     comment, and MSBuild reports that as MSB4024 "could not be loaded" against
     every project at once, which looks like a broken build rather than a typo.)
-
-    Restore the fallback only if Provide.Telemetry is genuinely published.
   -->
-  <Target Name="RequireTelemetrySubmodule" BeforeTargets="CollectPackageReferences;Restore"
-          Condition="'$(UseTelemetrySource)' != 'true'">
-    <Error Text="provide-telemetry submodule is not checked out. Run: git submodule update --init packages/provide-telemetry (CI: set `submodules: true` on actions/checkout). Expected: $(ProvideTelemetryPath)" />
-  </Target>
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);HAS_TELEMETRY</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Provide.Telemetry" Version="0.8.0" />
+  </ItemGroup>
 </Project>
