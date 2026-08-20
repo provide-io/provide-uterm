@@ -1,3 +1,0 @@
-[submodule "packages/provide-telemetry"]
-	path = packages/provide-telemetry
-	url = https://github.com/provide-io/provide-telemetry

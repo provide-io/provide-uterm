@@ -42,7 +42,6 @@ FROM ${SDK_IMAGE} AS build
 
 WORKDIR /src
 
-COPY packages/provide-telemetry/ packages/provide-telemetry/
 COPY packages/provide-uterm-csharp/ packages/provide-uterm-csharp/
 # Self-contained rather than native AOT. The runtime stage is distroless, which
 # carries no .NET runtime, so the publish has to bring its own either way --
