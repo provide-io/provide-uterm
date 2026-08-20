@@ -19,13 +19,14 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 EXCLUDE_SUBSTR = (
-    # The provide-telemetry submodule. It is consumed as a ProjectReference
-    # rather than a published package, so coverlet indexes its source next to
-    # ours and measures a library this repo neither owns nor tests -- it has
-    # its own repository, suite and floor. Counting it took the measured total
-    # from ~97% to 88.84% the moment the submodule was wired in, which reads
-    # as "uterm's coverage collapsed" when nothing about uterm's coverage
-    # changed at all.
+    # provide-telemetry. Normally consumed as a published NuGet package, whose
+    # nupkg carries no PDB, so coverlet cannot index it and this entry is inert.
+    # It stays for the local-development case in Directory.Build.props: swapping
+    # in a ProjectReference puts telemetry's source next to ours, and coverlet
+    # then measures a library this repo neither owns nor tests -- it has its own
+    # repository, suite and floor. Counting it took the measured total from ~97%
+    # to 88.84% the moment the submodule was wired in, which reads as "uterm's
+    # coverage collapsed" when nothing about uterm's coverage changed at all.
     "provide-telemetry/",
     "UnicodeNormTables",
     "UnicodeWidthTables",
