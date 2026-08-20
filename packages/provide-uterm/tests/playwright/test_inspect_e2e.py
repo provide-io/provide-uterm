@@ -291,8 +291,8 @@ def _send_until_listed(
     *,
     intercepted: bool = False,
     attempts: int = 8,
-) -> None:
-    """Send an http_req frame until the inspect UI shows it.
+) -> str:
+    """Send an http_req frame until the inspect UI shows it, and say which landed.
 
     The tunnel relay is live, not buffered. A frame the worker sends before the
     server has registered this browser as a subscriber is broadcast to nobody and
@@ -307,15 +307,21 @@ def _send_until_listed(
     Each attempt uses a fresh id because inspectStore.addRequest appends without
     deduplicating, so resending one id would stack rows and trip Playwright's
     strict mode. Callers assert against `.first` for the same reason.
+
+    Returns the id that landed. A caller sending the matching http_res has to
+    use it rather than assuming the first attempt was the one that arrived,
+    since a response carrying an id nothing registered updates no row.
     """
     for attempt in range(attempts):
-        worker.send_http_req(f"r{attempt}", method, url, intercepted=intercepted)
+        rid = f"r{attempt}"
+        worker.send_http_req(rid, method, url, intercepted=intercepted)
         try:
             expect(locator).to_be_visible(timeout=1500)
-            return
+            return rid
         except AssertionError:
             if attempt == attempts - 1:
                 raise
+    raise AssertionError("unreachable: the loop above returns or raises")
 
 
 @pytest.mark.playwright
@@ -342,16 +348,16 @@ class TestInspectE2E:
         _goto_inspect(page, base_url, worker_id, jwt)
         expect(page.get_by_text("Connected")).to_be_visible(timeout=15000)
 
-        worker.send_http_req("r1", "GET", "/api/users")
-        time.sleep(0.5)
+        rid = _send_until_listed(worker, page.get_by_text("/api/users").first, "GET", "/api/users")
 
         expect(page.locator("span", has_text="GET").first).to_be_visible(timeout=8000)
-        expect(page.get_by_text("/api/users")).to_be_visible(timeout=5000)
 
-        worker.send_http_res("r1", 200)
-        time.sleep(0.5)
+        # The response needs the id that actually landed, and no retry of its
+        # own: the row above proves the relay is wired, so this frame cannot be
+        # dropped the way the request could. expect() covers it being slow.
+        worker.send_http_res(rid, 200)
 
-        expect(page.get_by_text("200")).to_be_visible(timeout=5000)
+        expect(page.get_by_text("200").first).to_be_visible(timeout=5000)
 
         worker.stop()
 
@@ -400,16 +406,14 @@ class TestInspectE2E:
         _goto_inspect(page, base_url, worker_id, jwt)
         expect(page.get_by_text("Connected")).to_be_visible(timeout=15000)
 
-        worker.send_http_req("r1", "GET", "/api/test", intercepted=True)
-        time.sleep(0.5)
-
-        # Wait for the row before clicking it, as every other test here does.
-        # click() auto-waits too, but only reports "Locator.click: Timeout
-        # 30000ms exceeded" when it gives up — which cannot distinguish a row
-        # that never arrived (a dropped broadcast) from one that arrived and
-        # was not clickable. This names which of the two happened.
-        request_row = page.get_by_text("/api/test")
-        expect(request_row).to_be_visible(timeout=8000)
+        # Waiting for the row before clicking is what names the failure:
+        # click() auto-waits too, but reports only "Locator.click: Timeout
+        # 30000ms exceeded" when it gives up, which cannot distinguish a row
+        # that never arrived from one that arrived and was not clickable.
+        # _send_until_listed does that wait, and retries the send so a row that
+        # never arrived is no longer one of the possibilities.
+        request_row = page.get_by_text("/api/test").first
+        _send_until_listed(worker, request_row, "GET", "/api/test", intercepted=True)
 
         request_row.click()
         time.sleep(0.3)
