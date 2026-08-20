@@ -415,8 +415,12 @@ class TestInspectE2E:
         request_row = page.get_by_text("/api/test").first
         _send_until_listed(worker, request_row, "GET", "/api/test", intercepted=True)
 
+        # No settle after the click. Unlike the send above, this is a local DOM
+        # action: the detail panel renders from state the browser already holds,
+        # so the buttons can be late but never lost, and expect() waits for
+        # exactly that. A fixed sleep here would only decide how long the test
+        # takes when it passes.
         request_row.click()
-        time.sleep(0.3)
 
         expect(page.get_by_role("button", name="Forward", exact=True)).to_be_visible(timeout=5000)
         expect(page.get_by_role("button", name="Drop")).to_be_visible()
