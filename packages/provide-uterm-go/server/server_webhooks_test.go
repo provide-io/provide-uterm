@@ -604,14 +604,19 @@ func TestWebhookDeliveryAutoUnregistersAfterRepeatedGuardBlocks(t *testing.T) {
 	for i := 0; i < webhookMaxBlockedDeliveries; i++ {
 		bus.Enqueue("s1", map[string]any{"type": "output"})
 	}
+	// Waited on the removal rather than on the counter that announces it: the
+	// metric is emitted before Unregister runs, so a wait on the counter can win
+	// the race against the effect it is reporting and leave the entry still in
+	// the registry for the assertion below.
 	waitForWebhook(t, "the webhook to be auto-unregistered", func() bool {
-		return c.get("webhook_auto_unregistered_total") == 1
+		_, ok := m.GetWebhook(id)
+		return !ok
 	})
+	if got := c.get("webhook_auto_unregistered_total"); got != 1 {
+		t.Errorf("webhook_auto_unregistered_total = %d, want 1", got)
+	}
 	if got := c.get("webhook_delivery_blocked_total"); got != webhookMaxBlockedDeliveries {
 		t.Errorf("webhook_delivery_blocked_total = %d, want %d", got, webhookMaxBlockedDeliveries)
-	}
-	if _, ok := m.GetWebhook(id); ok {
-		t.Error("the auto-unregistered webhook is still in the registry")
 	}
 }
 
