@@ -95,6 +95,9 @@ func (c *ConnectionManager) RegisterWorkerWithTransport(
 		}
 		st.WorkerWS = ws
 		st.IsTunnelWorker = isTunnel
+		// A fresh socket has not announced its mode yet, whatever the previous
+		// one said. See WorkerTermState.HelloApplied.
+		st.HelloApplied = false
 		st.WorkerGeneration++
 		hub.lock.Unlock()
 		hub.logger.Info(eventSessionRegistered, "worker_id", workerID, "session_type", "worker")
@@ -166,10 +169,14 @@ func (c *ConnectionManager) SetWorkerHello(ctx context.Context, workerID, mode s
 		wouldLower := mode == InputModeOpen && st.InputMode == InputModeHijack
 		if wouldLower && (st.InputModeSetByOperator || hub.State.IsHijacked(st) || st.HijackPending != nil) {
 			hub.logger.Warn("worker_hello_mode_blocked", "worker_id", workerID)
+			// Refusing the mode is still a decision about it, so the worker has
+			// finished announcing itself and readiness must not wait longer.
+			st.HelloApplied = true
 			hub.lock.Unlock()
 			return false, nil
 		}
 		st.InputMode = mode
+		st.HelloApplied = true
 		if protocolVersion != nil {
 			st.ProtocolVersion = protocolVersion
 		}

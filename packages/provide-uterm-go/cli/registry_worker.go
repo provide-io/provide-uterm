@@ -148,7 +148,12 @@ func (r *SessionRegistryImpl) WorkersAttached() bool {
 		return true
 	}
 	for _, id := range ids {
-		if !h.HasWorkerSocket(id) {
+		// Both halves of "the hub can speak for this session": a socket to reach
+		// it on, and the worker_hello that says what mode it is in. The socket
+		// alone is not enough — it attaches before the hello is read, and a
+		// lease asked for in that window is granted against the hub's "hijack"
+		// default rather than against the session's configured mode.
+		if !h.HasWorkerSocket(id) || !h.HasWorkerHello(id) {
 			return false
 		}
 	}
