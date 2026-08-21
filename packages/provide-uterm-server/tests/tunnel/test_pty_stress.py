@@ -136,8 +136,11 @@ class TestHighThroughputIO:
     @pytest.mark.timeout(30)
     async def test_read_1mb_output(self) -> None:
         """Spawn a command that outputs ~1MB and read it all."""
-        # Use dd to output 1MB of zeros (as hex via od is too slow; use yes piped to head).
-        sp = spawn_pty(["/bin/sh", "-c", "dd if=/dev/zero bs=1024 count=1024 2>/dev/null"])
+        # `yes | head` rather than `dd if=/dev/zero bs= count=`: the latter is the
+        # binary_padding_via_dd EDR signature, and spawning it under a pty from
+        # Python trips the reverse-shell heuristic on top of it. This needs only
+        # ~1MB of output, so a dd is not worth the false positive.
+        sp = spawn_pty(["/bin/sh", "-c", "yes x | head -c 1048576"])
         try:
             collected = b""
             deadline = asyncio.get_event_loop().time() + 15.0

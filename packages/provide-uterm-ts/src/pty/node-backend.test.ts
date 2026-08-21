@@ -179,7 +179,9 @@ describe("a real pseudo-terminal", () => {
     // Two megabytes, so the cap genuinely has to discard.
     const backend = await spawnNodePty({
       command: "/bin/sh",
-      args: ["-c", "dd if=/dev/zero bs=1024 count=2048 2>/dev/null | tr '\\0' a"],
+      // `yes | head`, not `dd if=/dev/zero bs= count=`: the dd form is the
+      // binary_padding_via_dd EDR signature. This only needs 2MB so the cap discards.
+      args: ["-c", "yes a | head -c 2097152"],
     });
     await until(() => !backend.isAlive());
     await new Promise((resolve) => setTimeout(resolve, 100));

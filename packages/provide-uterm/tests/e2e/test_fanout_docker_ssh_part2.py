@@ -139,7 +139,8 @@ async def test_fanout_large_output(docker_server: tuple[str, list[str]]) -> None
         body = await _send_command(
             http,
             group_id,
-            "dd if=/dev/urandom bs=1024 count=10 2>/dev/null | base64\n",
+            # not dd: avoids the binary_padding_via_dd signature. Volume-only assert.
+            "head -c 10240 /dev/urandom | base64\n",
             quiesce_ms=3000,
             max_response_ms=15000,
         )
