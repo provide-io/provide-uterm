@@ -145,15 +145,31 @@ type WorkerTermState struct {
 	// state outlives a worker socket, so a decision survives a reconnect.
 	// Internal only — nothing serialises it onto the wire.
 	InputModeSetByOperator bool
-	LastSnapshot           map[string]any
-	Events                 []map[string]any
-	EventSeq               int
-	MinEventSeq            int
-	LastActivityAt         float64
-	ProtocolVersion        *int
-	IsTunnelWorker         bool
-	WorkerGeneration       uint64
-	GraphicalSession       gui.GraphicalSession
+	// HelloApplied records whether this worker's connection has got as far as
+	// its worker_hello being processed, in the sense that the hub has decided
+	// what to do with the mode it announced — applied it, or deliberately kept
+	// its own.
+	//
+	// It exists because a worker socket and the mode that socket speaks for
+	// arrive at different moments: RegisterWorker attaches WorkerWS, and the
+	// hello that says "open" is a frame read later, off the receive loop. In
+	// between, InputMode still holds the "hijack" default, so a lease asked for
+	// in that window is granted on a session that is configured open. Readiness
+	// gates on this rather than on the socket alone.
+	//
+	// Cleared when a socket registers, because a reconnecting worker has to say
+	// it again — the mode belongs to the connection, even though the operator's
+	// decision above it does not.
+	HelloApplied     bool
+	LastSnapshot     map[string]any
+	Events           []map[string]any
+	EventSeq         int
+	MinEventSeq      int
+	LastActivityAt   float64
+	ProtocolVersion  *int
+	IsTunnelWorker   bool
+	WorkerGeneration uint64
+	GraphicalSession gui.GraphicalSession
 }
 
 // InputSendReservation is the in-flight state-owner fence for one worker

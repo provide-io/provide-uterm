@@ -134,8 +134,8 @@ func TestRegistryWithoutAHubLinkAttachesNoWorker(t *testing.T) {
 }
 
 // WorkersAttached is what "ready" means to the live-conformance handshake: the
-// auto_start sessions are up AND the hub can reach them. Either half missing is
-// not ready.
+// auto_start sessions are up, the hub can reach them, AND each has announced the
+// mode it is in. Any one of the three missing is not ready.
 func TestWorkersAttachedNeedsBothHalves(t *testing.T) {
 	r, h := hubLinkedRegistry(t)
 	ctx := context.Background()
@@ -153,12 +153,21 @@ func TestWorkersAttachedNeedsBothHalves(t *testing.T) {
 	if r.WorkersAttached() {
 		t.Fatal("a running session whose worker never reached the hub is not attached")
 	}
-	// Standing in for the worker socket the bridge would have opened.
+	// Standing in for the worker socket the bridge would have opened. A socket
+	// on its own is the window this gate exists to close: it is attached, but
+	// the hub still holds the "hijack" default rather than the mode the worker
+	// booted in, so a lease taken now is granted against the wrong state.
 	st := hub.NewWorkerTermState()
 	st.WorkerWS = stubWorkerWS{}
 	h.Registry.Put("provide-shell", st)
+	if r.WorkersAttached() {
+		t.Fatal("a worker whose hello has not landed is not attached")
+	}
+	if _, err := h.SetWorkerHello(ctx, "provide-shell", hub.InputModeOpen, nil); err != nil {
+		t.Fatalf("SetWorkerHello: %v", err)
+	}
 	if !r.WorkersAttached() {
-		t.Fatal("a running session with a worker socket is attached")
+		t.Fatal("a running session with a worker socket and a landed hello is attached")
 	}
 }
 

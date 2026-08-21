@@ -179,6 +179,21 @@ func (h *TermHub) HasWorkerSocket(workerID string) bool {
 	return st != nil && st.WorkerWS != nil
 }
 
+// HasWorkerHello reports whether workerID's current socket has had its
+// worker_hello processed, so the mode the hub holds is the one the worker
+// announced rather than the "hijack" default it was created with.
+//
+// [HasWorkerSocket] answers "can this worker be reached"; this answers "is what
+// the hub believes about it true yet". A caller that has just started a session
+// needs both before it can call the session ready, because a lease taken in
+// between is granted against the default rather than against the configuration.
+func (h *TermHub) HasWorkerHello(workerID string) bool {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	st := h.registry.Get(workerID)
+	return st != nil && st.HelloApplied
+}
+
 // UpdateLastSnapshot stores the most recent snapshot for workerID.
 func (h *TermHub) UpdateLastSnapshot(ctx context.Context, workerID string, snapshot map[string]any) {
 	h.Conn.UpdateLastSnapshot(ctx, workerID, snapshot)
