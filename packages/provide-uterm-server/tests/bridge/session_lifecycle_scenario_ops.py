@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import httpx
+import httpx2
 import websockets
 
 from .test_session_lifecycle_security_scenarios import (
@@ -146,7 +146,7 @@ async def execute_approval_expiry(scenario: dict[str, Any], defaults: dict[str, 
                 await _send_control(browser, {"type": "input", "data": payload})
                 held = await _receive_matching(browser, lambda event: event.get("type") == "approval_pending")
                 request_id = str(held["request_id"])
-                async with httpx.AsyncClient(timeout=5.0) as client:
+                async with httpx2.AsyncClient(timeout=5.0) as client:
                     approve = await client.post(
                         f"{base_url}/api/approvals/{request_id}/approve", headers=approver_headers
                     )
