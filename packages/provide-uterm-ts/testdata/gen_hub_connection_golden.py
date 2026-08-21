@@ -142,6 +142,12 @@ class _FakeHub:
         self._ws_principal: dict[Any, str] = {}
         self._principal_browser_counts: dict[str, int] = {}
         self._startup_pending_browsers: set[Any] = set()
+        # Mirrors the real hub, which initialises this beside
+        # _startup_pending_browsers (core_impl.py). The broadcast window holds
+        # frames for a browser that is connected but not yet subscribed, and
+        # every disconnect path pops the socket's queue -- so a fake without it
+        # raises AttributeError the moment cleanup_browser_disconnect runs.
+        self._startup_pending_frames: dict[Any, list[Any]] = {}
         self._background_tasks: set[Any] = set()
         self._output_policy_gate = None
 
