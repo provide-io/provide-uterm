@@ -55,7 +55,32 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|oversized|slowloris|
       echo "unknown SERVER_IMPL: $server_impl" >&2
       exit 1
     fi
-    echo $! >"${SERVER_PID_FILE}"
+    server_pid=$!
+    echo "${server_pid}" >"${SERVER_PID_FILE}"
+
+    # Fail HERE if the launch did not take, rather than sixty seconds later in
+    # wait-health. A backgrounded launch reports success no matter what goes
+    # wrong -- a path that does not exist, a missing toolchain, a port already
+    # bound, a crash on boot -- and the health timeout that follows names none
+    # of them. That cost four days of a red `hostile-probes (csharp)` whose only
+    # symptom was a curl that could not connect.
+    #
+    # Two seconds is enough to catch a launch that died immediately; a server
+    # that is merely slow to bind is what wait-health is for.
+    sleep 2
+    if ! kill -0 "${server_pid}" 2>/dev/null; then
+      echo "start: ${server_impl} server exited immediately (pid ${server_pid})" >&2
+      cat "${SERVER_LOG}" 2>/dev/null || echo "start: ${SERVER_LOG} was never created" >&2
+      exit 1
+    fi
+    if [ ! -s "${SERVER_LOG}" ]; then
+      # An empty log is not fatal on its own (a quiet server may not have
+      # written yet), but a MISSING one means the redirect never ran.
+      [ -e "${SERVER_LOG}" ] || {
+        echo "start: ${SERVER_LOG} was never created -- the launch never ran" >&2
+        exit 1
+      }
+    fi
     ;;
   wait-health)
     for _ in $(seq 1 60); do
