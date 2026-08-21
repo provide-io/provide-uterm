@@ -35,6 +35,23 @@ public static class ConfigLoader
         return cfg;
     }
 
+    // Stryker disable all : key-name literals, not logic.
+    //
+    // Every mutant Stryker generates in this declaration is the same one --
+    // replace a key name with "" -- and all of them are killed by
+    // ServerConfigNestedKeyTests.TheKeySetsMatchTheReferencesRecordedSchema,
+    // which diffs the whole set against the recorded Python golden. That test
+    // is strictly stronger than the mutants: it also catches a key being added
+    // or removed, which a string mutation cannot express.
+    //
+    // Excluded for cost, not convenience. A mutation inside a static
+    // initializer has no per-test coverage for Stryker to derive a leash from
+    // (it reports static: true with an empty coveredBy), so each is measured
+    // against the WHOLE ~12m suite. The 211 across the four declarations in
+    // this file were the entire source of its timeout flake, and the reason a
+    // full-perimeter run stopped fitting the 120 minute job. The 124
+    // non-static mutants here -- the actual parsing and validation logic --
+    // stay in the perimeter and have never timed out in any run.
     /// <summary>
     /// Every top-level key the reference's model defines — its
     /// <c>config_schema.UtermServerConfig.model_fields</c>. Anything else is a
@@ -63,7 +80,10 @@ public static class ConfigLoader
         "worker_frame_on_invalid", "max_connections_per_principal", "max_workers",
         "fanout_allow_unknown_members",
     };
+    // Stryker restore all
 
+    // Stryker disable all : key-name literals, not logic. See the note on
+    // KnownTopLevelKeys for why these four declarations are excluded.
     /// <summary>
     /// Refuse a top-level key nobody recognises — this port's stand-in for the
     /// reference's <c>ServerBaseModel.model_config = ConfigDict(extra="forbid")</c>.
@@ -116,6 +136,7 @@ public static class ConfigLoader
         ["graphical_targets"] = "GraphicalTargetConfig",
         ["sessions"] = "SessionDefinition",
     };
+    // Stryker restore all
 
     /// <summary>
     /// Field names the reference accepts inside each section.
@@ -139,6 +160,8 @@ public static class ConfigLoader
     /// </remarks>
     internal static IReadOnlyDictionary<string, HashSet<string>> KnownNestedKeysForTests => KnownNestedKeys;
 
+    // Stryker disable all : key-name literals, not logic. See the note on
+    // KnownTopLevelKeys for why these four declarations are excluded.
     private static readonly Dictionary<string, HashSet<string>> KnownNestedKeys = new(StringComparer.Ordinal)
     {
         ["server"] = new(StringComparer.Ordinal)
@@ -227,7 +250,10 @@ public static class ConfigLoader
             "owner", "presence", "recording_enabled", "session_id", "tags", "visibility"
         },
     };
+    // Stryker restore all
 
+    // Stryker disable all : key-name literals, not logic. See the note on
+    // KnownTopLevelKeys for why these four declarations are excluded.
     /// <summary>
     /// Sections whose unrecognised keys are folded rather than refused.
     /// </summary>
@@ -238,6 +264,7 @@ public static class ConfigLoader
     /// including the sibling list <c>[[graphical_targets]]</c>, is validated.
     /// </remarks>
     private static readonly HashSet<string> OpenEndedSections = new(StringComparer.Ordinal) { "sessions" };
+    // Stryker restore all
 
     private static void RefuseUnknownNestedKeys(TomlTable root)
     {

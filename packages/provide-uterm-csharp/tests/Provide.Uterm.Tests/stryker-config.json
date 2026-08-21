@@ -8,7 +8,7 @@
     "concurrency": 4,
     "mutation-level": "Standard",
     "language-version": "latest",
-    "additional-timeout": 60000,
+    "additional-timeout": 600000,
     "mutate": [
       "**/Server/EgressAddressPolicy.cs",
       "**/Server/EgressGuard.cs",
