@@ -66,6 +66,39 @@ TEST_PROJECT_DIR = MODULE_ROOT / "tests" / "Provide.Uterm.Tests"
 ALLOWLIST_FILE = MODULE_ROOT / "mutation_equivalents.toml"
 STRYKER_CONFIG = TEST_PROJECT_DIR / "stryker-config.json"
 
+# Wall-clock budget, mirroring packages/provide-uterm-go/ci/mutation_gate.py.
+#
+# stryker-config.json sets additional-timeout to 10 minutes. That is now
+# insurance rather than the fix. A mutation inside a `static readonly`
+# initializer has no per-test coverage for Stryker to derive a leash from (it
+# reports `static: true` with an empty coveredBy), so it is measured against the
+# WHOLE ~12m suite; at the old 60s allowance a random slice of the 211 such
+# mutants in ServerConfig/Load.cs timed out every run (38, then 52, overlapping
+# on only 9). Raising the leash fixed the flake and was measured to work -- a
+# scoped run reproduced the 2026-08-12 baseline exactly, 333 killed / 2 survived
+# / 0 timed out, zero status differences -- but it cost too much wall clock: the
+# full perimeter went from 89 to over 115 minutes and stopped fitting the job.
+#
+# Those 211 are now excluded at the declaration (see the Stryker disable note on
+# KnownTopLevelKeys), which removed the timeout class outright: 419 mutants,
+# 53 minutes, 0 timeouts. The 10 minute leash stays because nothing else guards
+# a future slow mutant, and it costs nothing when none time out.
+#
+# The budget below is the backstop for a genuinely stuck run. 6000s was picked
+# from one data point and killed an honest run at 98 minutes; 6900s then killed
+# another at 115. Both were false failures that produced no report at all, since
+# Stryker writes one only at the end. 6900s now sits well clear of the measured
+# 53 minute run and still below the job's 120 minutes, leaving the gate room to
+# print its verdict before GitHub would kill it. A CI runner is slower than the
+# laptop these numbers came from; if this starts tripping honest runs, raise the
+# job limit rather than guessing here a fourth time.
+DEFAULT_BUDGET_S = 6900.0
+
+
+class GateTimeoutError(RuntimeError):
+    """Stryker outran the gate's wall-clock budget."""
+
+
 # Changing any of these can turn a killed mutant into a survivor (or excuse one)
 # without touching a perimeter source file, so a --changed-only run that touches
 # them must NOT narrow: it falls back to the full perimeter rather than
@@ -235,12 +268,22 @@ def changed_perimeter_globs(base_ref: str) -> list[str] | None:
     return sorted(set(selected))
 
 
-def run_stryker(mutate: list[str] | None = None) -> Path:
+def run_stryker(mutate: list[str] | None = None, budget_s: float = DEFAULT_BUDGET_S) -> Path:
     """Run ``dotnet stryker`` and return the path to its JSON report."""
     cmd = ["dotnet", "stryker"]
     for glob in mutate or []:
         cmd += ["--mutate", glob]
-    proc = subprocess.run(cmd, cwd=TEST_PROJECT_DIR, check=False)  # nosec
+    scope = ", ".join(mutate) if mutate else "the full perimeter"
+    try:
+        proc = subprocess.run(cmd, cwd=TEST_PROJECT_DIR, check=False, timeout=budget_s)  # nosec
+    except subprocess.TimeoutExpired as expired:
+        # A slow runner and a stuck mutant look identical from here, so name
+        # both readings rather than asserting one of them.
+        raise GateTimeoutError(
+            f"dotnet stryker exceeded the gate's {budget_s:.0f}s budget while mutating {scope}. "
+            "Either the runner made no progress, or additional-timeout in stryker-config.json is "
+            "now long enough that a stuck mutant can spend the whole budget by itself."
+        ) from expired
     if proc.returncode not in (0, 1):
         # 0 = above threshold-break, 1 = below it (Stryker's own thresholds are
         # informational here; we compute our own kill bar below). Anything
@@ -309,7 +352,13 @@ def main() -> int:
             narrowed = selected
             print(f"Narrowed to {len(narrowed)} changed perimeter file(s): {', '.join(narrowed)}")
 
-    report_path = args.report or run_stryker(narrowed)
+    try:
+        report_path = args.report or run_stryker(narrowed)
+    except GateTimeoutError as timed_out:
+        # A verdict, not a traceback: this path exists because the job being
+        # killed from outside printed nothing about where it was.
+        print(f"FAIL: {timed_out}", file=sys.stderr)
+        return 2
     report = json.loads(report_path.read_text(encoding="utf-8"))
 
     killed = 0
