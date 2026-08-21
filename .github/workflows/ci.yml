@@ -54,8 +54,9 @@ jobs:
     timeout-minutes: 60
     permissions:
       contents: read
-      # Read-only, for the perimeter-status note below: it reads the last
-      # mutation-full run's conclusion. It writes no issues and no runs.
+      # Read-only, for the two advisory status notes below: they read the
+      # last mutation-full run's conclusion, and the last main-branch run of
+      # each watched workflow. They write no issues and no runs.
       actions: read
     env:
       # Hypothesis settings profile (see hypothesis_profiles.py). Every CI run
@@ -75,6 +76,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash ci/report_perimeter_status.sh
+      # Echo workflows that are standing red on main. Advisory: these are not
+      # this push's checks, and the script never fails the build.
+      - if: matrix.python-version == '3.13'
+        name: Standing-red workflow status (advisory)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ci/report_red_workflows.sh
       - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d  # v10.0.0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
