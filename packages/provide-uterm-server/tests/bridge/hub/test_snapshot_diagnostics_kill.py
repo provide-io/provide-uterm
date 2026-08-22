@@ -362,3 +362,129 @@ class TestWaitForSnapshotDeadline:
         assert result["screen"] == "fresh"
         slept.assert_not_awaited()
         assert _warnings(log, "snapshot_wait_timeout") == []
+
+
+# ---------------------------------------------------------------------------
+# wait_for_snapshot — the timeout block reached with a junk or absent ts
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotWaitTimeoutStaleAgeEdges:
+    """Kills the suppress arguments, the rounding precision, and the ts default.
+
+    The class above could not reach any of them. Its snapshots all carry a
+    numeric ``ts``, so ``snap.get("ts", 0)``'s default never applies and
+    ``float()`` never raises; and its one junk-ts test is killed by the poll
+    loop before the timeout block runs, because the wall-clock proxy compares
+    ``snap.get("ts", 0) > req_ts`` unguarded.
+
+    ``after_event_seq`` is the way in. With it set and the snapshot carrying an
+    int ``event_seq``, _snapshot_is_fresh answers from the sequence alone and
+    never touches ``ts`` — so a snapshot whose ``ts`` is junk, or missing
+    entirely, reaches the timeout block intact and the arithmetic there is
+    finally observable.
+    """
+
+    @staticmethod
+    def _hub_with(snapshot: dict[str, Any]) -> TermHub:
+        hub = TermHub()
+        hub.request_snapshot = AsyncMock()  # type: ignore[method-assign]
+        state = WorkerTermState()
+        state.last_snapshot = snapshot
+        hub.registry._workers["bot1"] = state
+        return hub
+
+    async def _timeout_warning(self, snapshot: dict[str, Any]) -> dict[str, Any]:
+        hub = self._hub_with(snapshot)
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()) as log,
+        ):
+            result = await hub.wait_for_snapshot("bot1", timeout_ms=50, after_event_seq=10)
+        assert result is None
+        return _warnings(log, "snapshot_wait_timeout")[0]
+
+    async def test_the_age_keeps_exactly_three_decimals(self) -> None:
+        """Kills `round(..., 3)` -> `4`, -> `None`, and the dropped precision arg.
+
+        5.0 cannot catch any of them: round(5.0, None) is 5, and 5 == 5.0. The
+        age here has more decimals than the precision keeps, so each variant
+        produces a different number — 1.235 against 1.2346 and 1.
+        """
+        warning = await self._timeout_warning({"event_seq": 5, "ts": _FROZEN_NOW - 1.23456789})
+        assert warning["cached_age_s"] == 1.235
+
+    async def test_a_snapshot_with_no_ts_ages_from_zero(self) -> None:
+        """Kills the `snap.get("ts", 0)` default -> `1`, -> `None`, -> dropped.
+
+        With the default at 0 the age is the whole wall clock. A default of 1
+        shifts it by exactly one second; a default of None (or none at all)
+        makes float() raise, which the suppress swallows into a None age.
+        """
+        warning = await self._timeout_warning({"event_seq": 5})
+        assert warning["had_cached"] is True
+        assert warning["cached_age_s"] == round(_FROZEN_NOW, 3)
+
+    async def test_a_string_ts_is_suppressed_into_no_age(self) -> None:
+        """Kills `suppress(TypeError, )` — dropping ValueError from the tuple."""
+        warning = await self._timeout_warning({"event_seq": 5, "ts": "not-a-number"})
+        assert warning["had_cached"] is True
+        assert warning["cached_age_s"] is None
+
+    async def test_a_none_ts_is_suppressed_into_no_age(self) -> None:
+        """Kills `suppress(ValueError)` — dropping TypeError from the tuple.
+
+        Sibling of the test above and not redundant with it: float() raises
+        ValueError for a string and TypeError for None, so one test each is
+        what it takes to pin both members of the tuple.
+        """
+        warning = await self._timeout_warning({"event_seq": 5, "ts": None})
+        assert warning["had_cached"] is True
+        assert warning["cached_age_s"] is None
+
+
+class TestSnapshotWaitTimeoutMetric:
+    """Kills every mutation of the `snapshot_wait_timeout` counter increment.
+
+    Nothing in the repo asserted this metric, so the whole call was free to be
+    mutated: the increment could be doubled, its attributes emptied, dropped,
+    or the worker_id key renamed, and every test still passed. A counter that
+    reports the wrong worker is worse than one that reports nothing, because it
+    sends whoever is debugging the wedge to the wrong session.
+    """
+
+    async def test_the_timeout_counter_records_one_for_this_worker(self) -> None:
+        hub = TermHub()
+        hub.request_snapshot = AsyncMock()  # type: ignore[method-assign]
+        hub.registry._workers["bot1"] = WorkerTermState()
+        counter = MagicMock()
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()),
+            patch.object(polling_service.snapshot_metrics, "snapshot_wait_timeout", counter),
+        ):
+            await hub.wait_for_snapshot("bot1", timeout_ms=50)
+
+        assert counter.add.call_args_list == [((1, {"worker_id": "bot1"}),)]
+
+    async def test_no_timeout_leaves_the_counter_alone(self) -> None:
+        """The counter must track timeouts, not calls."""
+        hub = TermHub()
+        hub.request_snapshot = AsyncMock()  # type: ignore[method-assign]
+        state = WorkerTermState()
+        state.last_snapshot = {"screen": "fresh", "ts": _FROZEN_NOW + 1.0}
+        hub.registry._workers["bot1"] = state
+        counter = MagicMock()
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()),
+            patch.object(polling_service.snapshot_metrics, "snapshot_wait_timeout", counter),
+        ):
+            await hub.wait_for_snapshot("bot1", timeout_ms=50)
+
+        assert counter.add.call_args_list == []
