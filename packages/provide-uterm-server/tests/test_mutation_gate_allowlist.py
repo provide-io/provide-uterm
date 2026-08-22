@@ -252,10 +252,18 @@ class TestChangedOnlySupportFiles:
             "packages/provide-uterm/tests/test_control_channel_patterns.py"
         ]
 
-    def test_changed_only_support_change_runs_full_perimeter(
+    def test_changed_only_support_change_defers_the_full_perimeter(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        calls: list[dict[str, object]] = []
+        """A support change used to start the perimeter here; now it hands it off.
+
+        It previously called run_mutation_gate with source_paths=None -- one
+        mutmut invocation over all 38 perimeter files. That cannot finish inside
+        the job's 90-minute cap and was never a verdict, only a timeout. The gate
+        now prints the marker and returns, and ci/prepare_mutation_args.sh
+        dispatches mutation-full.yml, which fans the same targets across a matrix.
+        """
+        calls: list[object] = []
 
         monkeypatch.setattr(
             sys,
@@ -265,41 +273,13 @@ class TestChangedOnlySupportFiles:
         monkeypatch.setattr(gate, "_changed_python_paths", lambda _base, _staged, _roots: [])
         monkeypatch.setattr(gate, "_changed_paths", lambda _base, _staged: ["mutation_equivalents.toml"])
         monkeypatch.setattr(gate, "_half_cpu_count", lambda: 1)
-
-        def fake_run_mutation_gate(
-            python_version: str | None,
-            max_children: int,
-            retries: int,
-            min_mutation_score: float,
-            source_paths: list[str] | None = None,
-            allow_empty: bool = False,
-        ) -> dict[str, int]:
-            calls.append(
-                {
-                    "python_version": python_version,
-                    "max_children": max_children,
-                    "retries": retries,
-                    "min_mutation_score": min_mutation_score,
-                    "source_paths": source_paths,
-                    "allow_empty": allow_empty,
-                }
-            )
-            return {"total": 1, "killed": 1, "bad_total": 0}
-
-        monkeypatch.setattr(gate, "run_mutation_gate", fake_run_mutation_gate)
+        monkeypatch.setattr(gate, "run_mutation_gate", lambda *a, **k: calls.append((a, k)))
 
         assert gate.main() == 0
-        assert calls == [
-            {
-                "python_version": "3.11",
-                "max_children": 1,
-                "retries": 0,
-                "min_mutation_score": 100.0,
-                "source_paths": None,
-                "allow_empty": False,
-            }
-        ]
-        assert "mutation gate full-perimeter trigger" in capsys.readouterr().out
+        assert calls == [], "the un-chunked full perimeter was started; it can only time out"
+        out = capsys.readouterr().out
+        assert "mutation gate full-perimeter trigger" in out
+        assert gate.FULL_PERIMETER_REQUIRED_MARKER in out
 
 
 class TestScopedMutationSelection:
@@ -394,3 +374,53 @@ class TestNarrowedResultsAreReadBeforeRestore:
         gate.run_mutation_gate(None, 1, 0, 100.0, source_paths=["src/provide/uterm/only_this.py"])
 
         assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == original
+
+
+# ---------------------------------------------------------------------------
+# main(): a support-file change defers instead of running the perimeter
+# ---------------------------------------------------------------------------
+
+
+class TestSupportFileChangeDefersToTheFullWorkflow:
+    """A support-file change is a perimeter-wide question this job cannot answer.
+
+    The perimeter is 38 files that mutmut has to be given one at a time, so
+    answering it in the changed-only job means hours against a 90-minute cap --
+    what that produced was never a verdict, only a timeout. The gate prints the
+    marker instead, and ci/prepare_mutation_args.sh dispatches mutation-full.yml,
+    where the same 38 targets run across a matrix.
+    """
+
+    def _run_main(self, monkeypatch: pytest.MonkeyPatch, support: list[str]) -> tuple[int, bool]:
+        ran = False
+
+        def _fake_run(*_args: object, **_kwargs: object) -> dict[str, int]:
+            nonlocal ran
+            ran = True
+            return {"total": 0, "bad_total": 0}
+
+        monkeypatch.setattr(gate, "_changed_python_paths", lambda *_a, **_k: [])
+        monkeypatch.setattr(gate, "_changed_paths", lambda *_a, **_k: list(support))
+        monkeypatch.setattr(gate, "_changed_mutation_support_paths", lambda _p: list(support))
+        monkeypatch.setattr(gate, "run_mutation_gate", _fake_run)
+        monkeypatch.setattr(sys, "argv", ["run_mutation_gate.py", "--changed-only", "--base-ref", "HEAD~1"])
+        return gate.main(), ran
+
+    def test_marker_is_printed_and_the_perimeter_is_not_run(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        rc, ran = self._run_main(monkeypatch, ["scripts/run_mutation_gate.py"])
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert gate.FULL_PERIMETER_REQUIRED_MARKER in out
+        assert not ran, "the un-chunked full perimeter was started; it can only time out"
+
+    def test_no_support_change_skips_without_the_marker(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        rc, ran = self._run_main(monkeypatch, [])
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert gate.FULL_PERIMETER_REQUIRED_MARKER not in out
+        assert "skipped" in out
+        assert not ran
