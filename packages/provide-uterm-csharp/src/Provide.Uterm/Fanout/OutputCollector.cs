@@ -48,6 +48,19 @@ internal static class OutputCollector
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
+                // Which of the two bounds cut the read decides what the silence
+                // meant, and the timers cannot answer that: when the budget is
+                // the tighter one this linked source and ct are set for the same
+                // instant, so whichever fired first used to decide whether the
+                // member was reported as collected or as failed. Read off the
+                // bounds themselves instead.
+                //
+                // A read that got its full quiesce window and heard nothing has
+                // quiesced, which is a collected — if empty — response. One cut
+                // short by what was left of the response budget has not: the
+                // caller is owed the cancellation, because a member starved of
+                // budget by the members ahead of it did not answer.
+                if (remaining < quiesceMs) throw;
                 break;
             }
 
