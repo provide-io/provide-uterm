@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Provide.Uterm.Cli;
+using Provide.Uterm.CtrlMsg;
 
 namespace Provide.Uterm.Tests.Cli;
 
@@ -73,10 +74,16 @@ public class RealCliTests
             var path = Path.Combine(dir, "chain.jsonl");
             var r1 = AuditChain.MakeRecord(1, AuditChain.GenesisHash, action: "login", principal: "alice");
             var r2 = AuditChain.MakeRecord(2, (string)r1["record_hash"]!, action: "logout", principal: "alice");
+            // Written canonically, not with JsonSerializer: an integral ts — the
+            // one reading in a thousand that lands on an exact second — is
+            // written by the plain serializer with no fractional part, comes
+            // back an integer rather than a float, and hashes to something the
+            // chain does not recognise. See AuditChainTests
+            // .ChainWrittenAtAnExactSecondStillVerifies.
             File.WriteAllLines(path, new[]
             {
-                JsonSerializer.Serialize(r1),
-                JsonSerializer.Serialize(r2),
+                CanonicalJson.Serialize(r1),
+                CanonicalJson.Serialize(r2),
             });
 
             using var o = new StringWriter();
@@ -90,8 +97,8 @@ public class RealCliTests
             // leave record_hash stale → broken
             File.WriteAllLines(path, new[]
             {
-                JsonSerializer.Serialize(r1),
-                JsonSerializer.Serialize(r2),
+                CanonicalJson.Serialize(r1),
+                CanonicalJson.Serialize(r2),
             });
             using var o2 = new StringWriter();
             var code2 = Root.Execute(new[] { "audit", "verify", path }, o2, TextWriter.Null);
