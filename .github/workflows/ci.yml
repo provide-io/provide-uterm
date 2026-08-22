@@ -524,6 +524,14 @@ jobs:
 
   mutation-gate:
     runs-on: ubuntu-latest
+    # actions: write is scoped to THIS job, not the workflow (which stays
+    # contents: read), and buys exactly one thing: when a support-file change
+    # makes the question perimeter-wide, ci/prepare_mutation_args.sh dispatches
+    # mutation-full.yml on this SHA rather than attempting 38 sequential mutmut
+    # runs against a 90-minute cap.
+    permissions:
+      contents: read
+      actions: write
     # Without this the job inherits GitHub's 6-hour platform cap, and a run that
     # widens to the full perimeter burns all of it before reporting anything —
     # which is exactly what happened when a commit touched root pyproject.toml
@@ -556,6 +564,9 @@ jobs:
       - name: Run mutation gate (changed-only)
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+          # gh workflow run needs a token; the dispatch path uses it, the
+          # ordinary changed-only path never calls gh at all.
+          GH_TOKEN: ${{ github.token }}
         run: ci/prepare_mutation_args.sh
 
   # Go-side mutation gate: gremlins over a small, ~100%-covered perimeter

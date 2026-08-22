@@ -204,6 +204,14 @@ def _looks_like_test_path(value: str) -> bool:
     return value == "tests" or value.endswith("/tests") or "/tests/" in value or value.startswith("tests/")
 
 
+# Printed when a support-file change makes the question perimeter-wide and this
+# job cannot answer it. ci/prepare_mutation_args.sh greps for this exact line and
+# dispatches mutation-full.yml, which fans the perimeter across a matrix instead
+# of running it end to end in one job. Keep the literal stable: it is a contract
+# between the two, not a log message.
+FULL_PERIMETER_REQUIRED_MARKER = "MUTATION_FULL_PERIMETER_REQUIRED"
+
+
 def _changed_mutation_support_paths(changed_paths: list[str]) -> list[str]:
     support_files = set(MUTATION_SUPPORT_FILES)
     configured_tests = tuple(path.rstrip("/") for path in _configured_mutation_tests())
@@ -497,16 +505,27 @@ def main() -> int:
         if not source_paths:
             changed_support_paths = _changed_mutation_support_paths(_changed_paths(args.base_ref, args.staged_only))
             if changed_support_paths:
+                # A support-file change is a perimeter-wide question: the tooling
+                # moved, so nothing about the previous result carries over. It is
+                # NOT answerable here. The perimeter is 38 files and mutmut has to
+                # be given them one at a time (a single run over all of them trips
+                # the fork-loop child-reaping crash), so answering it in this job
+                # means 38 sequential runs -- hours against a 90-minute cap. What
+                # that produced was never a verdict, only a timeout.
+                #
+                # So the job says what it cannot answer and names who can:
+                # mutation-full.yml already fans the same 38 targets across a
+                # matrix. ci/prepare_mutation_args.sh reads the marker below and
+                # dispatches it on this SHA.
                 print(
                     "mutation gate full-perimeter trigger: changed mutation allowlist/config/tests "
                     f"without changed source mutants: {changed_support_paths}"
                 )
-                source_paths = None
-            else:
-                print("mutation gate skipped: no changed Python files under mutation roots")
+                print(FULL_PERIMETER_REQUIRED_MARKER)
                 return 0
-        else:
-            print(f"mutation gate targets ({len(source_paths)}): {source_paths}")
+            print("mutation gate skipped: no changed Python files under mutation roots")
+            return 0
+        print(f"mutation gate targets ({len(source_paths)}): {source_paths}")
     elif args.paths:
         source_paths = [p.strip() for p in args.paths.split(",") if p.strip()]
         if not source_paths:
@@ -523,7 +542,7 @@ def main() -> int:
             source_paths=source_paths,
             # An explicitly-narrowed target set (--paths / --changed-only) may
             # legitimately contain only no-mutable-surface files → 0 mutants is OK.
-            allow_empty=source_paths is not None and not changed_support_paths,
+            allow_empty=source_paths is not None,
         )
     except RuntimeError as exc:
         print(str(exc))
