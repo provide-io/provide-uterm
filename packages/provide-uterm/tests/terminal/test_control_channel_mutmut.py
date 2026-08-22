@@ -20,6 +20,7 @@ from provide.uterm.control_channel import (
     ControlFrameDecoder,
     ControlFrameProtocolError,
     DataChunk,
+    _utf8_payload_end,
     encode_control_frame,
 )
 
@@ -303,3 +304,80 @@ class TestReportError:
         err = d._report_error("custom message")
         assert isinstance(err, ControlFrameProtocolError)
         assert str(err) == "custom message"
+
+
+# ---------------------------------------------------------------------------
+# _utf8_payload_end — the byte-length walk over a character buffer
+# ---------------------------------------------------------------------------
+
+
+class TestUtf8PayloadEndBounds:
+    """Kills the loop's two bounds and the length-error message.
+
+    The walk advances a character index while counting UTF-8 *bytes*, so its
+    guard has to hold both ends at once: stop at the end of the buffer, and
+    stop once the declared byte count is reached. Each half is load-bearing in
+    a different direction, and neither was pinned.
+    """
+
+    def test_a_short_buffer_returns_none_rather_than_reading_past_it(self) -> None:
+        """Kills `and` -> `or` and `idx < len(buf)` -> `<=`.
+
+        Both let the walk step past the last character when the buffer is
+        shorter than the declared length — the case that says "not yet, feed me
+        more", which is the normal state of a frame split across two reads.
+        """
+        assert _utf8_payload_end("ab", 0, 5) is None
+
+    def test_the_walk_stops_on_the_byte_it_was_asked_for(self) -> None:
+        """Kills `byte_count < payload_bytes` -> `<=`.
+
+        A buffer LONGER than the payload is what separates the two: at an exact
+        fit the mutant takes one more character, overshoots, and reports the
+        length invalid. With a buffer that ends exactly at the payload the loop
+        stops for the other reason and the mutant survives.
+        """
+        assert _utf8_payload_end("abcd", 0, 3) == 3
+
+    def test_a_length_splitting_a_code_point_is_named_as_such(self) -> None:
+        """Kills the message -> None, -> XX-wrapped, -> upper-cased.
+
+        A length landing mid-character cannot be fixed by feeding more text, so
+        this is the one payload-length error the sender has to be told apart
+        from "incomplete". é is two bytes; asking for one splits it.
+        """
+        with pytest.raises(ControlFrameProtocolError) as excinfo:
+            _utf8_payload_end("é", 0, 1)
+        assert str(excinfo.value) == "invalid control payload length"
+
+
+class TestFinishResetsEveryBuffer:
+    """Kills the three buffer resets on the error path of ``finish``.
+
+    ``finish`` rejects a truncated frame, and on the way out clears the text
+    buffer, the parts list and the byte buffer. Nothing asserted any of them,
+    so each could be set to None — leaving a decoder that raises AttributeError
+    or TypeError on the next feed instead of starting clean. A decoder that
+    cannot be reused after one bad frame is a worse failure than the bad frame.
+    """
+
+    @staticmethod
+    def _truncated() -> ControlFrameDecoder:
+        decoder = ControlFrameDecoder()
+        decoder.feed(DLE + STX + "0000000a:")  # header promising ten bytes, none sent
+        return decoder
+
+    def test_a_rejected_frame_leaves_every_buffer_empty(self) -> None:
+        decoder = self._truncated()
+        with pytest.raises(ControlFrameProtocolError):
+            decoder.finish()
+        assert decoder._buffer == ""
+        assert decoder._buffer_parts == []
+        assert decoder._buffer_bytes == bytearray()
+
+    def test_the_decoder_still_works_after_a_rejected_frame(self) -> None:
+        """The resets exist so the next frame decodes; assert that, not just the state."""
+        decoder = self._truncated()
+        with pytest.raises(ControlFrameProtocolError):
+            decoder.finish()
+        assert decoder.feed(encode_control_frame({"type": "ping"})) == [ControlChunk({"type": "ping"})]
