@@ -39,20 +39,49 @@ run_gate() {
   set -e
   printf '%s\n' "${out}"
   if printf '%s' "${out}" | grep -q "${MARKER}"; then
-    dispatch_full_perimeter
+    if should_dispatch; then
+      dispatch_full_perimeter || return 1
+    else
+      echo "pull_request: the full perimeter will be dispatched when this lands on the target branch"
+    fi
   fi
   return "${status}"
 }
 
-# Fan the 38 perimeter targets across mutation-full.yml's matrix on this SHA.
-# Needs `actions: write`, granted to the mutation-gate job alone. A dispatch
-# failure is reported but does not fail the gate: losing the deferred run is
-# worth knowing about, and is not itself a perimeter regression.
+# Fan the 38 perimeter targets across mutation-full.yml's matrix.
+#
+# --ref takes a BRANCH OR TAG, never a commit SHA: the dispatch API resolves the
+# workflow file from a ref, and a raw SHA is rejected. Passing $GITHUB_SHA looked
+# right, dispatched nothing, and -- because the failure only warned -- left a
+# green job with no perimeter run behind it, which is the exact shape of problem
+# this whole mechanism exists to remove. The dispatched run therefore uses the
+# branch head; on a push those are the same commit unless another push races in.
+#
+# A dispatch failure FAILS the step. The gate has already said it cannot answer
+# the perimeter question here; if the handoff does not happen either, then nobody
+# is answering it, and a job that reports success while nothing checks the
+# perimeter is worse than the timeout this replaced -- a timeout is at least
+# visible. Needs `actions: write`, granted to the mutation-gate job alone.
 dispatch_full_perimeter() {
-  echo "dispatching mutation-full.yml on ${GITHUB_SHA:-HEAD} (perimeter is not answerable in this job)"
-  if ! gh workflow run mutation-full.yml --ref "${GITHUB_SHA:-HEAD}"; then
-    echo "WARNING: could not dispatch mutation-full.yml; run it manually on this SHA"
+  local ref="${GITHUB_REF_NAME:-main}"
+  echo "dispatching mutation-full.yml on ${ref} (the perimeter is not answerable in this job)"
+  if ! gh workflow run mutation-full.yml --ref "${ref}"; then
+    echo "ERROR: could not dispatch mutation-full.yml on ${ref}."
+    echo "The perimeter question is unanswered: this job cannot run it and the handoff failed."
+    echo "Run it manually (gh workflow run mutation-full.yml --ref ${ref}) before trusting this commit."
+    return 1
   fi
+}
+
+# A fork PR's token is read-only whatever the permissions block says, so the
+# dispatch cannot work there. The perimeter question is deferred to the push that
+# lands the change on main, which is the ref that matters, rather than failing a
+# contributor's PR for a capability their token was never going to have.
+should_dispatch() {
+  case "${GITHUB_EVENT_NAME:-}" in
+    pull_request) return 1 ;;
+    *) return 0 ;;
+  esac
 }
 
 event="${GITHUB_EVENT_NAME:-}"
