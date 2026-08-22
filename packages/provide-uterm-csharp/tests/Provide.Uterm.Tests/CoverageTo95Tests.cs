@@ -14,7 +14,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Provide.Uterm.Bridge;
 using Provide.Uterm.Cli;
-using Provide.Uterm.CtrlMsg;
 using Provide.Uterm.Client;
 using Provide.Uterm.Connectors;
 using Provide.Uterm.ControlChannel;
@@ -478,10 +477,7 @@ public class CoverageTo95Tests
 
         var path = Path.Combine(Path.GetTempPath(), "aud-" + Guid.NewGuid().ToString("N") + ".jsonl");
         var r1 = AuditChain.MakeRecord(1, AuditChain.GenesisHash, action: "a", principal: "p");
-        // Canonical, not plain: a ts landing on an exact second round-trips
-        // through JsonSerializer as an integer and breaks the hash. See
-        // AuditChainTests.ChainWrittenAtAnExactSecondStillVerifies.
-        File.WriteAllText(path, CanonicalJson.Serialize(r1) + "\n");
+        File.WriteAllText(path, global::Provide.Uterm.CtrlMsg.CanonicalJson.Serialize(r1) + "\n");
         try
         {
             using var o = new StringWriter();
