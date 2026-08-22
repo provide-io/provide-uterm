@@ -335,3 +335,62 @@ class TestScopedMutationSelection:
 
     def test_unscoped_path_keeps_full_selection(self) -> None:
         assert gate._scoped_test_selection(["src/provide/uterm/io.py"]) is None
+
+
+# ---------------------------------------------------------------------------
+# run_mutation_gate: results must be read before the config is restored
+# ---------------------------------------------------------------------------
+
+
+class TestNarrowedResultsAreReadBeforeRestore:
+    """``mutmut results`` reads source_paths from the ROOT pyproject too.
+
+    A ``--paths`` / ``--changed-only`` run narrows that config for the duration of
+    the run, so the results have to be asked for while the narrowed config is
+    still in place. Restoring first made mutmut report on the DEFAULT perimeter
+    instead of the files just mutated, which answers "no results" — and the gate
+    cannot tell that from a file with no mutable surface, so it passed. A
+    ``--paths`` run over router_impl.py that mutmut itself tallied as 976 mutants
+    with 456 survivors was read back as ``total=0`` and passed as clean.
+    """
+
+    def test_collect_stats_sees_the_narrowed_config(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        narrowed = "src/provide/uterm/only_this.py"
+        (tmp_path / "pyproject.toml").write_text(
+            '[tool.mutmut]\nsource_paths = ["src/provide/uterm/original.py"]\n', encoding="utf-8"
+        )
+        seen: list[str] = []
+
+        def _fake_collect(*_args: object, **_kwargs: object) -> tuple[list[str], dict[str, int]]:
+            seen.append((tmp_path / "pyproject.toml").read_text(encoding="utf-8"))
+            return [], {"total": 1, "killed": 1, "bad_total": 0}
+
+        monkeypatch.setattr(gate, "_collect_stats", _fake_collect)
+        monkeypatch.setattr(gate, "_seed_mutants_config", lambda **_k: None)
+        monkeypatch.setattr(gate, "_scoped_test_selection", lambda _p: ())
+        monkeypatch.setattr(gate, "_load_equivalent_allowlist", lambda *_a, **_k: {})
+        monkeypatch.setattr(gate.subprocess, "run", lambda *_a, **_k: type("R", (), {"returncode": 0})())
+
+        gate.run_mutation_gate(None, 1, 0, 100.0, source_paths=[narrowed])
+
+        assert seen, "stats were never collected"
+        assert narrowed in seen[0], (
+            "mutmut results was asked AFTER pyproject.toml had been restored, so it "
+            "reported on the default perimeter rather than the narrowed target"
+        )
+
+    def test_config_is_restored_afterwards(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        original = '[tool.mutmut]\nsource_paths = ["src/provide/uterm/original.py"]\n'
+        (tmp_path / "pyproject.toml").write_text(original, encoding="utf-8")
+
+        monkeypatch.setattr(gate, "_collect_stats", lambda *_a, **_k: ([], {"total": 1, "killed": 1, "bad_total": 0}))
+        monkeypatch.setattr(gate, "_seed_mutants_config", lambda **_k: None)
+        monkeypatch.setattr(gate, "_scoped_test_selection", lambda _p: ())
+        monkeypatch.setattr(gate, "_load_equivalent_allowlist", lambda *_a, **_k: {})
+        monkeypatch.setattr(gate.subprocess, "run", lambda *_a, **_k: type("R", (), {"returncode": 0})())
+
+        gate.run_mutation_gate(None, 1, 0, 100.0, source_paths=["src/provide/uterm/only_this.py"])
+
+        assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == original

@@ -394,16 +394,22 @@ def run_mutation_gate(
         # Survivors are expected (equivalent mutants); only fail on real errors.
         cmd = _uv_mutmut_cmd(python_version, "run", "--max-children", str(children))
         print("+", " ".join(cmd))
+        # `mutmut results` reads source_paths from the root pyproject too, so it
+        # has to be asked while the narrowed config is still in place. Restoring
+        # first made it report on the DEFAULT perimeter instead of the files just
+        # mutated, which answers "no results" -- indistinguishable from a file
+        # with no mutable surface. A --paths run over router_impl.py that mutmut
+        # itself tallied as 976 mutants with 456 survivors was read back as
+        # total=0 and passed as "no mutable surface".
         try:
             mutmut_result = subprocess.run(cmd, check=False, env=mutation_env)
+            if mutmut_result.returncode > 1:
+                raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
+            _effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
         finally:
             # Restore root pyproject.toml (even on error so we never leave it modified)
             if root_original is not None:
                 root_pyproject.write_text(root_original, encoding="utf-8")
-        if mutmut_result.returncode > 1:
-            raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
-
-        _effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
 
         # An explicitly-narrowed target (--paths / --changed-only) with zero mutants
         # is a file with no mutable surface (a Pydantic model, a re-export shim,
