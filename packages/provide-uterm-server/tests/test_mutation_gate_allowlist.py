@@ -424,3 +424,78 @@ class TestSupportFileChangeDefersToTheFullWorkflow:
         assert gate.FULL_PERIMETER_REQUIRED_MARKER not in out
         assert "skipped" in out
         assert not ran
+
+
+# ---------------------------------------------------------------------------
+# Carrying a proven kill across attempts
+# ---------------------------------------------------------------------------
+
+
+class TestProvenKillsSurviveALaterTimeout:
+    """A kill proved by one attempt must not be undone by the next attempt's timeout.
+
+    mutmut orders a mutant's covering tests by measured duration, fastest first.
+    At microsecond scale that is noise, so when the covering set holds a test
+    that spins on the mutant, whether the killing test runs first is a coin flip
+    per attempt. Reading only the last attempt therefore discarded exactly what
+    the retry was run to find out: two attempts of one control_channel.py run
+    reported different timeout sets, each killing a mutant the other did not.
+    """
+
+    def test_a_timeout_is_restored_to_the_kill_it_was_shown_to_be(self) -> None:
+        promoted = gate._promote_proven_kills([("a", "killed"), ("flaky", "timeout")], {"flaky"})
+        assert promoted == [("a", "killed"), ("flaky", "killed")]
+
+    def test_a_survived_verdict_is_never_promoted(self) -> None:
+        """``survived`` means a test ran to completion and passed.
+
+        That contradicts the earlier kill instead of failing to reach it, so it
+        is test flakiness and has to stay visible. Only the absence of a verdict
+        is restored.
+        """
+        promoted = gate._promote_proven_kills([("flaky", "survived")], {"flaky"})
+        assert promoted == [("flaky", "survived")]
+
+    def test_an_unproven_timeout_still_fails_the_gate(self) -> None:
+        promoted = gate._promote_proven_kills([("slow", "timeout")], {"other"})
+        assert promoted == [("slow", "timeout")]
+
+    def test_collect_stats_counts_a_carried_kill_as_killed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            gate,
+            "_results_per_mutant",
+            lambda _pv, _env: [("a", "killed"), ("flaky", "timeout")],
+        )
+        _effective, stats = gate._collect_stats(None, {}, {}, {"flaky"})
+        assert stats["killed"] == 2
+        assert stats["timeout"] == 0
+        assert stats["bad_total"] == 0
+
+    def test_the_gate_passes_once_both_attempts_together_kill_everything(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The end-to-end shape: neither attempt is clean, the pair is.
+
+        Attempt 1 kills ``x`` and times out on ``y``; attempt 2 does the
+        reverse. Before this, attempt 2's stats were the verdict and the run
+        failed on ``x`` — a mutant attempt 1 had already killed.
+        """
+        # chdir first: run_mutation_gate rmtree's ./mutants and rewrites
+        # ./pyproject.toml, so running it against the real repo root would
+        # delete a live mutants tree.
+        monkeypatch.chdir(tmp_path)
+        results = iter(
+            [
+                [("x", "killed"), ("y", "timeout")],
+                [("x", "timeout"), ("y", "killed")],
+            ]
+        )
+        monkeypatch.setattr(gate, "_results_per_mutant", lambda _pv, _env: next(results))
+        monkeypatch.setattr(gate, "_seed_mutants_config", lambda **_k: None)
+        monkeypatch.setattr(gate, "_scoped_test_selection", lambda _p: ())
+        monkeypatch.setattr(gate, "_load_equivalent_allowlist", lambda *_a, **_k: {})
+        monkeypatch.setattr(gate.subprocess, "run", lambda *_a, **_k: type("R", (), {"returncode": 1})())
+
+        stats = gate.run_mutation_gate(None, 4, 1, 100.0, source_paths=["src/x.py"])
+        assert stats["killed"] == 2
+        assert stats["bad_total"] == 0

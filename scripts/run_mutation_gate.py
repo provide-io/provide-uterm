@@ -308,10 +308,49 @@ def _apply_equivalent_allowlist(
     return effective, excused, stale
 
 
+def _promote_proven_kills(effective: list[tuple[str, str]], killed_previously: set[str]) -> list[tuple[str, str]]:
+    """Restore kills an earlier attempt proved and this attempt only timed out on.
+
+    A ``killed`` is positive evidence: a test ran on that mutant and failed. A
+    ``timeout`` is the opposite -- mutmut gave up before any test reached a
+    verdict -- so it is the absence of an answer, not an answer of "survived".
+    Retries exist because timeouts are flaky, and reading only the last attempt
+    threw away what the retry was run to learn: two attempts of the same
+    control_channel.py run reported different timeout sets, each killing a
+    mutant the other did not.
+
+    mutmut orders a mutant's covering tests by measured duration, fastest first
+    (mutmut/__main__.py). At microsecond scale that ordering is noise, so for a
+    mutant whose covering set contains a test that spins, whether the killing
+    test runs before the spinning one is a coin flip per attempt.
+
+    Only ``timeout`` is promoted. A ``survived`` means a test ran to completion
+    and passed, which is a real verdict and contradicts the earlier kill -- that
+    is test flakiness and must stay visible, not be papered over.
+    """
+    if not killed_previously:
+        return effective
+    promoted = [
+        (name, "killed") if state == "timeout" and name in killed_previously else (name, state)
+        for name, state in effective
+    ]
+    carried = sorted(
+        name
+        for (name, state), (_, was) in zip(promoted, effective, strict=True)
+        if state == "killed" and was == "timeout"
+    )
+    if carried:
+        print(f"carried forward {len(carried)} kill(s) proven by an earlier attempt (timed out in this one):")
+        for name in carried:
+            print(f"  {name}")
+    return promoted
+
+
 def _collect_stats(
     python_version: str | None,
     env: dict[str, str],
     equivalents: dict[str, str],
+    killed_previously: set[str] | None = None,
 ) -> tuple[list[tuple[str, str]], dict[str, int]]:
     """Read ``mutmut results``, apply the equivalent allowlist, and tally stats.
 
@@ -330,6 +369,7 @@ def _collect_stats(
             print(f"WARNING: stale equivalent-allowlist entry (no surviving mutant matched): {name}")
     if excused:
         print(f"excused {len(excused)} documented-equivalent mutant(s) via {DEFAULT_EQUIVALENTS_FILE}")
+    effective = _promote_proven_kills(effective, killed_previously or set())
     state_counts = _state_counts_from(effective)
     total = sum(state_counts.values())
     killed = int(state_counts.get("killed", 0))
@@ -367,6 +407,8 @@ def run_mutation_gate(
 ) -> dict[str, int]:
     attempts = retries + 1
     last_stats: dict[str, int] = {}
+    # Mutants some attempt has already proven killable. See _promote_proven_kills.
+    killed_previously: set[str] = set()
     mutation_env = _mutation_environment()
     existing_pythonpath = mutation_env.get("PYTHONPATH")
     _prepend_mutant_source_roots(mutation_env, existing_pythonpath)
@@ -413,7 +455,8 @@ def run_mutation_gate(
             mutmut_result = subprocess.run(cmd, check=False, env=mutation_env)
             if mutmut_result.returncode > 1:
                 raise RuntimeError(f"mutmut crashed (exit {mutmut_result.returncode})")
-            _effective, last_stats = _collect_stats(python_version, mutation_env, equivalents)
+            effective, last_stats = _collect_stats(python_version, mutation_env, equivalents, killed_previously)
+            killed_previously |= {name for name, state in effective if state == "killed"}
         finally:
             # Restore root pyproject.toml (even on error so we never leave it modified)
             if root_original is not None:
