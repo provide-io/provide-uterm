@@ -425,6 +425,36 @@ class TestSupportFileChangeDefersToTheFullWorkflow:
         assert "skipped" in out
         assert not ran
 
+    def test_a_source_change_alongside_it_still_asks_the_perimeter(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The marker is about the tooling, not about what else is in the commit.
+
+        The support check used to run only when NOTHING under the mutation roots
+        had changed, so a commit carrying both a perimeter source file and a gate
+        script ran the scoped gate on the source file and dispatched nothing --
+        the tooling moved and the other 37 perimeter files were never re-checked.
+        Both have to happen: the scoped run answers the file in hand, the
+        dispatch answers the rest.
+        """
+        ran_with: list[object] = []
+
+        def _fake_run(*args: object, **kwargs: object) -> dict[str, int]:
+            ran_with.append(kwargs.get("source_paths"))
+            return {"total": 1, "killed": 1, "bad_total": 0}
+
+        monkeypatch.setattr(gate, "_changed_python_paths", lambda *_a, **_k: ["src/provide/uterm/control_channel.py"])
+        monkeypatch.setattr(gate, "_changed_paths", lambda *_a, **_k: ["scripts/run_mutation_gate.py"])
+        monkeypatch.setattr(gate, "_changed_mutation_support_paths", lambda _p: ["scripts/run_mutation_gate.py"])
+        monkeypatch.setattr(gate, "run_mutation_gate", _fake_run)
+        monkeypatch.setattr(sys, "argv", ["run_mutation_gate.py", "--changed-only", "--base-ref", "HEAD~1"])
+
+        rc = gate.main()
+        out = capsys.readouterr().out
+        assert rc == 0
+        assert gate.FULL_PERIMETER_REQUIRED_MARKER in out, "the perimeter question went unasked"
+        assert ran_with == [["src/provide/uterm/control_channel.py"]], "the scoped run was skipped"
+
 
 # ---------------------------------------------------------------------------
 # Carrying a proven kill across attempts
