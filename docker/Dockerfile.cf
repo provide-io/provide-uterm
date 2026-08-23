@@ -142,8 +142,15 @@ RUN mkdir -p /opt/wrangler \
 #                                       5.0.9 churn above). ip-address 10.x has
 #                                       no dependencies of its own, so the
 #                                       in-place swap pulls in no new tree.
-#   tar              7.5.16 -> 7.5.19   CVE-2026-59873 CRITICAL gzip-bomb DoS
+#   tar              7.5.16 -> 7.5.22   CVE-2026-59873 CRITICAL gzip-bomb DoS
 #                                       CVE-2026-59874 HIGH     malformed header
+#                                       CVE-2026-73566 HIGH     long-path DoS
+#                                       (needs >= 7.5.21; the 7.5.19 pin went
+#                                       red on its own three weeks later, the
+#                                       third time this block has been bumped
+#                                       with no commit of ours in between.
+#                                       Pinned to current latest, as ip-address
+#                                       above is, for the same reason.)
 # Every tarball is fetched BEFORE anything is replaced: `npm pack` itself runs on
 # npm's bundled tar, so swapping tar mid-loop would pull the implementation out
 # from under the remaining downloads. The trailing `npm --version` is a smoke
@@ -152,7 +159,7 @@ RUN mkdir -p /opt/wrangler \
 RUN set -e \
     && NM=/usr/local/lib/node_modules/npm/node_modules \
     && t="$(mktemp -d)" && cd "$t" \
-    && npm pack undici@6.27.0 brace-expansion@5.0.9 ip-address@10.5.0 tar@7.5.19 >/dev/null \
+    && npm pack undici@6.27.0 brace-expansion@5.0.9 ip-address@10.5.0 tar@7.5.22 >/dev/null \
     && for pkg in undici brace-expansion ip-address tar; do \
          mkdir -p "unpack-$pkg" \
          && tar xzf "$pkg"-*.tgz -C "unpack-$pkg" \
