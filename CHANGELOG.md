@@ -4,10 +4,57 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
-## [0.5.0] — 2026-08-01
+## [0.5.0] — 2026-08-23
 
 A multi-wave security/compliance hardening pass landed during the
 `0.5.0` development cycle. Highlights:
+
+### Cross-port hardening (2026-08-01 … 2026-08-23)
+
+- **WebSocket authentication is refused consistently across all three server
+  ports.** An unauthenticated socket is answered with 401 rather than 403; Go
+  refuses before the upgrade rather than after it; C# refuses anonymous browser
+  sockets. The worker socket — the privileged half, which had no security
+  probe of its own — is now covered, and `UTERM_TEST_MODE` announces itself
+  when it disables websocket auth instead of doing so silently.
+- **A browser that is still starting up no longer misses inspect traffic.**
+  All three ports hold inspect frames for a connecting browser and replay them
+  over a broadcast window, so the frames emitted between socket accept and
+  first render are delivered rather than dropped.
+- **Approval requests expire (C#).** Nothing was expiring them, so a request
+  that was never answered held its slot indefinitely. The browser-input
+  approval hold path is ported to match the reference.
+- **The control-frame length header has one canonical form.** Every decoder
+  validated the field only for membership in the hex alphabet while every
+  `is_control_frame` predicate compared it against the canonical lower-case
+  spelling, so an uppercase header was a frame to one and terminal data to the
+  other — and the predicate is what decides whether a payload is framed at all,
+  so a conforming peer emitting `%08X` would have had its control frames
+  rendered to the screen as text. Fixed in Python, Go, C# and TypeScript
+  together, pinned in the shared fuzz corpus as CCF-REG-0006. Found by the
+  weekly exploratory fuzz job, which had been reporting it on fresh seeds for
+  a month.
+- **The control-frame decoder cannot spin.** The drain loop is bounded, so a
+  parse offset that fails to advance rejects the stream instead of looping
+  forever inside the caller's read loop. The plain-data scan now jumps to the
+  next DLE with a C-level search rather than stepping a byte at a time —
+  4096 bytes of terminal output decode in 1.7µs, down from 169µs.
+- **Capture reports what it could not deliver**, including when the built
+  library is behind its sources, rather than reporting a clean run.
+- **Snapshot freshness arithmetic is pinned**, and `/snapshot` no longer
+  answers from a cache without saying so.
+- **Mutation tooling.** Narrowed runs read their results before the config is
+  restored (a 976-mutant run with 456 survivors had been read back as
+  `total=0` and passed as clean); a perimeter file that generates no mutants
+  fails instead of silently enforcing nothing; a perimeter-wide question is
+  dispatched to the chunked workflow instead of timing out; a kill proven by
+  one attempt survives a later attempt's timeout; and the Go, C# and
+  TypeScript allowlists key on mutation content rather than line coordinates,
+  so an edit above an entry no longer invalidates it.
+- **Dependencies.** provide-telemetry 0.8.0 on the Python and C# sides with the
+  submodule dropped in favour of published packages, a Go toolchain bump
+  closing six stdlib advisories, and CF-image pins for undici, brace-expansion,
+  ip-address and node-tar (CVE-2026-73566).
 
 ### Post-audit hardening (2026-06-02 … 2026-06-06)
 
