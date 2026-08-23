@@ -155,10 +155,35 @@ case "${1:?usage: hostile_probe.sh <start|wait-health|burst|worker|oversized|slo
       --latency-budget-s 5.0
     ;;
   stop)
+    # Kill the recorded pid AND anything still bound to the port. For the C#
+    # impl the recorded pid is `dotnet run`, which spawns the actual server as a
+    # SEPARATE child: killing the launcher leaves that child holding the port.
+    # The next `start` then cannot bind, dies, and `wait-health` happily passes
+    # against the orphan -- with a dev token minted by the dead process, so
+    # every authenticated probe is answered 401 and the lane reads as a server
+    # bug. That cost three cycles of chasing a false failure locally; in CI each
+    # job gets a fresh runner, so it only ever bites interactive use.
     if [ -f "${SERVER_PID_FILE}" ]; then
       kill "$(cat "${SERVER_PID_FILE}")" 2>/dev/null || true
       rm -f "${SERVER_PID_FILE}"
     fi
+    hostport="${HOSTILE_BASE_URL#*://}"
+    port="${hostport##*:}"
+    # Matched on the port this script owns, so nothing else on the box is hit.
+    # SIGTERM then SIGKILL: the C# server does not exit on SIGTERM, so a plain
+    # kill returns success while the port stays bound -- which is the same
+    # false-clean state this whole branch exists to prevent.
+    for pid in $(lsof -nP -iTCP:"${port}" -sTCP:LISTEN -t 2>/dev/null); do
+      kill "${pid}" 2>/dev/null || true
+    done
+    for _ in 1 2 3 4 5; do
+      [ -z "$(lsof -nP -iTCP:"${port}" -sTCP:LISTEN -t 2>/dev/null)" ] && break
+      sleep 1
+    done
+    for pid in $(lsof -nP -iTCP:"${port}" -sTCP:LISTEN -t 2>/dev/null); do
+      kill -9 "${pid}" 2>/dev/null || true
+    done
+    rm -f "${UTERM_DEV_TOKEN_PATH}"
     ;;
   *)
     echo "unknown probe: ${1}" >&2
