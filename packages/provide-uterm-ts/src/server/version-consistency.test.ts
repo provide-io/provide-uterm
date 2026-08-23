@@ -17,28 +17,35 @@ function readJson(path: string): Record<string, unknown> {
 }
 
 /**
- * Repo-root-relative paths of every git submodule.
+ * Directory names under packages/ that belong to another repository.
  *
- * A submodule is a separate repository on its own release cadence —
- * `provide-telemetry` is published from provide-io/provide-telemetry and is
- * already past this repo's version — so holding one to this repo's version
- * would assert that an independent project may never move without us. Read
- * from `.gitmodules` rather than named here, so adding a submodule does not
- * silently start failing this test, and removing one does not leave a stale
- * exemption behind that quietly stops checking a first-party package.
+ * packages/provide-telemetry is a git submodule, released on its own cadence —
+ * it is versioned independently of this repo, and its VERSION is not ours to
+ * keep in step. scripts/repo_paths.py already carries this rule for the SPDX
+ * walker and the docs-accuracy checker, both of which "got it wrong in the same
+ * way" when the submodule landed; this check is the one that never got updated.
+ *
+ * Parsed from .gitmodules rather than shelled out to `git submodule`, matching
+ * that helper: the answer must not depend on whether the submodule happens to
+ * be initialised, which it is not in a fresh clone.
  */
-function submodulePaths(): Set<string> {
+function submoduleNames(): Set<string> {
   let config: string;
   try {
     config = readFileSync(join(repoRoot, ".gitmodules"), "utf8");
   } catch (error) {
-    // A checkout with no submodules at all has no file to read.
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return new Set();
   }
-  return new Set(
-    [...config.matchAll(/^\s*path\s*=\s*(.+)$/gm)].map((match) => (match[1] as string).trim()),
-  );
+  const names = new Set<string>();
+  for (const line of config.split("\n")) {
+    const stripped = line.trim();
+    if (!stripped.startsWith("path")) continue;
+    const value = stripped.slice(stripped.indexOf("=") + 1).trim();
+    const [parent, name] = value.split("/");
+    if (parent === "packages" && name) names.add(name);
+  }
+  return names;
 }
 
 describe("release version consistency", () => {
@@ -50,17 +57,22 @@ describe("release version consistency", () => {
     const expected = String(rootProject.version);
     expect(readFileSync(join(repoRoot, "VERSION"), "utf8").trim()).toBe(expected);
 
-    const submodules = submodulePaths();
+    const foreign = submoduleNames();
+    let checked = 0;
     for (const entry of readdirSync(join(repoRoot, "packages"), { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      if (submodules.has(`packages/${entry.name}`)) continue;
+      if (!entry.isDirectory() || foreign.has(entry.name)) continue;
       const versionPath = join(repoRoot, "packages", entry.name, "VERSION");
       try {
         expect(readFileSync(versionPath, "utf8").trim(), versionPath).toBe(expected);
+        checked += 1;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
     }
+    // Skipping is only safe while it stays narrow. A parse slip in .gitmodules
+    // that swallowed every name would empty this loop, and an assertion that
+    // checks nothing passes just as quietly as one that checks everything.
+    expect(checked, "no packages/*/VERSION files were checked").toBeGreaterThan(0);
 
     const rootManifest = readJson(join(repoRoot, "package.json"));
     const lock = readJson(join(repoRoot, "package-lock.json"));
@@ -73,17 +85,31 @@ describe("release version consistency", () => {
     }
 
     expect(SERVER_VERSION).toBe(expected);
-    expect(readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8")).toContain(`## [${expected}] — 2026-08-23`);
+    // Matched by version with the date left open. Pinning the literal date
+    // meant every bump edited this assertion, and an assertion edited to make
+    // it pass is not one that checks anything.
+    expect(readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8")).toMatch(
+      new RegExp(`^## \\[${expected.replace(/\./g, "\\.")}\\] — \\d{4}-\\d{2}-\\d{2}$`, "m"),
+    );
   });
 
-  it("keeps pre-release hardening inside the dated release section", () => {
+  it("keeps the Unreleased section empty, with this version as the newest release", () => {
     const changelog = readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8");
+    const rootProject = parseToml(readFileSync(join(repoRoot, "pyproject.toml"), "utf8")).project as Record<
+      string,
+      unknown
+    >;
     const unreleasedStart = changelog.indexOf("## [Unreleased]");
-    const releaseStart = changelog.indexOf("## [0.5.0] — 2026-08-23");
-
     expect(unreleasedStart).toBeGreaterThanOrEqual(0);
-    expect(releaseStart).toBeGreaterThan(unreleasedStart);
+
+    // The first dated release heading after [Unreleased] is the one being cut.
+    const dated = /^## \[(\d+\.\d+\.\d+)\] — (\d{4}-\d{2}-\d{2})$/m.exec(changelog.slice(unreleasedStart));
+    expect(dated, "no dated release heading follows [Unreleased]").not.toBeNull();
+    expect(dated?.[1], "newest dated release is not the current version").toBe(String(rootProject.version));
+
+    // Nothing may accumulate under [Unreleased]: notes written there are notes
+    // that ship in no release, which is how a version goes out undocumented.
+    const releaseStart = unreleasedStart + (dated?.index ?? 0);
     expect(changelog.slice(unreleasedStart + "## [Unreleased]".length, releaseStart).trim()).toBe("");
-    expect(changelog.indexOf("### Post-audit hardening", releaseStart)).toBeGreaterThan(releaseStart);
   });
 });

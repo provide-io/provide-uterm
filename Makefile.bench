@@ -1,0 +1,131 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Reproducible benchmark harness (P2-BENCH-001 in
+# docs/roadmap/uterm-risk-ranked-action-plan.md).
+#
+# The benchmark scripts existed before this file; what did not exist was one
+# place fixing the parameters. Two people benchmarking "the control channel"
+# were running different frame counts, different pass counts, and an unpinned
+# seed, so their numbers could not be compared with each other or with a run
+# from last month. Every knob below is declared once here.
+#
+#   make -f Makefile.bench bench-local   # dev sweep, small dataset
+#   make -f Makefile.bench bench-ci      # full dataset + enforced smoke
+#   make -f Makefile.bench bench-help    # every target
+#
+# Rules for a number to be comparable:
+#   1. Same profile. A local number never goes in a table next to a CI number.
+#   2. Same fingerprint family. Each run writes env.json beside its results;
+#      compare within a machine, not across machines.
+#   3. Clean tree. The fingerprint records `dirty: true` and that invalidates a
+#      historical comparison.
+#   4. Deltas, not absolutes. Ratios between backends survive a machine change;
+#      ns/op does not.
+
+SHELL := /bin/bash
+
+# ---- Shared, pinned parameters --------------------------------------------
+# Overridable for exploration, but an artifact recorded under a non-default
+# value is not comparable with the committed history.
+BENCH_SEED           ?= 1337
+BENCH_CHUNK_SIZE     ?= 4096
+BENCH_DATA_SIZE      ?= 256
+BENCH_CONTROL_SIZE   ?= 128
+BENCH_CONTROL_RATIO  ?= 0.25
+BENCH_BACKENDS       ?= python csharp go typescript
+
+# Profile-specific volume. CI gets the large dataset because a runner is slower
+# and noisier: more frames per pass is what pulls the variance down.
+CI_FRAME_COUNT       ?= 200000
+CI_PASSES            ?= 5
+LOCAL_FRAME_COUNT    ?= 20000
+LOCAL_PASSES         ?= 3
+
+# Enforced ANSI throughput smoke. Iterations are high enough that a single
+# scheduler hiccup cannot move the median past the threshold.
+SMOKE_ITERATIONS     ?= 100000
+SMOKE_RUNS           ?= 3
+
+BENCH_OUT            ?= docs/benchmarks/results
+UV                   ?= uv
+
+PARITY_ARGS = \
+	--backends $(BENCH_BACKENDS) \
+	--chunk-size $(BENCH_CHUNK_SIZE) \
+	--data-size $(BENCH_DATA_SIZE) \
+	--control-size $(BENCH_CONTROL_SIZE) \
+	--control-ratio $(BENCH_CONTROL_RATIO) \
+	--seed $(BENCH_SEED)
+
+.PHONY: bench-help bench-local bench-ci bench-env bench-parity-local bench-parity-ci \
+        bench-smoke bench-smoke-enforced bench-redaction bench-backends bench-clean
+
+bench-help:
+	@echo "targets:"
+	@echo "  bench-local          dev sweep: parity ($(LOCAL_FRAME_COUNT) frames) + smoke, non-enforcing"
+	@echo "  bench-ci             full sweep: parity ($(CI_FRAME_COUNT) frames) + enforced smoke"
+	@echo "  bench-env            write the environment fingerprint only"
+	@echo "  bench-parity-local   cross-language control-frame decode, local volume"
+	@echo "  bench-parity-ci      cross-language control-frame decode, CI volume"
+	@echo "  bench-smoke          ANSI normalize/strip throughput, reported"
+	@echo "  bench-smoke-enforced ANSI throughput, fails past threshold (also in quality-gate)"
+	@echo "  bench-redaction      stream-redaction rule throughput"
+	@echo "  bench-backends       FastAPI vs Cloudflare Worker session workloads (slow, boots servers)"
+	@echo "  bench-clean          remove $(BENCH_OUT)"
+	@echo ""
+	@echo "results -> $(BENCH_OUT)/  (env.json records the machine; see docs/benchmarks/README.md)"
+
+$(BENCH_OUT):
+	@mkdir -p $(BENCH_OUT)
+
+# Written before any measurement, so a result file always has the machine that
+# produced it sitting next to it.
+bench-env: | $(BENCH_OUT)
+	@$(UV) run python scripts/bench_env_fingerprint.py --output $(BENCH_OUT)/env.json
+
+bench-parity-local: bench-env
+	@$(UV) run python scripts/benchmark_control_channel_parity.py \
+		$(PARITY_ARGS) \
+		--frame-count $(LOCAL_FRAME_COUNT) \
+		--passes $(LOCAL_PASSES) \
+		--output-json $(BENCH_OUT)/control-channel-parity.local.json
+
+bench-parity-ci: bench-env
+	@$(UV) run python scripts/benchmark_control_channel_parity.py \
+		$(PARITY_ARGS) \
+		--frame-count $(CI_FRAME_COUNT) \
+		--passes $(CI_PASSES) \
+		--output-json $(BENCH_OUT)/control-channel-parity.ci.json
+
+# --runs 3 takes the median of three samples. One sample on a shared runner is
+# a coin flip; the median is what makes the threshold meaningful.
+bench-smoke: bench-env
+	@$(UV) run python scripts/run_performance_smoke.py \
+		--iterations $(SMOKE_ITERATIONS) --runs $(SMOKE_RUNS)
+
+bench-smoke-enforced: bench-env
+	@$(UV) run python scripts/run_performance_smoke.py \
+		--iterations $(SMOKE_ITERATIONS) --runs $(SMOKE_RUNS) --enforce
+
+bench-redaction: bench-env
+	@$(UV) run python scripts/benchmark_redaction.py
+
+# Boots a real FastAPI server and a real workerd via pywrangler, so it is far
+# slower than the rest and is not part of either profile.
+bench-backends: bench-env
+	@$(UV) run python scripts/benchmark_backends_impl.py
+
+bench-local: bench-parity-local bench-smoke
+	@echo ""
+	@echo "local benchmark sweep complete -> $(BENCH_OUT)"
+	@echo "local numbers are for spotting a regression on THIS machine; do not"
+	@echo "commit them as history (see docs/benchmarks/README.md)."
+
+bench-ci: bench-parity-ci bench-smoke-enforced
+	@echo ""
+	@echo "CI benchmark sweep complete -> $(BENCH_OUT)"
+
+bench-clean:
+	@rm -rf $(BENCH_OUT)
+	@echo "removed $(BENCH_OUT)"

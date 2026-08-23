@@ -1,0 +1,23 @@
+{
+  "_comment": [
+    "Deferred C# build warnings, keyed on (code, package-relative file).",
+    "An entry is a deferral with a written reason, not an exemption: the gate",
+    "fails on any warning that is not listed AND on any listed warning that no",
+    "longer fires, so this file cannot silently rot.",
+    "",
+    "Compiler diagnostics (CS*, CA*) are at zero and must stay there. Fix the",
+    "warning; add an entry only when the fix genuinely belongs to someone else",
+    "(an SDK/analyzer regression, or a dependency's generated source).",
+    "",
+    "xUnit warnings are real and should stay forbidden. The prior",
+    "C# warning-baseline included xUnit1031 entries for 28 call sites, and a",
+    "recent cleanup removed the synchronous-blocking call sites tracked as",
+    "CSHARP-XUNIT-001 in docs/roadmap/uterm-risk-ranked-action-plan.md.",
+    "",
+    "Because the key is (code, file), a NEW file acquiring xUnit1031 still fails",
+    "the gate. The backlog cannot grow quietly, only shrink.",
+    "",
+    "Enforced by ci/warning_gate.py, run from the `build` Makefile target."
+  ],
+  "allowed": []
+}

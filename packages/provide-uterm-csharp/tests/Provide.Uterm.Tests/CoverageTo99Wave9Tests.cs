@@ -138,7 +138,7 @@ public class CoverageTo99Wave9Tests : IDisposable
     }
 
     [Fact]
-    public void Pure_AnsiBright_Upgrade_Screen_Frames_HubCatch()
+    public async Task Pure_AnsiBright_Upgrade_Screen_Frames_HubCatch()
     {
         // bright FG/BG MapIndex arms via Upgrade
         _ = Upgrade.UpgradeTo256("\x1b[91;101mX\x1b[0m");
@@ -162,9 +162,8 @@ public class CoverageTo99Wave9Tests : IDisposable
         var hub = new TermHub();
         hub.Conn.RegisterWorker("w", new OkWs());
         hub.Conn.RegisterBrowser("w", new FailWs(), "admin");
-        hub.Conn.BroadcastHijackStateAsync("w").GetAwaiter().GetResult();
-        hub.Conn.BroadcastToBrowsersAsync("w", new Dictionary<string, object?> { ["type"] = "x" })
-            .GetAwaiter().GetResult();
+        await hub.Conn.BroadcastHijackStateAsync("w");
+        await hub.Conn.BroadcastToBrowsersAsync("w", new Dictionary<string, object?> { ["type"] = "x" });
 
         var store = new StateStore(hub.Registry, new object(), maxBufferChars: 40);
         Assert.False(store.BufferAndGetCommand(new object(), "abcdefghi").Ok); // overflow needs max=4
@@ -259,13 +258,13 @@ public class CoverageTo99Wave9Tests : IDisposable
                 SecurityAlgorithms.HmacSha256));
         var tok = new JwtSecurityTokenHandler().WriteToken(jwt);
         var idp = new LocalIdentityProvider(auth);
-        var p = idp.AuthenticateAsync(new AuthRequest
+        var p = await idp.AuthenticateAsync(new AuthRequest
         {
             Headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Authorization"] = "Bearer " + tok,
             },
-        }).GetAwaiter().GetResult();
+        });
         Assert.Equal("scoped-user", p.SubjectId);
 
         // IsControlFrame oversized payload claim (Codec L201)

@@ -1,0 +1,424 @@
+{
+  "ambiguity": {
+    "cross_verifies": true,
+    "signatures_collide": true
+  },
+  "api_keys": {
+    "default_scopes_empty": [],
+    "default_tenant_is_empty": "",
+    "empty_tenant_cannot_revoke_a_flat_key": false,
+    "empty_tenant_refused": "tenant_id is required and must match ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+    "expired_key_is_refused": true,
+    "expiry_is_in_the_future": true,
+    "hash_length": 64,
+    "invalid_tenant_cannot_revoke_a_flat_key": false,
+    "invalid_tenant_refused": "tenant_id is required and must match ^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+    "key_id_is_hash_prefix": true,
+    "key_id_length": 16,
+    "keys_are_distinct": true,
+    "list_keys_counts_everything": 3,
+    "lists_nothing_for_an_invalid_tenant": [],
+    "lists_nothing_for_an_unknown_tenant": [],
+    "lists_only_its_own": [
+      "ci"
+    ],
+    "living_key_is_accepted": true,
+    "no_expiry_by_default": true,
+    "padded_tenant_is_trimmed": "globex",
+    "raw_key_is_not_stored": true,
+    "raw_key_length": 43,
+    "records_last_used": true,
+    "refuses an unknown key": true,
+    "revoke_an_unknown_key": false,
+    "revoke_for_an_invalid_tenant": false,
+    "revoke_reports_found": true,
+    "revoke_reports_unknown": false,
+    "revoked_key_is_refused": true,
+    "revoked_key_leaves_the_listing": [],
+    "revokes_its_own": true,
+    "revokes_only_its_own": false,
+    "scopes_kept": [
+      "operator"
+    ],
+    "tenant_is_canonical": "acme",
+    "validates_its_own_key": true
+  },
+  "default_role": "viewer",
+  "known_roles": [
+    "admin",
+    "operator",
+    "viewer"
+  ],
+  "max_age_s": 300.0,
+  "now": 1700000000.0,
+  "role_failures": [
+    {
+      "error": "TypeError",
+      "name": "a number"
+    },
+    {
+      "error": "TypeError",
+      "name": "none"
+    },
+    {
+      "error": "TypeError",
+      "name": "a boolean"
+    }
+  ],
+  "roles": [
+    {
+      "input": [],
+      "name": "nothing at all",
+      "resolved": [
+        "viewer"
+      ]
+    },
+    {
+      "input": [
+        "operator"
+      ],
+      "name": "one known role",
+      "resolved": [
+        "operator"
+      ]
+    },
+    {
+      "input": [
+        "viewer",
+        "operator",
+        "admin"
+      ],
+      "name": "every known role",
+      "resolved": [
+        "admin",
+        "operator",
+        "viewer"
+      ]
+    },
+    {
+      "input": [
+        "superuser"
+      ],
+      "name": "an unknown role",
+      "resolved": [
+        "viewer"
+      ]
+    },
+    {
+      "input": [
+        "operator",
+        "root"
+      ],
+      "name": "a known and an unknown role",
+      "resolved": [
+        "operator"
+      ]
+    },
+    {
+      "input": [
+        "OPERATOR",
+        "Admin"
+      ],
+      "name": "mixed case",
+      "resolved": [
+        "admin",
+        "operator"
+      ]
+    },
+    {
+      "input": [
+        "  operator  "
+      ],
+      "name": "padded with whitespace",
+      "resolved": [
+        "operator"
+      ]
+    },
+    {
+      "input": [
+        "",
+        "   "
+      ],
+      "name": "empty strings",
+      "resolved": [
+        "viewer"
+      ]
+    },
+    {
+      "input": [
+        "operator",
+        "operator",
+        "OPERATOR"
+      ],
+      "name": "duplicates",
+      "resolved": [
+        "operator"
+      ]
+    },
+    {
+      "input": [
+        1,
+        null,
+        true
+      ],
+      "name": "something that is not a string",
+      "resolved": [
+        "viewer"
+      ]
+    },
+    {
+      "input": "operator",
+      "name": "a string rather than a list",
+      "resolved": [
+        "viewer"
+      ]
+    },
+    {
+      "input": {
+        "operator": 1,
+        "root": 2
+      },
+      "name": "a mapping, which iterates its keys",
+      "resolved": [
+        "operator"
+      ]
+    },
+    {
+      "input": [
+        "admin"
+      ],
+      "name": "a tuple",
+      "resolved": [
+        "admin"
+      ]
+    },
+    {
+      "input": [
+        "viewer"
+      ],
+      "name": "a set",
+      "resolved": [
+        "viewer"
+      ]
+    }
+  ],
+  "secret": "s3cr3t-signing-key",
+  "signatures": [
+    {
+      "body": [
+        123,
+        34,
+        100,
+        101,
+        99,
+        105,
+        115,
+        105,
+        111,
+        110,
+        34,
+        58,
+        34,
+        97,
+        108,
+        108,
+        111,
+        119,
+        34,
+        125
+      ],
+      "name": "a json body",
+      "secret": "s3cr3t-signing-key",
+      "signature": "sha256=51fcf06b9de81e542880cce6d54e7b99f11d3a9a87aac74ebab73f42f16262b2",
+      "verifies": true
+    },
+    {
+      "body": [],
+      "name": "an empty body",
+      "secret": "s3cr3t-signing-key",
+      "signature": "sha256=638ebf94e352d17eae1f95b4df068ff175e8e02860df260d37236cee248f5510",
+      "verifies": true
+    },
+    {
+      "body": [
+        49,
+        55,
+        48,
+        48,
+        48,
+        48,
+        48,
+        48,
+        48,
+        48,
+        46,
+        110,
+        111,
+        116,
+        45,
+        116,
+        104,
+        101,
+        45,
+        114,
+        101,
+        97,
+        108,
+        45,
+        98,
+        111,
+        100,
+        121
+      ],
+      "name": "a body with a dot in it",
+      "secret": "s3cr3t-signing-key",
+      "signature": "sha256=1a0c041c65f844c83ce4a3b22d46e4302cc42728439eda2ce2155ca87959b29c",
+      "verifies": true
+    },
+    {
+      "body": [
+        250,
+        251,
+        252,
+        253,
+        254,
+        255
+      ],
+      "name": "a body with high bytes",
+      "secret": "s3cr3t-signing-key",
+      "signature": "sha256=520852a4f5acc743bc001e9c3410b5928f89d1232563a5c2d0a698ac477eefe3",
+      "verifies": true
+    },
+    {
+      "body": [
+        123,
+        34,
+        100,
+        101,
+        99,
+        105,
+        115,
+        105,
+        111,
+        110,
+        34,
+        58,
+        34,
+        97,
+        108,
+        108,
+        111,
+        119,
+        34,
+        125
+      ],
+      "name": "a different secret",
+      "secret": "another-key",
+      "signature": "sha256=44d3243cc21b4eaab9bf6bf7858af6c111d356d2aec98f84a67374b5071bd334",
+      "verifies": false
+    }
+  ],
+  "tenants": [
+    {
+      "canonical": "acme",
+      "input": "acme",
+      "name": "a simple slug"
+    },
+    {
+      "canonical": "acme-corp.eu_1",
+      "input": "acme-corp.eu_1",
+      "name": "with separators"
+    },
+    {
+      "canonical": "1acme",
+      "input": "1acme",
+      "name": "starting with a digit"
+    },
+    {
+      "canonical": "acme",
+      "input": "  acme  ",
+      "name": "padded"
+    },
+    {
+      "canonical": null,
+      "input": "",
+      "name": "empty"
+    },
+    {
+      "canonical": null,
+      "input": "   ",
+      "name": "whitespace only"
+    },
+    {
+      "canonical": null,
+      "input": null,
+      "name": "none"
+    },
+    {
+      "canonical": null,
+      "input": "-acme",
+      "name": "starting with a separator"
+    },
+    {
+      "canonical": null,
+      "input": ".acme",
+      "name": "starting with a dot"
+    },
+    {
+      "canonical": null,
+      "input": "acme/evil",
+      "name": "with a slash"
+    },
+    {
+      "canonical": null,
+      "input": "acme corp",
+      "name": "with a space inside"
+    },
+    {
+      "canonical": null,
+      "input": "acme\u0000",
+      "name": "with a null byte"
+    },
+    {
+      "canonical": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "name": "at the length limit"
+    },
+    {
+      "canonical": null,
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "name": "one past the limit"
+    },
+    {
+      "canonical": null,
+      "input": "acm\u00e9",
+      "name": "unicode"
+    }
+  ],
+  "timestamp": "1700000000",
+  "verification": {
+    "accepts a good signature": true,
+    "accepts a mixed-case prefix": true,
+    "accepts a padded signature": true,
+    "accepts it without the prefix": true,
+    "accepts one at the edge of the window": true,
+    "refuses a bare prefix": false,
+    "refuses a changed body": false,
+    "refuses a padded timestamp header": false,
+    "refuses a short signature": false,
+    "refuses a signature for another timestamp": false,
+    "refuses a signature made with a timestamp that is not a number": false,
+    "refuses a signature made with a whitespace secret": false,
+    "refuses a stale timestamp": false,
+    "refuses a timestamp from the future": false,
+    "refuses a timestamp that is not a number": false,
+    "refuses a whitespace secret": false,
+    "refuses a whitespace timestamp": false,
+    "refuses a wrong secret": false,
+    "refuses an empty secret": false,
+    "refuses an empty signature": false,
+    "refuses no secret": false,
+    "refuses no signature": false,
+    "refuses no timestamp": false
+  }
+}

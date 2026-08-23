@@ -1,0 +1,985 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_pydifflib_golden.py",
+ "autojunk_min_length": 200,
+ "ratios": [
+  {
+   "name": "both empty",
+   "a": "",
+   "b": "",
+   "ratio": 1.0,
+   "blocks": [
+    [
+     0,
+     0,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "one empty",
+   "a": "",
+   "b": "abc",
+   "ratio": 0.0,
+   "blocks": [
+    [
+     0,
+     3,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "other empty",
+   "a": "abc",
+   "b": "",
+   "ratio": 0.0,
+   "blocks": [
+    [
+     3,
+     0,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "identical",
+   "a": "abc",
+   "b": "abc",
+   "ratio": 1.0,
+   "blocks": [
+    [
+     0,
+     0,
+     3
+    ],
+    [
+     3,
+     3,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "single character, same",
+   "a": "a",
+   "b": "a",
+   "ratio": 1.0,
+   "blocks": [
+    [
+     0,
+     0,
+     1
+    ],
+    [
+     1,
+     1,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "single character, different",
+   "a": "a",
+   "b": "b",
+   "ratio": 0.0,
+   "blocks": [
+    [
+     1,
+     1,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "disjoint",
+   "a": "abc",
+   "b": "xyz",
+   "ratio": 0.0,
+   "blocks": [
+    [
+     3,
+     3,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "one substitution",
+   "a": "abcd",
+   "b": "abed",
+   "ratio": 0.75,
+   "blocks": [
+    [
+     0,
+     0,
+     2
+    ],
+    [
+     3,
+     3,
+     1
+    ],
+    [
+     4,
+     4,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "one insertion",
+   "a": "abcd",
+   "b": "abxcd",
+   "ratio": 0.8888888888888888,
+   "blocks": [
+    [
+     0,
+     0,
+     2
+    ],
+    [
+     2,
+     3,
+     2
+    ],
+    [
+     4,
+     5,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "one deletion",
+   "a": "abcd",
+   "b": "acd",
+   "ratio": 0.8571428571428571,
+   "blocks": [
+    [
+     0,
+     0,
+     1
+    ],
+    [
+     2,
+     1,
+     2
+    ],
+    [
+     4,
+     3,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "transposed",
+   "a": "abcd",
+   "b": "abdc",
+   "ratio": 0.75,
+   "blocks": [
+    [
+     0,
+     0,
+     2
+    ],
+    [
+     2,
+     3,
+     1
+    ],
+    [
+     4,
+     4,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "reversed",
+   "a": "abcdef",
+   "b": "fedcba",
+   "ratio": 0.16666666666666666,
+   "blocks": [
+    [
+     0,
+     5,
+     1
+    ],
+    [
+     6,
+     6,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "repeated characters",
+   "a": "aaaa",
+   "b": "aa",
+   "ratio": 0.6666666666666666,
+   "blocks": [
+    [
+     0,
+     0,
+     2
+    ],
+    [
+     4,
+     2,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "classic difflib example",
+   "a": "abcd",
+   "b": "bcde",
+   "ratio": 0.75,
+   "blocks": [
+    [
+     1,
+     0,
+     3
+    ],
+    [
+     4,
+     4,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "prefix only",
+   "a": "prefix-common",
+   "b": "prefix-different",
+   "ratio": 0.5517241379310345,
+   "blocks": [
+    [
+     0,
+     0,
+     7
+    ],
+    [
+     12,
+     14,
+     1
+    ],
+    [
+     13,
+     16,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "suffix only",
+   "a": "alpha-suffix",
+   "b": "beta-suffix",
+   "ratio": 0.6956521739130435,
+   "blocks": [
+    [
+     4,
+     3,
+     8
+    ],
+    [
+     12,
+     11,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "equal-length blocks tie",
+   "a": "abxycd",
+   "b": "cdxyab",
+   "ratio": 0.3333333333333333,
+   "blocks": [
+    [
+     0,
+     4,
+     2
+    ],
+    [
+     6,
+     6,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "shell prompts",
+   "a": "user@host:~$ ",
+   "b": "user@host:~# ",
+   "ratio": 0.9230769230769231,
+   "blocks": [
+    [
+     0,
+     0,
+     11
+    ],
+    [
+     12,
+     12,
+     1
+    ],
+    [
+     13,
+     13,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "command output",
+   "a": "total 24\ndrwxr-xr-x 3 user",
+   "b": "total 28\ndrwxr-xr-x 4 user",
+   "ratio": 0.9230769230769231,
+   "blocks": [
+    [
+     0,
+     0,
+     7
+    ],
+    [
+     8,
+     8,
+     12
+    ],
+    [
+     21,
+     21,
+     5
+    ],
+    [
+     26,
+     26,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "error vs success",
+   "a": "OK: all checks passed",
+   "b": "FAIL: 3 checks failed",
+   "ratio": 0.6190476190476191,
+   "blocks": [
+    [
+     2,
+     4,
+     2
+    ],
+    [
+     7,
+     7,
+     8
+    ],
+    [
+     16,
+     16,
+     1
+    ],
+    [
+     19,
+     19,
+     2
+    ],
+    [
+     21,
+     21,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "whitespace only",
+   "a": "   ",
+   "b": "    ",
+   "ratio": 0.8571428571428571,
+   "blocks": [
+    [
+     0,
+     0,
+     3
+    ],
+    [
+     3,
+     4,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "newlines",
+   "a": "a\nb\nc",
+   "b": "a\nb\nd",
+   "ratio": 0.8,
+   "blocks": [
+    [
+     0,
+     0,
+     4
+    ],
+    [
+     5,
+     5,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "unicode",
+   "a": "héllo wörld",
+   "b": "héllo würld",
+   "ratio": 0.9090909090909091,
+   "blocks": [
+    [
+     0,
+     0,
+     7
+    ],
+    [
+     8,
+     8,
+     3
+    ],
+    [
+     11,
+     11,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "emoji",
+   "a": "done ✅",
+   "b": "done ❌",
+   "ratio": 0.8333333333333334,
+   "blocks": [
+    [
+     0,
+     0,
+     5
+    ],
+    [
+     6,
+     6,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "long, near-identical prompts",
+   "a": "user@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\n",
+   "b": "user@host:~$ ls -l \nuser@host:~$ ls -l \nuser@host:~$ ls -l \nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\n",
+   "ratio": 0.075,
+   "blocks": [
+    [
+     0,
+     0,
+     18
+    ],
+    [
+     240,
+     240,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "long, dominated by spaces",
+   "a": "                                                                                                                                                      done",
+   "b": "                                                                                                                                                      fail",
+   "ratio": 0.974025974025974,
+   "blocks": [
+    [
+     0,
+     0,
+     150
+    ],
+    [
+     154,
+     154,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "long identical",
+   "a": "user@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\n",
+   "b": "user@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\nuser@host:~$ ls -la\n",
+   "ratio": 1.0,
+   "blocks": [
+    [
+     0,
+     0,
+     240
+    ],
+    [
+     240,
+     240,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "exactly at the autojunk threshold",
+   "a": "abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab",
+   "b": "abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababab",
+   "ratio": 1.0,
+   "blocks": [
+    [
+     0,
+     0,
+     200
+    ],
+    [
+     200,
+     200,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "just under the autojunk threshold",
+   "a": "abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababc",
+   "b": "abababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababababd",
+   "ratio": 0.9949748743718593,
+   "blocks": [
+    [
+     0,
+     0,
+     198
+    ],
+    [
+     199,
+     199,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "asymmetric, forwards",
+   "a": "abaabababaabbaaabbbbabbababbbabbbaaaaabbaababbbabbabaababaabaaabababbbaaaaabaaabbabbabbabaaaabababbbbaabaabbaaaabbaaabbababaabbabbbbaababaabbabbaaaabaabababbaaabbbabaabaaaaaaababbaaabbabaaa",
+   "b": "babaaabbbabbaaaabbbaababbaabbbbbbaabababbabbbaaaaabbabababbbaaabbbbabbbbababbbaaabbbabbabbbabaabaabbbabbabaaabbabbaaabbbbbbbbabbbaaaaababbbbaaaaabababbaabbbabbbabbbaaababbbbbaaabbbaabbbaaaaaabaaaaaababbaaababbaaabbbbabaaabbaaabbababbababbbb",
+   "ratio": 0.0,
+   "blocks": [
+    [
+     189,
+     240,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "asymmetric, backwards",
+   "a": "babaaabbbabbaaaabbbaababbaabbbbbbaabababbabbbaaaaabbabababbbaaabbbbabbbbababbbaaabbbabbabbbabaabaabbbabbabaaabbabbaaabbbbbbbbabbbaaaaababbbbaaaaabababbaabbbabbbabbbaaababbbbbaaabbbaabbbaaaaaabaaaaaababbaaababbaaabbbbabaaabbaaabbababbababbbb",
+   "b": "abaabababaabbaaabbbbabbababbbabbbaaaaabbaababbbabbabaababaabaaabababbbaaaaabaaabbabbabbabaaaabababbbbaabaabbaaaabbaaabbababaabbabbbbaababaabbabbaaaabaabababbaaabbbabaabaaaaaaababbaaabbabaaa",
+   "ratio": 0.6013986013986014,
+   "blocks": [
+    [
+     0,
+     1,
+     2
+    ],
+    [
+     2,
+     12,
+     7
+    ],
+    [
+     21,
+     19,
+     5
+    ],
+    [
+     35,
+     24,
+     3
+    ],
+    [
+     39,
+     27,
+     14
+    ],
+    [
+     54,
+     41,
+     2
+    ],
+    [
+     97,
+     43,
+     11
+    ],
+    [
+     110,
+     54,
+     3
+    ],
+    [
+     113,
+     59,
+     5
+    ],
+    [
+     124,
+     65,
+     12
+    ],
+    [
+     138,
+     79,
+     3
+    ],
+    [
+     141,
+     89,
+     10
+    ],
+    [
+     151,
+     101,
+     3
+    ],
+    [
+     154,
+     125,
+     6
+    ],
+    [
+     160,
+     133,
+     2
+    ],
+    [
+     162,
+     142,
+     5
+    ],
+    [
+     167,
+     151,
+     3
+    ],
+    [
+     172,
+     155,
+     9
+    ],
+    [
+     184,
+     164,
+     3
+    ],
+    [
+     187,
+     168,
+     1
+    ],
+    [
+     192,
+     169,
+     14
+    ],
+    [
+     215,
+     183,
+     6
+    ],
+    [
+     240,
+     189,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "element exactly at the autojunk limit",
+   "a": "zzz",
+   "b": "ĀāĂăĄąĆćĈĉĊċČčĎďĐđĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħĨĩĪīĬĭĮįİıĲĳĴĵĶķĸĹĺĻļĽľĿŀŁłŃńŅņŇňŉŊŋŌōŎŏŐőŒœŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŦŧŨũŪūŬŭŮůŰűŲųŴŵŶŷŸŹźŻżŽžſƀƁƂƃƄƅƆƇƈƉƊƋƌƍƎƏƐƑƒƓƔƕƖƗƘƙƚƛƜƝƞƟƠơƢƣƤƥƦƧƨƩƪƫƬƭƮƯưƱƲƳƴƵƶƷƸƹƺƻƼƽƾƿǀǁǂǃǄzzz",
+   "ratio": 0.029556650246305417,
+   "blocks": [
+    [
+     0,
+     197,
+     3
+    ],
+    [
+     3,
+     200,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "element one past the autojunk limit",
+   "a": "zzzz",
+   "b": "ĀāĂăĄąĆćĈĉĊċČčĎďĐđĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħĨĩĪīĬĭĮįİıĲĳĴĵĶķĸĹĺĻļĽľĿŀŁłŃńŅņŇňŉŊŋŌōŎŏŐőŒœŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŦŧŨũŪūŬŭŮůŰűŲųŴŵŶŷŸŹźŻżŽžſƀƁƂƃƄƅƆƇƈƉƊƋƌƍƎƏƐƑƒƓƔƕƖƗƘƙƚƛƜƝƞƟƠơƢƣƤƥƦƧƨƩƪƫƬƭƮƯưƱƲƳƴƵƶƷƸƹƺƻƼƽƾƿǀǁǂǃzzzz",
+   "ratio": 0.0,
+   "blocks": [
+    [
+     4,
+     200,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "match extends back over dropped elements",
+   "a": "                                                                                                                                                                                                        unique-tail",
+   "b": "                                                                                                                                                                                                        unique-tail",
+   "ratio": 1.0,
+   "blocks": [
+    [
+     0,
+     0,
+     211
+    ],
+    [
+     211,
+     211,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "match extends back, then diverges",
+   "a": "                                                                                                                                                                                                        unique-tail",
+   "b": "                                                                                                                                                                                                        unique-fail",
+   "ratio": 0.995260663507109,
+   "blocks": [
+    [
+     0,
+     0,
+     207
+    ],
+    [
+     208,
+     208,
+     3
+    ],
+    [
+     211,
+     211,
+     0
+    ]
+   ]
+  },
+  {
+   "name": "backwards extension is the only way left",
+   "a": "ZZ                                                                                                                                                                                                        tail",
+   "b": "                                                                                                                                                                                                        tail",
+   "ratio": 0.9951219512195122,
+   "blocks": [
+    [
+     2,
+     0,
+     204
+    ],
+    [
+     206,
+     204,
+     0
+    ]
+   ]
+  }
+ ],
+ "divergences": [
+  {
+   "name": "no sessions",
+   "outputs": [],
+   "threshold": 0.8,
+   "flags": []
+  },
+  {
+   "name": "one session",
+   "outputs": [
+    "only"
+   ],
+   "threshold": 0.8,
+   "flags": [
+    false
+   ]
+  },
+  {
+   "name": "two identical",
+   "outputs": [
+    "same",
+    "same"
+   ],
+   "threshold": 0.8,
+   "flags": [
+    false,
+    false
+   ]
+  },
+  {
+   "name": "two different",
+   "outputs": [
+    "yes",
+    "no"
+   ],
+   "threshold": 0.8,
+   "flags": [
+    true,
+    true
+   ]
+  },
+  {
+   "name": "three in agreement",
+   "outputs": [
+    "ok",
+    "ok",
+    "ok"
+   ],
+   "threshold": 0.8,
+   "flags": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "one odd one out",
+   "outputs": [
+    "ok",
+    "ok",
+    "totally different"
+   ],
+   "threshold": 0.8,
+   "flags": [
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "name": "two against one",
+   "outputs": [
+    "ok fine",
+    "ok fine",
+    "broken"
+   ],
+   "threshold": 0.8,
+   "flags": [
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "name": "all three different",
+   "outputs": [
+    "alpha",
+    "beta",
+    "gamma"
+   ],
+   "threshold": 0.8,
+   "flags": [
+    true,
+    true,
+    true
+   ]
+  },
+  {
+   "name": "near misses under a strict threshold",
+   "outputs": [
+    "result 1",
+    "result 2",
+    "result 3"
+   ],
+   "threshold": 0.99,
+   "flags": [
+    true,
+    true,
+    true
+   ]
+  },
+  {
+   "name": "near misses under a loose threshold",
+   "outputs": [
+    "result 1",
+    "result 2",
+    "result 3"
+   ],
+   "threshold": 0.5,
+   "flags": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "threshold of zero",
+   "outputs": [
+    "a",
+    "b",
+    "c"
+   ],
+   "threshold": 0.0,
+   "flags": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "threshold of one",
+   "outputs": [
+    "a",
+    "a",
+    "a"
+   ],
+   "threshold": 1.0,
+   "flags": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "empty outputs",
+   "outputs": [
+    "",
+    "",
+    ""
+   ],
+   "threshold": 0.8,
+   "flags": [
+    false,
+    false,
+    false
+   ]
+  },
+  {
+   "name": "one empty among agreement",
+   "outputs": [
+    "ok",
+    "ok",
+    ""
+   ],
+   "threshold": 0.8,
+   "flags": [
+    false,
+    false,
+    true
+   ]
+  },
+  {
+   "name": "realistic: one host failed",
+   "outputs": [
+    "Done.\nexit 0",
+    "Done.\nexit 0",
+    "Error.\nexit 1"
+   ],
+   "threshold": 0.8,
+   "flags": [
+    false,
+    false,
+    true
+   ]
+  }
+ ]
+}

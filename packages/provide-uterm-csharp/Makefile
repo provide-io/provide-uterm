@@ -58,8 +58,21 @@ CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test conformance-test mutation-gate
 
+# -v normal so warnings reach the log the gate reads; -t:Rebuild because an
+# incremental build re-emits nothing for the projects it skips, which would let
+# a new warning pass the gate simply by not being recompiled.
+#
+# Via a file rather than a pipe: `set -o pipefail` is not in POSIX sh, and
+# make's default shell is dash on Ubuntu, so a pipe would report the gate's
+# status and swallow a failed build. obj/ is already ignored.
+BUILD_LOG := obj/build-$(CONFIGURATION).log
+
 build:
-	$(DOTNET) build -c $(CONFIGURATION)
+	@mkdir -p obj
+	@$(DOTNET) build -c $(CONFIGURATION) -t:Rebuild -v normal --nologo > $(BUILD_LOG) 2>&1 \
+	  || { cat $(BUILD_LOG); exit 1; }
+	@grep -E ': (warning|error) [A-Z]+[0-9]+|Build succeeded|Build FAILED' $(BUILD_LOG) || true
+	@python3 ci/warning_gate.py < $(BUILD_LOG)
 
 # Serialize + batch test hosts. Ubuntu CI hits glibc free()/malloc crashes after
 # ~300–400 tests in one process (native PTY/SSH residual). Fresh process per batch.

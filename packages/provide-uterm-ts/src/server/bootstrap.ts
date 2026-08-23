@@ -34,7 +34,7 @@ import { sessionDefinitionFrom } from "./session-status.ts";
  * Held against `package.json` by a test rather than read from it, so nothing
  * in the request path has to reach a filesystem a Worker does not have.
  */
-export const SERVER_VERSION = "0.5.0";
+export const SERVER_VERSION = "0.6.0";
 
 /** A configuration that will not start a server. */
 export class ServerBootstrapError extends Error {}

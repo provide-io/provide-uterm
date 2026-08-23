@@ -1,0 +1,2084 @@
+{
+  "secret": "fleet-secret",
+  "operator_token": "operator-token",
+  "fleet_token": "fleet-token",
+  "derived": [
+    {
+      "name": "an ordinary agent",
+      "secret": "fleet-secret",
+      "agent_id": "agent-1",
+      "token": "sha256=d6b01c8b2614381d5f4f5bf1eccf9fbff9f63073deebfb7c11fa1052f79b4051"
+    },
+    {
+      "name": "another agent under the same secret",
+      "secret": "fleet-secret",
+      "agent_id": "agent-2",
+      "token": "sha256=2cc2891a36c0d31a62e2719fb2bf6c0c0aa0c575342fa73a4053fd59baedade9"
+    },
+    {
+      "name": "the same agent under another secret",
+      "secret": "other-secret",
+      "agent_id": "agent-1",
+      "token": "sha256=e13ed66180b0a8664d0354e5c7c8a2248093db65c09f69e37d6724a6a29abd44"
+    },
+    {
+      "name": "an agent with no id",
+      "secret": "fleet-secret",
+      "agent_id": "",
+      "token": "sha256=2dcdb28e39bd951f253194a944cf5b1d1f3dacba146b02eb42538e20b2b62a82"
+    },
+    {
+      "name": "an id outside ASCII",
+      "secret": "fleet-secret",
+      "agent_id": "agent-☃",
+      "token": "sha256=bee3da06e49ae33468baa11d3a7c56db0eb8fb9371ef62a25b14043f1f907b88"
+    },
+    {
+      "name": "an id that looks like a path",
+      "secret": "fleet-secret",
+      "agent_id": "a/b",
+      "token": "sha256=97ae759c342af9659a9e772d43cf45c2b4b31e9765ef7bb9181179f142f28a66"
+    },
+    {
+      "name": "a long id",
+      "secret": "fleet-secret",
+      "agent_id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "token": "sha256=91e0aa6ee718ef4017e2eefd7e3615109b9ca92e83af7bc83a2cdca86ee55137"
+    },
+    {
+      "name": "an id differing in one character",
+      "secret": "fleet-secret",
+      "agent_id": "agent-3",
+      "token": "sha256=bc17598e09081ba6f126e4f71bf54f2aafa0bda2daefc33060512663d8aa7902"
+    },
+    {
+      "name": "an empty secret",
+      "secret": "",
+      "agent_id": "agent-1",
+      "token": "sha256=6f83286ec595a5b8e0f36ee9468c02ea6b9fed583080fdd12b52ecd3f5444db9"
+    }
+  ],
+  "routes": [
+    {
+      "name": "a status report",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "agent_id": "agent-1"
+    },
+    {
+      "name": "a registration",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "agent_id": "agent-1"
+    },
+    {
+      "name": "a status report read",
+      "method": "GET",
+      "path": "/agent/agent-1/status",
+      "agent_id": null
+    },
+    {
+      "name": "a status report by another verb",
+      "method": "PUT",
+      "path": "/agent/agent-1/status",
+      "agent_id": null
+    },
+    {
+      "name": "a path with something after status",
+      "method": "POST",
+      "path": "/agent/agent-1/statusfoo",
+      "agent_id": null
+    },
+    {
+      "name": "a path with something before status",
+      "method": "POST",
+      "path": "/agent/agent-1/xstatus",
+      "agent_id": null
+    },
+    {
+      "name": "a nested agent id",
+      "method": "POST",
+      "path": "/agent/a/b/status",
+      "agent_id": null
+    },
+    {
+      "name": "a trailing slash",
+      "method": "POST",
+      "path": "/agent/agent-1/status/",
+      "agent_id": null
+    },
+    {
+      "name": "a leading segment",
+      "method": "POST",
+      "path": "/api/agent/agent-1/status",
+      "agent_id": null
+    },
+    {
+      "name": "an empty agent id",
+      "method": "POST",
+      "path": "/agent//status",
+      "agent_id": null
+    },
+    {
+      "name": "a query string left on the path",
+      "method": "POST",
+      "path": "/agent/agent-1/status?x=1",
+      "agent_id": null
+    },
+    {
+      "name": "an agent id that is a dot",
+      "method": "POST",
+      "path": "/agent/./status",
+      "agent_id": "."
+    },
+    {
+      "name": "an agent id that is two dots",
+      "method": "POST",
+      "path": "/agent/../status",
+      "agent_id": ".."
+    },
+    {
+      "name": "an id with an escaped slash",
+      "method": "POST",
+      "path": "/agent/a%2Fb/status",
+      "agent_id": "a%2Fb"
+    },
+    {
+      "name": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "agent_id": null
+    },
+    {
+      "name": "a kill route",
+      "method": "POST",
+      "path": "/agent/agent-1/kill",
+      "agent_id": null
+    },
+    {
+      "name": "the root",
+      "method": "GET",
+      "path": "/",
+      "agent_id": null
+    },
+    {
+      "name": "nothing at all",
+      "method": "POST",
+      "path": "",
+      "agent_id": null
+    }
+  ],
+  "authorized": [
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": false,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the fleet token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "this agent's own derived token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "another agent's derived token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token derived under the wrong secret",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "no token at all",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "a token that is nearly the operator's",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": false,
+      "token": "the operator token in capitals",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the fleet token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "this agent's own derived token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": true
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "another agent's derived token",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token derived under the wrong secret",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "no token at all",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "a token that is nearly the operator's",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "its own status route",
+      "method": "POST",
+      "path": "/agent/agent-1/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "another agent's status route",
+      "method": "POST",
+      "path": "/agent/agent-2/status",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "its own register route",
+      "method": "POST",
+      "path": "/agent/agent-1/register",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "the spawn route",
+      "method": "POST",
+      "path": "/spawn",
+      "authorized": false
+    },
+    {
+      "enforce_per_agent": true,
+      "has_secret": true,
+      "token": "the operator token in capitals",
+      "target": "a read",
+      "method": "GET",
+      "path": "/agents",
+      "authorized": false
+    }
+  ],
+  "no_fleet_token": [
+    {
+      "token": "the operator token",
+      "authorized": true
+    },
+    {
+      "token": "the fleet token",
+      "authorized": false
+    },
+    {
+      "token": "a derived token",
+      "authorized": false
+    },
+    {
+      "token": "nothing",
+      "authorized": false
+    }
+  ],
+  "extracted": [
+    {
+      "name": "a bearer header",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer abc"
+          ]
+        ]
+      },
+      "token": "abc",
+      "pass_through": false
+    },
+    {
+      "name": "a bearer header with spaces around the token",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer   abc  "
+          ]
+        ]
+      },
+      "token": "abc",
+      "pass_through": false
+    },
+    {
+      "name": "a bearer header in lower case",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "bearer abc"
+          ]
+        ]
+      },
+      "token": "",
+      "pass_through": false
+    },
+    {
+      "name": "a bearer header with no token",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer "
+          ]
+        ]
+      },
+      "token": "",
+      "pass_through": false
+    },
+    {
+      "name": "an authorization header of another kind",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Basic abc"
+          ]
+        ]
+      },
+      "token": "",
+      "pass_through": false
+    },
+    {
+      "name": "an api token header",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": [
+          [
+            "x-api-token",
+            "abc"
+          ]
+        ]
+      },
+      "token": "abc",
+      "pass_through": false
+    },
+    {
+      "name": "an api token header with spaces",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": [
+          [
+            "x-api-token",
+            "  abc  "
+          ]
+        ]
+      },
+      "token": "abc",
+      "pass_through": false
+    },
+    {
+      "name": "both headers",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer from-bearer"
+          ],
+          [
+            "x-api-token",
+            "from-api"
+          ]
+        ]
+      },
+      "token": "from-bearer",
+      "pass_through": false
+    },
+    {
+      "name": "no headers at all",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "query_string": "",
+        "headers": []
+      },
+      "token": "",
+      "pass_through": false
+    },
+    {
+      "name": "a preflight",
+      "scope": {
+        "type": "http",
+        "method": "OPTIONS",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer abc"
+          ]
+        ]
+      },
+      "token": "",
+      "pass_through": true
+    },
+    {
+      "name": "a websocket with a token",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "query_string": "token=abc",
+        "headers": []
+      },
+      "token": "abc",
+      "pass_through": false
+    },
+    {
+      "name": "a websocket with spaces around it",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "query_string": "token=%20abc%20",
+        "headers": []
+      },
+      "token": "abc",
+      "pass_through": false
+    },
+    {
+      "name": "a websocket with no token",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "query_string": "",
+        "headers": []
+      },
+      "token": "",
+      "pass_through": false
+    },
+    {
+      "name": "a websocket with an empty token",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "query_string": "token=",
+        "headers": []
+      },
+      "token": "",
+      "pass_through": false
+    },
+    {
+      "name": "a websocket with two tokens",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "query_string": "token=one&token=two",
+        "headers": []
+      },
+      "token": "one",
+      "pass_through": false
+    },
+    {
+      "name": "a websocket with another parameter",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "query_string": "other=abc",
+        "headers": []
+      },
+      "token": "",
+      "pass_through": false
+    },
+    {
+      "name": "a websocket carrying a header instead",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer abc"
+          ]
+        ]
+      },
+      "token": "",
+      "pass_through": false
+    }
+  ],
+  "requests": [
+    {
+      "name": "an operator spawning",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "path": "/spawn",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer operator-token"
+          ]
+        ]
+      },
+      "reached_inner": true,
+      "sent": []
+    },
+    {
+      "name": "a worker spawning with its own token",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "path": "/spawn",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer sha256=d6b01c8b2614381d5f4f5bf1eccf9fbff9f63073deebfb7c11fa1052f79b4051"
+          ]
+        ]
+      },
+      "reached_inner": false,
+      "sent": [
+        {
+          "type": "http.response.start",
+          "status": 401
+        },
+        {
+          "type": "http.response.body",
+          "body": "{\"error\":\"Unauthorized\"}"
+        }
+      ]
+    },
+    {
+      "name": "a worker reporting its own status",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "path": "/agent/agent-1/status",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer sha256=d6b01c8b2614381d5f4f5bf1eccf9fbff9f63073deebfb7c11fa1052f79b4051"
+          ]
+        ]
+      },
+      "reached_inner": true,
+      "sent": []
+    },
+    {
+      "name": "a worker reporting as another agent",
+      "scope": {
+        "type": "http",
+        "method": "POST",
+        "path": "/agent/agent-2/status",
+        "query_string": "",
+        "headers": [
+          [
+            "authorization",
+            "Bearer sha256=d6b01c8b2614381d5f4f5bf1eccf9fbff9f63073deebfb7c11fa1052f79b4051"
+          ]
+        ]
+      },
+      "reached_inner": false,
+      "sent": [
+        {
+          "type": "http.response.start",
+          "status": 401
+        },
+        {
+          "type": "http.response.body",
+          "body": "{\"error\":\"Unauthorized\"}"
+        }
+      ]
+    },
+    {
+      "name": "nobody at all",
+      "scope": {
+        "type": "http",
+        "method": "GET",
+        "path": "/agents",
+        "query_string": "",
+        "headers": []
+      },
+      "reached_inner": false,
+      "sent": [
+        {
+          "type": "http.response.start",
+          "status": 401
+        },
+        {
+          "type": "http.response.body",
+          "body": "{\"error\":\"Unauthorized\"}"
+        }
+      ]
+    },
+    {
+      "name": "a public path",
+      "scope": {
+        "type": "http",
+        "method": "GET",
+        "path": "/health",
+        "query_string": "",
+        "headers": []
+      },
+      "reached_inner": true,
+      "sent": []
+    },
+    {
+      "name": "something under a public prefix",
+      "scope": {
+        "type": "http",
+        "method": "GET",
+        "path": "/static/app.js",
+        "query_string": "",
+        "headers": []
+      },
+      "reached_inner": true,
+      "sent": []
+    },
+    {
+      "name": "a path that merely starts like a public one",
+      "scope": {
+        "type": "http",
+        "method": "GET",
+        "path": "/healthz",
+        "query_string": "",
+        "headers": []
+      },
+      "reached_inner": false,
+      "sent": [
+        {
+          "type": "http.response.start",
+          "status": 401
+        },
+        {
+          "type": "http.response.body",
+          "body": "{\"error\":\"Unauthorized\"}"
+        }
+      ]
+    },
+    {
+      "name": "a preflight with no token",
+      "scope": {
+        "type": "http",
+        "method": "OPTIONS",
+        "path": "/spawn",
+        "query_string": "",
+        "headers": []
+      },
+      "reached_inner": true,
+      "sent": []
+    },
+    {
+      "name": "a websocket with the operator token",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "path": "/ws",
+        "query_string": "token=operator-token",
+        "headers": []
+      },
+      "reached_inner": true,
+      "sent": []
+    },
+    {
+      "name": "a websocket with nothing",
+      "scope": {
+        "type": "websocket",
+        "method": null,
+        "path": "/ws",
+        "query_string": "",
+        "headers": []
+      },
+      "reached_inner": false,
+      "sent": [
+        {
+          "type": "websocket.accept"
+        },
+        {
+          "type": "websocket.close",
+          "code": 4403
+        }
+      ]
+    },
+    {
+      "name": "a lifespan message",
+      "scope": {
+        "type": "lifespan",
+        "method": null,
+        "path": null,
+        "query_string": "",
+        "headers": []
+      },
+      "reached_inner": true,
+      "sent": []
+    }
+  ]
+}

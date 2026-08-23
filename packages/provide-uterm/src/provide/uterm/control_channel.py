@@ -250,6 +250,14 @@ class ControlFrameDecoder:
         try:
             events = self._drain(final=True)
             if self._buffer or self._buffer_bytes:
+                # These three are NOT redundant with the handler below, though
+                # they look it. _report_error notifies the error hook, and the
+                # hook runs between this assignment and the except clause that
+                # repeats it -- so a caller can observe the difference, which is
+                # what TestWhichLayerReportsATruncatedFrame asserts. It also
+                # decides what survives a hook that itself raises: that escapes
+                # `except ControlFrameProtocolError` uncaught, and without these
+                # the decoder would be left holding the rejected frame's bytes.
                 self._buffer = ""
                 self._buffer_parts = []
                 self._buffer_bytes = bytearray()

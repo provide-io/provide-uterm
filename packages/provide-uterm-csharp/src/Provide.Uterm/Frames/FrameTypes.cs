@@ -89,6 +89,24 @@ public sealed class SnapshotFrame : IFrame
     public bool? HasTrailingSpace { get; set; }
     public Dictionary<string, object?>? PromptDetected { get; set; }
     public string? RawTail { get; set; }
+
+    /// <summary>
+    /// Reader-loop ingest counters from the worker's own session, counted before
+    /// any emulator work. They let a consumer tell "no bytes ever reached that
+    /// process" apart from "bytes arrived and the emulator never reflected
+    /// them" -- two failures needing opposite fixes that look identical from the
+    /// screen alone.
+    ///
+    /// Optional and backward-compatible: a worker predating them omits both, so
+    /// null means "not reported" rather than zero. The port had neither field,
+    /// so it could not carry either counter in or out, and its stale copy of
+    /// python_golden.json omitted them too and so asserted the gap was correct.
+    /// </summary>
+    public int? ChunksRead { get; set; }
+
+    /// <inheritdoc cref="ChunksRead"/>
+    public int? BytesRead { get; set; }
+
     public double? Ts { get; set; }
     public string FrameType => FrameTypeNames.Snapshot;
 }

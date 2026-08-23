@@ -1,0 +1,121 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_capture_golden.py",
+ "default_max_chars": 65536,
+ "captures": [
+  {
+   "name": "nothing captured",
+   "max_chars": 16,
+   "chunks": [],
+   "text": ""
+  },
+  {
+   "name": "one chunk",
+   "max_chars": 16,
+   "chunks": [
+    "hello"
+   ],
+   "text": "hello"
+  },
+  {
+   "name": "several chunks",
+   "max_chars": 16,
+   "chunks": [
+    "one ",
+    "two ",
+    "three"
+   ],
+   "text": "one two three"
+  },
+  {
+   "name": "empty chunks are ignored",
+   "max_chars": 16,
+   "chunks": [
+    "a",
+    "",
+    "b"
+   ],
+   "text": "ab"
+  },
+  {
+   "name": "exactly at the bound",
+   "max_chars": 8,
+   "chunks": [
+    "abcdefgh"
+   ],
+   "text": "abcdefgh"
+  },
+  {
+   "name": "one past the bound",
+   "max_chars": 8,
+   "chunks": [
+    "abcdefghi"
+   ],
+   "text": "bcdefghi"
+  },
+  {
+   "name": "accumulating past the bound",
+   "max_chars": 8,
+   "chunks": [
+    "abcde",
+    "fghij"
+   ],
+   "text": "cdefghij"
+  },
+  {
+   "name": "a single chunk far over the bound",
+   "max_chars": 8,
+   "chunks": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   ],
+   "text": "aaaaaaaa"
+  },
+  {
+   "name": "bound of one",
+   "max_chars": 1,
+   "chunks": [
+    "abc"
+   ],
+   "text": "c"
+  },
+  {
+   "name": "bound of zero is raised to one",
+   "max_chars": 0,
+   "chunks": [
+    "abc"
+   ],
+   "text": "c"
+  },
+  {
+   "name": "negative bound is raised to one",
+   "max_chars": -5,
+   "chunks": [
+    "abc"
+   ],
+   "text": "c"
+  },
+  {
+   "name": "unicode is counted by character",
+   "max_chars": 4,
+   "chunks": [
+    "héllo"
+   ],
+   "text": "éllo"
+  },
+  {
+   "name": "astral characters",
+   "max_chars": 4,
+   "chunks": [
+    "a😀b😀c"
+   ],
+   "text": "😀b😀c"
+  },
+  {
+   "name": "newlines are content",
+   "max_chars": 6,
+   "chunks": [
+    "a\nb\nc\nd"
+   ],
+   "text": "\nb\nc\nd"
+  }
+ ]
+}

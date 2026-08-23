@@ -1,0 +1,286 @@
+{
+  "note": "Recorded from the reference FastAPI server on an ephemeral port, in dev_token mode, with the default configuration. Values that differ between runs are masked with '<volatile>' \u2014 the same paths the live scenarios declare volatile.",
+  "volatile": "<volatile>",
+  "probes": [
+    {
+      "id": "health_anonymous",
+      "method": "GET",
+      "path": "/api/health",
+      "auth": "none",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "status": "ok",
+        "ok": true,
+        "ready": true,
+        "service": "uterm-server",
+        "version": "<volatile>",
+        "uptime_s": "<volatile>",
+        "active_sessions": "<volatile>",
+        "control_plane_backend": "memory"
+      }
+    },
+    {
+      "id": "health_token",
+      "method": "GET",
+      "path": "/api/health",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "status": "ok",
+        "ok": true,
+        "ready": true,
+        "service": "uterm-server",
+        "version": "<volatile>",
+        "uptime_s": "<volatile>",
+        "active_sessions": "<volatile>",
+        "control_plane_backend": "memory"
+      }
+    },
+    {
+      "id": "health_forged",
+      "method": "GET",
+      "path": "/api/health",
+      "auth": "bad",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "status": "ok",
+        "ok": true,
+        "ready": true,
+        "service": "uterm-server",
+        "version": "<volatile>",
+        "uptime_s": "<volatile>",
+        "active_sessions": "<volatile>",
+        "control_plane_backend": "memory"
+      }
+    },
+    {
+      "id": "sessions_anonymous",
+      "method": "GET",
+      "path": "/api/sessions",
+      "auth": "none",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "sessions_forged",
+      "method": "GET",
+      "path": "/api/sessions",
+      "auth": "bad",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "sessions_bare_scheme",
+      "method": "GET",
+      "path": "/api/sessions",
+      "auth": "bare",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "sessions_not_bearer",
+      "method": "GET",
+      "path": "/api/sessions",
+      "auth": "basic",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "sessions_token",
+      "method": "GET",
+      "path": "/api/sessions",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": [
+        {
+          "session_id": "provide-shell",
+          "display_name": "Provide Shell",
+          "created_at": "<volatile>",
+          "connector_type": "shell",
+          "lifecycle_state": "<volatile>",
+          "input_mode": "open",
+          "connected": "<volatile>",
+          "auto_start": true,
+          "tags": [
+            "shell",
+            "reference"
+          ],
+          "recording_enabled": false,
+          "recording_available": false,
+          "owner": null,
+          "visibility": "public",
+          "stopped_at": null,
+          "last_error": null
+        }
+      ]
+    },
+    {
+      "id": "session_token",
+      "method": "GET",
+      "path": "/api/sessions/provide-shell",
+      "auth": "token",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "session_id": "provide-shell",
+        "display_name": "Provide Shell",
+        "created_at": "<volatile>",
+        "connector_type": "shell",
+        "lifecycle_state": "<volatile>",
+        "input_mode": "open",
+        "connected": "<volatile>",
+        "auto_start": true,
+        "tags": [
+          "shell",
+          "reference"
+        ],
+        "recording_enabled": false,
+        "recording_available": false,
+        "owner": null,
+        "visibility": "public",
+        "stopped_at": null,
+        "last_error": null
+      }
+    },
+    {
+      "id": "session_unknown",
+      "method": "GET",
+      "path": "/api/sessions/no-such-session",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "unknown session: no-such-session"
+      }
+    },
+    {
+      "id": "session_unknown_anonymous",
+      "method": "GET",
+      "path": "/api/sessions/no-such-session",
+      "auth": "none",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "unknown_path",
+      "method": "GET",
+      "path": "/api/not-a-thing",
+      "auth": "token",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "Not Found"
+      }
+    },
+    {
+      "id": "unknown_path_anonymous",
+      "method": "GET",
+      "path": "/api/not-a-thing",
+      "auth": "none",
+      "status": 404,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "detail": "Not Found"
+      }
+    },
+    {
+      "id": "wrong_method_health",
+      "method": "POST",
+      "path": "/api/health",
+      "auth": "token",
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "GET"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
+      "id": "wrong_method_session",
+      "method": "PUT",
+      "path": "/api/sessions/provide-shell",
+      "auth": "token",
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "DELETE, GET, PATCH"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
+      "id": "healthz",
+      "method": "GET",
+      "path": "/healthz",
+      "auth": "none",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "status": "ok"
+      }
+    },
+    {
+      "id": "readyz",
+      "method": "GET",
+      "path": "/readyz",
+      "auth": "none",
+      "status": 200,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "body": {
+        "status": "ready"
+      }
+    }
+  ]
+}

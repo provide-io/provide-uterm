@@ -1,0 +1,708 @@
+{
+  "start": "ÿý\u0018ÿý'",
+  "streams": [
+    {
+      "name": "nothing at all",
+      "chunked": false,
+      "stream": "",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "nothing at all",
+      "chunked": true,
+      "stream": "",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "plain text",
+      "chunked": false,
+      "stream": "hello",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "hello",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "plain text",
+      "chunked": true,
+      "stream": "hello",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "hello",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a lone IAC",
+      "chunked": false,
+      "stream": "ÿ",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a lone IAC",
+      "chunked": true,
+      "stream": "ÿ",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an escaped IAC",
+      "chunked": false,
+      "stream": "ÿÿ",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "ÿ",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an escaped IAC",
+      "chunked": true,
+      "stream": "ÿÿ",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "ÿ",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "text around an escaped IAC",
+      "chunked": false,
+      "stream": "aÿÿb",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "aÿb",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "text around an escaped IAC",
+      "chunked": true,
+      "stream": "aÿÿb",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "aÿb",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an option this end wants",
+      "chunked": false,
+      "stream": "ÿû\u0018",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "ÿú\u0018\u0001ÿð",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an option this end wants",
+      "chunked": true,
+      "stream": "ÿû\u0018",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "ÿú\u0018\u0001ÿð",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an option this end refuses",
+      "chunked": false,
+      "stream": "ÿûc",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an option this end refuses",
+      "chunked": true,
+      "stream": "ÿûc",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an option offered the other way",
+      "chunked": false,
+      "stream": "ÿýc",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an option offered the other way",
+      "chunked": true,
+      "stream": "ÿýc",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a refusal",
+      "chunked": false,
+      "stream": "ÿü\u0018",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a refusal",
+      "chunked": true,
+      "stream": "ÿü\u0018",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a refusal of something unknown",
+      "chunked": false,
+      "stream": "ÿþc",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a refusal of something unknown",
+      "chunked": true,
+      "stream": "ÿþc",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a terminal type",
+      "chunked": false,
+      "stream": "ÿú\u0018\u0000xterm-256colorÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "xterm-256color",
+      "env": {},
+      "done": false,
+      "colormode": "256"
+    },
+    {
+      "name": "a terminal type",
+      "chunked": true,
+      "stream": "ÿú\u0018\u0000xterm-256colorÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a terminal type in capitals",
+      "chunked": false,
+      "stream": "ÿú\u0018\u0000XTERM-256COLORÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "xterm-256color",
+      "env": {},
+      "done": false,
+      "colormode": "256"
+    },
+    {
+      "name": "a terminal type in capitals",
+      "chunked": true,
+      "stream": "ÿú\u0018\u0000XTERM-256COLORÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a plain terminal type",
+      "chunked": false,
+      "stream": "ÿú\u0018\u0000vt100ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "vt100",
+      "env": {},
+      "done": false,
+      "colormode": "16"
+    },
+    {
+      "name": "a plain terminal type",
+      "chunked": true,
+      "stream": "ÿú\u0018\u0000vt100ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a terminal type of nothing",
+      "chunked": false,
+      "stream": "ÿú\u0018\u0000ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a terminal type of nothing",
+      "chunked": true,
+      "stream": "ÿú\u0018\u0000ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an environment",
+      "chunked": false,
+      "stream": "ÿú'\u0000\u0000COLORTERM\u0001truecolorÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {
+        "COLORTERM": "truecolor"
+      },
+      "done": false,
+      "colormode": "passthrough"
+    },
+    {
+      "name": "an environment",
+      "chunked": true,
+      "stream": "ÿú'\u0000\u0000COLORTERM\u0001truecolorÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an environment with several",
+      "chunked": false,
+      "stream": "ÿú'\u0000\u0000COLORTERM\u0001truecolor\u0000LANG\u0001en_GBÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {
+        "COLORTERM": "truecolor",
+        "LANG": "en_GB"
+      },
+      "done": false,
+      "colormode": "passthrough"
+    },
+    {
+      "name": "an environment with several",
+      "chunked": true,
+      "stream": "ÿú'\u0000\u0000COLORTERM\u0001truecolor\u0000LANG\u0001en_GBÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a user variable",
+      "chunked": false,
+      "stream": "ÿú'\u0000\u0003COLORTERM\u000124bitÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {
+        "COLORTERM": "24bit"
+      },
+      "done": false,
+      "colormode": "passthrough"
+    },
+    {
+      "name": "a user variable",
+      "chunked": true,
+      "stream": "ÿú'\u0000\u0003COLORTERM\u000124bitÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a terminal type then an environment",
+      "chunked": false,
+      "stream": "ÿú\u0018\u0000xtermÿðÿú'\u0000\u0000COLORTERM\u0001truecolorÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "xterm",
+      "env": {
+        "COLORTERM": "truecolor"
+      },
+      "done": true,
+      "colormode": "passthrough"
+    },
+    {
+      "name": "a terminal type then an environment",
+      "chunked": true,
+      "stream": "ÿú\u0018\u0000xtermÿðÿú'\u0000\u0000COLORTERM\u0001truecolorÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an environment then a terminal type",
+      "chunked": false,
+      "stream": "ÿú'\u0000\u0000COLORTERM\u0001truecolorÿðÿú\u0018\u0000xtermÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "xterm",
+      "env": {
+        "COLORTERM": "truecolor"
+      },
+      "done": true,
+      "colormode": "passthrough"
+    },
+    {
+      "name": "an environment then a terminal type",
+      "chunked": true,
+      "stream": "ÿú'\u0000\u0000COLORTERM\u0001truecolorÿðÿú\u0018\u0000xtermÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "text around a subnegotiation",
+      "chunked": false,
+      "stream": "beforeÿú\u0018\u0000xtermÿðafter",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "beforeafter",
+      "reply": "",
+      "term": "xterm",
+      "env": {},
+      "done": false,
+      "colormode": "16"
+    },
+    {
+      "name": "text around a subnegotiation",
+      "chunked": true,
+      "stream": "beforeÿú\u0018\u0000xtermÿðafter",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "before",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a subnegotiation nobody handles",
+      "chunked": false,
+      "stream": "ÿúc\u0001\u0002ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a subnegotiation nobody handles",
+      "chunked": true,
+      "stream": "ÿúc\u0001\u0002ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a subnegotiation that never ends",
+      "chunked": false,
+      "stream": "ÿú\u0018\u0000xterm",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a subnegotiation that never ends",
+      "chunked": true,
+      "stream": "ÿú\u0018\u0000xterm",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an escaped IAC inside a subnegotiation",
+      "chunked": false,
+      "stream": "ÿú\u0018\u0000aÿÿbÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "aÿb",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an escaped IAC inside a subnegotiation",
+      "chunked": true,
+      "stream": "ÿú\u0018\u0000aÿÿbÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "a terminal type sent twice",
+      "chunked": false,
+      "stream": "ÿú\u0018\u0000xtermÿðÿú\u0018\u0000vt100ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "vt100",
+      "env": {},
+      "done": false,
+      "colormode": "16"
+    },
+    {
+      "name": "a terminal type sent twice",
+      "chunked": true,
+      "stream": "ÿú\u0018\u0000xtermÿðÿú\u0018\u0000vt100ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an empty subnegotiation",
+      "chunked": false,
+      "stream": "ÿú\u0018ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    },
+    {
+      "name": "an empty subnegotiation",
+      "chunked": true,
+      "stream": "ÿú\u0018ÿð",
+      "start": "ÿý\u0018ÿý'",
+      "cleaned": "",
+      "reply": "",
+      "term": "",
+      "env": {},
+      "done": false,
+      "colormode": null
+    }
+  ],
+  "colours": [
+    {
+      "name": "nothing known",
+      "term": null,
+      "env": {},
+      "colormode": null
+    },
+    {
+      "name": "a true-colour hint",
+      "term": "xterm",
+      "env": {
+        "COLORTERM": "truecolor"
+      },
+      "colormode": "passthrough"
+    },
+    {
+      "name": "a 24-bit hint",
+      "term": "xterm",
+      "env": {
+        "COLORTERM": "24bit"
+      },
+      "colormode": "passthrough"
+    },
+    {
+      "name": "a hint in capitals",
+      "term": "xterm",
+      "env": {
+        "COLORTERM": "TRUECOLOR"
+      },
+      "colormode": "passthrough"
+    },
+    {
+      "name": "a hint nobody defined",
+      "term": "xterm",
+      "env": {
+        "COLORTERM": "sideways"
+      },
+      "colormode": "16"
+    },
+    {
+      "name": "a 256-colour terminal",
+      "term": "xterm-256color",
+      "env": {},
+      "colormode": "256"
+    },
+    {
+      "name": "a 256-colour terminal in capitals",
+      "term": "XTERM-256COLOR",
+      "env": {},
+      "colormode": "256"
+    },
+    {
+      "name": "a plain terminal",
+      "term": "vt100",
+      "env": {},
+      "colormode": "16"
+    },
+    {
+      "name": "a terminal with colour in its name",
+      "term": "xterm-color",
+      "env": {},
+      "colormode": null
+    },
+    {
+      "name": "a screen",
+      "term": "screen",
+      "env": {},
+      "colormode": null
+    },
+    {
+      "name": "a terminal of nothing",
+      "term": "",
+      "env": {},
+      "colormode": null
+    },
+    {
+      "name": "a hint with no terminal",
+      "term": null,
+      "env": {
+        "COLORTERM": "truecolor"
+      },
+      "colormode": "passthrough"
+    },
+    {
+      "name": "both, disagreeing",
+      "term": "vt100",
+      "env": {
+        "COLORTERM": "truecolor"
+      },
+      "colormode": "passthrough"
+    }
+  ]
+}

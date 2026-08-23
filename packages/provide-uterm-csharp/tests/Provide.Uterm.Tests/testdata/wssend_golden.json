@@ -1,0 +1,187 @@
+{
+  "terminal_types": [
+    "input",
+    "term"
+  ],
+  "frames": [
+    {
+      "name": "terminal output",
+      "payload": {
+        "type": "term",
+        "data": "hello"
+      },
+      "wire": "hello",
+      "terminal": true
+    },
+    {
+      "name": "terminal input",
+      "payload": {
+        "type": "input",
+        "data": "ls\r"
+      },
+      "wire": "ls\r",
+      "terminal": true
+    },
+    {
+      "name": "terminal output with no data",
+      "payload": {
+        "type": "term"
+      },
+      "wire": "",
+      "terminal": true
+    },
+    {
+      "name": "terminal output with empty data",
+      "payload": {
+        "type": "term",
+        "data": ""
+      },
+      "wire": "",
+      "terminal": true
+    },
+    {
+      "name": "terminal output carrying escapes",
+      "payload": {
+        "type": "term",
+        "data": "\u001b[31mred\u001b[0m"
+      },
+      "wire": "\u001b[31mred\u001b[0m",
+      "terminal": true
+    },
+    {
+      "name": "terminal output that is not a string",
+      "payload": {
+        "type": "term",
+        "data": 7
+      },
+      "wire": "7",
+      "terminal": true
+    },
+    {
+      "name": "terminal output that is null",
+      "payload": {
+        "type": "term",
+        "data": null
+      },
+      "wire": "None",
+      "terminal": true
+    },
+    {
+      "name": "terminal output with other fields",
+      "payload": {
+        "type": "term",
+        "data": "x",
+        "seq": 1
+      },
+      "wire": "x",
+      "terminal": true
+    },
+    {
+      "name": "a snapshot",
+      "payload": {
+        "type": "snapshot",
+        "rows": 24
+      },
+      "wire": "\u0010\u00020000001d:{\"type\":\"snapshot\",\"rows\":24}",
+      "terminal": false
+    },
+    {
+      "name": "an error",
+      "payload": {
+        "type": "error",
+        "reason": "protocol_mismatch"
+      },
+      "wire": "\u0010\u00020000002d:{\"type\":\"error\",\"reason\":\"protocol_mismatch\"}",
+      "terminal": false
+    },
+    {
+      "name": "a presence update",
+      "payload": {
+        "type": "presence_sync",
+        "users": [
+          {
+            "user_id": "u1"
+          }
+        ]
+      },
+      "wire": "\u0010\u000200000033:{\"type\":\"presence_sync\",\"users\":[{\"user_id\":\"u1\"}]}",
+      "terminal": false
+    },
+    {
+      "name": "a type nobody recognised",
+      "payload": {
+        "type": "nonsense",
+        "x": 1
+      },
+      "wire": "\u0010\u000200000019:{\"type\":\"nonsense\",\"x\":1}",
+      "terminal": false
+    },
+    {
+      "name": "no type at all",
+      "payload": {
+        "data": "hello"
+      },
+      "wire": "\u0010\u000200000010:{\"data\":\"hello\"}",
+      "terminal": false
+    },
+    {
+      "name": "an empty type",
+      "payload": {
+        "type": "",
+        "data": "hello"
+      },
+      "wire": "\u0010\u00020000001a:{\"type\":\"\",\"data\":\"hello\"}",
+      "terminal": false
+    },
+    {
+      "name": "a type that is null",
+      "payload": {
+        "type": null,
+        "data": "hello"
+      },
+      "wire": "\u0010\u00020000001c:{\"type\":null,\"data\":\"hello\"}",
+      "terminal": false
+    },
+    {
+      "name": "a type that is a number",
+      "payload": {
+        "type": 7
+      },
+      "wire": "\u0010\u00020000000a:{\"type\":7}",
+      "terminal": false
+    },
+    {
+      "name": "a type that starts the same",
+      "payload": {
+        "type": "input_send",
+        "data": "x"
+      },
+      "wire": "\u0010\u000200000020:{\"type\":\"input_send\",\"data\":\"x\"}",
+      "terminal": false
+    },
+    {
+      "name": "a type in capitals",
+      "payload": {
+        "type": "TERM",
+        "data": "x"
+      },
+      "wire": "\u0010\u00020000001a:{\"type\":\"TERM\",\"data\":\"x\"}",
+      "terminal": false
+    },
+    {
+      "name": "a type with space around it",
+      "payload": {
+        "type": " term ",
+        "data": "x"
+      },
+      "wire": "\u0010\u00020000001c:{\"type\":\" term \",\"data\":\"x\"}",
+      "terminal": false
+    },
+    {
+      "name": "an empty payload",
+      "payload": {},
+      "wire": "\u0010\u000200000002:{}",
+      "terminal": false
+    }
+  ]
+}

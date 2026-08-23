@@ -1,0 +1,270 @@
+{
+  "asynchronous": {
+    "hook_calls": [
+      {
+        "is_idle": true,
+        "prompt_id": "command"
+      },
+      {
+        "is_idle": true,
+        "prompt_id": null
+      }
+    ],
+    "matched": {
+      "input_type": "single_key",
+      "is_idle": true,
+      "kv_data": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "match_prompt_id": "command",
+      "prompt_id": "command"
+    },
+    "saver_status_with_one": {
+      "enabled": true,
+      "namespace": null,
+      "saved_count": 0,
+      "screens_dir": "/tmp/screens"
+    },
+    "saver_status_without_one": {
+      "enabled": false
+    },
+    "survived_a_failing_saver": {
+      "input_type": "single_key",
+      "is_idle": false,
+      "kv_data": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "match_prompt_id": "command",
+      "prompt_id": "command"
+    },
+    "unmatched": null
+  },
+  "cache": {
+    "again": {
+      "input_type": "single_key",
+      "is_idle": null,
+      "kv_data": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "match_prompt_id": "command",
+      "prompt_id": "command"
+    },
+    "cursor_moved": {
+      "input_type": "single_key",
+      "is_idle": null,
+      "kv_data": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "match_prompt_id": "command",
+      "prompt_id": "command"
+    },
+    "first": {
+      "input_type": "single_key",
+      "is_idle": null,
+      "kv_data": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "match_prompt_id": "command",
+      "prompt_id": "command"
+    },
+    "missed": null,
+    "missed_again": null,
+    "screen_changed": {
+      "input_type": "multi_key",
+      "is_idle": null,
+      "kv_data": {},
+      "match_prompt_id": "login",
+      "prompt_id": "login"
+    }
+  },
+  "command_screen": "Sector  42\nCommand [TL=00:00:00]:? ",
+  "disabled": {
+    "after": {
+      "input_type": "single_key",
+      "is_idle": null,
+      "kv_data": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "match_prompt_id": "command",
+      "prompt_id": "command"
+    },
+    "before": {
+      "input_type": "single_key",
+      "is_idle": null,
+      "kv_data": {
+        "_validation": {
+          "errors": [],
+          "valid": true
+        },
+        "sector": 42
+      },
+      "match_prompt_id": "command",
+      "prompt_id": "command"
+    },
+    "default_enabled": true,
+    "while_off": null
+  },
+  "login_screen": "Enter your name: ",
+  "namespace": {
+    "changed": "other",
+    "default": null,
+    "started": "tw2002"
+  },
+  "other_rules": {
+    "game": "tw2002",
+    "prompts": [
+      {
+        "id": "different",
+        "match": {
+          "pattern": "Enter your name:"
+        }
+      }
+    ]
+  },
+  "pattern_count": 2,
+  "reload": {
+    "after": {
+      "input_type": "multi_key",
+      "is_idle": null,
+      "kv_data": {},
+      "match_prompt_id": "different",
+      "prompt_id": "different"
+    },
+    "after_cached": {
+      "input_type": "multi_key",
+      "is_idle": null,
+      "kv_data": {},
+      "match_prompt_id": "different",
+      "prompt_id": "different"
+    },
+    "after_count": 1,
+    "before": {
+      "input_type": "multi_key",
+      "is_idle": null,
+      "kv_data": {},
+      "match_prompt_id": "login",
+      "prompt_id": "login"
+    },
+    "before_count": 2,
+    "failed_error": "Failed to parse rules: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+    "survived": {
+      "input_type": "multi_key",
+      "is_idle": null,
+      "kv_data": {},
+      "match_prompt_id": "different",
+      "prompt_id": "different"
+    }
+  },
+  "rules": {
+    "game": "tw2002",
+    "prompts": [
+      {
+        "id": "command",
+        "input_type": "single_key",
+        "kv_extract": [
+          {
+            "field": "sector",
+            "regex": "Sector\\s+(\\d+)",
+            "type": "int"
+          }
+        ],
+        "match": {
+          "pattern": "Command \\[TL=[\\d:]+\\]:"
+        }
+      },
+      {
+        "id": "login",
+        "input_type": "multi_key",
+        "match": {
+          "pattern": "Enter your name:"
+        }
+      }
+    ]
+  },
+  "sync": [
+    {
+      "detection": {
+        "input_type": "single_key",
+        "is_idle": null,
+        "kv_data": {
+          "_validation": {
+            "errors": [],
+            "valid": true
+          },
+          "sector": 42
+        },
+        "match_prompt_id": "command",
+        "prompt_id": "command"
+      },
+      "name": "a command prompt",
+      "screen": "Sector  42\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "detection": {
+        "input_type": "multi_key",
+        "is_idle": null,
+        "kv_data": {},
+        "match_prompt_id": "login",
+        "prompt_id": "login"
+      },
+      "name": "a login prompt",
+      "screen": "Enter your name: "
+    },
+    {
+      "detection": null,
+      "name": "no prompt at all",
+      "screen": "just output"
+    },
+    {
+      "detection": null,
+      "name": "an empty screen",
+      "screen": ""
+    },
+    {
+      "detection": {
+        "input_type": "multi_key",
+        "is_idle": null,
+        "kv_data": {},
+        "match_prompt_id": "login",
+        "prompt_id": "login"
+      },
+      "name": "a prompt with nothing to extract",
+      "screen": "Enter your name: "
+    },
+    {
+      "detection": {
+        "input_type": "single_key",
+        "is_idle": null,
+        "kv_data": {},
+        "match_prompt_id": "command",
+        "prompt_id": "command"
+      },
+      "name": "a prompt whose extraction finds nothing",
+      "screen": "Command [TL=00:00:00]:? "
+    }
+  ]
+}

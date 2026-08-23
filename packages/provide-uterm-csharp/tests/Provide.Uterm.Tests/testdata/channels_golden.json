@@ -1,0 +1,454 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_channels_golden.py",
+ "negotiate": [
+  {
+   "name": "exact match",
+   "supported": {
+    "term": 1
+   },
+   "requested": {
+    "term": 1
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "term": 1
+    }
+   },
+   "granted": {
+    "term": 1
+   },
+   "exported": {
+    "term": 1
+   }
+  },
+  {
+   "name": "client asks for less",
+   "supported": {
+    "term": 3
+   },
+   "requested": {
+    "term": 2
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "term": 2
+    }
+   },
+   "granted": {
+    "term": 2
+   },
+   "exported": {
+    "term": 2
+   }
+  },
+  {
+   "name": "client asks for more",
+   "supported": {
+    "term": 2
+   },
+   "requested": {
+    "term": 5
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "term": 2
+    }
+   },
+   "granted": {
+    "term": 2
+   },
+   "exported": {
+    "term": 2
+   }
+  },
+  {
+   "name": "unknown channel is dropped",
+   "supported": {
+    "term": 1
+   },
+   "requested": {
+    "other": 1
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {}
+   },
+   "granted": {},
+   "exported": {}
+  },
+  {
+   "name": "mixed known and unknown",
+   "supported": {
+    "term": 1,
+    "gui": 2
+   },
+   "requested": {
+    "term": 1,
+    "other": 9,
+    "gui": 5
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "term": 1,
+     "gui": 2
+    }
+   },
+   "granted": {
+    "term": 1,
+    "gui": 2
+   },
+   "exported": {
+    "term": 1,
+    "gui": 2
+   }
+  },
+  {
+   "name": "version zero is refused",
+   "supported": {
+    "term": 1
+   },
+   "requested": {
+    "term": 0
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {}
+   },
+   "granted": {},
+   "exported": {}
+  },
+  {
+   "name": "negative version is refused",
+   "supported": {
+    "term": 1
+   },
+   "requested": {
+    "term": -1
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {}
+   },
+   "granted": {},
+   "exported": {}
+  },
+  {
+   "name": "empty request grants nothing",
+   "supported": {
+    "term": 1
+   },
+   "requested": {},
+   "ack": {
+    "type": "hello_ack",
+    "channels": {}
+   },
+   "granted": {},
+   "exported": {}
+  },
+  {
+   "name": "server supports more than asked",
+   "supported": {
+    "term": 1,
+    "gui": 1
+   },
+   "requested": {
+    "term": 1
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "term": 1
+    }
+   },
+   "granted": {
+    "term": 1
+   },
+   "exported": {
+    "term": 1
+   }
+  },
+  {
+   "name": "multiple channels all granted",
+   "supported": {
+    "a": 4,
+    "b": 5,
+    "c": 6
+   },
+   "requested": {
+    "a": 9,
+    "b": 2,
+    "c": 6
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "a": 4,
+     "b": 2,
+     "c": 6
+    }
+   },
+   "granted": {
+    "a": 4,
+    "b": 2,
+    "c": 6
+   },
+   "exported": {
+    "a": 4,
+    "b": 2,
+    "c": 6
+   }
+  }
+ ],
+ "parse": [
+  {
+   "name": "empty string",
+   "raw": "",
+   "channels": null
+  },
+  {
+   "name": "plain text",
+   "raw": "not a frame",
+   "channels": null
+  },
+  {
+   "name": "hello with channels",
+   "raw": "\u0010\u000200000026:{\"type\":\"hello\",\"channels\":{\"term\":2}}",
+   "channels": {
+    "term": 2
+   }
+  },
+  {
+   "name": "hello with several channels",
+   "raw": "\u0010\u000200000029:{\"type\":\"hello\",\"channels\":{\"a\":1,\"b\":2}}",
+   "channels": {
+    "a": 1,
+    "b": 2
+   }
+  },
+  {
+   "name": "hello with no channels field",
+   "raw": "\u0010\u000200000010:{\"type\":\"hello\"}",
+   "channels": null
+  },
+  {
+   "name": "hello with an empty channel map",
+   "raw": "\u0010\u00020000001e:{\"type\":\"hello\",\"channels\":{}}",
+   "channels": {}
+  },
+  {
+   "name": "hello with an invalid channel map",
+   "raw": "\u0010\u000200000028:{\"type\":\"hello\",\"channels\":{\"term\":\"x\"}}",
+   "channels": null
+  },
+  {
+   "name": "hello with a non-mapping channels field",
+   "raw": "\u0010\u00020000001f:{\"type\":\"hello\",\"channels\":[1]}",
+   "channels": null
+  },
+  {
+   "name": "a frame that is not a hello",
+   "raw": "\u0010\u00020000002a:{\"type\":\"hello_ack\",\"channels\":{\"term\":1}}",
+   "channels": null
+  },
+  {
+   "name": "a frame with no type",
+   "raw": "\u0010\u000200000017:{\"channels\":{\"term\":1}}",
+   "channels": null
+  },
+  {
+   "name": "a structurally valid frame whose payload is not JSON",
+   "raw": "\u0010\u000200000003:abc",
+   "channels": null
+  },
+  {
+   "name": "a truncated frame",
+   "raw": "\u0010\u000200000010:{\"type\":\"hello\"",
+   "channels": null
+  }
+ ],
+ "sequence": {
+  "steps": [
+   {
+    "channel": null,
+    "seq": 1
+   },
+   {
+    "channel": null,
+    "seq": 2
+   },
+   {
+    "channel": "gui",
+    "seq": 1
+   },
+   {
+    "channel": "term",
+    "seq": 3
+   },
+   {
+    "channel": "gui",
+    "seq": 2
+   },
+   {
+    "channel": "other",
+    "seq": 1
+   }
+  ],
+  "restored_granted": {
+   "term": 1,
+   "gui": 1
+  },
+  "steps_after_restore": [
+   {
+    "channel": "term",
+    "seq": 1
+   },
+   {
+    "channel": "gui",
+    "seq": 1
+   }
+  ]
+ },
+ "ack_fields": [
+  {
+   "extra": {
+    "session_id": "s1"
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "term": 1
+    },
+    "session_id": "s1"
+   },
+   "error": null
+  },
+  {
+   "extra": {
+    "a": 1,
+    "b": [
+     2
+    ]
+   },
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "term": 1
+    },
+    "a": 1,
+    "b": [
+     2
+    ]
+   },
+   "error": null
+  },
+  {
+   "extra": {},
+   "ack": {
+    "type": "hello_ack",
+    "channels": {
+     "term": 1
+    }
+   },
+   "error": null
+  },
+  {
+   "extra": {
+    "type": "x"
+   },
+   "ack": null,
+   "error": "reserved hello_ack field: type"
+  },
+  {
+   "extra": {
+    "channels": {}
+   },
+   "ack": null,
+   "error": "reserved hello_ack field: channels"
+  },
+  {
+   "extra": {
+    "type": "x",
+    "channels": {}
+   },
+   "ack": null,
+   "error": "reserved hello_ack field: channels"
+  }
+ ],
+ "errors": [
+  {
+   "name": "empty supported map",
+   "error": "at least one supported channel is required"
+  },
+  {
+   "name": "default channel not supported",
+   "error": "default channel is not supported: 'gui'"
+  },
+  {
+   "name": "next_seq with no default",
+   "error": "channel is required when no default_channel is configured"
+  },
+  {
+   "name": "is_negotiated with no default",
+   "error": "channel is required when no default_channel is configured"
+  },
+  {
+   "name": "invalid supported map 0",
+   "error": "channels must be a mapping"
+  },
+  {
+   "name": "invalid supported map 1",
+   "error": "channels must be a mapping"
+  },
+  {
+   "name": "invalid supported map 2",
+   "error": "channels must be a mapping"
+  },
+  {
+   "name": "invalid supported map 3",
+   "error": "channels must be a mapping"
+  },
+  {
+   "name": "invalid supported map 4",
+   "error": "channel names must be non-empty strings"
+  },
+  {
+   "name": "invalid supported map 5",
+   "error": "channel versions must be integers"
+  },
+  {
+   "name": "invalid supported map 6",
+   "error": "channel versions must be integers"
+  },
+  {
+   "name": "invalid supported map 7",
+   "error": "channel versions must be integers"
+  },
+  {
+   "name": "invalid supported map 8",
+   "error": "channel versions must be integers"
+  },
+  {
+   "name": "invalid supported map 9",
+   "error": "channel versions must be integers"
+  }
+ ],
+ "is_negotiated": [
+  {
+   "stage": "before",
+   "default": false,
+   "term": false,
+   "gui": false
+  },
+  {
+   "stage": "after",
+   "default": true,
+   "term": true,
+   "gui": false,
+   "unknown": false
+  }
+ ]
+}

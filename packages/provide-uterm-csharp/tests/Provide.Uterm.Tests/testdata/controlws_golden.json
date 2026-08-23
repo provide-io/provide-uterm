@@ -1,0 +1,451 @@
+{
+  "encoded": [
+    {
+      "name": "somebody typing",
+      "payload": {
+        "type": "input",
+        "data": "ls\n"
+      },
+      "encoded": "ls\n"
+    },
+    {
+      "name": "the session printing",
+      "payload": {
+        "type": "term",
+        "data": "hello\r\n"
+      },
+      "encoded": "hello\r\n"
+    },
+    {
+      "name": "typing with nothing in it",
+      "payload": {
+        "type": "input"
+      },
+      "encoded": ""
+    },
+    {
+      "name": "typing something that is not text",
+      "payload": {
+        "type": "input",
+        "data": 42
+      },
+      "encoded": "42"
+    },
+    {
+      "name": "typing a delimiter",
+      "payload": {
+        "type": "input",
+        "data": "\u0010\u0002{}"
+      },
+      "encoded": "\u0010\u0010\u0002{}"
+    },
+    {
+      "name": "typing outside ASCII",
+      "payload": {
+        "type": "input",
+        "data": "héllo ☃"
+      },
+      "encoded": "héllo ☃"
+    },
+    {
+      "name": "a control frame",
+      "payload": {
+        "type": "hijack_request"
+      },
+      "encoded": "\u0010\u000200000019:{\"type\":\"hijack_request\"}"
+    },
+    {
+      "name": "a control frame with fields",
+      "payload": {
+        "type": "resize",
+        "cols": 80,
+        "rows": 25
+      },
+      "encoded": "\u0010\u000200000025:{\"type\":\"resize\",\"cols\":80,\"rows\":25}"
+    },
+    {
+      "name": "a frame with no type at all",
+      "payload": {
+        "data": "ls"
+      },
+      "encoded": "\u0010\u00020000000d:{\"data\":\"ls\"}"
+    },
+    {
+      "name": "a frame whose type is null",
+      "payload": {
+        "type": null,
+        "data": "ls"
+      },
+      "encoded": "\u0010\u000200000019:{\"type\":null,\"data\":\"ls\"}"
+    },
+    {
+      "name": "a frame whose type is a number",
+      "payload": {
+        "type": 1,
+        "data": "ls"
+      },
+      "encoded": "\u0010\u000200000016:{\"type\":1,\"data\":\"ls\"}"
+    },
+    {
+      "name": "a frame named input in capitals",
+      "payload": {
+        "type": "INPUT",
+        "data": "ls"
+      },
+      "encoded": "\u0010\u00020000001c:{\"type\":\"INPUT\",\"data\":\"ls\"}"
+    },
+    {
+      "name": "an empty frame",
+      "payload": {},
+      "encoded": "\u0010\u000200000002:{}"
+    }
+  ],
+  "decoded": [
+    {
+      "name": "terminal bytes",
+      "role": "browser",
+      "chunks": [
+        "hello"
+      ],
+      "frames": [
+        {
+          "type": "term",
+          "data": "hello"
+        }
+      ]
+    },
+    {
+      "name": "terminal bytes",
+      "role": "worker",
+      "chunks": [
+        "hello"
+      ],
+      "frames": [
+        {
+          "type": "input",
+          "data": "hello"
+        }
+      ]
+    },
+    {
+      "name": "a control frame",
+      "role": "browser",
+      "chunks": [
+        "\u0010\u000200000019:{\"type\":\"hijack_request\"}"
+      ],
+      "frames": [
+        {
+          "type": "hijack_request"
+        }
+      ]
+    },
+    {
+      "name": "a control frame",
+      "role": "worker",
+      "chunks": [
+        "\u0010\u000200000019:{\"type\":\"hijack_request\"}"
+      ],
+      "frames": [
+        {
+          "type": "hijack_request"
+        }
+      ]
+    },
+    {
+      "name": "one of each",
+      "role": "browser",
+      "chunks": [
+        "before\u0010\u000200000026:{\"type\":\"hijack_state\",\"holder\":\"ada\"}after"
+      ],
+      "frames": [
+        {
+          "type": "term",
+          "data": "before"
+        },
+        {
+          "type": "hijack_state",
+          "holder": "ada"
+        },
+        {
+          "type": "term",
+          "data": "after"
+        }
+      ]
+    },
+    {
+      "name": "one of each",
+      "role": "worker",
+      "chunks": [
+        "before\u0010\u000200000026:{\"type\":\"hijack_state\",\"holder\":\"ada\"}after"
+      ],
+      "frames": [
+        {
+          "type": "input",
+          "data": "before"
+        },
+        {
+          "type": "hijack_state",
+          "holder": "ada"
+        },
+        {
+          "type": "input",
+          "data": "after"
+        }
+      ]
+    },
+    {
+      "name": "a frame split across two reads",
+      "role": "browser",
+      "chunks": [
+        "\u0010\u00020000",
+        "0022:{\"type\":\"hello\",\"session_id\":\"s1\"}"
+      ],
+      "frames": [
+        {
+          "type": "hello",
+          "session_id": "s1"
+        }
+      ]
+    },
+    {
+      "name": "a frame split across two reads",
+      "role": "worker",
+      "chunks": [
+        "\u0010\u00020000",
+        "0022:{\"type\":\"hello\",\"session_id\":\"s1\"}"
+      ],
+      "frames": [
+        {
+          "type": "hello",
+          "session_id": "s1"
+        }
+      ]
+    },
+    {
+      "name": "an escaped delimiter in the bytes",
+      "role": "browser",
+      "chunks": [
+        "\u0010\u0010\u0002{}"
+      ],
+      "frames": [
+        {
+          "type": "term",
+          "data": "\u0010\u0002{}"
+        }
+      ]
+    },
+    {
+      "name": "an escaped delimiter in the bytes",
+      "role": "worker",
+      "chunks": [
+        "\u0010\u0010\u0002{}"
+      ],
+      "frames": [
+        {
+          "type": "input",
+          "data": "\u0010\u0002{}"
+        }
+      ]
+    },
+    {
+      "name": "nothing at all",
+      "role": "browser",
+      "chunks": [
+        ""
+      ],
+      "frames": []
+    },
+    {
+      "name": "nothing at all",
+      "role": "worker",
+      "chunks": [
+        ""
+      ],
+      "frames": []
+    }
+  ],
+  "sent": [
+    {
+      "name": "a mapping",
+      "value": {
+        "type": "hijack_request"
+      },
+      "is_bytes": false,
+      "sent": [
+        "\u0010\u000200000019:{\"type\":\"hijack_request\"}"
+      ],
+      "error": null
+    },
+    {
+      "name": "bytes",
+      "value": "\u0001\u0002raw",
+      "is_bytes": true,
+      "sent": [
+        "\u0001\u0002raw"
+      ],
+      "error": null
+    },
+    {
+      "name": "text that is not json",
+      "value": "just text",
+      "is_bytes": false,
+      "sent": [
+        "just text"
+      ],
+      "error": null
+    },
+    {
+      "name": "a bare json object",
+      "value": "{\"type\":\"hijack_request\"}",
+      "is_bytes": false,
+      "sent": [],
+      "error": "TypeError",
+      "message": "bare JSON control strings are not accepted; use send_frame() or send_json()"
+    },
+    {
+      "name": "a bare json list",
+      "value": "[1,2]",
+      "is_bytes": false,
+      "sent": [
+        "[1,2]"
+      ],
+      "error": null
+    },
+    {
+      "name": "a bare json number",
+      "value": "42",
+      "is_bytes": false,
+      "sent": [
+        "42"
+      ],
+      "error": null
+    },
+    {
+      "name": "a bare json string",
+      "value": "\"hello\"",
+      "is_bytes": false,
+      "sent": [
+        "\"hello\""
+      ],
+      "error": null
+    },
+    {
+      "name": "a bare json null",
+      "value": "null",
+      "is_bytes": false,
+      "sent": [
+        "null"
+      ],
+      "error": null
+    },
+    {
+      "name": "something else entirely",
+      "value": 42,
+      "is_bytes": false,
+      "sent": [
+        42
+      ],
+      "error": null
+    }
+  ],
+  "sent_json": [
+    {
+      "name": "a mapping",
+      "value": {
+        "type": "hijack_request"
+      },
+      "sent": [
+        "\u0010\u000200000019:{\"type\":\"hijack_request\"}"
+      ],
+      "error": null
+    },
+    {
+      "name": "a list",
+      "value": [
+        1,
+        2
+      ],
+      "sent": [],
+      "error": "TypeError",
+      "message": "expected mapping payload, got list"
+    },
+    {
+      "name": "text",
+      "value": "hello",
+      "sent": [],
+      "error": "TypeError",
+      "message": "expected mapping payload, got str"
+    },
+    {
+      "name": "a number",
+      "value": 42,
+      "sent": [],
+      "error": "TypeError",
+      "message": "expected mapping payload, got int"
+    },
+    {
+      "name": "nothing",
+      "value": null,
+      "sent": [],
+      "error": "TypeError",
+      "message": "expected mapping payload, got NoneType"
+    }
+  ],
+  "received": [
+    {
+      "name": "a browser reading the session",
+      "role": "browser",
+      "chunks": [
+        "out\u0010\u000200000026:{\"type\":\"hijack_state\",\"holder\":\"ada\"}"
+      ],
+      "frames": [
+        {
+          "type": "term",
+          "data": "out"
+        },
+        {
+          "type": "hijack_state",
+          "holder": "ada"
+        }
+      ]
+    },
+    {
+      "name": "a worker reading what was typed",
+      "role": "worker",
+      "chunks": [
+        "ls"
+      ],
+      "frames": [
+        {
+          "type": "input",
+          "data": "ls"
+        }
+      ]
+    },
+    {
+      "name": "a frame that arrives in pieces",
+      "role": "browser",
+      "chunks": [
+        "\u0010\u000200",
+        "000022:{\"type\":\"hello\",\"session_id\":\"s1\"}"
+      ],
+      "frames": [
+        {
+          "type": "hello",
+          "session_id": "s1"
+        }
+      ]
+    },
+    {
+      "name": "a payload that is not text",
+      "role": "browser",
+      "chunks": [],
+      "error": "TypeError",
+      "message": "expected text WebSocket payload, got bytes"
+    }
+  ],
+  "roles": {
+    "browser_data_type": "term",
+    "worker_data_type": "input"
+  }
+}

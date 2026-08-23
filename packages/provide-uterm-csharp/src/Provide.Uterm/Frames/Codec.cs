@@ -43,7 +43,7 @@ public static class FrameCodec
         [FrameTypeNames.Term] = ["type", "data", "ts"],
         [FrameTypeNames.Input] = ["type", "data", "ts"],
         [FrameTypeNames.SnapshotReq] = ["type", "ts"],
-        [FrameTypeNames.Snapshot] = ["type", "screen", "cursor", "cols", "rows", "screen_hash", "cursor_at_end", "has_trailing_space", "prompt_detected", "raw_tail", "ts"],
+        [FrameTypeNames.Snapshot] = ["type", "screen", "cursor", "cols", "rows", "screen_hash", "cursor_at_end", "has_trailing_space", "prompt_detected", "raw_tail", "chunks_read", "bytes_read", "ts"],
         [FrameTypeNames.Control] = ["type", "action", "owner", "lease_s", "ts"],
         [FrameTypeNames.HijackState] = ["type", "hijacked", "owner", "lease_expires_at", "input_mode"],
         [FrameTypeNames.HijackRequest] = ["type", "token", "ts"],

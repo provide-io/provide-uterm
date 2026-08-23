@@ -75,14 +75,17 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
     # Graphical-target model + tenant-scoped registry:
     #   provide.uterm.server.graphical_targets (Python)
     #   <-> packages/provide-uterm-go/graphical (Go)
-    #   <-> Provide.Uterm/Server/GraphicalTargets.cs (C#, all types in one file).
+    #   <-> Provide.Uterm/Server/GraphicalTargets{,.Registry,.Parsing}.cs (C#).
     # The Python/C# names (GraphicalTargetDefinition, GraphicalTargetScope,
     # InMemoryGraphicalTargetRegistry) collapse to graphical.Definition/Scope/
     # InMemoryRegistry in Go, so the type NAMES are required: false in the spec;
     # the method surface (get/list/create/update/delete/add_static, public_copy,
-    # permits, parse_rfb_endpoint) is parity-enforced. The single C# type source
-    # is enough because _csharp_type_methods scans the whole file GraphicalTargetDefinition
-    # lives in, which is every graphical type (registry, scope, parsing helper).
+    # permits, parse_rfb_endpoint) is parity-enforced. Every C# type is listed
+    # explicitly, as Python and Go are: _csharp_type_methods harvests methods
+    # only from the file that DECLARES the named type, so a type living in a
+    # sibling file contributes nothing unless it is named here. Listing one type
+    # and relying on its file to hold the rest is what broke when the 845-line
+    # GraphicalTargets.cs was split for the LOC cap.
     "graphical": {
         "python": [
             {
@@ -110,6 +113,11 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
         ],
         "csharp": [
             {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Server", "type": "GraphicalTargetDefinition"},
+            {
+                "dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Server",
+                "type": "InMemoryGraphicalTargetRegistry",
+            },
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Server", "type": "GraphicalTargetParsing"},
         ],
     },
     # Tenant-scoped auth surface: the API-key store's tenant methods + the

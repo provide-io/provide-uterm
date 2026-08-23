@@ -282,6 +282,26 @@ _SETUP_HINTS = {
 }
 
 
+def _partial_output(expired: subprocess.TimeoutExpired) -> str:
+    """Render whatever a killed adapter emitted before it hit the deadline.
+
+    ``capture_output=True`` means the child's streams are collected even when
+    it is killed, so a timeout still has something to say. Silence is itself a
+    finding — an adapter that printed nothing never got as far as its first
+    test — so say so explicitly rather than returning an empty string.
+    """
+    parts: list[str] = []
+    for label, stream in (("stdout", expired.stdout), ("stderr", expired.stderr)):
+        if not stream:
+            continue
+        text = stream.decode("utf-8", errors="replace") if isinstance(stream, bytes) else stream
+        if text.strip():
+            parts.append(f"{label}: {text.strip()}")
+    if not parts:
+        return ". The adapter printed nothing before it was killed."
+    return ". Partial output — " + "; ".join(parts)
+
+
 def _command(root: Path, backend: str) -> tuple[list[str], Path]:
     if backend == "python":
         return [
@@ -344,8 +364,19 @@ def collect_backend_observations(
                 text=True,
                 timeout=timeout_s,
             )
-        except subprocess.TimeoutExpired:
-            return [f"{backend}: native command timed out after {timeout_s:g}s"], []
+        except subprocess.TimeoutExpired as expired:
+            # Report WHERE it hung, not just that it did. Every backend runs
+            # warm in 2-15s (cold go, on a scratch build cache: 11.7s wall /
+            # 60s CPU), so blowing this deadline means something pathological
+            # rather than a budget set too tight -- and the old message, which
+            # printed only the number, left nothing to diagnose it with.
+            # TimeoutExpired carries whatever the child emitted before it was
+            # killed; that partial output is the only evidence there is.
+            where = f"{shlex.join(command)} (cwd {cwd})"
+            timed_out = (
+                f"{backend}: native command timed out after {timeout_s:g}s. Ran {where}{_partial_output(expired)}"
+            )
+            return [timed_out], []
         errors = command_errors(backend, result)
         if errors:
             return errors, []

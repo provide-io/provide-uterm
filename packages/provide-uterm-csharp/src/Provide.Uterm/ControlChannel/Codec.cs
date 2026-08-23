@@ -268,7 +268,11 @@ public static class ControlChannelCodec
                 return false;
             }
 
-            value = (value << 4) | d;
+            // (uint), not (long): d is a nibble in 0..15, but a signed int
+            // operand of a long OR is sign-extended, which is CS0675. The
+            // unsigned cast makes the zero-extension explicit and cannot
+            // change the value for a non-negative d.
+            value = (value << 4) | (uint)d;
         }
 
         return true;

@@ -48,11 +48,21 @@ def _warn_if_stale(lib: Path) -> None:
     except OSError:
         return
     if newer:
+        # The remedy is split from the directory deliberately. Telemetry's
+        # secret scanner redacts a WHOLE field value when any part of it looks
+        # like a credential, and a high-entropy path segment qualifies -- macOS
+        # $TMPDIR always has one (…/folders/sg/wy47gw996f78fznt898m8x540000gn/…).
+        # Interpolating the path into the remedy therefore replaced the entire
+        # instruction with "***", so the one field that exists to tell a human
+        # what to run told them nothing. Keeping the command in its own
+        # low-entropy field means the actionable half always survives, and only
+        # the directory degrades when it happens to look secret.
         logger.warning(
             "capture_library_is_stale",
             library=str(lib),
             newer_sources=newer,
-            remedy=f"make -C {source_dir} install",
+            remedy="make install",
+            remedy_dir=str(source_dir),
         )
 
 

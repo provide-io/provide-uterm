@@ -1,0 +1,719 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_emulator_golden.py",
+ "defaults": {
+  "cols": 80,
+  "rows": 25,
+  "term": "ANSI",
+  "receive_encoding": "cp437"
+ },
+ "cases": [
+  {
+   "name": "empty",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [],
+   "snapshot": {
+    "screen": "                    \n                    \n                    \n                    \n                    ",
+    "screen_hash": "1342eb30a9f12bda3f64b5b9ef156b4149af9a211c31d69f3866ab9c2fb24247",
+    "cursor": {
+     "x": 0,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": ""
+   },
+   "ansi_screen": "\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": ""
+  },
+  {
+   "name": "plain text",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "hello"
+   ],
+   "snapshot": {
+    "screen": "hello               \n                    \n                    \n                    \n                    ",
+    "screen_hash": "ebc6cf4e770a5227731c32a30c0ba4ce6627f199122431a386ecd463a070429a",
+    "cursor": {
+     "x": 5,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "hello"
+   },
+   "ansi_screen": "\u001b[0mhello               \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "hello"
+  },
+  {
+   "name": "two rows",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "one\r\ntwo"
+   ],
+   "snapshot": {
+    "screen": "one                 \ntwo                 \n                    \n                    \n                    ",
+    "screen_hash": "6d8c9d337857e45183e767edebfc503c53b15602e1d37800898608ec8ab6930b",
+    "cursor": {
+     "x": 3,
+     "y": 1
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "one\r\ntwo"
+   },
+   "ansi_screen": "\u001b[0mone                 \u001b[0m\n\u001b[0mtwo                 \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "one\r\ntwo"
+  },
+  {
+   "name": "fed in two chunks",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "hel",
+    "lo"
+   ],
+   "snapshot": {
+    "screen": "hello               \n                    \n                    \n                    \n                    ",
+    "screen_hash": "ebc6cf4e770a5227731c32a30c0ba4ce6627f199122431a386ecd463a070429a",
+    "cursor": {
+     "x": 5,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "hello"
+   },
+   "ansi_screen": "\u001b[0mhello               \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "hello"
+  },
+  {
+   "name": "prompt with trailing space",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "Command? "
+   ],
+   "snapshot": {
+    "screen": "Command?            \n                    \n                    \n                    \n                    ",
+    "screen_hash": "6b2505a88b790b822e804c033ef3baf27560d3cc8dc651b3c6f3a09d2cb229f8",
+    "cursor": {
+     "x": 9,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "Command? "
+   },
+   "ansi_screen": "\u001b[0mCommand?            \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "Command? "
+  },
+  {
+   "name": "prompt ending in a colon",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "Name:"
+   ],
+   "snapshot": {
+    "screen": "Name:               \n                    \n                    \n                    \n                    ",
+    "screen_hash": "2705133addba0dbab44b785ca9a57489879b9836991e54f6c25da1698b051858",
+    "cursor": {
+     "x": 5,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "Name:"
+   },
+   "ansi_screen": "\u001b[0mName:               \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "Name:"
+  },
+  {
+   "name": "prompt ending in a colon and space",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "Name: "
+   ],
+   "snapshot": {
+    "screen": "Name:               \n                    \n                    \n                    \n                    ",
+    "screen_hash": "2705133addba0dbab44b785ca9a57489879b9836991e54f6c25da1698b051858",
+    "cursor": {
+     "x": 6,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "Name: "
+   },
+   "ansi_screen": "\u001b[0mName:               \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "Name: "
+  },
+  {
+   "name": "no trailing space",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "done"
+   ],
+   "snapshot": {
+    "screen": "done                \n                    \n                    \n                    \n                    ",
+    "screen_hash": "86e45a648712bd068f3db3578c6f2b9955135fc3c0a68dfc363797db8ae76cb9",
+    "cursor": {
+     "x": 4,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "done"
+   },
+   "ansi_screen": "\u001b[0mdone                \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "done"
+  },
+  {
+   "name": "cursor just before the end",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "abcdef\u001b[5G"
+   ],
+   "snapshot": {
+    "screen": "abcdef              \n                    \n                    \n                    \n                    ",
+    "screen_hash": "ca0bccc486e2f158aa953fc8dd4cf654a80a4bdc6f684a73f4159d34e206281b",
+    "cursor": {
+     "x": 4,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "abcdef\u001b[5G"
+   },
+   "ansi_screen": "\u001b[0mabcdef              \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "abcdef\u001b[5G"
+  },
+  {
+   "name": "cursor well before the end",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "abcdef\u001b[1G"
+   ],
+   "snapshot": {
+    "screen": "abcdef              \n                    \n                    \n                    \n                    ",
+    "screen_hash": "ca0bccc486e2f158aa953fc8dd4cf654a80a4bdc6f684a73f4159d34e206281b",
+    "cursor": {
+     "x": 0,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": false,
+    "has_trailing_space": true,
+    "raw_tail": "abcdef\u001b[1G"
+   },
+   "ansi_screen": "\u001b[0mabcdef              \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "abcdef\u001b[1G"
+  },
+  {
+   "name": "cursor on a row below the content",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "abc\r\n\r\n"
+   ],
+   "snapshot": {
+    "screen": "abc                 \n                    \n                    \n                    \n                    ",
+    "screen_hash": "691fb99960554636380ffddbe7fffa5425e62a4652cd9493fd8e0d4782a158ed",
+    "cursor": {
+     "x": 0,
+     "y": 2
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "abc\r\n\r\n"
+   },
+   "ansi_screen": "\u001b[0mabc                 \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "abc\r\n\r\n"
+  },
+  {
+   "name": "blank screen",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[2J"
+   ],
+   "snapshot": {
+    "screen": "                    \n                    \n                    \n                    \n                    ",
+    "screen_hash": "1342eb30a9f12bda3f64b5b9ef156b4149af9a211c31d69f3866ab9c2fb24247",
+    "cursor": {
+     "x": 0,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[2J"
+   },
+   "ansi_screen": "\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "\u001b[2J"
+  },
+  {
+   "name": "coloured text",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[31mred\u001b[0m plain"
+   ],
+   "snapshot": {
+    "screen": "red plain           \n                    \n                    \n                    \n                    ",
+    "screen_hash": "e81f3a50611f85d0c0e41f3c61cd7ea7dd67e0d175b620b61181026fc39fb9d3",
+    "cursor": {
+     "x": 9,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[31mred\u001b[0m plain"
+   },
+   "ansi_screen": "\u001b[31mred\u001b[0m plain           \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "\u001b[31mred\u001b[0m plain"
+  },
+  {
+   "name": "bold and underline",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[1;4mboth\u001b[0m"
+   ],
+   "snapshot": {
+    "screen": "both                \n                    \n                    \n                    \n                    ",
+    "screen_hash": "a1971263cea85d8f7974f13496e300b51548cf57b011edb83228d7f22b45f65d",
+    "cursor": {
+     "x": 4,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[1;4mboth\u001b[0m"
+   },
+   "ansi_screen": "\u001b[1;4mboth\u001b[0m                \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "\u001b[1;4mboth\u001b[0m"
+  },
+  {
+   "name": "reverse video",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[7mrev\u001b[0m"
+   ],
+   "snapshot": {
+    "screen": "rev                 \n                    \n                    \n                    \n                    ",
+    "screen_hash": "7cb4bbf3289a8e37ccf6a14cebb66d29abf28ee354eb87bd96f123a46c2794fb",
+    "cursor": {
+     "x": 3,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[7mrev\u001b[0m"
+   },
+   "ansi_screen": "\u001b[0mrev\u001b[0m                 \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "\u001b[7mrev\u001b[0m"
+  },
+  {
+   "name": "background colour",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[42mbg\u001b[0m"
+   ],
+   "snapshot": {
+    "screen": "bg                  \n                    \n                    \n                    \n                    ",
+    "screen_hash": "ffb946ec6d018a86ecdc382c87791302116515f201f9baa338da48770c84dcd1",
+    "cursor": {
+     "x": 2,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[42mbg\u001b[0m"
+   },
+   "ansi_screen": "\u001b[42mbg\u001b[0m                  \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "\u001b[42mbg\u001b[0m"
+  },
+  {
+   "name": "256-colour",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[38;5;196mx"
+   ],
+   "snapshot": {
+    "screen": "x                   \n                    \n                    \n                    \n                    ",
+    "screen_hash": "2a0d87f45f56eb9dd6451363b25a5b5970b8b177d50a3fa55ca2db9782beb117",
+    "cursor": {
+     "x": 1,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[38;5;196mx"
+   },
+   "ansi_screen": "\u001b[38;2;255;0;0mx\u001b[0m                   \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "\u001b[38;5;196mx"
+  },
+  {
+   "name": "brown, which the renderer has no code for",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[33mbrown"
+   ],
+   "snapshot": {
+    "screen": "brown               \n                    \n                    \n                    \n                    ",
+    "screen_hash": "da03dfe4f62cd436f4df4da820c6d3e8e693a0bf93476b7b70fcdf42ccaf6bf2",
+    "cursor": {
+     "x": 5,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[33mbrown"
+   },
+   "ansi_screen": "\u001b[0mbrown\u001b[0m               \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "\u001b[33mbrown"
+  },
+  {
+   "name": "blink",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[5mblink"
+   ],
+   "snapshot": {
+    "screen": "blink               \n                    \n                    \n                    \n                    ",
+    "screen_hash": "8c803f3f9c27ff3f402da8f4444f71d7a8bf5d9ae3f83e974e4e1d5ff7a46605",
+    "cursor": {
+     "x": 5,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[5mblink"
+   },
+   "ansi_screen": "\u001b[5mblink\u001b[0m               \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m",
+   "raw_tail": "\u001b[5mblink"
+  }
+ ],
+ "after_resize": {
+  "snapshot": {
+   "screen": "          \n          \n          ",
+   "screen_hash": "dc7fcb17ad6e0fa12a79b02f7e766b4a81f76044796f62bbe7f4c97f47fe2d4e",
+   "cursor": {
+    "x": 5,
+    "y": 0
+   },
+   "cols": 10,
+   "rows": 3,
+   "term": "ANSI",
+   "cursor_at_end": true,
+   "has_trailing_space": true,
+   "raw_tail": "hello"
+  },
+  "raw_tail": "hello"
+ },
+ "resize_order_divergence": {
+  "read_first": "          \n          \n          ",
+  "never_read": "hello     \n          \n          "
+ },
+ "after_reset": {
+  "snapshot": {
+   "screen": "                    \n                    \n                    \n                    \n                    ",
+   "screen_hash": "1342eb30a9f12bda3f64b5b9ef156b4149af9a211c31d69f3866ab9c2fb24247",
+   "cursor": {
+    "x": 0,
+    "y": 0
+   },
+   "cols": 20,
+   "rows": 5,
+   "term": "ANSI",
+   "cursor_at_end": true,
+   "has_trailing_space": true,
+   "raw_tail": "hello"
+  },
+  "raw_tail": "hello"
+ },
+ "styles": [
+  {
+   "style": [
+    "default",
+    "default",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[0m"
+  },
+  {
+   "style": [
+    "red",
+    "default",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[31m"
+  },
+  {
+   "style": [
+    "default",
+    "green",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[42m"
+  },
+  {
+   "style": [
+    "red",
+    "green",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[31;42m"
+  },
+  {
+   "style": [
+    "brightcyan",
+    "brightblack",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[96;100m"
+  },
+  {
+   "style": [
+    "default",
+    "default",
+    true,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[1m"
+  },
+  {
+   "style": [
+    "default",
+    "default",
+    false,
+    true,
+    false,
+    false
+   ],
+   "sgr": "\u001b[4m"
+  },
+  {
+   "style": [
+    "default",
+    "default",
+    false,
+    false,
+    false,
+    true
+   ],
+   "sgr": "\u001b[5m"
+  },
+  {
+   "style": [
+    "default",
+    "default",
+    true,
+    true,
+    false,
+    true
+   ],
+   "sgr": "\u001b[1;4;5m"
+  },
+  {
+   "style": [
+    "red",
+    "green",
+    false,
+    false,
+    true,
+    false
+   ],
+   "sgr": "\u001b[32;41m"
+  },
+  {
+   "style": [
+    "default",
+    "default",
+    false,
+    false,
+    true,
+    false
+   ],
+   "sgr": "\u001b[0m"
+  },
+  {
+   "style": [
+    "ff8000",
+    "default",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[38;2;255;128;0m"
+  },
+  {
+   "style": [
+    "default",
+    "0000ff",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[48;2;0;0;255m"
+  },
+  {
+   "style": [
+    "ff8000",
+    "0000ff",
+    true,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[1;38;2;255;128;0;48;2;0;0;255m"
+  },
+  {
+   "style": [
+    "brown",
+    "default",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[0m"
+  },
+  {
+   "style": [
+    "brightbrown",
+    "default",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[0m"
+  },
+  {
+   "style": [
+    "nonsense",
+    "default",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[0m"
+  },
+  {
+   "style": [
+    "ff800",
+    "default",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[0m"
+  },
+  {
+   "style": [
+    "FF8000",
+    "default",
+    false,
+    false,
+    false,
+    false
+   ],
+   "sgr": "\u001b[38;2;255;128;0m"
+  }
+ ],
+ "empty_rows": [
+  "\u001b[0m   \u001b[0m",
+  "\u001b[0m   \u001b[0m"
+ ]
+}

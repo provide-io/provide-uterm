@@ -1,0 +1,883 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_control_channel_golden.py",
+ "encode_data": [
+  {
+   "data": "",
+   "out": ""
+  },
+  {
+   "data": "plain terminal output",
+   "out": "plain terminal output"
+  },
+  {
+   "data": "\u0010",
+   "out": "\u0010\u0010"
+  },
+  {
+   "data": "\u0010\u0010",
+   "out": "\u0010\u0010\u0010\u0010"
+  },
+  {
+   "data": "before\u0010after",
+   "out": "before\u0010\u0010after"
+  },
+  {
+   "data": "\u0010leading",
+   "out": "\u0010\u0010leading"
+  },
+  {
+   "data": "trailing\u0010",
+   "out": "trailing\u0010\u0010"
+  },
+  {
+   "data": "\u0010\u0002not a frame, just bytes",
+   "out": "\u0010\u0010\u0002not a frame, just bytes"
+  },
+  {
+   "data": "ÿþ",
+   "out": "ÿþ"
+  },
+  {
+   "data": "box ÉÍ» drawing",
+   "out": "box ÉÍ» drawing"
+  },
+  {
+   "data": "\n\r\t",
+   "out": "\n\r\t"
+  }
+ ],
+ "encode_control": [
+  {
+   "payload": {},
+   "out": "\u0010\u000200000002:{}"
+  },
+  {
+   "payload": {
+    "type": "hello"
+   },
+   "out": "\u0010\u000200000010:{\"type\":\"hello\"}"
+  },
+  {
+   "payload": {
+    "type": "hello",
+    "version": 1
+   },
+   "out": "\u0010\u00020000001c:{\"type\":\"hello\",\"version\":1}"
+  },
+  {
+   "payload": {
+    "b": 1,
+    "a": 2
+   },
+   "out": "\u0010\u00020000000d:{\"b\":1,\"a\":2}"
+  },
+  {
+   "payload": {
+    "type": "resize",
+    "cols": 80,
+    "rows": 24
+   },
+   "out": "\u0010\u000200000025:{\"type\":\"resize\",\"cols\":80,\"rows\":24}"
+  },
+  {
+   "payload": {
+    "nested": {
+     "a": [
+      1,
+      2,
+      {
+       "b": null
+      }
+     ]
+    }
+   },
+   "out": "\u0010\u000200000021:{\"nested\":{\"a\":[1,2,{\"b\":null}]}}"
+  },
+  {
+   "payload": {
+    "flag_true": true,
+    "flag_false": false,
+    "nothing": null
+   },
+   "out": "\u0010\u000200000034:{\"flag_true\":true,\"flag_false\":false,\"nothing\":null}"
+  },
+  {
+   "payload": {
+    "float": 1.5,
+    "negative": -2.25
+   },
+   "out": "\u0010\u00020000001e:{\"float\":1.5,\"negative\":-2.25}"
+  },
+  {
+   "payload": {
+    "big_int": 9007199254740991
+   },
+   "out": "\u0010\u00020000001c:{\"big_int\":9007199254740991}"
+  },
+  {
+   "payload": {
+    "empty_list": [],
+    "empty_obj": {}
+   },
+   "out": "\u0010\u000200000020:{\"empty_list\":[],\"empty_obj\":{}}"
+  },
+  {
+   "payload": {
+    "text": "é"
+   },
+   "out": "\u0010\u00020000000d:{\"text\":\"é\"}"
+  },
+  {
+   "payload": {
+    "text": "你好"
+   },
+   "out": "\u0010\u000200000011:{\"text\":\"你好\"}"
+  },
+  {
+   "payload": {
+    "text": "aéb你c"
+   },
+   "out": "\u0010\u000200000013:{\"text\":\"aéb你c\"}"
+  },
+  {
+   "payload": {
+    "emoji": "☃"
+   },
+   "out": "\u0010\u00020000000f:{\"emoji\":\"☃\"}"
+  },
+  {
+   "payload": {
+    "astral": "𝄞"
+   },
+   "out": "\u0010\u000200000011:{\"astral\":\"𝄞\"}"
+  },
+  {
+   "payload": {
+    "astral_pair": "a𝄞b"
+   },
+   "out": "\u0010\u000200000018:{\"astral_pair\":\"a𝄞b\"}"
+  },
+  {
+   "payload": {
+    "quote": "\""
+   },
+   "out": "\u0010\u00020000000e:{\"quote\":\"\\\"\"}"
+  },
+  {
+   "payload": {
+    "backslash": "\\"
+   },
+   "out": "\u0010\u000200000012:{\"backslash\":\"\\\\\"}"
+  },
+  {
+   "payload": {
+    "newline": "\n",
+    "tab": "\t"
+   },
+   "out": "\u0010\u00020000001b:{\"newline\":\"\\n\",\"tab\":\"\\t\"}"
+  },
+  {
+   "payload": {
+    "control": "\u0000\u001f"
+   },
+   "out": "\u0010\u00020000001a:{\"control\":\"\\u0000\\u001f\"}"
+  },
+  {
+   "payload": {
+    "dle": "\u0010",
+    "stx": "\u0002"
+   },
+   "out": "\u0010\u00020000001f:{\"dle\":\"\\u0010\",\"stx\":\"\\u0002\"}"
+  },
+  {
+   "payload": {
+    "d": {
+     "d": {
+      "d": {
+       "d": {
+        "d": 1
+       }
+      }
+     }
+    }
+   },
+   "out": "\u0010\u00020000001f:{\"d\":{\"d\":{\"d\":{\"d\":{\"d\":1}}}}}"
+  }
+ ],
+ "float_divergences": [
+  {
+   "payload": {
+    "zero": 0.0
+   },
+   "cpython": "\u0010\u00020000000c:{\"zero\":0.0}"
+  },
+  {
+   "payload": {
+    "one": 1.0
+   },
+   "cpython": "\u0010\u00020000000b:{\"one\":1.0}"
+  },
+  {
+   "payload": {
+    "negative_zero": -0.0
+   },
+   "cpython": "\u0010\u000200000016:{\"negative_zero\":-0.0}"
+  },
+  {
+   "payload": {
+    "mixed": [
+     1.0,
+     1.5,
+     2
+    ]
+   },
+   "cpython": "\u0010\u000200000015:{\"mixed\":[1.0,1.5,2]}"
+  }
+ ],
+ "is_control_frame": [
+  {
+   "message": "",
+   "out": false
+  },
+  {
+   "message": "x",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000200000010:{\"type\":\"hello\"}",
+   "out": true
+  },
+  {
+   "message": "\u0010\u000200000010",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000200000010:",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000200000010:{\"type\":\"hello\"",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000200000010:{\"type\":\"hello\"}x",
+   "out": false
+  },
+  {
+   "message": "\u0011\u000200000010:{\"type\":\"hello\"}",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000300000010:{\"type\":\"hello\"}",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000200000010;{\"type\":\"hello\"}",
+   "out": false
+  },
+  {
+   "message": "\u0010\u00020000000g:{}",
+   "out": false
+  },
+  {
+   "message": "\u0010\u0002        :{}",
+   "out": false
+  },
+  {
+   "message": "\u0010\u00020000000A:{\"a\":\"aaaaaaaaa\"}",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000200100001:{}",
+   "out": false
+  },
+  {
+   "message": "\u0010\u0002000000ff:{}",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000200000001:é",
+   "out": false
+  },
+  {
+   "message": "\u0010\u000200000003:abc",
+   "out": true
+  },
+  {
+   "message": "\u0010\u000200000000:",
+   "out": true
+  },
+  {
+   "message": "\u0010\u00020000000e:{\"t\":\"你好\"}",
+   "out": true
+  }
+ ],
+ "decode": [
+  {
+   "name": "empty stream",
+   "chunks": [],
+   "events": [],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "empty chunk",
+   "chunks": [
+    ""
+   ],
+   "events": [],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "plain data",
+   "chunks": [
+    "hello world"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "hello world"
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "plain data split across chunks",
+   "chunks": [
+    "hel",
+    "lo ",
+    "world"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "hel"
+    },
+    {
+     "kind": "data",
+     "data": "lo "
+    },
+    {
+     "kind": "data",
+     "data": "world"
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "escaped DLE alone",
+   "chunks": [
+    "\u0010\u0010"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "\u0010"
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "escaped DLE between data",
+   "chunks": [
+    "a\u0010\u0010b"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "a\u0010b"
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "escaped DLE split across chunks",
+   "chunks": [
+    "a\u0010",
+    "\u0010b"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "a"
+    },
+    {
+     "kind": "data",
+     "data": "\u0010b"
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "single control frame",
+   "chunks": [
+    "\u0010\u000200000010:{\"type\":\"hello\"}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "type": "hello"
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "control frame split at every byte",
+   "chunks": [
+    "\u0010",
+    "\u0002",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "1",
+    "6",
+    ":",
+    "{",
+    "\"",
+    "t",
+    "y",
+    "p",
+    "e",
+    "\"",
+    ":",
+    "\"",
+    "h",
+    "e",
+    "l",
+    "l",
+    "o",
+    "\"",
+    ",",
+    "\"",
+    "n",
+    "\"",
+    ":",
+    "1",
+    "}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "type": "hello",
+      "n": 1
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "data then control",
+   "chunks": [
+    "out\u0010\u000200000010:{\"type\":\"hello\"}"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "out"
+    },
+    {
+     "kind": "control",
+     "control": {
+      "type": "hello"
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "control then data",
+   "chunks": [
+    "\u0010\u000200000010:{\"type\":\"hello\"}out"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "type": "hello"
+     }
+    },
+    {
+     "kind": "data",
+     "data": "out"
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "data control data",
+   "chunks": [
+    "a\u0010\u00020000000c:{\"type\":\"x\"}b"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "a"
+    },
+    {
+     "kind": "control",
+     "control": {
+      "type": "x"
+     }
+    },
+    {
+     "kind": "data",
+     "data": "b"
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "two adjacent control frames",
+   "chunks": [
+    "\u0010\u000200000007:{\"a\":1}\u0010\u000200000007:{\"b\":2}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "a": 1
+     }
+    },
+    {
+     "kind": "control",
+     "control": {
+      "b": 2
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "control frame with a non-ASCII payload",
+   "chunks": [
+    "\u0010\u00020000000e:{\"t\":\"你好\"}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "t": "你好"
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "control frame with nulls and objects inside an array",
+   "chunks": [
+    "\u0010\u000200000020:{\"list\":[null,1,{\"x\":2},[null]]}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "list": [
+       null,
+       1,
+       {
+        "x": 2
+       },
+       [
+        null
+       ]
+      ]
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "escaped DLE inside data around a frame",
+   "chunks": [
+    "a\u0010\u0010\u0010\u000200000007:{\"a\":1}\u0010\u0010"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "a\u0010"
+    },
+    {
+     "kind": "control",
+     "control": {
+      "a": 1
+     }
+    },
+    {
+     "kind": "data",
+     "data": "\u0010"
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "trailing lone DLE is buffered, not emitted",
+   "chunks": [
+    "data\u0010"
+   ],
+   "events": [
+    {
+     "kind": "data",
+     "data": "data"
+    }
+   ],
+   "error": "truncated control frame",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "header split across chunks",
+   "chunks": [
+    "\u0010\u0002000",
+    "00016:{\"type\":\"hello\",\"n\":1}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "type": "hello",
+      "n": 1
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "payload split across chunks",
+   "chunks": [
+    "\u0010\u000200000016:{\"",
+    "type\":\"hello\",\"n\":1}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "type": "hello",
+      "n": 1
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "multi-byte code point split across chunks",
+   "chunks": [
+    "\u0010\u00020000000e:{\"t\":\"",
+    "你好\"}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "t": "你好"
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  },
+  {
+   "name": "astral code point split across chunks",
+   "chunks": [
+    "\u0010\u00020000000e:{\"t\":\"a",
+    "𝄞b\"}"
+   ],
+   "events": [
+    {
+     "kind": "control",
+     "control": {
+      "t": "a𝄞b"
+     }
+    }
+   ],
+   "error": null,
+   "on_error": []
+  }
+ ],
+ "reject": [
+  {
+   "name": "DLE followed by a byte that is neither DLE nor STX",
+   "chunks": [
+    "a\u0010x"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "invalid control prefix",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "invalid control header separator",
+   "chunks": [
+    "\u0010\u000200000002;{}"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "invalid control header",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "non-hex control header",
+   "chunks": [
+    "\u0010\u00020000000g:{}"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "invalid control header",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "control payload over the ceiling",
+   "chunks": [
+    "\u0010\u000200100001:"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "control payload too large",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "payload that is not JSON",
+   "chunks": [
+    "\u0010\u000200000003:abc"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "invalid control json",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "payload that is a JSON array",
+   "chunks": [
+    "\u0010\u000200000002:[]"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "control payload must be an object",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "payload that is a JSON string",
+   "chunks": [
+    "\u0010\u000200000003:\"a\""
+   ],
+   "finish": false,
+   "events": [],
+   "error": "control payload must be an object",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "payload that is a JSON number",
+   "chunks": [
+    "\u0010\u000200000001:1"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "control payload must be an object",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "declared length splitting a code point",
+   "chunks": [
+    "\u0010\u000200000001:é"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "invalid control payload length",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "truncated header at finish",
+   "chunks": [
+    "\u0010\u00020000"
+   ],
+   "finish": true,
+   "events": [],
+   "error": "truncated control frame",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "truncated payload at finish",
+   "chunks": [
+    "\u0010\u000200000010:{}"
+   ],
+   "finish": true,
+   "events": [],
+   "error": "truncated control frame",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "lone trailing DLE at finish",
+   "chunks": [
+    "data\u0010"
+   ],
+   "finish": true,
+   "events": [
+    {
+     "kind": "data",
+     "data": "data"
+    }
+   ],
+   "error": "truncated control frame",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  },
+  {
+   "name": "nesting deeper than the depth limit",
+   "chunks": [
+    "\u0010\u000200000057:{\"d\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}"
+   ],
+   "finish": false,
+   "events": [],
+   "error": "control payload nests deeper than 32",
+   "on_error": [
+    "control_frame_protocol_error"
+   ]
+  }
+ ]
+}

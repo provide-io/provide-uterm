@@ -43,7 +43,7 @@ public class GuiRestAndPngTests
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets);
 
             var attach = await client.GuiAttachAsync("demo", new Dictionary<string, object?>
             {
@@ -94,7 +94,7 @@ public class GuiRestAndPngTests
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets);
             var ok = await client.GuiAttachAsync("demo", new Dictionary<string, object?>
             {
                 ["mode"] = "litevirt",
@@ -119,7 +119,7 @@ public class GuiRestAndPngTests
             Assert.Equal(422, missing.StatusCode);
 
             var closed = FreePort();
-            var targetId = CreateGraphicalTarget(
+            var targetId = await CreateGraphicalTargetAsync(
                 graphicalTargets,
                 protocol: "rfb",
                 endpoint: $"127.0.0.1:{closed}");
@@ -141,7 +141,7 @@ public class GuiRestAndPngTests
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            var targetId = CreateGraphicalTarget(
+            var targetId = await CreateGraphicalTargetAsync(
                 graphicalTargets,
                 width: 8,
                 height: 8);
@@ -195,7 +195,7 @@ public class GuiRestAndPngTests
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets);
             _ = await client.GuiAttachAsync("demo", new Dictionary<string, object?> { ["target_id"] = targetId });
             var acq = await client.AcquireAsync("demo", owner: "operator", leaseS: 60);
             var hid = acq["hijack_id"]?.ToString()!;
@@ -216,7 +216,7 @@ public class GuiRestAndPngTests
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets);
             var denied = await Assert.ThrowsAsync<ApiException>(() =>
                 client.GuiAttachAsync("demo", new Dictionary<string, object?> { ["target_id"] = targetId }));
             Assert.Equal(403, denied.StatusCode);
@@ -245,7 +245,7 @@ public class GuiRestAndPngTests
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets);
             await client.GuiAttachAsync("demo", new Dictionary<string, object?> { ["target_id"] = targetId });
             var acq = await client.AcquireAsync("demo");
             var hid = acq["hijack_id"]!.ToString()!;
@@ -288,7 +288,7 @@ public class GuiRestAndPngTests
         await using (server)
         {
             using var client = HijackClient.WithBearer(baseUrl, token);
-            var targetId = CreateGraphicalTarget(
+            var targetId = await CreateGraphicalTargetAsync(
                 graphicalTargets,
                 protocol: "litevirt",
                 endpoint: "10.0.0.5:7443");
@@ -310,7 +310,7 @@ public class GuiRestAndPngTests
 
     private const string TestTenant = "acme";
 
-    private static string CreateGraphicalTarget(
+    private static async Task<string> CreateGraphicalTargetAsync(
         InMemoryGraphicalTargetRegistry graphicalTargets,
         string protocol = "memory",
         string? endpoint = null,
@@ -333,9 +333,7 @@ public class GuiRestAndPngTests
             UpdatedBy = "test",
         };
         Assert.True(GraphicalTargetScope.TryForTenant(TestTenant, out var scope));
-        // Sync test helper: setup only, never a request path, so completing
-        // here cannot starve the thread pool.
-        graphicalTargets.CreateAsync(scope, target).GetAwaiter().GetResult();
+        await graphicalTargets.CreateAsync(scope, target);
         return targetId;
     }
 

@@ -1,0 +1,35 @@
+{
+  "handshake": "ÿû\u0001ÿû\u0003ÿý\u0003ÿþ\"ÿý\u001f",
+  "handshake_bytes": [
+    255,
+    251,
+    1,
+    255,
+    251,
+    3,
+    255,
+    253,
+    3,
+    255,
+    254,
+    34,
+    255,
+    253,
+    31
+  ],
+  "codes": {
+    "IAC": 255,
+    "WILL": 251,
+    "DO": 253,
+    "DONT": 254,
+    "ECHO": 1,
+    "SGA": 3,
+    "LINEMODE": 34,
+    "NAWS": 31
+  },
+  "defaults": {
+    "bind_all": "0.0.0.0",
+    "telnet_port": 2102,
+    "negotiation_delay_s": 0.1
+  }
+}

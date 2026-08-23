@@ -2,6 +2,11 @@
 
 Prioritized by novelty and competitive differentiation.
 
+**Label vocabulary** — `served`, `unserved`, `unsupported`, `partial`, `N/A`
+are defined once in [`docs/parity-labels.md`](./parity-labels.md). The served
+server backends are Python (FastAPI), Go, C#, and Cloudflare; TypeScript is a
+`partial` port.
+
 ## Tier 1 — Novel (no competitor does this well for terminals)
 
 ### 1. Command Approval Workflows (AGPL-3.0-or-later)
@@ -12,12 +17,12 @@ pending human approval via Slack/webhook/REST.
 
 ### 2. Session Replay with AI Annotation (AGPL-3.0-or-later)
 Automatic summarization of terminal sessions using LLMs. Generates searchable "Chapters" and "Key Actions" for long audit logs.
-*   **Status:** **Pattern-Based Annotation Done (2026-04-08)** — JSONL recording, replay viewer, raw stream rebuilder, `PatternDetector` with 20 built-in detection rules (credentials, escalation, destructive commands, connections, lifecycle), `Annotation`/`AnnotationSpan` data models, REST endpoint (`POST /api/sessions/{id}/annotate`), and `session_annotate` MCP tool (tool 21 of 21) all implemented and tested.
+*   **Status:** **Pattern-Based Annotation Done (2026-04-08)** — JSONL recording, replay viewer, raw stream rebuilder, `PatternDetector` with 20 built-in detection rules (credentials, escalation, destructive commands, connections, lifecycle), `Annotation`/`AnnotationSpan` data models, REST endpoint (`POST /api/sessions/{id}/annotate`), and `session_annotate` MCP tool all implemented and tested. `session_annotate` is one of the 28 tools the MCP server registers — 28 `@mcp.tool` decorators under `packages/provide-uterm-client/src/provide/uterm/ai/` (10 hijack/control, 11 session/fan-out/annotation, 7 graphical), which is the count the root README states and `scripts/check_docs_accuracy.py` enforces.
 *   **Parked:** LLM-based summarization pipeline (auto-generated "Chapters" and "Key Actions") has no implementation or active development. The annotation system uses regex pattern detection only — no LLM integration exists in the annotation or recording modules.
 
 ### 3. Multi-Session Fan-Out (AGPL-3.0-or-later)
 Managed fleet control UI. Broadcast input to N sessions simultaneously with group management and status aggregation.
-*   **Status:** **Server-Side Complete; Cross-Language Hardened (2026-07-31)** — `FanOutController` with parallel/sequential broadcast, divergence detection, group storage, REST routes (CRUD groups, send, grants), audit events, and MCP tooling. Unknown members are rejected by default; the served Python, Go, and C# backends expose the admission-only `fanout_allow_unknown_members = true` opt-in, and every send re-resolves current session authorization. Python serves webhook deny/hold/release; Go and C# refuse configured governance explicitly instead of bypassing it. TypeScript's equivalent route/controller behavior is tested as an unserved module with a default-false `allowUnknownMembers` construction option, but is not mounted by its partial Node server. Native semantic runners and package gates are recorded in the remediation tracker.
+*   **Status:** **Server-Side Complete; Cross-Language Hardened (2026-07-31)** — `FanOutController` with parallel/sequential broadcast, divergence detection, group storage, REST routes (CRUD groups, send, grants), audit events, and MCP tooling. Unknown members are rejected by default; the served Python, Go, and C# backends expose the admission-only `fanout_allow_unknown_members = true` opt-in, and every send re-resolves current session authorization. Python serves webhook deny/hold/release; Go and C# report it `unsupported (501)` instead of bypassing it. TypeScript's equivalent route/controller behavior is tested as an `unserved` module with a default-false `allowUnknownMembers` construction option, but is not mounted by its `partial` Node server. Native semantic runners and package gates are recorded in the remediation tracker.
 *   **Parked:** "Fleet Console" browser UI has no implementation. All fan-out interaction is currently REST API and MCP tooling only.
 
 ## Tier 2 — Infrastructure & Security (All AGPL)

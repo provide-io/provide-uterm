@@ -19,6 +19,10 @@ outputs, and the Go tests must match — byte-for-byte where the format demands
 it. A deterministic subset of each corpus is committed under the package's
 `testdata/` so Go CI re-verifies parity without a Python toolchain.
 
+Go is one of the four served server backends (Python, Go, C#, Cloudflare).
+Parity-label definitions — `served`, `unserved`, `unsupported`, `partial`,
+`N/A` — are in [`docs/parity-labels.md`](../../docs/parity-labels.md).
+
 Highlights:
 
 | Package | Parity evidence |

@@ -28,7 +28,7 @@ public class Over90NudgeTests
         var flags = Divergence.ComputeDivergence(
             new[] { "aaaa", "aaaa", "aaaa", "ZZZZ_totally_different" }, 0.8);
         Assert.Equal(4, flags.Length);
-        Assert.True(flags.Any(f => f));
+        Assert.Contains(true, flags);
 
         // empty strings ratio path
         var empty = Divergence.ComputeDivergence(new[] { "", "" }, 0.5);

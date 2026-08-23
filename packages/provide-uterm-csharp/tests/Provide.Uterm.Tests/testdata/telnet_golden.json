@@ -1,0 +1,692 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_telnet_golden.py",
+ "constants": {
+  "IAC": 255,
+  "WILL": 251,
+  "WONT": 252,
+  "DO": 253,
+  "DONT": 254,
+  "SB": 250,
+  "SE": 240,
+  "OPT_BINARY": 0,
+  "OPT_ECHO": 1,
+  "OPT_SGA": 3,
+  "OPT_NAWS": 31,
+  "OPT_TTYPE": 24
+ },
+ "parses": [
+  {
+   "name": "empty",
+   "bytes": [],
+   "streaming": {
+    "payload": [],
+    "events": [],
+    "consumed": 0
+   },
+   "final": {
+    "payload": [],
+    "events": [],
+    "consumed": 0
+   }
+  },
+  {
+   "name": "plain text",
+   "bytes": [
+    104,
+    105
+   ],
+   "streaming": {
+    "payload": [
+     104,
+     105
+    ],
+    "events": [],
+    "consumed": 2
+   },
+   "final": {
+    "payload": [
+     104,
+     105
+    ],
+    "events": [],
+    "consumed": 2
+   }
+  },
+  {
+   "name": "escaped command byte",
+   "bytes": [
+    255,
+    255
+   ],
+   "streaming": {
+    "payload": [
+     255
+    ],
+    "events": [],
+    "consumed": 2
+   },
+   "final": {
+    "payload": [
+     255
+    ],
+    "events": [],
+    "consumed": 2
+   }
+  },
+  {
+   "name": "text around an escaped command byte",
+   "bytes": [
+    97,
+    255,
+    255,
+    98
+   ],
+   "streaming": {
+    "payload": [
+     97,
+     255,
+     98
+    ],
+    "events": [],
+    "consumed": 4
+   },
+   "final": {
+    "payload": [
+     97,
+     255,
+     98
+    ],
+    "events": [],
+    "consumed": 4
+   }
+  },
+  {
+   "name": "do",
+   "bytes": [
+    255,
+    253,
+    31
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      253,
+      31
+     ]
+    ],
+    "consumed": 3
+   },
+   "final": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      253,
+      31
+     ]
+    ],
+    "consumed": 3
+   }
+  },
+  {
+   "name": "dont",
+   "bytes": [
+    255,
+    254,
+    31
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      254,
+      31
+     ]
+    ],
+    "consumed": 3
+   },
+   "final": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      254,
+      31
+     ]
+    ],
+    "consumed": 3
+   }
+  },
+  {
+   "name": "will",
+   "bytes": [
+    255,
+    251,
+    1
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      251,
+      1
+     ]
+    ],
+    "consumed": 3
+   },
+   "final": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      251,
+      1
+     ]
+    ],
+    "consumed": 3
+   }
+  },
+  {
+   "name": "wont",
+   "bytes": [
+    255,
+    252,
+    1
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      252,
+      1
+     ]
+    ],
+    "consumed": 3
+   },
+   "final": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      252,
+      1
+     ]
+    ],
+    "consumed": 3
+   }
+  },
+  {
+   "name": "negotiation between text",
+   "bytes": [
+    97,
+    255,
+    253,
+    31,
+    98
+   ],
+   "streaming": {
+    "payload": [
+     97,
+     98
+    ],
+    "events": [
+     [
+      "negotiate",
+      253,
+      31
+     ]
+    ],
+    "consumed": 5
+   },
+   "final": {
+    "payload": [
+     97,
+     98
+    ],
+    "events": [
+     [
+      "negotiate",
+      253,
+      31
+     ]
+    ],
+    "consumed": 5
+   }
+  },
+  {
+   "name": "two negotiations",
+   "bytes": [
+    255,
+    253,
+    31,
+    255,
+    251,
+    1
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      253,
+      31
+     ],
+     [
+      "negotiate",
+      251,
+      1
+     ]
+    ],
+    "consumed": 6
+   },
+   "final": {
+    "payload": [],
+    "events": [
+     [
+      "negotiate",
+      253,
+      31
+     ],
+     [
+      "negotiate",
+      251,
+      1
+     ]
+    ],
+    "consumed": 6
+   }
+  },
+  {
+   "name": "subnegotiation",
+   "bytes": [
+    255,
+    250,
+    24,
+    1,
+    255,
+    240
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [
+     [
+      "subnegotiation",
+      0,
+      [
+       24,
+       1
+      ]
+     ]
+    ],
+    "consumed": 6
+   },
+   "final": {
+    "payload": [],
+    "events": [
+     [
+      "subnegotiation",
+      0,
+      [
+       24,
+       1
+      ]
+     ]
+    ],
+    "consumed": 6
+   }
+  },
+  {
+   "name": "subnegotiation between text",
+   "bytes": [
+    97,
+    255,
+    250,
+    24,
+    1,
+    255,
+    240,
+    98
+   ],
+   "streaming": {
+    "payload": [
+     97,
+     98
+    ],
+    "events": [
+     [
+      "subnegotiation",
+      0,
+      [
+       24,
+       1
+      ]
+     ]
+    ],
+    "consumed": 8
+   },
+   "final": {
+    "payload": [
+     97,
+     98
+    ],
+    "events": [
+     [
+      "subnegotiation",
+      0,
+      [
+       24,
+       1
+      ]
+     ]
+    ],
+    "consumed": 8
+   }
+  },
+  {
+   "name": "empty subnegotiation",
+   "bytes": [
+    255,
+    250,
+    255,
+    240
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [
+     [
+      "subnegotiation",
+      0,
+      []
+     ]
+    ],
+    "consumed": 4
+   },
+   "final": {
+    "payload": [],
+    "events": [
+     [
+      "subnegotiation",
+      0,
+      []
+     ]
+    ],
+    "consumed": 4
+   }
+  },
+  {
+   "name": "unknown command is dropped",
+   "bytes": [
+    97,
+    255,
+    99,
+    98
+   ],
+   "streaming": {
+    "payload": [
+     97,
+     98
+    ],
+    "events": [],
+    "consumed": 4
+   },
+   "final": {
+    "payload": [
+     97,
+     98
+    ],
+    "events": [],
+    "consumed": 4
+   }
+  },
+  {
+   "name": "trailing command byte",
+   "bytes": [
+    97,
+    255
+   ],
+   "streaming": {
+    "payload": [
+     97
+    ],
+    "events": [],
+    "consumed": 1
+   },
+   "final": {
+    "payload": [
+     97,
+     255
+    ],
+    "events": [],
+    "consumed": 2
+   }
+  },
+  {
+   "name": "truncated negotiation",
+   "bytes": [
+    97,
+    255,
+    253
+   ],
+   "streaming": {
+    "payload": [
+     97
+    ],
+    "events": [],
+    "consumed": 1
+   },
+   "final": {
+    "payload": [
+     97,
+     255,
+     253
+    ],
+    "events": [],
+    "consumed": 3
+   }
+  },
+  {
+   "name": "truncated subnegotiation",
+   "bytes": [
+    97,
+    255,
+    250,
+    24
+   ],
+   "streaming": {
+    "payload": [
+     97
+    ],
+    "events": [],
+    "consumed": 1
+   },
+   "final": {
+    "payload": [
+     97,
+     255,
+     250,
+     24
+    ],
+    "events": [],
+    "consumed": 4
+   }
+  },
+  {
+   "name": "subnegotiation with no end",
+   "bytes": [
+    255,
+    250,
+    24,
+    1,
+    2,
+    3
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [],
+    "consumed": 0
+   },
+   "final": {
+    "payload": [
+     255,
+     250,
+     24,
+     1,
+     2,
+     3
+    ],
+    "events": [],
+    "consumed": 6
+   }
+  },
+  {
+   "name": "high bytes are data",
+   "bytes": [
+    128,
+    200,
+    254
+   ],
+   "streaming": {
+    "payload": [
+     128,
+     200,
+     254
+    ],
+    "events": [],
+    "consumed": 3
+   },
+   "final": {
+    "payload": [
+     128,
+     200,
+     254
+    ],
+    "events": [],
+    "consumed": 3
+   }
+  },
+  {
+   "name": "a command byte inside a subnegotiation payload",
+   "bytes": [
+    255,
+    250,
+    24,
+    0,
+    65,
+    255,
+    240
+   ],
+   "streaming": {
+    "payload": [],
+    "events": [
+     [
+      "subnegotiation",
+      0,
+      [
+       24,
+       0,
+       65
+      ]
+     ]
+    ],
+    "consumed": 7
+   },
+   "final": {
+    "payload": [],
+    "events": [
+     [
+      "subnegotiation",
+      0,
+      [
+       24,
+       0,
+       65
+      ]
+     ]
+    ],
+    "consumed": 7
+   }
+  }
+ ],
+ "sends": [
+  {
+   "name": "plain",
+   "bytes": [
+    104,
+    105
+   ],
+   "escaped": [
+    104,
+    105
+   ]
+  },
+  {
+   "name": "one command byte",
+   "bytes": [
+    255
+   ],
+   "escaped": [
+    255,
+    255
+   ]
+  },
+  {
+   "name": "command byte among text",
+   "bytes": [
+    97,
+    255,
+    98
+   ],
+   "escaped": [
+    97,
+    255,
+    255,
+    98
+   ]
+  },
+  {
+   "name": "two command bytes",
+   "bytes": [
+    255,
+    255
+   ],
+   "escaped": [
+    255,
+    255,
+    255,
+    255
+   ]
+  },
+  {
+   "name": "no bytes",
+   "bytes": [],
+   "escaped": []
+  },
+  {
+   "name": "high bytes",
+   "bytes": [
+    128,
+    254
+   ],
+   "escaped": [
+    128,
+    254
+   ]
+  }
+ ],
+ "do_accepts": [
+  0,
+  3,
+  31,
+  24
+ ],
+ "will_accepts": [
+  1,
+  3,
+  0
+ ]
+}

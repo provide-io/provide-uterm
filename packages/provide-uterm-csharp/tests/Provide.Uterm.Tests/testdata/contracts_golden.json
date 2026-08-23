@@ -1,0 +1,169 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_contracts_golden.py",
+ "min_protocol_version": 1,
+ "max_protocol_version": 1,
+ "preferred_protocol_version": 1,
+ "current_protocol_version": 1,
+ "negotiations": [
+  {
+   "client_min": -1,
+   "client_max": -1,
+   "selected": null
+  },
+  {
+   "client_min": -1,
+   "client_max": 0,
+   "selected": null
+  },
+  {
+   "client_min": -1,
+   "client_max": 1,
+   "selected": 1
+  },
+  {
+   "client_min": -1,
+   "client_max": 2,
+   "selected": 1
+  },
+  {
+   "client_min": -1,
+   "client_max": 3,
+   "selected": 1
+  },
+  {
+   "client_min": 0,
+   "client_max": -1,
+   "selected": null
+  },
+  {
+   "client_min": 0,
+   "client_max": 0,
+   "selected": null
+  },
+  {
+   "client_min": 0,
+   "client_max": 1,
+   "selected": 1
+  },
+  {
+   "client_min": 0,
+   "client_max": 2,
+   "selected": 1
+  },
+  {
+   "client_min": 0,
+   "client_max": 3,
+   "selected": 1
+  },
+  {
+   "client_min": 1,
+   "client_max": -1,
+   "selected": null
+  },
+  {
+   "client_min": 1,
+   "client_max": 0,
+   "selected": null
+  },
+  {
+   "client_min": 1,
+   "client_max": 1,
+   "selected": 1
+  },
+  {
+   "client_min": 1,
+   "client_max": 2,
+   "selected": 1
+  },
+  {
+   "client_min": 1,
+   "client_max": 3,
+   "selected": 1
+  },
+  {
+   "client_min": 2,
+   "client_max": -1,
+   "selected": null
+  },
+  {
+   "client_min": 2,
+   "client_max": 0,
+   "selected": null
+  },
+  {
+   "client_min": 2,
+   "client_max": 1,
+   "selected": null
+  },
+  {
+   "client_min": 2,
+   "client_max": 2,
+   "selected": null
+  },
+  {
+   "client_min": 2,
+   "client_max": 3,
+   "selected": null
+  },
+  {
+   "client_min": 3,
+   "client_max": -1,
+   "selected": null
+  },
+  {
+   "client_min": 3,
+   "client_max": 0,
+   "selected": null
+  },
+  {
+   "client_min": 3,
+   "client_max": 1,
+   "selected": null
+  },
+  {
+   "client_min": 3,
+   "client_max": 2,
+   "selected": null
+  },
+  {
+   "client_min": 3,
+   "client_max": 3,
+   "selected": null
+  }
+ ],
+ "session_lifecycles": [
+  "stopped",
+  "starting",
+  "running",
+  "error"
+ ],
+ "input_modes": [
+  "hijack",
+  "open"
+ ],
+ "visibilities": [
+  "public",
+  "operator",
+  "private"
+ ],
+ "frame_types": [
+  "snapshot_req",
+  "snapshot",
+  "term",
+  "input",
+  "control",
+  "hijack_state",
+  "analysis",
+  "error",
+  "worker_connected",
+  "worker_disconnected",
+  "worker_hello",
+  "heartbeat",
+  "ping",
+  "hijack_request",
+  "hijack_release",
+  "hijack_step",
+  "hello",
+  "resume"
+ ]
+}

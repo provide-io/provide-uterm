@@ -1,0 +1,118 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_hub_frames_golden.py",
+ "wall": 1700000000.0,
+ "mono": 1000.0,
+ "frames": [
+  {
+   "name": "input goes out as terminal data",
+   "message": {
+    "type": "input",
+    "data": "ls\r"
+   },
+   "encoded": "ls\r"
+  },
+  {
+   "name": "input with no data",
+   "message": {
+    "type": "input"
+   },
+   "encoded": ""
+  },
+  {
+   "name": "input with empty data",
+   "message": {
+    "type": "input",
+    "data": ""
+   },
+   "encoded": ""
+  },
+  {
+   "name": "input carrying control bytes",
+   "message": {
+    "type": "input",
+    "data": "\u001b[A"
+   },
+   "encoded": "\u001b[A"
+  },
+  {
+   "name": "control frame",
+   "message": {
+    "type": "control",
+    "action": "pause",
+    "owner": "cli"
+   },
+   "encoded": "\u0010\u000200000031:{\"type\":\"control\",\"action\":\"pause\",\"owner\":\"cli\"}"
+  },
+  {
+   "name": "resume frame",
+   "message": {
+    "type": "control",
+    "action": "resume",
+    "owner": "lease-expired",
+    "lease_s": 0
+   },
+   "encoded": "\u0010\u000200000048:{\"type\":\"control\",\"action\":\"resume\",\"owner\":\"lease-expired\",\"lease_s\":0}"
+  },
+  {
+   "name": "snapshot request",
+   "message": {
+    "type": "snapshot_req",
+    "req_id": "r1"
+   },
+   "encoded": "\u0010\u000200000025:{\"type\":\"snapshot_req\",\"req_id\":\"r1\"}"
+  },
+  {
+   "name": "no type at all",
+   "message": {
+    "action": "pause"
+   },
+   "encoded": "\u0010\u000200000012:{\"action\":\"pause\"}"
+  },
+  {
+   "name": "null type",
+   "message": {
+    "type": null,
+    "action": "pause"
+   },
+   "encoded": "\u0010\u00020000001e:{\"type\":null,\"action\":\"pause\"}"
+  },
+  {
+   "name": "empty type",
+   "message": {
+    "type": "",
+    "action": "pause"
+   },
+   "encoded": "\u0010\u00020000001c:{\"type\":\"\",\"action\":\"pause\"}"
+  },
+  {
+   "name": "non-string type",
+   "message": {
+    "type": 7,
+    "action": "pause"
+   },
+   "encoded": "\u0010\u00020000001b:{\"type\":7,\"action\":\"pause\"}"
+  }
+ ],
+ "mono_to_wall": [
+  {
+   "mono": null,
+   "wall": null
+  },
+  {
+   "mono": 1000.0,
+   "wall": 1700000000.0
+  },
+  {
+   "mono": 1030.0,
+   "wall": 1700000030.0
+  },
+  {
+   "mono": 970.0,
+   "wall": 1699999970.0
+  },
+  {
+   "mono": 0.0,
+   "wall": 1699999000.0
+  }
+ ]
+}

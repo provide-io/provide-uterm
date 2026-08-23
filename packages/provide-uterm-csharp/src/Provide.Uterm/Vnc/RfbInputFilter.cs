@@ -19,7 +19,7 @@ public static class RfbInputFilter
 
     public delegate bool CanInject(string sessionId, string leaseId, string principalId, string principalRole);
 
-    public static void FilterClientInput(
+    public static async Task FilterClientInputAsync(
         Stream dst,
         Stream src,
         CanInject? canInject,
@@ -30,24 +30,23 @@ public static class RfbInputFilter
         CancellationToken cancellationToken = default)
     {
         // ProtocolVersion
-        CopyExact(dst, src, 12, cancellationToken);
+        await CopyExactAsync(dst, src, 12, cancellationToken).ConfigureAwait(false);
         // Security type None only
-        var sec = ReadExact(src, 1, cancellationToken);
+        var sec = await ReadExactAsync(src, 1, cancellationToken).ConfigureAwait(false);
         if (sec[0] != 1)
         {
             throw new InvalidOperationException($"unsupported security type {sec[0]}");
         }
 
         dst.Write(sec);
-        // ClientInit
-        CopyExact(dst, src, 1, cancellationToken);
+        await CopyExactAsync(dst, src, 1, cancellationToken).ConfigureAwait(false);
 
         while (true)
         {
             byte[] msgType;
             try
             {
-                msgType = ReadExact(src, 1, cancellationToken);
+                msgType = await ReadExactAsync(src, 1, cancellationToken).ConfigureAwait(false);
             }
             catch (EndOfStreamException)
             {
@@ -58,28 +57,28 @@ public static class RfbInputFilter
             {
                 case 0: // SetPixelFormat
                     dst.Write(msgType);
-                    CopyExact(dst, src, 19, cancellationToken);
+                    await CopyExactAsync(dst, src, 19, cancellationToken).ConfigureAwait(false);
                     break;
                 case 2: // SetEncodings
                 {
-                    var header = ReadExact(src, 3, cancellationToken);
+                    var header = await ReadExactAsync(src, 3, cancellationToken).ConfigureAwait(false);
                     var num = BinaryPrimitives.ReadUInt16BigEndian(header.AsSpan(1, 2));
                     dst.Write(msgType);
                     dst.Write(header);
                     if (num > 0)
                     {
-                        CopyExact(dst, src, num * 4, cancellationToken);
+                        await CopyExactAsync(dst, src, num * 4, cancellationToken).ConfigureAwait(false);
                     }
 
                     break;
                 }
                 case 3: // FramebufferUpdateRequest
                     dst.Write(msgType);
-                    CopyExact(dst, src, 9, cancellationToken);
+                    await CopyExactAsync(dst, src, 9, cancellationToken).ConfigureAwait(false);
                     break;
                 case 4: // KeyEvent
                 {
-                    var payload = ReadExact(src, 7, cancellationToken);
+                    var payload = await ReadExactAsync(src, 7, cancellationToken).ConfigureAwait(false);
                     if (Allowed(canInject, sessionId, leaseId, principalId, principalRole))
                     {
                         dst.Write(msgType);
@@ -90,7 +89,7 @@ public static class RfbInputFilter
                 }
                 case 5: // PointerEvent
                 {
-                    var payload = ReadExact(src, 5, cancellationToken);
+                    var payload = await ReadExactAsync(src, 5, cancellationToken).ConfigureAwait(false);
                     if (Allowed(canInject, sessionId, leaseId, principalId, principalRole))
                     {
                         dst.Write(msgType);
@@ -101,14 +100,16 @@ public static class RfbInputFilter
                 }
                 case 6: // ClientCutText
                 {
-                    var header = ReadExact(src, 7, cancellationToken);
+                    var header = await ReadExactAsync(src, 7, cancellationToken).ConfigureAwait(false);
                     var length = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(3, 4));
                     if (length > MaxCutText)
                     {
                         throw new InvalidOperationException("ClientCutText too large");
                     }
 
-                    var payload = length > 0 ? ReadExact(src, (int)length, cancellationToken) : Array.Empty<byte>();
+                    var payload = length > 0
+                        ? await ReadExactAsync(src, (int)length, cancellationToken).ConfigureAwait(false)
+                        : Array.Empty<byte>();
                     if (Allowed(canInject, sessionId, leaseId, principalId, principalRole))
                     {
                         dst.Write(msgType);
@@ -135,14 +136,14 @@ public static class RfbInputFilter
         string principalRole) =>
         canInject is not null && canInject(sessionId, leaseId, principalId, principalRole);
 
-    private static byte[] ReadExact(Stream src, int n, CancellationToken ct)
+    private static async Task<byte[]> ReadExactAsync(Stream src, int n, CancellationToken ct)
     {
         var buf = new byte[n];
         var off = 0;
         while (off < n)
         {
             ct.ThrowIfCancellationRequested();
-            var read = src.Read(buf, off, n - off);
+            var read = await src.ReadAsync(buf.AsMemory(off, n - off), ct).ConfigureAwait(false);
             if (read <= 0)
             {
                 throw new EndOfStreamException($"short read: want {n}, got {off}");
@@ -154,9 +155,9 @@ public static class RfbInputFilter
         return buf;
     }
 
-    private static void CopyExact(Stream dst, Stream src, int n, CancellationToken ct)
+    private static async Task CopyExactAsync(Stream dst, Stream src, int n, CancellationToken ct)
     {
-        var buf = ReadExact(src, n, ct);
+        var buf = await ReadExactAsync(src, n, ct).ConfigureAwait(false);
         dst.Write(buf);
     }
 }

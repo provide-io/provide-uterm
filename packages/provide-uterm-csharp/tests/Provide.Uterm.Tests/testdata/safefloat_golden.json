@@ -1,0 +1,126 @@
+{
+  "default": 2.5,
+  "negative_default": -1.0,
+  "values": [
+    {
+      "name": "a float",
+      "result": 1.5,
+      "value": 1.5
+    },
+    {
+      "name": "an integer",
+      "result": 3.0,
+      "value": 3
+    },
+    {
+      "name": "zero",
+      "result": 0.0,
+      "value": 0
+    },
+    {
+      "name": "a negative",
+      "result": -1.5,
+      "value": -1.5
+    },
+    {
+      "name": "nothing",
+      "result": 2.5,
+      "value": null
+    },
+    {
+      "name": "a numeric string",
+      "result": 1.5,
+      "value": "1.5"
+    },
+    {
+      "name": "an integer string",
+      "result": 3.0,
+      "value": "3"
+    },
+    {
+      "name": "a string with space around it",
+      "result": 1.5,
+      "value": "  1.5  "
+    },
+    {
+      "name": "a string with an underscore",
+      "result": 1000.5,
+      "value": "1_000.5"
+    },
+    {
+      "name": "an exponent",
+      "result": 1000.0,
+      "value": "1e3"
+    },
+    {
+      "name": "a signed string",
+      "result": 1.5,
+      "value": "+1.5"
+    },
+    {
+      "name": "an empty string",
+      "result": 2.5,
+      "value": ""
+    },
+    {
+      "name": "a string of spaces",
+      "result": 2.5,
+      "value": "   "
+    },
+    {
+      "name": "a string that is not a number",
+      "result": 2.5,
+      "value": "nonsense"
+    },
+    {
+      "name": "a hexadecimal string",
+      "result": 2.5,
+      "value": "0x10"
+    },
+    {
+      "name": "a boolean",
+      "result": 1.0,
+      "value": true
+    },
+    {
+      "name": "a false boolean",
+      "result": 0.0,
+      "value": false
+    },
+    {
+      "name": "a list",
+      "result": 2.5,
+      "value": [
+        1.5
+      ]
+    },
+    {
+      "name": "a mapping",
+      "result": 2.5,
+      "value": {
+        "a": 1
+      }
+    },
+    {
+      "name": "infinity",
+      "result": "inf",
+      "value": "inf"
+    },
+    {
+      "name": "negative infinity",
+      "result": "-inf",
+      "value": "-inf"
+    },
+    {
+      "name": "not a number",
+      "result": "nan",
+      "value": "nan"
+    },
+    {
+      "name": "infinity in capitals",
+      "result": "inf",
+      "value": "INFINITY"
+    }
+  ],
+  "zero_default": 0.0
+}

@@ -221,6 +221,22 @@ Architecture and implementation report:
   release pass and is closed with behavioral tests or narrowly justified
   unreachable-branch annotations.
 
+## C# follow-up closure (hardening pass)
+
+- [x] **CSHARP-GOLDEN-003 (P2): shared corpus parity.** `GraphicalTargetParsing`
+  and server control-plane surfaces now consume additional C# corpus mirrors for
+  previously unconsumed shared vectors.
+- [x] **CSHARP-RFB-001 (P2): endpoint parser parity.** Host/port parsing now
+  aligns with reference behavior for bracketed IPv6 hosts, malformed credentials,
+  IPvFuture, and zone-id forms, and emits coded errors for duplicate/parsing
+  mismatches.
+- [x] **CSHARP-SECHEADERS-001 (P2): response-header resolver parity.**
+  C# resolves security headers from mode + overrides and validates header ordering
+  with golden-backed parity tests.
+- [x] **CSHARP-XUNIT-001 (P2): warning gate visibility.** The warning gate
+  now catches lower-case analyzer codes (`xUnit...`) and the deferred xUnit
+  baselines were removed once call sites were migrated.
+
 ## Architecture and documentation
 
 - [x] **ARCH-001 (medium): integration-level parity.** Extend conformance beyond
@@ -257,6 +273,7 @@ Architecture and implementation report:
 | 2026-07-31 | Python server final gate (known red) | `uv run pytest -q tests` in `provide-uterm-server` | 6,726 passed, 2 deselected, 2 approval tests failed; 99.77% coverage with 22 lines and 17 branches missing in newly fenced lifecycle paths; approval store/replay audit reopened before release |
 | 2026-07-31 | C# final quality gate (known red) | `make quality-gate` in `provide-uterm-csharp` | build, conformance, and 1,366 serial test-batch cases pass; merged coverage is 95.34% (16,819/17,641) against 97.4%, so binary stage is not reached |
 | 2026-07-31 | C# quality-gate closure | `make quality-gate` in `provide-uterm-csharp` | pass in combined commit `5793a7b3`: build clean; 13 conformance and 1,665 serial tests pass; 97.44% (17,189/17,641) >= 97.4%; lowercase `uterm`/`uterm-manager` binaries validated |
+| 2026-08-15 | C# follow-up closure | `ci/quality_checks.sh`, `.ci/check_goldens.sh`, warning gate | protocol-drift, lifecycle-contract, and fanout-contract gates pass; 161 corpora match CPython; warning gate reflects zero deferred xUnit baselines |
 | 2026-07-31 | Python approval/lifecycle closure | full strict server suite plus focused approval/lifecycle set, Ruff, and hooks | pass at `99d07111`: 6,752 passed, 2 deselected; 100% of 13,461 statements and 3,592 branches; 77 focused tests pass |
 | 2026-07-31 | Python approval expiry/fan-out truthfulness fix-forward (superseded) | normal package-CWD strict suite in one invocation; 268 focused compatibility tests; Ruff/format/hooks | pass at `e32c8a39`: 6,763 passed, 2 deselected; 100% of 13,533 statements and 3,626 branches; independent acceptance was pending at this checkpoint and is closed by the Python approval/resume final independent closure (`4219b154`) below |
 | 2026-07-31 | Python rejected-resume authority closure (superseded) | 76 focused server and 20 mirrored core tests; normal strict server suite; Ruff/Mypy/ty/hooks | pass at `ff1955d4`: 6,773 passed, 2 deselected; 100% of 13,558 statements and 3,638 branches; independent final review was pending at this checkpoint and is closed by the Python approval/resume final independent closure (`4219b154`) below |

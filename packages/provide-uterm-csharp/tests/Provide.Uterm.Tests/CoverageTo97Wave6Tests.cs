@@ -284,7 +284,7 @@ public class CoverageTo97Wave6Tests : IDisposable
     }
 
     [Fact]
-    public void Hub_ILeaseHub_Facade_And_Defaults()
+    public async Task Hub_ILeaseHub_Facade_And_Defaults()
     {
         var hub = new TermHub(new TermHubConfig
         {
@@ -304,8 +304,8 @@ public class CoverageTo97Wave6Tests : IDisposable
         Assert.False(hub.CanSendInput(st, new object()));
         hub.Metric("x", 1);
         hub.NotifyHijackChanged("w", true, "op");
-        hub.AppendEventAsync("w", "term").GetAwaiter().GetResult();
-        hub.PruneIfIdleAsync("w").GetAwaiter().GetResult();
+        await hub.AppendEventAsync("w", "term");
+        await hub.PruneIfIdleAsync("w");
     }
 
     private sealed class Echo : IWorkerWs
