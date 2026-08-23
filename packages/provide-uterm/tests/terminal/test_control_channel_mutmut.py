@@ -471,6 +471,21 @@ class TestTheWholeLengthFieldIsValidated:
             decoder.feed(DLE + STX + "z0000002:{}")
         assert str(excinfo.value) == "invalid control header"
 
+    def test_an_uppercase_length_field_is_rejected(self) -> None:
+        """The length field has one spelling, and the message says which check failed.
+
+        string.hexdigits admits A-F, so the digit test alone accepted this while
+        is_control_frame() -- the gate that decides whether a payload is framed
+        at all -- rejected it, and the same bytes meant two different things
+        depending on which one looked. The corpus pins the case as CCF-REG-0006,
+        but that suite is not in the mutation selection, so the exact message is
+        asserted here too.
+        """
+        decoder = ControlFrameDecoder()
+        with pytest.raises(ControlFrameProtocolError) as excinfo:
+            decoder.feed(DLE + STX + "0000001F:" + '{"k":"' + "a" * 23 + '"}')
+        assert str(excinfo.value) == "invalid control header"
+
 
 class TestOverflowNamesTheSizeAndLeavesAUsableDecoder:
     """Kills `buffered_bytes = len(...)` -> None and the byte-buffer reset -> None.

@@ -309,7 +309,23 @@ class ControlFrameDecoder:
         separator = buf[idx + 10]
         if separator != ord(":") or any(byte not in _HEX_BYTE_DIGITS for byte in length_hex):
             raise self._report_error("invalid control header")
-        payload_bytes = int(length_hex.decode("ascii"), 16)
+        length_text = length_hex.decode("ascii")
+        payload_bytes = int(length_text, 16)
+        # The length field has exactly one spelling: eight zero-padded LOWERCASE
+        # hex digits, the form every encoder emits. string.hexdigits also admits
+        # A-F, which let this decoder read `0000001F` as a frame while
+        # is_control_frame() -- and the Go port's decoder, which has always made
+        # this same canonical comparison -- read it as terminal data. The same
+        # bytes meant two different things depending on which one looked, and
+        # is_control_frame() is what decides whether a message is framed at all,
+        # so a peer emitting %08X had its control frames painted to the screen.
+        # Found by the weekly exploratory fuzz job; pinned as CCF-REG-0006.
+        #
+        # The digit-set check above stays load-bearing despite this one: int()
+        # accepts a leading '-', and `f"{-1:08x}"` is "-0000001", which round
+        # trips through this comparison intact.
+        if f"{payload_bytes:08x}" != length_text:
+            raise self._report_error("invalid control header")
 
         # Bounding check: frames > 1MB are rejected immediately before allocation
         if payload_bytes > _MAX_CONTROL_PAYLOAD_BYTES or payload_bytes > self._max_control_payload_bytes:

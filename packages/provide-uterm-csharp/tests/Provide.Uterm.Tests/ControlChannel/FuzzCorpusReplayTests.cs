@@ -36,7 +36,7 @@ public class ControlChannelFuzzCorpusReplayTests
     private const int ExpectedEncodeControl = 96;
     private const int ExpectedIsControlFrame = 128;
     private const int ExpectedDecode = 192;
-    private const int ExpectedRegressions = 5;
+    private const int ExpectedRegressions = 6;
     private const int ExpectedSerializerDivergences = 6;
 
     private readonly ITestOutputHelper _out;
@@ -63,7 +63,7 @@ public class ControlChannelFuzzCorpusReplayTests
 
         var total = ExpectedEncodeData + ExpectedEncodeControl + ExpectedIsControlFrame +
                     ExpectedDecode + ExpectedRegressions + ExpectedSerializerDivergences;
-        Assert.Equal(523, total);
+        Assert.Equal(524, total);
         foreach (var (family, expected) in new[]
                  {
                      ("encode_data", ExpectedEncodeData),
