@@ -529,6 +529,23 @@ _REGRESSIONS: tuple[tuple[str, str, list[str], bool], ...] = (
         [DLE + STX + "80000000:" + '{"k":1}'],
         True,
     ),
+    (
+        "CCF-REG-0006",
+        (
+            "Found by explore_control_channel_fuzz.py, which had been reporting it "
+            "on fresh seeds for a month. An UPPERCASE length header split the two "
+            "readers of the same bytes: the decoder validated the field against "
+            "string.hexdigits (which admits A-F) and parsed a frame, while "
+            "is_control_frame() compared it against the canonical f'{n:08x}' and "
+            "said the message was not framed at all. Since is_control_frame() is "
+            "the gate that decides whether a payload is a control frame or "
+            "terminal output, a conforming peer emitting %08X would have had its "
+            "control frames rendered to the screen as text. The decoder now makes "
+            "the same canonical comparison the predicate and the Go port make."
+        ),
+        [DLE + STX + "0000001F:" + '{"k":"' + "a" * 23 + '"}'],
+        True,
+    ),
 )
 
 

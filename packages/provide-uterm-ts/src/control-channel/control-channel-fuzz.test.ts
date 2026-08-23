@@ -62,7 +62,7 @@ const EXPECTED_COUNTS = {
   encode_control: 96,
   is_control_frame: 128,
   decode: 192,
-  regressions: 5,
+  regressions: 6,
   serializer_divergences: 6,
 } as const;
 
@@ -226,7 +226,7 @@ describe("control-channel fuzz corpus: the file itself", () => {
         seen.add(testCase.id);
       }
     }
-    expect(seen.size).toBe(523);
+    expect(seen.size).toBe(524);
   });
 
   it("exercises both drives and both finish states", () => {

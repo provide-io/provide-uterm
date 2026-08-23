@@ -79,7 +79,12 @@ export interface FitAddonInstance {
 export const _RECONNECT_ANIM_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 export const _DLE = "\x10";
 export const _STX = "\x02";
-const _CONTROL_LEN_RE = /^[0-9a-fA-F]{8}$/;
+// Lowercase only: for a field of exactly eight zero-padded digits this is
+// the same test as comparing against the canonical `n.toString(16)` form,
+// which is what every encoder emits and what isControlFrame() checks.
+// Accepting A-F here made "0000001F" a frame to the decoder and terminal
+// data to the predicate. Pinned as CCF-REG-0006 in the shared fuzz corpus.
+const _CONTROL_LEN_RE = /^[0-9a-f]{8}$/;
 const _TEXT_ENCODER = new TextEncoder();
 const _DEFAULT_MAX_CONTROL_BYTES = 1024 * 1024;
 const _DEFAULT_MAX_BUFFER_BYTES = 10 * 1024 * 1024;

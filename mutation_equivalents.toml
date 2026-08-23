@@ -1087,7 +1087,7 @@ Case-insensitive codec lookup, and the UnicodeDecodeError raised for a length th
 a code point is raised identically by both spellings."""
 
 [[equivalent]]
-mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_try_parse_frame__mutmut_31"
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_try_parse_frame__mutmut_27"
 reason = """\
 Codec-name case flip on the header length field: length_hex.decode("ascii") -> \
 decode("ASCII"). Case-insensitive codec lookup, and the field has already been checked \

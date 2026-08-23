@@ -329,7 +329,13 @@ func (d *Decoder) tryParseFrame(buf string, idx int, final bool) (chunk ControlC
 	lengthHex := buf[idx+2 : idx+10]
 	separator := buf[idx+10]
 	payloadBytes, hexOK := parseHex32(lengthHex)
-	if separator != ':' || !hexOK {
+	// The canonical comparison, not just parseHex32's digit test: parseHex32
+	// accepts A-F, so without this the decoder reads "0000001F" as a frame
+	// while IsControlFrame -- which has always compared against %08x -- reads
+	// the same bytes as terminal data. IsControlFrame is what decides whether
+	// a message is framed at all, so the two must agree. Pinned as
+	// CCF-REG-0006 in the shared fuzz corpus.
+	if separator != ':' || !hexOK || fmt.Sprintf("%08x", payloadBytes) != lengthHex {
 		return ControlChunk{}, 0, false, d.reportError("invalid control header")
 	}
 	// Bounding check: oversized frames are rejected before allocation.

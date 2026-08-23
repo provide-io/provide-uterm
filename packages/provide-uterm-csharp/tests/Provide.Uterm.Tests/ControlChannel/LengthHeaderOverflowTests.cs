@@ -99,18 +99,23 @@ public sealed class ControlChannelLengthHeaderOverflowTests
     }
 
     [Fact]
-    public void UpperCaseHexIsAcceptedAsTheReferenceAcceptsIt()
+    public void UpperCaseHexIsRejectedAsTheReferenceRejectsIt()
     {
-        // CPython's string.hexdigits spans both cases. The corpus now pairs
-        // upper-case hex with ':' so this agreement is tested rather than
-        // assumed, and it is asserted here too.
+        // Inverted 2026-08-23. This test used to assert the opposite, on the
+        // grounds that CPython's string.hexdigits spans both cases -- which was
+        // true of the reference DECODER but never of IsControlFrame, which has
+        // always compared against the canonical lower-case form. Every port had
+        // the same split, so a peer emitting %08X got a frame from the decoder
+        // and "not a control frame" from the predicate that gates whether a
+        // message is framed at all. The reference now rejects it in both, and
+        // the corpus pins the case as CCF-REG-0006.
         var payload = "{\"k\":\"" + new string('a', 20) + "\"}";
         var byteCount = System.Text.Encoding.UTF8.GetByteCount(payload);
         var decoder = new ControlFrameDecoder();
 
-        var chunks = decoder.Feed(Frame(byteCount.ToString("X8", System.Globalization.CultureInfo.InvariantCulture), payload));
+        var ex = Assert.Throws<ProtocolException>(
+            () => decoder.Feed(Frame(byteCount.ToString("X8", System.Globalization.CultureInfo.InvariantCulture), payload)));
 
-        var chunk = Assert.Single(chunks);
-        Assert.IsType<ControlChunk>(chunk);
+        Assert.Equal("invalid control header", ex.Message);
     }
 }

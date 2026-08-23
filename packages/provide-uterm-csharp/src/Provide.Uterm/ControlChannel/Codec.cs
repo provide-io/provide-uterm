@@ -522,6 +522,17 @@ public class ControlFrameDecoder
             throw ReportError("invalid control header");
         }
 
+        // The canonical comparison, not just TryParseHex32's digit test:
+        // TryParseHex32 accepts A-F, so without this the decoder reads
+        // "0000001F" as a frame while IsControlFrame -- which has always
+        // compared against the x8 form -- reads the same bytes as terminal
+        // data. IsControlFrame decides whether a message is framed at all, so
+        // the two must agree. Pinned as CCF-REG-0006 in the shared fuzz corpus.
+        if (string.Create(CultureInfo.InvariantCulture, $"{payloadBytes:x8}") != lengthHex)
+        {
+            throw ReportError("invalid control header");
+        }
+
         if (payloadBytes > ControlChannelCodec.MaxControlPayloadBytes || payloadBytes > _maxControlPayloadBytes)
         {
             throw ReportError("control payload too large");

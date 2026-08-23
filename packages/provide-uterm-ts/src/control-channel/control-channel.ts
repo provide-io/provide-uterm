@@ -309,6 +309,14 @@ export class ControlFrameDecoder {
       throw this.#reportError("invalid control header");
     }
     const payloadBytes = Number.parseInt(lengthHex, 16);
+    // isHexDigit accepts A-F, so without the canonical comparison this decoder
+    // reads "0000001F" as a frame while isControlFrame() -- which compares
+    // against the padded lowercase form -- reads it as terminal data. The
+    // predicate decides whether a message is framed at all, so the two have to
+    // agree. Pinned as CCF-REG-0006 in the shared fuzz corpus.
+    if (payloadBytes.toString(16).padStart(8, "0") !== lengthHex) {
+      throw this.#reportError("invalid control header");
+    }
     if (payloadBytes > MAX_CONTROL_PAYLOAD_BYTES || payloadBytes > this.#maxControlPayloadBytes) {
       throw this.#reportError("control payload too large");
     }

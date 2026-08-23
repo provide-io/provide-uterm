@@ -13,7 +13,7 @@
   "encode_control": 96,
   "is_control_frame": 128,
   "decode": 192,
-  "regressions": 5,
+  "regressions": 6,
   "serializer_divergences": 6
  },
  "encode_data": [
@@ -2348,36 +2348,18 @@
    ],
    "finish": true,
    "chunked": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaaaaa"
-      }
-     },
-     {
-      "kind": "data",
-      "data_b64": "EBA="
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    },
    "single": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaaaaa"
-      }
-     },
-     {
-      "kind": "data",
-      "data_b64": "EBA="
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    }
   },
   {
@@ -4419,30 +4401,15 @@
    ],
    "finish": true,
    "chunked": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaa"
-      }
-     },
-     {
-      "kind": "data",
-      "data_b64": "zqkCC8OxOOS9oAvjgYIQ"
-     },
-     {
-      "kind": "data",
-      "data_b64": "GzgQW8Kd"
-     }
-    ],
-    "error": "invalid control prefix",
+    "events": [],
+    "error": "invalid control header",
     "on_error": [
      "control_frame_protocol_error"
     ]
    },
    "single": {
     "events": [],
-    "error": "invalid control prefix",
+    "error": "invalid control header",
     "on_error": [
      "control_frame_protocol_error"
     ]
@@ -4687,14 +4654,14 @@
    "finish": true,
    "chunked": {
     "events": [],
-    "error": "control payload too large",
+    "error": "invalid control header",
     "on_error": [
      "control_frame_protocol_error"
     ]
    },
    "single": {
     "events": [],
-    "error": "control payload too large",
+    "error": "invalid control header",
     "on_error": [
      "control_frame_protocol_error"
     ]
@@ -6114,36 +6081,18 @@
    ],
    "finish": true,
    "chunked": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaaaaa"
-      }
-     },
-     {
-      "kind": "data",
-      "data_b64": "EBAQ"
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    },
    "single": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaaaaa"
-      }
-     },
-     {
-      "kind": "data",
-      "data_b64": "EBAQ"
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    }
   },
   {
@@ -6460,28 +6409,18 @@
    ],
    "finish": false,
    "chunked": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaa"
-      }
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    },
    "single": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaa"
-      }
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    }
   },
   {
@@ -7577,44 +7516,18 @@
    ],
    "finish": true,
    "chunked": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaaaa"
-      }
-     },
-     {
-      "kind": "control",
-      "control": {}
-     },
-     {
-      "kind": "control",
-      "control": {}
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    },
    "single": {
-    "events": [
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaaaa"
-      }
-     },
-     {
-      "kind": "control",
-      "control": {}
-     },
-     {
-      "kind": "control",
-      "control": {}
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    }
   },
   {
@@ -7806,32 +7719,19 @@
      {
       "kind": "data",
       "data_b64": "WAfimIM6ZPCdhJ7CjfCfnIHCuuOBgsOp"
-     },
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaaaaa"
-      }
      }
     ],
-    "error": null,
-    "on_error": []
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    },
    "single": {
-    "events": [
-     {
-      "kind": "data",
-      "data_b64": "WAfimIM6ZPCdhJ7CjfCfnIHCuuOBgsOp"
-     },
-     {
-      "kind": "control",
-      "control": {
-       "k": "aaaaaaaaaaaaaaaaaaaaaaa"
-      }
-     }
-    ],
-    "error": null,
-    "on_error": []
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
    }
   },
   {
@@ -8667,6 +8567,28 @@
     ]
    },
    "note": "Found by the C# port replaying this corpus. A length header with the high bit set is an unsigned wire value; a port that accumulates it into a signed 32-bit integer wraps negative, its payload-size guard then never fires, and the negative length reaches an index or a slice \u2014 C# threw IndexOutOfRangeException where the reference reports 'control payload too large'. Thirteen bytes from a peer, and the exception type is one no caller catches. The corpus missed it because every high-bit header it generated was followed by a separator other than ':', so the header was rejected as malformed before its length was ever parsed: a length is only load-bearing when ':' follows it."
+  },
+  {
+   "id": "CCF-REG-0006",
+   "chunks_b64": [
+    "EAIwMDAwMDAxRjp7ImsiOiJhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9"
+   ],
+   "finish": true,
+   "chunked": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "single": {
+    "events": [],
+    "error": "invalid control header",
+    "on_error": [
+     "control_frame_protocol_error"
+    ]
+   },
+   "note": "Found by explore_control_channel_fuzz.py, which had been reporting it on fresh seeds for a month. An UPPERCASE length header split the two readers of the same bytes: the decoder validated the field against string.hexdigits (which admits A-F) and parsed a frame, while is_control_frame() compared it against the canonical f'{n:08x}' and said the message was not framed at all. Since is_control_frame() is the gate that decides whether a payload is a control frame or terminal output, a conforming peer emitting %08X would have had its control frames rendered to the screen as text. The decoder now makes the same canonical comparison the predicate and the Go port make."
   }
  ],
  "serializer_divergences": [
