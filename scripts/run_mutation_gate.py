@@ -545,8 +545,28 @@ def main() -> int:
     changed_support_paths: list[str] = []
     if args.changed_only:
         source_paths = _changed_python_paths(args.base_ref, args.staged_only, DEFAULT_MUTATION_ROOTS)
+        # Asked regardless of whether source also changed. This used to sit under
+        # `if not source_paths:`, so a commit touching BOTH a perimeter source
+        # file and the tooling ran the scoped gate on the source file and never
+        # asked the perimeter question at all -- the tooling moved and nothing
+        # re-checked the other 37 files. That is exactly backwards: a support
+        # change invalidates prior results for every perimeter file, and whether
+        # some unrelated source file rode along in the same commit says nothing
+        # about that. Caught on 491a4c67, which changed this very file plus
+        # control_channel.py and dispatched nothing.
+        changed_support_paths = _changed_mutation_support_paths(_changed_paths(args.base_ref, args.staged_only))
+        if changed_support_paths:
+            # With source changes present, the scoped run below is still worth
+            # doing -- it is the fast answer for the file in hand -- so print the
+            # marker (ci/prepare_mutation_args.sh dispatches on it) and carry on
+            # rather than returning. Only a support-ONLY change returns early,
+            # because there is nothing else for this job to run.
+            print(
+                "mutation gate full-perimeter trigger: changed mutation allowlist/config/tests: "
+                f"{changed_support_paths}"
+            )
+            print(FULL_PERIMETER_REQUIRED_MARKER)
         if not source_paths:
-            changed_support_paths = _changed_mutation_support_paths(_changed_paths(args.base_ref, args.staged_only))
             if changed_support_paths:
                 # A support-file change is a perimeter-wide question: the tooling
                 # moved, so nothing about the previous result carries over. It is
@@ -560,11 +580,7 @@ def main() -> int:
                 # mutation-full.yml already fans the same 38 targets across a
                 # matrix. ci/prepare_mutation_args.sh reads the marker below and
                 # dispatches it on this SHA.
-                print(
-                    "mutation gate full-perimeter trigger: changed mutation allowlist/config/tests "
-                    f"without changed source mutants: {changed_support_paths}"
-                )
-                print(FULL_PERIMETER_REQUIRED_MARKER)
+                print("no changed source mutants: the dispatched full-perimeter run is the whole answer")
                 return 0
             print("mutation gate skipped: no changed Python files under mutation roots")
             return 0
