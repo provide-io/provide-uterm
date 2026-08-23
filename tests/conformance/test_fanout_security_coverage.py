@@ -273,7 +273,9 @@ def test_adapter_timeout_is_a_hard_failure_without_partial_observations(
         timeout_s=1,
     )
 
-    assert errors == ["python: native command timed out after 1s"]
+    assert len(errors) == 1
+    assert errors[0].startswith("python: native command timed out after 1s. Ran ")
+    assert 'Partial output — stdout: [{"id":"partial"}]; stderr: still running' in errors[0]
     assert observations == []
 
 
@@ -290,7 +292,9 @@ def test_adapter_timeout_defaults_to_120_seconds(monkeypatch: pytest.MonkeyPatch
 
     errors, observations = runner.collect_backend_observations(REPO_ROOT, contract_path, "python")
 
-    assert errors == ["python: native command timed out after 120s"]
+    assert len(errors) == 1
+    assert errors[0].startswith("python: native command timed out after 120s. Ran ")
+    assert errors[0].endswith("The adapter printed nothing before it was killed.")
     assert observations == []
 
 

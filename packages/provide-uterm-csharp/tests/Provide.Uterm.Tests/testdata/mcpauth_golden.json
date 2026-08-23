@@ -1,0 +1,260 @@
+{
+  "default_principal": {
+    "subject_id": "anonymous",
+    "roles": [
+      "viewer"
+    ]
+  },
+  "principals": [
+    {
+      "name": "an admin",
+      "subject_id": "ada",
+      "roles": [
+        "admin"
+      ],
+      "primary_role": "admin",
+      "meets": {
+        "viewer": true,
+        "operator": true,
+        "admin": true
+      },
+      "may": {
+        "session_list": true,
+        "session_read": true,
+        "session_connect": true,
+        "hijack_begin": true,
+        "session_create": true,
+        "gui_key": true
+      }
+    },
+    {
+      "name": "an operator",
+      "subject_id": "ada",
+      "roles": [
+        "operator"
+      ],
+      "primary_role": "operator",
+      "meets": {
+        "viewer": true,
+        "operator": true,
+        "admin": false
+      },
+      "may": {
+        "session_list": true,
+        "session_read": true,
+        "session_connect": true,
+        "hijack_begin": false,
+        "session_create": false,
+        "gui_key": true
+      }
+    },
+    {
+      "name": "a viewer",
+      "subject_id": "ada",
+      "roles": [
+        "viewer"
+      ],
+      "primary_role": "viewer",
+      "meets": {
+        "viewer": true,
+        "operator": false,
+        "admin": false
+      },
+      "may": {
+        "session_list": true,
+        "session_read": true,
+        "session_connect": false,
+        "hijack_begin": false,
+        "session_create": false,
+        "gui_key": false
+      }
+    },
+    {
+      "name": "somebody holding two roles",
+      "subject_id": "ada",
+      "roles": [
+        "admin",
+        "viewer"
+      ],
+      "primary_role": "admin",
+      "meets": {
+        "viewer": true,
+        "operator": true,
+        "admin": true
+      },
+      "may": {
+        "session_list": true,
+        "session_read": true,
+        "session_connect": true,
+        "hijack_begin": true,
+        "session_create": true,
+        "gui_key": true
+      }
+    },
+    {
+      "name": "somebody holding operator and viewer",
+      "subject_id": "ada",
+      "roles": [
+        "operator",
+        "viewer"
+      ],
+      "primary_role": "operator",
+      "meets": {
+        "viewer": true,
+        "operator": true,
+        "admin": false
+      },
+      "may": {
+        "session_list": true,
+        "session_read": true,
+        "session_connect": true,
+        "hijack_begin": false,
+        "session_create": false,
+        "gui_key": true
+      }
+    },
+    {
+      "name": "somebody holding no role at all",
+      "subject_id": "ada",
+      "roles": [],
+      "primary_role": "viewer",
+      "meets": {
+        "viewer": false,
+        "operator": false,
+        "admin": false
+      },
+      "may": {
+        "session_list": false,
+        "session_read": false,
+        "session_connect": false,
+        "hijack_begin": false,
+        "session_create": false,
+        "gui_key": false
+      }
+    },
+    {
+      "name": "somebody holding a role nobody defined",
+      "subject_id": "ada",
+      "roles": [
+        "superuser"
+      ],
+      "primary_role": "superuser",
+      "meets": {
+        "viewer": false,
+        "operator": false,
+        "admin": false
+      },
+      "may": {
+        "session_list": false,
+        "session_read": false,
+        "session_connect": false,
+        "hijack_begin": false,
+        "session_create": false,
+        "gui_key": false
+      }
+    },
+    {
+      "name": "somebody holding a role in capitals",
+      "subject_id": "ada",
+      "roles": [
+        "Admin"
+      ],
+      "primary_role": "Admin",
+      "meets": {
+        "viewer": false,
+        "operator": false,
+        "admin": false
+      },
+      "may": {
+        "session_list": false,
+        "session_read": false,
+        "session_connect": false,
+        "hijack_begin": false,
+        "session_create": false,
+        "gui_key": false
+      }
+    },
+    {
+      "name": "the default principal",
+      "subject_id": "anonymous",
+      "roles": [
+        "viewer"
+      ],
+      "primary_role": "viewer",
+      "meets": {
+        "viewer": true,
+        "operator": false,
+        "admin": false
+      },
+      "may": {
+        "session_list": true,
+        "session_read": true,
+        "session_connect": false,
+        "hijack_begin": false,
+        "session_create": false,
+        "gui_key": false
+      }
+    }
+  ],
+  "resolution": [
+    {
+      "name": "no context at all",
+      "subject_id": "configured",
+      "roles": [
+        "operator"
+      ]
+    },
+    {
+      "name": "an unauthenticated transport",
+      "subject_id": "configured",
+      "roles": [
+        "operator"
+      ]
+    },
+    {
+      "name": "an authenticated transport",
+      "subject_id": "[\"web-client\",null,\"alice\"]",
+      "roles": [
+        "operator"
+      ]
+    },
+    {
+      "name": "a context whose request_context access fails",
+      "subject_id": "configured",
+      "roles": [
+        "operator"
+      ]
+    }
+  ],
+  "denials": [
+    {
+      "success": false,
+      "error": "authorization_denied",
+      "tool": "hijack_begin",
+      "required_role": "admin",
+      "principal": "ada",
+      "principal_roles": [
+        "viewer"
+      ]
+    },
+    {
+      "success": false,
+      "error": "authorization_denied",
+      "tool": "session_create",
+      "required_role": "admin",
+      "principal": "ada",
+      "principal_roles": [
+        "operator",
+        "viewer"
+      ]
+    },
+    {
+      "success": false,
+      "error": "authorization_denied",
+      "tool": "session_read",
+      "required_role": "viewer",
+      "principal": "anonymous",
+      "principal_roles": []
+    }
+  ]
+}

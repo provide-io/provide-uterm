@@ -1,0 +1,222 @@
+{
+  "channels": {
+    "stdout": 1,
+    "stdin": 2,
+    "connect": 3
+  },
+  "max_frame_bytes": 16777216,
+  "queue_maxsize": 4096,
+  "socket_mode": 384,
+  "bind_umask": 127,
+  "header_size": 5,
+  "streams": [
+    {
+      "name": "nothing at all",
+      "stream": "",
+      "frames": [],
+      "reads": [],
+      "closes": 1
+    },
+    {
+      "name": "one frame of output",
+      "stream": "\u0001\u0000\u0000\u0000\u0007hello\r\n",
+      "frames": [
+        {
+          "channel": 1,
+          "data": "hello\r\n"
+        }
+      ],
+      "reads": [
+        5,
+        7
+      ],
+      "closes": 1
+    },
+    {
+      "name": "one frame of input",
+      "stream": "\u0002\u0000\u0000\u0000\u0003ls\r",
+      "frames": [
+        {
+          "channel": 2,
+          "data": "ls\r"
+        }
+      ],
+      "reads": [
+        5,
+        3
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a connect frame",
+      "stream": "\u0003\u0000\u0000\u0000\u0005pts/3",
+      "frames": [
+        {
+          "channel": 3,
+          "data": "pts/3"
+        }
+      ],
+      "reads": [
+        5,
+        5
+      ],
+      "closes": 1
+    },
+    {
+      "name": "two frames",
+      "stream": "\u0001\u0000\u0000\u0000\u0001a\u0002\u0000\u0000\u0000\u0001b",
+      "frames": [
+        {
+          "channel": 1,
+          "data": "a"
+        },
+        {
+          "channel": 2,
+          "data": "b"
+        }
+      ],
+      "reads": [
+        5,
+        1,
+        5,
+        1
+      ],
+      "closes": 1
+    },
+    {
+      "name": "an empty payload",
+      "stream": "\u0001\u0000\u0000\u0000\u0000",
+      "frames": [
+        {
+          "channel": 1,
+          "data": ""
+        }
+      ],
+      "reads": [
+        5,
+        0
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a channel nobody defined",
+      "stream": "\u0000\u0000\u0000\u0001x",
+      "frames": [
+        {
+          "channel": 127,
+          "data": "x"
+        }
+      ],
+      "reads": [
+        5,
+        1
+      ],
+      "closes": 1
+    },
+    {
+      "name": "high bytes in the payload",
+      "stream": "\u0001\u0000\u0000\u0000\u0003ÉÍ»",
+      "frames": [
+        {
+          "channel": 1,
+          "data": "ÉÍ»"
+        }
+      ],
+      "reads": [
+        5,
+        3
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a header that stops short",
+      "stream": "\u0001\u0000\u0000",
+      "frames": [],
+      "reads": [],
+      "closes": 1
+    },
+    {
+      "name": "a payload that stops short",
+      "stream": "\u0001\u0000\u0000\u0000\nabc",
+      "frames": [],
+      "reads": [
+        5
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a frame after one that stops short",
+      "stream": "\u0001\u0000\u0000\u0000\nabc\u0001\u0000\u0000\u0000\u0005never",
+      "frames": [
+        {
+          "channel": 1,
+          "data": "abc\u0001\u0000\u0000\u0000\u0005ne"
+        }
+      ],
+      "reads": [
+        5,
+        10
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a frame exactly at the cap",
+      "stream": "\u0001\u0001\u0000\u0000\u0000",
+      "frames": [],
+      "reads": [
+        5
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a frame one byte over the cap",
+      "stream": "\u0001\u0001\u0000\u0000\u0001",
+      "frames": [],
+      "reads": [
+        5
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a frame claiming four gigabytes",
+      "stream": "\u0001ÿÿÿÿ",
+      "frames": [],
+      "reads": [
+        5
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a good frame before an over-large one",
+      "stream": "\u0001\u0000\u0000\u0000\u0005first\u0001ÿÿÿÿ",
+      "frames": [
+        {
+          "channel": 1,
+          "data": "first"
+        }
+      ],
+      "reads": [
+        5,
+        5,
+        5
+      ],
+      "closes": 1
+    },
+    {
+      "name": "a frame after an over-large one",
+      "stream": "\u0001ÿÿÿÿ\u0001\u0000\u0000\u0000\u0005never",
+      "frames": [],
+      "reads": [
+        5
+      ],
+      "closes": 1
+    }
+  ],
+  "backpressure": {
+    "maxsize": 4096,
+    "pushed": 4099,
+    "kept": 4096,
+    "first_kept": "3",
+    "last_kept": "4098"
+  }
+}

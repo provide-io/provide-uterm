@@ -50,8 +50,8 @@ follow this policy.
 
 | Version line | Supported |
 |---|:---:|
-| `0.5.x` (current) | ✅ |
-| `< 0.5` | ❌ |
+| `0.6.x` (current) | ✅ |
+| `< 0.6` | ❌ |
 
 The 0.x line follows semantic-minor support: only the current minor receives
 security fixes. Once 1.0 ships, the policy will broaden to the current

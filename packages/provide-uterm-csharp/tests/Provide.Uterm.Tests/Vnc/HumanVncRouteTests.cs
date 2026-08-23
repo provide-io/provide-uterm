@@ -44,7 +44,7 @@ public class HumanVncRouteTests
             using var client = HijackClient.WithBearer(baseUrl, token);
             // Viewer cannot acquire either — seed hijack via hub isn't needed for capability 403.
             // Use a ghost id; AuthorizeHub fails first for viewer on mutate.
-            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets);
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath("00000000-0000-4000-8000-000000000099", targetId));
             Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
@@ -57,7 +57,7 @@ public class HumanVncRouteTests
         var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
         await using (server)
         {
-            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets);
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath("00000000-0000-4000-8000-000000000099", targetId));
             Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
@@ -76,7 +76,7 @@ public class HumanVncRouteTests
             var st = hub.Registry.Get(WorkerId)!;
             st.HijackSession!.AcquiredBy = "someone-else";
 
-            var targetId = CreateGraphicalTarget(graphicalTargets);
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets);
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath(hid, targetId));
             Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
@@ -109,7 +109,7 @@ public class HumanVncRouteTests
             using var client = HijackClient.WithBearer(baseUrl, token);
             var acq = await client.AcquireAsync(WorkerId, owner: "operator", leaseS: 60);
             var hid = acq["hijack_id"]!.ToString()!;
-            var targetId = CreateGraphicalTarget(graphicalTargets, protocol: "memory");
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets, protocol: "memory");
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath(hid, targetId));
             Assert.Equal(HttpStatusCode.NotImplemented, resp.StatusCode);
@@ -125,7 +125,7 @@ public class HumanVncRouteTests
             using var client = HijackClient.WithBearer(baseUrl, token);
             var acq = await client.AcquireAsync(WorkerId, owner: "operator", leaseS: 60);
             var hid = acq["hijack_id"]!.ToString()!;
-            var targetId = CreateGraphicalTarget(
+            var targetId = await CreateGraphicalTargetAsync(
                 graphicalTargets, protocol: "litevirt", endpoint: "10.0.0.5:7443");
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath(hid, targetId));
@@ -142,7 +142,7 @@ public class HumanVncRouteTests
             using var client = HijackClient.WithBearer(baseUrl, token);
             var acq = await client.AcquireAsync(WorkerId, owner: "operator", leaseS: 60);
             var hid = acq["hijack_id"]!.ToString()!;
-            var targetId = CreateGraphicalTarget(
+            var targetId = await CreateGraphicalTargetAsync(
                 graphicalTargets, protocol: "rfb", endpoint: "169.254.169.254:5900");
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath(hid, targetId));
@@ -160,7 +160,7 @@ public class HumanVncRouteTests
             var acq = await client.AcquireAsync(WorkerId, owner: "operator", leaseS: 60);
             var hid = acq["hijack_id"]!.ToString()!;
             // High port with nothing listening on loopback.
-            var targetId = CreateGraphicalTarget(
+            var targetId = await CreateGraphicalTargetAsync(
                 graphicalTargets, protocol: "rfb", endpoint: "127.0.0.1:1");
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath(hid, targetId));
@@ -319,7 +319,7 @@ public class HumanVncRouteTests
             var acq = await client.AcquireAsync(WorkerId, owner: "operator", leaseS: 60);
             var hid = acq["hijack_id"]!.ToString()!;
             // Target exists under acme but principal has no tenant claim.
-            var targetId = CreateGraphicalTarget(graphicalTargets, protocol: "rfb", endpoint: "127.0.0.1:5900");
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets, protocol: "rfb", endpoint: "127.0.0.1:5900");
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath(hid, targetId));
             Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
@@ -413,7 +413,7 @@ public class HumanVncRouteTests
         return http;
     }
 
-    private static string CreateGraphicalTarget(
+    private static async Task<string> CreateGraphicalTargetAsync(
         InMemoryGraphicalTargetRegistry graphicalTargets,
         string protocol = "memory",
         string? endpoint = null)
@@ -433,9 +433,7 @@ public class HumanVncRouteTests
             UpdatedBy = "test",
         };
         Assert.True(GraphicalTargetScope.TryForTenant(TestTenant, out var scope));
-        // Sync test helper: setup only, never a request path, so completing
-        // here cannot starve the thread pool.
-        graphicalTargets.CreateAsync(scope, target).GetAwaiter().GetResult();
+        await graphicalTargets.CreateAsync(scope, target);
         return targetId;
     }
 

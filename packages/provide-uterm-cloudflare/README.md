@@ -71,11 +71,20 @@ non-placeholder entropy floor.
 
 ## Current gaps
 
+Every *intentional* difference from the FastAPI backend — auth modes, capability
+refusals, the `/api/health` payload, hibernation, the tunnel transport — is
+tabulated with its reason and its pinning test in
+[`docs/cloudflare-divergence-matrix.md`](../../docs/cloudflare-divergence-matrix.md).
+Changing edge-runtime behavior means updating that table and its edge tests in
+the same commit. The gaps below are the ones that are not yet settled either way:
+
 - The quick-connect form creates sessions in KV but the CF worker cannot run
   shell/SSH/telnet connectors itself — a worker process must bridge in via WS.
 - The hijack REST surface is intended to match the FastAPI contract, but there
   are still backend-parity gaps; treat `docs/protocol-matrix.md` as the target
-  contract, not a guarantee that every edge case is identical today.
+  contract, not a guarantee that every edge case is identical today. Cells in
+  that matrix use the labels defined in
+  [`docs/parity-labels.md`](../../docs/parity-labels.md).
 
 ## Commands
 

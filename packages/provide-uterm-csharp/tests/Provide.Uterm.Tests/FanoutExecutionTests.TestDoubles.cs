@@ -332,10 +332,10 @@ public sealed partial class FanoutExecutionTests
         TaskCompletionSource dispose,
         Action onDispose) : IFanoutOutputSubscription
     {
-        public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
+        public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
         {
-            if (mode == "expired_before_dispose") Thread.Sleep(30);
-            return ValueTask.FromResult<FanoutOutputEvent?>(null);
+            if (mode == "expired_before_dispose") await Task.Delay(30, ct);
+            return null;
         }
 
         public ValueTask DisposeAsync()

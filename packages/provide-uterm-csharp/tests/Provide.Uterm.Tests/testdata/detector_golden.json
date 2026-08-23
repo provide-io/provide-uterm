@@ -1,0 +1,1287 @@
+{
+  "compile": {
+    "grown_count": 2,
+    "grown_detects_new": {
+      "eol_pattern": "[\\r\\n]+",
+      "input_type": "multi_key",
+      "kv_extract": null,
+      "pattern": {
+        "id": "second",
+        "regex": "Enter"
+      },
+      "prompt_id": "second"
+    },
+    "grown_detects_old": {
+      "eol_pattern": "[\\r\\n]+",
+      "input_type": "multi_key",
+      "kv_extract": null,
+      "pattern": {
+        "id": "good",
+        "regex": "Command"
+      },
+      "prompt_id": "good"
+    },
+    "lenient_failures": [
+      {
+        "error": "missing ), unterminated subpattern at position 9",
+        "id": "bad",
+        "regex": "unclosed ("
+      },
+      {
+        "error": "Missing key: 'regex'",
+        "id": "missing"
+      },
+      {
+        "error": "unterminated character set at position 0",
+        "id": "unknown",
+        "regex": "[unclosed"
+      }
+    ],
+    "lenient_pattern_count": 4,
+    "lenient_still_detects": {
+      "eol_pattern": "[\\r\\n]+",
+      "input_type": "multi_key",
+      "kv_extract": null,
+      "pattern": {
+        "id": "good",
+        "regex": "Command"
+      },
+      "prompt_id": "good"
+    },
+    "ordered_detects": {
+      "eol_pattern": "[\\r\\n]+",
+      "input_type": "multi_key",
+      "kv_extract": null,
+      "pattern": {
+        "id": "first",
+        "regex": "Command"
+      },
+      "prompt_id": "first"
+    },
+    "python_non_string_regex_error": "first argument must be string or compiled pattern",
+    "reload_error": "1 pattern(s) failed to compile in strict mode: bad: missing ), unterminated subpattern at position 0",
+    "replaced_count": 1,
+    "replaced_detects_new": {
+      "eol_pattern": "[\\r\\n]+",
+      "input_type": "multi_key",
+      "kv_extract": null,
+      "pattern": {
+        "id": "other",
+        "regex": "Enter"
+      },
+      "prompt_id": "other"
+    },
+    "replaced_detects_old": null,
+    "strict_error": "3 pattern(s) failed to compile in strict mode: bad: missing ), unterminated subpattern at position 9, missing: Missing key: 'regex', unknown: unterminated character set at position 0",
+    "survivor_pattern_count": 1,
+    "survivor_still_detects": {
+      "eol_pattern": "[\\r\\n]+",
+      "input_type": "multi_key",
+      "kv_extract": null,
+      "pattern": {
+        "id": "good",
+        "regex": "Command"
+      },
+      "prompt_id": "good"
+    },
+    "twice_failures": [
+      {
+        "error": "unterminated character set at position 0",
+        "id": "bad2",
+        "regex": "["
+      }
+    ]
+  },
+  "defaults": {
+    "eol_pattern": "[\\r\\n]+",
+    "input_type": "multi_key",
+    "kv_extract": null
+  },
+  "detect": [
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "a prompt at the bottom",
+      "snapshot": {
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": null,
+      "name": "no prompt at all",
+      "snapshot": {
+        "screen": "just some output\nnothing to answer",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": null,
+      "name": "an empty screen",
+      "snapshot": {
+        "screen": "",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": null,
+      "name": "a missing screen",
+      "snapshot": {
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": null,
+      "name": "a null screen",
+      "snapshot": {
+        "screen": null,
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": null,
+      "name": "the cursor is not at the end",
+      "snapshot": {
+        "cursor_at_end": false,
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": null,
+      "name": "the cursor is wrong but there is a trailing space",
+      "snapshot": {
+        "cursor_at_end": false,
+        "has_trailing_space": true,
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "expect_cursor_at_end": false,
+          "id": "any_key",
+          "input_type": "single_key",
+          "regex": "press any key"
+        },
+        "prompt_id": "any_key"
+      },
+      "name": "a pattern that does not need the cursor",
+      "snapshot": {
+        "cursor_at_end": false,
+        "screen": "Loading...\npress any key",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "expect_cursor_at_end": false,
+          "id": "any_key",
+          "input_type": "single_key",
+          "regex": "press any key"
+        },
+        "prompt_id": "any_key"
+      },
+      "name": "that same pattern with a trailing space",
+      "snapshot": {
+        "cursor_at_end": false,
+        "has_trailing_space": true,
+        "screen": "Loading...\npress any key",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "a prompt only in scrollback",
+      "snapshot": {
+        "screen": "Command [TL=00:00:00]:?\nline 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29\nline 30\nline 31\nline 32\nline 33\nline 34\nline 35\nline 36\nline 37\nline 38\nline 39",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "a prompt below blank rows",
+      "snapshot": {
+        "screen": "Command [TL=00:00:00]:? \n\n\n\n",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "the cursor is inside the region",
+      "snapshot": {
+        "cursor": {
+          "x": 5,
+          "y": 3
+        },
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "the cursor is above the region",
+      "snapshot": {
+        "cursor": {
+          "x": 0,
+          "y": 0
+        },
+        "screen": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29\nline 30\nline 31\nline 32\nline 33\nline 34\nline 35\nline 36\nline 37\nline 38\nline 39\nCommand [TL=00:00:00]:?",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "two prompts, the first pattern wins",
+      "snapshot": {
+        "screen": "Enter your name:\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "\\r",
+        "input_type": "line",
+        "kv_extract": null,
+        "pattern": {
+          "eol_pattern": "\\r",
+          "id": "name",
+          "input_type": "line",
+          "regex": "Enter your name:"
+        },
+        "prompt_id": "name"
+      },
+      "name": "a line prompt",
+      "snapshot": {
+        "screen": "Enter your name: ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "yes_no",
+          "input_type": "single_key",
+          "regex": "\\(Y/N\\)\\??"
+        },
+        "prompt_id": "yes_no"
+      },
+      "name": "a yes/no prompt",
+      "snapshot": {
+        "screen": "Delete it? (Y/N)?",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "a whitespace-only last line",
+      "snapshot": {
+        "screen": "Command [TL=00:00:00]:? \n   \n  ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "a fractional cursor",
+      "snapshot": {
+        "cursor": {
+          "x": 1.9,
+          "y": 2.9
+        },
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [
+        {
+          "actual_cursor_at_end": false,
+          "expected_cursor_at_end": true,
+          "pattern_id": "command",
+          "reason": "cursor_position"
+        }
+      ],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "a trailing flag that is not a boolean",
+      "snapshot": {
+        "cursor": {
+          "x": 0,
+          "y": 0
+        },
+        "cursor_at_end": false,
+        "has_trailing_space": "yes",
+        "screen": "BANNER at the very top\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "a stale prompt above a live one",
+      "snapshot": {
+        "screen": "Enter your name:\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [
+        {
+          "actual_cursor_at_end": false,
+          "expected_cursor_at_end": true,
+          "pattern_id": "command",
+          "reason": "cursor_position"
+        }
+      ],
+      "match": {
+        "eol_pattern": "[\\r\\n]+",
+        "input_type": "single_key",
+        "kv_extract": null,
+        "pattern": {
+          "id": "command",
+          "input_type": "single_key",
+          "regex": "Command \\[TL=[\\d:]+\\]:"
+        },
+        "prompt_id": "command"
+      },
+      "name": "the cursor is above the region and wrong, with a trailing space",
+      "snapshot": {
+        "cursor": {
+          "x": 0,
+          "y": 0
+        },
+        "cursor_at_end": false,
+        "has_trailing_space": true,
+        "screen": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29\nline 30\nline 31\nline 32\nline 33\nline 34\nline 35\nline 36\nline 37\nline 38\nline 39\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "failures": [
+        {
+          "actual_cursor_at_end": false,
+          "expected_cursor_at_end": true,
+          "pattern_id": "command",
+          "reason": "cursor_position"
+        }
+      ],
+      "match": null,
+      "name": "the same, without the trailing space",
+      "snapshot": {
+        "cursor": {
+          "x": 0,
+          "y": 0
+        },
+        "cursor_at_end": false,
+        "screen": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29\nline 30\nline 31\nline 32\nline 33\nline 34\nline 35\nline 36\nline 37\nline 38\nline 39\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    }
+  ],
+  "fingerprints": [
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:0:0:0",
+      "name": "a plain screen",
+      "snapshot": {
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:0:0:0",
+      "name": "the same screen again",
+      "snapshot": {
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7e78747c26ca150247817f9cb3dfcca4554cf112645b038c186d41bd021e0fbb:1:0:0:0",
+      "name": "a different screen",
+      "snapshot": {
+        "screen": "something else",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:0:1:2",
+      "name": "the cursor moved",
+      "snapshot": {
+        "cursor": {
+          "x": 1,
+          "y": 2
+        },
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:0:2:2",
+      "name": "the cursor moved again",
+      "snapshot": {
+        "cursor": {
+          "x": 2,
+          "y": 2
+        },
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:0:0:0:0",
+      "name": "the cursor is not at the end",
+      "snapshot": {
+        "cursor_at_end": false,
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:1:0:0",
+      "name": "there is a trailing space",
+      "snapshot": {
+        "has_trailing_space": true,
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "69217a3079908094e11121d042354a7c1f55b6482ca1a51e1b250dfd1ed0eef9:1:0:0:0",
+      "name": "an empty screen",
+      "snapshot": {
+        "screen": "",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:0:0:0",
+      "name": "a cursor that is not a number",
+      "snapshot": {
+        "cursor": {
+          "x": "nonsense",
+          "y": 0
+        },
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:0:0:0",
+      "name": "a null cursor",
+      "snapshot": {
+        "cursor": null,
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:0:1:2",
+      "name": "a fractional cursor",
+      "snapshot": {
+        "cursor": {
+          "x": 1.9,
+          "y": 2.9
+        },
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "10e8c91087e268f1a432b58485fa38a46820175910eac4da2b59e4e8dd0b6d9d:1:0:0:0",
+      "name": "a tall screen",
+      "snapshot": {
+        "screen": "BANNER at the very top\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "10e8c91087e268f1a432b58485fa38a46820175910eac4da2b59e4e8dd0b6d9d:1:0:0:0",
+      "name": "the same tail, a different banner",
+      "snapshot": {
+        "screen": "OTHER! at the very top\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    },
+    {
+      "fingerprint": "7aa4a71456e6f92d0d5b329ecc81c193ba55b2ca25cb385f07ee6bfd7fbb9790:1:0:0:0",
+      "name": "a cursor with no coordinates",
+      "snapshot": {
+        "cursor": {},
+        "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+        "screen_hash": "h"
+      }
+    }
+  ],
+  "negative": [
+    {
+      "failures": [
+        {
+          "negative_pattern": "STARDOCK",
+          "pattern_id": "cmd",
+          "reason": "negative_match"
+        }
+      ],
+      "matched": false,
+      "name": "a negative regex blocks it",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_regex": "STARDOCK",
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": null,
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "the negative regex is not on screen",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_regex": "NOWHERE",
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [
+        {
+          "negative_pattern": "stardock",
+          "pattern_id": "cmd",
+          "reason": "negative_match"
+        }
+      ],
+      "matched": false,
+      "name": "a negative regex is case insensitive",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_regex": "stardock",
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": null,
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": false,
+      "name": "the positive pattern is not",
+      "patterns": [
+        {
+          "id": "cmd",
+          "regex": "command"
+        }
+      ],
+      "prompt_id": null,
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [
+        {
+          "negative_pattern": "STARDOCK\\ is",
+          "pattern_id": "cmd",
+          "reason": "negative_match"
+        }
+      ],
+      "matched": false,
+      "name": "a contains-mode negative match",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": {
+            "match_mode": "contains",
+            "pattern": "STARDOCK is"
+          },
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": null,
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [
+        {
+          "negative_pattern": "\\[TL=",
+          "pattern_id": "cmd",
+          "reason": "negative_match"
+        }
+      ],
+      "matched": false,
+      "name": "a contains-mode match with regex characters in it",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": {
+            "match_mode": "contains",
+            "pattern": "[TL="
+          },
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": null,
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [
+        {
+          "negative_pattern": "^STARDOCK\\ is\\ closed$",
+          "pattern_id": "cmd",
+          "reason": "negative_match"
+        }
+      ],
+      "matched": false,
+      "name": "an exact-mode negative match",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": {
+            "match_mode": "exact",
+            "pattern": "STARDOCK is closed"
+          },
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": null,
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "an exact-mode match that is only a substring",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": {
+            "match_mode": "exact",
+            "pattern": "STARDOCK"
+          },
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [
+        {
+          "negative_pattern": "STAR\\w+",
+          "pattern_id": "cmd",
+          "reason": "negative_match"
+        }
+      ],
+      "matched": false,
+      "name": "a negative match with no mode is a regex",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": {
+            "pattern": "STAR\\w+"
+          },
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": null,
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "an empty negative match dict",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": {},
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "a negative match that is not a dict",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": "STARDOCK",
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "a null negative match",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": null,
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "negative_regex wins over negative_match",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": {
+            "match_mode": "contains",
+            "pattern": "STARDOCK"
+          },
+          "negative_regex": "NOWHERE",
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [
+        {
+          "negative_pattern": "BANNER",
+          "pattern_id": "cmd",
+          "reason": "negative_match"
+        },
+        {
+          "negative_pattern": "BANNER",
+          "pattern_id": "cmd",
+          "reason": "negative_match"
+        }
+      ],
+      "matched": false,
+      "name": "the exclusion only looks at the whole screen",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_regex": "BANNER",
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": null,
+      "screen": "BANNER at the very top\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "an empty negative regex blocks nothing",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_regex": "",
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "a null negative regex",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_regex": null,
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    },
+    {
+      "failures": [],
+      "matched": true,
+      "name": "an empty pattern in a contains-mode match",
+      "patterns": [
+        {
+          "id": "cmd",
+          "negative_match": {
+            "match_mode": "contains"
+          },
+          "regex": "Command"
+        }
+      ],
+      "prompt_id": "cmd",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? "
+    }
+  ],
+  "patterns": [
+    {
+      "id": "command",
+      "input_type": "single_key",
+      "regex": "Command \\[TL=[\\d:]+\\]:"
+    },
+    {
+      "id": "yes_no",
+      "input_type": "single_key",
+      "regex": "\\(Y/N\\)\\??"
+    },
+    {
+      "expect_cursor_at_end": false,
+      "id": "any_key",
+      "input_type": "single_key",
+      "regex": "press any key"
+    },
+    {
+      "eol_pattern": "\\r",
+      "id": "name",
+      "input_type": "line",
+      "regex": "Enter your name:"
+    }
+  ],
+  "python_non_string_input_type_error": "ValidationError",
+  "region": [
+    {
+      "cursor_in_region": true,
+      "cursor_y": 0,
+      "name": "the default tail (cursor y=0)",
+      "region": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 3,
+      "name": "the default tail (cursor y=3)",
+      "region": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "the default tail (cursor y=100)",
+      "region": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 0,
+      "name": "one line (cursor y=0)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 1
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 3,
+      "name": "one line (cursor y=3)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 1
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "one line (cursor y=100)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 1
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 0,
+      "name": "more lines than there are (cursor y=0)",
+      "region": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 100
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 3,
+      "name": "more lines than there are (cursor y=3)",
+      "region": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 100
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "more lines than there are (cursor y=100)",
+      "region": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 100
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 0,
+      "name": "zero lines is treated as one (cursor y=0)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 0
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 3,
+      "name": "zero lines is treated as one (cursor y=3)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 0
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "zero lines is treated as one (cursor y=100)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 0
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 0,
+      "name": "a negative tail is treated as one (cursor y=0)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": -5
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 3,
+      "name": "a negative tail is treated as one (cursor y=3)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": -5
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "a negative tail is treated as one (cursor y=100)",
+      "region": "Command [TL=00:00:00]:? ",
+      "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+      "tail_lines": -5
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 0,
+      "name": "trailing blank rows are ignored (cursor y=0)",
+      "region": "one\ntwo",
+      "screen": "one\ntwo\n\n\n\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 3,
+      "name": "trailing blank rows are ignored (cursor y=3)",
+      "region": "one\ntwo",
+      "screen": "one\ntwo\n\n\n\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "trailing blank rows are ignored (cursor y=100)",
+      "region": "one\ntwo",
+      "screen": "one\ntwo\n\n\n\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 0,
+      "name": "an all-blank screen (cursor y=0)",
+      "region": "",
+      "screen": "\n\n\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 3,
+      "name": "an all-blank screen (cursor y=3)",
+      "region": "",
+      "screen": "\n\n\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "an all-blank screen (cursor y=100)",
+      "region": "",
+      "screen": "\n\n\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 0,
+      "name": "a single line (cursor y=0)",
+      "region": "only this",
+      "screen": "only this",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 3,
+      "name": "a single line (cursor y=3)",
+      "region": "only this",
+      "screen": "only this",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "a single line (cursor y=100)",
+      "region": "only this",
+      "screen": "only this",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 0,
+      "name": "an empty screen (cursor y=0)",
+      "region": "",
+      "screen": "",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 3,
+      "name": "an empty screen (cursor y=3)",
+      "region": "",
+      "screen": "",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "an empty screen (cursor y=100)",
+      "region": "",
+      "screen": "",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 0,
+      "name": "a long screen (cursor y=0)",
+      "region": "line 17\nline 18\nline 19",
+      "screen": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19",
+      "tail_lines": 3
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 3,
+      "name": "a long screen (cursor y=3)",
+      "region": "line 17\nline 18\nline 19",
+      "screen": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19",
+      "tail_lines": 3
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "a long screen (cursor y=100)",
+      "region": "line 17\nline 18\nline 19",
+      "screen": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19",
+      "tail_lines": 3
+    },
+    {
+      "cursor_in_region": true,
+      "cursor_y": 0,
+      "name": "a whitespace-only last line (cursor y=0)",
+      "region": "content",
+      "screen": "content\n   \n\t\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 3,
+      "name": "a whitespace-only last line (cursor y=3)",
+      "region": "content",
+      "screen": "content\n   \n\t\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "a whitespace-only last line (cursor y=100)",
+      "region": "content",
+      "screen": "content\n   \n\t\n",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 0,
+      "name": "a tall screen at the default tail (cursor y=0)",
+      "region": "filler 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+      "screen": "BANNER at the very top\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 3,
+      "name": "a tall screen at the default tail (cursor y=3)",
+      "region": "filler 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+      "screen": "BANNER at the very top\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 12
+    },
+    {
+      "cursor_in_region": false,
+      "cursor_y": 100,
+      "name": "a tall screen at the default tail (cursor y=100)",
+      "region": "filler 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+      "screen": "BANNER at the very top\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? ",
+      "tail_lines": 12
+    }
+  ],
+  "rich_pattern": {
+    "eol_pattern": "[\\r\\n]+",
+    "input_type": "multi_key",
+    "kv_extract": [
+      {
+        "key": "a",
+        "regex": "(.*)"
+      }
+    ],
+    "pattern": {
+      "id": "rich",
+      "kv_extract": [
+        {
+          "key": "a",
+          "regex": "(.*)"
+        }
+      ],
+      "regex": "x"
+    },
+    "prompt_id": "rich"
+  },
+  "screen": "Welcome to the game\nSTARDOCK is closed\n\nCommand [TL=00:00:00]:? ",
+  "surrogate_fingerprint": "db368e0bc2bf277ee54917c4f39daa484f87f71b011a9ebba546eae0b5a453b0:1:0:0:0",
+  "tall": "BANNER at the very top\nfiller 0\nfiller 1\nfiller 2\nfiller 3\nfiller 4\nfiller 5\nfiller 6\nfiller 7\nfiller 8\nfiller 9\nfiller 10\nfiller 11\nfiller 12\nfiller 13\nfiller 14\nfiller 15\nfiller 16\nfiller 17\nfiller 18\nfiller 19\nfiller 20\nfiller 21\nfiller 22\nfiller 23\nfiller 24\nfiller 25\nfiller 26\nfiller 27\nfiller 28\nfiller 29\nCommand [TL=00:00:00]:? "
+}

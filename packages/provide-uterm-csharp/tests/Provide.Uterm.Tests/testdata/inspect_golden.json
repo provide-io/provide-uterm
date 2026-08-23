@@ -1,0 +1,465 @@
+{
+  "cases": [
+    {
+      "name": "an ordinary run",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "a port to listen on",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t",
+        "listen_port": 9000
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 9000,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "a name given",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t",
+        "display_name": "my api"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "my api",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "a name given as nothing",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t",
+        "display_name": ""
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "another port",
+      "args": {
+        "server": "https://warp.example",
+        "port": 3000,
+        "token": "t"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:3000",
+          "token": "t",
+          "target_port": 3000
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 3000,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:3000\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "interception on",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t",
+        "intercept": true
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": true,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\n  Intercept: ON (timeout: 30.0s, action: forward)\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "interception with its own timeout",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t",
+        "intercept": true,
+        "intercept_timeout": 5.0,
+        "intercept_timeout_action": "drop"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": true,
+          "intercept_timeout": 5.0,
+          "intercept_timeout_action": "drop"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\n  Intercept: ON (timeout: 5.0s, action: drop)\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "an absolute endpoint",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "wss://elsewhere.example/t",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://elsewhere.example/t",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "a server over cleartext",
+      "args": {
+        "server": "http://warp.example",
+        "port": 8080,
+        "token": "t"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "http://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "ws://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "a server with a trailing slash",
+      "args": {
+        "server": "https://warp.example/",
+        "port": 8080,
+        "token": "t"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example/",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "an answer with no endpoint",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\n",
+      "stderr": "error: server response missing ws_endpoint\n",
+      "exit_code": 1
+    },
+    {
+      "name": "an answer with nothing in it",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t"
+      },
+      "tunnel_info": {},
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        }
+      },
+      "stdout": "Creating tunnel... done\n",
+      "stderr": "error: server response missing ws_endpoint\n",
+      "exit_code": 1
+    },
+    {
+      "name": "an answer naming a session rather than a tunnel",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t"
+      },
+      "tunnel_info": {
+        "tunnel_id": "",
+        "share_url": "https://warp.example/app/inspect/t-1",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token",
+        "session_id": "s-9"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done\nInspecting HTTP traffic on localhost:8080\n  Share: https://warp.example/app/inspect/t-1\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    },
+    {
+      "name": "an answer with no share link",
+      "args": {
+        "server": "https://warp.example",
+        "port": 8080,
+        "token": "t"
+      },
+      "tunnel_info": {
+        "tunnel_id": "t-1",
+        "share_url": "",
+        "ws_endpoint": "/tunnel/abc",
+        "worker_token": "worker-token"
+      },
+      "ran": {
+        "created": {
+          "server": "https://warp.example",
+          "display_name": "http:8080",
+          "token": "t",
+          "target_port": 8080
+        },
+        "inspect": {
+          "ws_endpoint": "wss://warp.example/tunnel/abc",
+          "worker_token": "worker-token",
+          "target_port": 8080,
+          "listen_port": 0,
+          "intercept": false,
+          "intercept_timeout": 30.0,
+          "intercept_timeout_action": "forward"
+        }
+      },
+      "stdout": "Creating tunnel... done (t-1)\nInspecting HTTP traffic on localhost:8080\nPress Ctrl+C to stop.\n\n",
+      "stderr": "",
+      "exit_code": null
+    }
+  ]
+}

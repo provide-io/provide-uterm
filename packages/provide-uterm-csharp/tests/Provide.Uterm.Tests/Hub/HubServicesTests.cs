@@ -431,18 +431,18 @@ public class HubServicesTests
     }
 
     [Fact]
-    public void Clock_Real_And_Manual()
+    public async Task Clock_Real_And_Manual()
     {
         var real = new RealClock();
         Assert.True(real.Wall() > 0);
         Assert.True(real.Monotonic() >= 0);
-        real.SleepAsync(0).GetAwaiter().GetResult();
+        await real.SleepAsync(0);
 
         var m = new ManualClock(42);
         m.SetMonotonic(3);
         m.SetWall(99);
         m.Step = 2;
-        m.SleepAsync(1).GetAwaiter().GetResult();
+        await m.SleepAsync(1);
         Assert.Equal(5, m.Monotonic());
         Assert.Equal(99, m.Wall());
         Assert.Equal(new[] { 1.0 }, m.Sleeps());

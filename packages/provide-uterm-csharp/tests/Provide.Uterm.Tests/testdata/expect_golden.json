@@ -1,0 +1,139 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_expect_golden.py",
+ "default_timeout_ms": 5000,
+ "matches": [
+  {
+   "name": "no guards",
+   "screen": "anything",
+   "expect_text": null,
+   "expect_regex": null,
+   "matched": null
+  },
+  {
+   "name": "text present",
+   "screen": "login: ready",
+   "expect_text": "ready",
+   "expect_regex": null,
+   "matched": "ready"
+  },
+  {
+   "name": "text absent",
+   "screen": "login: busy",
+   "expect_text": "ready",
+   "expect_regex": null,
+   "matched": null
+  },
+  {
+   "name": "text is the whole screen",
+   "screen": "ready",
+   "expect_text": "ready",
+   "expect_regex": null,
+   "matched": "ready"
+  },
+  {
+   "name": "empty text matches anything",
+   "screen": "anything",
+   "expect_text": "",
+   "expect_regex": null,
+   "matched": ""
+  },
+  {
+   "name": "empty text on an empty screen",
+   "screen": "",
+   "expect_text": "",
+   "expect_regex": null,
+   "matched": ""
+  },
+  {
+   "name": "text is case sensitive",
+   "screen": "READY",
+   "expect_text": "ready",
+   "expect_regex": null,
+   "matched": null
+  },
+  {
+   "name": "regex matches",
+   "screen": "exit code 0",
+   "expect_text": null,
+   "expect_regex": "exit code \\d",
+   "matched": "exit code 0"
+  },
+  {
+   "name": "regex misses",
+   "screen": "still running",
+   "expect_text": null,
+   "expect_regex": "exit code \\d",
+   "matched": null
+  },
+  {
+   "name": "regex returns the whole match",
+   "screen": "user@host:~$ ",
+   "expect_text": null,
+   "expect_regex": "(\\w+)@(\\w+)",
+   "matched": "user@host"
+  },
+  {
+   "name": "regex anchored",
+   "screen": "ready",
+   "expect_text": null,
+   "expect_regex": "^ready$",
+   "matched": "ready"
+  },
+  {
+   "name": "regex with alternation",
+   "screen": "FAIL",
+   "expect_text": null,
+   "expect_regex": "OK|FAIL",
+   "matched": "FAIL"
+  },
+  {
+   "name": "both, text wins",
+   "screen": "ready and exit code 0",
+   "expect_text": "ready",
+   "expect_regex": "exit code \\d",
+   "matched": "ready"
+  },
+  {
+   "name": "both, only the regex holds",
+   "screen": "exit code 0",
+   "expect_text": "ready",
+   "expect_regex": "exit code \\d",
+   "matched": "exit code 0"
+  },
+  {
+   "name": "both, only the text holds",
+   "screen": "ready",
+   "expect_text": "ready",
+   "expect_regex": "exit code \\d",
+   "matched": "ready"
+  },
+  {
+   "name": "both miss",
+   "screen": "busy",
+   "expect_text": "ready",
+   "expect_regex": "exit code \\d",
+   "matched": null
+  },
+  {
+   "name": "regex matching empty",
+   "screen": "anything",
+   "expect_text": null,
+   "expect_regex": "",
+   "matched": ""
+  },
+  {
+   "name": "multiline screen",
+   "screen": "line one\nready\nline three",
+   "expect_text": "ready",
+   "expect_regex": null,
+   "matched": "ready"
+  },
+  {
+   "name": "regex across lines needs the flag",
+   "screen": "one\nready",
+   "expect_text": null,
+   "expect_regex": "^ready",
+   "matched": null
+  }
+ ]
+}

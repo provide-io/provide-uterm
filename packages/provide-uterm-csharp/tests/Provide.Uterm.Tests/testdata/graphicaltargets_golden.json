@@ -1,0 +1,2499 @@
+{
+  "protocols": [
+    "litevirt",
+    "memory",
+    "rfb"
+  ],
+  "error_codes": [
+    "ALREADY_EXISTS",
+    "NOT_FOUND",
+    "IMMUTABLE",
+    "FORBIDDEN",
+    "CONFLICT",
+    "INVALID",
+    "CLOSED",
+    "BACKEND"
+  ],
+  "rfb": [
+    {
+      "name": "a host and port",
+      "endpoint": "vm.example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a host and port with a scheme",
+      "endpoint": "rfb://vm.example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a scheme in capitals",
+      "endpoint": "RFB://vm.example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a dns prefix",
+      "endpoint": "dns:///vm.example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a dns prefix and a scheme",
+      "endpoint": "dns:///rfb://vm.example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a dns prefix in capitals",
+      "endpoint": "DNS:///vm.example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "spaces around it",
+      "endpoint": "  vm.example:5900  ",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a tab and a newline around it",
+      "endpoint": "\t\nvm.example:5900\n\t",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "an address",
+      "endpoint": "192.0.2.10:5900",
+      "value": [
+        "192.0.2.10",
+        5900
+      ]
+    },
+    {
+      "name": "an address in brackets",
+      "endpoint": "[2001:db8::1]:5900",
+      "value": [
+        "2001:db8::1",
+        5900
+      ]
+    },
+    {
+      "name": "an address with a zone",
+      "endpoint": "[FE80::1%ETH0]:5900",
+      "value": [
+        "fe80::1%ETH0",
+        5900
+      ]
+    },
+    {
+      "name": "a zone and nothing before it",
+      "endpoint": "%ETH0:5900",
+      "value": [
+        "%ETH0",
+        5900
+      ]
+    },
+    {
+      "name": "brackets with nothing in them",
+      "endpoint": "[]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "credentials and no user",
+      "endpoint": "@vm.example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a bracket nobody closed",
+      "endpoint": "[2001:db8::1:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a tab in the middle of the host",
+      "endpoint": "vm.exa\tmple:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "the lowest port",
+      "endpoint": "vm.example:1",
+      "value": [
+        "vm.example",
+        1
+      ]
+    },
+    {
+      "name": "the highest port",
+      "endpoint": "vm.example:65535",
+      "value": [
+        "vm.example",
+        65535
+      ]
+    },
+    {
+      "name": "port zero",
+      "endpoint": "vm.example:0",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a port past the end",
+      "endpoint": "vm.example:65536",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a negative port",
+      "endpoint": "vm.example:-1",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a port that is not a number",
+      "endpoint": "vm.example:abc",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "no port at all",
+      "endpoint": "vm.example",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "no host at all",
+      "endpoint": ":5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "nothing",
+      "endpoint": "",
+      "error": "INVALID",
+      "message": "endpoint is required for protocol rfb"
+    },
+    {
+      "name": "only spaces",
+      "endpoint": "   ",
+      "error": "INVALID",
+      "message": "endpoint is required for protocol rfb"
+    },
+    {
+      "name": "nothing given",
+      "endpoint": null,
+      "error": "INVALID",
+      "message": "endpoint is required for protocol rfb"
+    },
+    {
+      "name": "a path after it",
+      "endpoint": "vm.example:5900/path",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a query after it",
+      "endpoint": "vm.example:5900?x=1",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a fragment after it",
+      "endpoint": "vm.example:5900#x",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "credentials in front",
+      "endpoint": "user:pw@vm.example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "a host in capitals",
+      "endpoint": "VM.Example:5900",
+      "value": [
+        "vm.example",
+        5900
+      ]
+    },
+    {
+      "name": "another colon after the port",
+      "endpoint": "vm.example:5900:1",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "an address in brackets with no port",
+      "endpoint": "[2001:db8::1]",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a scheme and nothing else",
+      "endpoint": "rfb://",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a space inside the port",
+      "endpoint": "vm.example: 5900",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a port in another script",
+      "endpoint": "vm.example:٥٩٠٠",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a name in brackets",
+      "endpoint": "[vmhost]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "brackets the wrong way round",
+      "endpoint": "]a[:1",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "something before the bracket",
+      "endpoint": "a[::1]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "something after the bracket",
+      "endpoint": "[::1]x:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "four octets in brackets",
+      "endpoint": "[192.0.2.10]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "an IPvFuture address",
+      "endpoint": "[v7.example]:5900",
+      "value": [
+        "v7.example",
+        5900
+      ]
+    },
+    {
+      "name": "an IPvFuture address with no version",
+      "endpoint": "[v.example]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "brackets in the credentials",
+      "endpoint": "[::1]@vm.example:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "brackets in the credentials and no port",
+      "endpoint": "[::1]@vm.example",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a closing bracket in the credentials",
+      "endpoint": "]@[::1",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a zone with nothing in it",
+      "endpoint": "[fe80::1%]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a second zone",
+      "endpoint": "[fe80::1%a%b]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "an address ending in four octets",
+      "endpoint": "[::ffff:192.0.2.10]:5900",
+      "value": [
+        "::ffff:192.0.2.10",
+        5900
+      ]
+    },
+    {
+      "name": "an octet past the end",
+      "endpoint": "[::ffff:192.0.2.256]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "an octet with a leading zero",
+      "endpoint": "[::ffff:192.0.2.010]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "three octets where there are four",
+      "endpoint": "[::ffff:1.2.3]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a name where the octets go",
+      "endpoint": "[::ffff:host.example]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "eight groups written out",
+      "endpoint": "[1:2:3:4:5:6:7:8]:5900",
+      "value": [
+        "1:2:3:4:5:6:7:8",
+        5900
+      ]
+    },
+    {
+      "name": "nine groups",
+      "endpoint": "[1:2:3:4:5:6:7:8:9]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "eleven groups",
+      "endpoint": "[1:2:3:4:5:6:7:8:9:a:b]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "eight groups and a run of zeroes",
+      "endpoint": "[1:2:3:4:5:6:7:8::]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a run of zeroes standing in for nothing",
+      "endpoint": "[1:2:3:4::5:6:7:8]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "two runs of zeroes",
+      "endpoint": "[1::2::3]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a leading colon before a run",
+      "endpoint": "[:1::2]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a trailing colon after a run",
+      "endpoint": "[1::2:]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a leading colon and no run at all",
+      "endpoint": "[:1:2:3:4:5:6:7]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a trailing colon and no run at all",
+      "endpoint": "[1:2:3:4:5:6:7:]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a run of zeroes at the end",
+      "endpoint": "[1:2:3:4:5:6:7::]:5900",
+      "value": [
+        "1:2:3:4:5:6:7::",
+        5900
+      ]
+    },
+    {
+      "name": "three groups where there are eight",
+      "endpoint": "[1:2:3]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "two groups",
+      "endpoint": "[a:b]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a group of five digits",
+      "endpoint": "[12345::1]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "a group that is not hex",
+      "endpoint": "[::z]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    },
+    {
+      "name": "nothing but a run of zeroes",
+      "endpoint": "[::]:5900",
+      "value": [
+        "::",
+        5900
+      ]
+    },
+    {
+      "name": "an address longer than an address goes",
+      "endpoint": "[2001:db8:2001:db8:2001:db8:2001:db8:2001:db8:1]:5900",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port or rfb://host:port"
+    }
+  ],
+  "litevirt": [
+    {
+      "name": "a host and port",
+      "endpoint": "vm.example:9000",
+      "value": [
+        "vm.example",
+        9000
+      ]
+    },
+    {
+      "name": "a dns prefix",
+      "endpoint": "dns:///vm.example:9000",
+      "value": [
+        "vm.example",
+        9000
+      ]
+    },
+    {
+      "name": "a dns prefix in capitals",
+      "endpoint": "DNS:///vm.example:9000",
+      "value": [
+        "vm.example",
+        9000
+      ]
+    },
+    {
+      "name": "spaces around it",
+      "endpoint": "  vm.example:9000  ",
+      "value": [
+        "vm.example",
+        9000
+      ]
+    },
+    {
+      "name": "an address in brackets",
+      "endpoint": "[2001:db8::1]:9000",
+      "value": [
+        "2001:db8::1",
+        9000
+      ]
+    },
+    {
+      "name": "a bracket nobody closed",
+      "endpoint": "[2001:db8::1:9000",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port"
+    },
+    {
+      "name": "a scheme it does not take",
+      "endpoint": "rfb://vm.example:9000",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "no port at all",
+      "endpoint": "vm.example",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "port zero",
+      "endpoint": "vm.example:0",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a port past the end",
+      "endpoint": "vm.example:65536",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "nothing",
+      "endpoint": "",
+      "error": "INVALID",
+      "message": "endpoint is required for protocol litevirt"
+    },
+    {
+      "name": "only spaces",
+      "endpoint": "   ",
+      "error": "INVALID",
+      "message": "endpoint is required for protocol litevirt"
+    },
+    {
+      "name": "nothing given",
+      "endpoint": null,
+      "error": "INVALID",
+      "message": "endpoint is required for protocol litevirt"
+    },
+    {
+      "name": "a host in capitals",
+      "endpoint": "VM.Example:9000",
+      "value": [
+        "vm.example",
+        9000
+      ]
+    },
+    {
+      "name": "credentials in front",
+      "endpoint": "user:pw@vm.example:9000",
+      "value": [
+        "vm.example",
+        9000
+      ]
+    },
+    {
+      "name": "a path after it",
+      "endpoint": "vm.example:9000/x",
+      "value": [
+        "vm.example",
+        9000
+      ]
+    },
+    {
+      "name": "an address in brackets with no port",
+      "endpoint": "[2001:db8::1]",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a negative port",
+      "endpoint": "vm.example:-1",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a port that is not a number",
+      "endpoint": "vm.example:abc",
+      "error": "INVALID",
+      "message": "invalid endpoint port"
+    },
+    {
+      "name": "a name in brackets",
+      "endpoint": "[vmhost]:9000",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port"
+    },
+    {
+      "name": "brackets the wrong way round",
+      "endpoint": "]a[:9000",
+      "error": "INVALID",
+      "message": "invalid endpoint; expected host:port"
+    },
+    {
+      "name": "an IPvFuture address",
+      "endpoint": "[v7.example]:9000",
+      "value": [
+        "v7.example",
+        9000
+      ]
+    }
+  ],
+  "definitions": [
+    {
+      "name": "an ordinary target",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "a target with a tenant",
+      "fields": {
+        "target_id": "vm1",
+        "tenant_id": "acme",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "acme",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "an identifier with a dot",
+      "fields": {
+        "target_id": "vm.1",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm.1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "an identifier starting with a dash",
+      "fields": {
+        "target_id": "-vm",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "target_id must be a safe identifier"
+    },
+    {
+      "name": "an identifier starting with a dot",
+      "fields": {
+        "target_id": ".vm",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "target_id must be a safe identifier"
+    },
+    {
+      "name": "an identifier with a slash",
+      "fields": {
+        "target_id": "a/b",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "target_id must be a safe identifier"
+    },
+    {
+      "name": "an identifier with a space",
+      "fields": {
+        "target_id": "a b",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "target_id must be a safe identifier"
+    },
+    {
+      "name": "an empty identifier",
+      "fields": {
+        "target_id": "",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "target_id must be a safe identifier"
+    },
+    {
+      "name": "an identifier of one character",
+      "fields": {
+        "target_id": "a",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "a",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "an identifier of the longest length",
+      "fields": {
+        "target_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "an identifier one too long",
+      "fields": {
+        "target_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "target_id must be a safe identifier"
+    },
+    {
+      "name": "an identifier with a newline after it",
+      "fields": {
+        "target_id": "vm1\n",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1\n",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "an identifier with a newline inside it",
+      "fields": {
+        "target_id": "vm\n1",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "target_id must be a safe identifier"
+    },
+    {
+      "name": "a protocol in capitals",
+      "fields": {
+        "target_id": "vm1",
+        "protocol": "RFB",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "a protocol with spaces",
+      "fields": {
+        "target_id": "vm1",
+        "protocol": "  rfb  ",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "a protocol nobody speaks",
+      "fields": {
+        "target_id": "vm1",
+        "protocol": "vnc2",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "unsupported protocol"
+    },
+    {
+      "name": "the memory protocol",
+      "fields": {
+        "target_id": "vm1",
+        "protocol": "memory"
+      },
+      "protocol": "memory",
+      "endpoint": null,
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "memory",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00"
+      }
+    },
+    {
+      "name": "litevirt",
+      "fields": {
+        "target_id": "vm1",
+        "protocol": "litevirt",
+        "endpoint": "vm.example:9000"
+      },
+      "protocol": "litevirt",
+      "endpoint": "vm.example:9000",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "litevirt",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:9000"
+      }
+    },
+    {
+      "name": "a size of one",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "width": 1,
+        "height": 1
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 1,
+        "height": 1,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "the largest size",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "width": 8192,
+        "height": 8192
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 8192,
+        "height": 8192,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "no width at all",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "width": 0
+      },
+      "error": "INVALID",
+      "message": "width out of range"
+    },
+    {
+      "name": "a width past the end",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "width": 8193
+      },
+      "error": "INVALID",
+      "message": "width out of range"
+    },
+    {
+      "name": "a negative height",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "height": -1
+      },
+      "error": "INVALID",
+      "message": "height out of range"
+    },
+    {
+      "name": "no height at all",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "height": 0
+      },
+      "error": "INVALID",
+      "message": "height out of range"
+    },
+    {
+      "name": "a negative width",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "width": -1
+      },
+      "error": "INVALID",
+      "message": "width out of range"
+    },
+    {
+      "name": "a tenant with a slash",
+      "fields": {
+        "target_id": "vm1",
+        "tenant_id": "a/b",
+        "endpoint": "vm.example:5900"
+      },
+      "error": "INVALID",
+      "message": "tenant_id is invalid"
+    },
+    {
+      "name": "a tenant of only spaces",
+      "fields": {
+        "target_id": "vm1",
+        "tenant_id": "   ",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "   ",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "a tenant with a newline after it",
+      "fields": {
+        "target_id": "vm1",
+        "tenant_id": "acme\n",
+        "endpoint": "vm.example:5900"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "acme\n",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "a secret from the environment",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "env:CA_BUNDLE"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "env:CA_BUNDLE"
+      }
+    },
+    {
+      "name": "a secret from a file",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "file:/etc/ca.pem"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "file:/etc/ca.pem"
+      }
+    },
+    {
+      "name": "a secret from a relative file",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "file:etc/ca.pem"
+      },
+      "error": "INVALID",
+      "message": "invalid secret reference syntax"
+    },
+    {
+      "name": "a secret from somewhere else",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "http://x/ca"
+      },
+      "error": "INVALID",
+      "message": "invalid secret reference syntax"
+    },
+    {
+      "name": "a secret named oddly",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "env:1BAD"
+      },
+      "error": "INVALID",
+      "message": "invalid secret reference syntax"
+    },
+    {
+      "name": "a client key reference",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "client_key_secret_ref": "bad"
+      },
+      "error": "INVALID",
+      "message": "invalid secret reference syntax"
+    },
+    {
+      "name": "a certificate reference",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "client_cert_secret_ref": "bad"
+      },
+      "error": "INVALID",
+      "message": "invalid secret reference syntax"
+    },
+    {
+      "name": "a secret reference with a newline after it",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "env:CA\n"
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "env:CA\n"
+      }
+    },
+    {
+      "name": "a secret reference with a newline inside it",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "env:CA\nmore"
+      },
+      "error": "INVALID",
+      "message": "invalid secret reference syntax"
+    },
+    {
+      "name": "a secret reference with a null byte in it",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "file:/etc/\u0000ca.pem"
+      },
+      "error": "INVALID",
+      "message": "invalid secret reference syntax"
+    },
+    {
+      "name": "a secret reference that is only a file scheme",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "vm.example:5900",
+        "ca_secret_ref": "file:/"
+      },
+      "error": "INVALID",
+      "message": "invalid secret reference syntax"
+    },
+    {
+      "name": "an endpoint written every long way",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": "  dns:///RFB://VM.Example:5900/ignored  "
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "rfb",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900"
+      }
+    },
+    {
+      "name": "memory with an endpoint nobody could reach",
+      "fields": {
+        "target_id": "vm1",
+        "protocol": "memory",
+        "endpoint": "nonsense"
+      },
+      "protocol": "memory",
+      "endpoint": "nonsense",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "memory",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "nonsense"
+      }
+    },
+    {
+      "name": "memory with no endpoint at all",
+      "fields": {
+        "target_id": "vm1",
+        "protocol": "memory",
+        "endpoint": null
+      },
+      "protocol": "memory",
+      "endpoint": null,
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "",
+        "display_name": "",
+        "protocol": "memory",
+        "width": 640,
+        "height": 480,
+        "is_system": false,
+        "is_static": false,
+        "created_at": "2026-01-02T03:04:05+00:00"
+      }
+    },
+    {
+      "name": "litevirt with no endpoint at all",
+      "fields": {
+        "target_id": "vm1",
+        "protocol": "litevirt",
+        "endpoint": null
+      },
+      "error": "INVALID",
+      "message": "endpoint is required for protocol litevirt"
+    },
+    {
+      "name": "rfb with no endpoint at all",
+      "fields": {
+        "target_id": "vm1",
+        "endpoint": null
+      },
+      "error": "INVALID",
+      "message": "endpoint is required for protocol rfb"
+    },
+    {
+      "name": "everything filled in",
+      "fields": {
+        "target_id": "vm1",
+        "tenant_id": "acme",
+        "display_name": "The one in the corner",
+        "protocol": "rfb",
+        "endpoint": "vm.example:5900",
+        "secret": "s3cret",
+        "width": 1024,
+        "height": 768,
+        "is_system": true,
+        "is_static": true,
+        "ca_secret_ref": "env:CA",
+        "client_cert_secret_ref": "file:/etc/cert.pem",
+        "client_key_secret_ref": "env:KEY",
+        "created_by": "ada",
+        "updated_by": "grace",
+        "updated_at": "2026-02-03T04:05:06+00:00",
+        "config": {
+          "vm_name": "guest-1",
+          "depth": 24
+        }
+      },
+      "protocol": "rfb",
+      "endpoint": "vm.example:5900",
+      "wire": {
+        "target_id": "vm1",
+        "tenant_id": "acme",
+        "display_name": "The one in the corner",
+        "protocol": "rfb",
+        "width": 1024,
+        "height": 768,
+        "is_system": true,
+        "is_static": true,
+        "created_at": "2026-01-02T03:04:05+00:00",
+        "endpoint": "vm.example:5900",
+        "secret": "s3cret",
+        "ca_secret_ref": "env:CA",
+        "client_cert_secret_ref": "file:/etc/cert.pem",
+        "client_key_secret_ref": "env:KEY",
+        "created_by": "ada",
+        "updated_by": "grace",
+        "updated_at": "2026-02-03T04:05:06+00:00",
+        "config": {
+          "vm_name": "guest-1",
+          "depth": 24
+        }
+      }
+    }
+  ],
+  "scopes": [
+    {
+      "name": "the system scope against a tenant's target",
+      "scope_tenant": null,
+      "is_system": true,
+      "target_tenant": "acme",
+      "is_valid": true,
+      "permits": true
+    },
+    {
+      "name": "the system scope against an unowned target",
+      "scope_tenant": null,
+      "is_system": true,
+      "target_tenant": null,
+      "is_valid": true,
+      "permits": true
+    },
+    {
+      "name": "a tenant against its own target",
+      "scope_tenant": "acme",
+      "is_system": false,
+      "target_tenant": "acme",
+      "is_valid": true,
+      "permits": true
+    },
+    {
+      "name": "a tenant against another's target",
+      "scope_tenant": "acme",
+      "is_system": false,
+      "target_tenant": "other",
+      "is_valid": true,
+      "permits": false
+    },
+    {
+      "name": "a tenant against an unowned target",
+      "scope_tenant": "acme",
+      "is_system": false,
+      "target_tenant": null,
+      "is_valid": true,
+      "permits": false
+    },
+    {
+      "name": "a scope that is both",
+      "scope_tenant": "acme",
+      "is_system": true,
+      "target_tenant": "acme",
+      "is_valid": false,
+      "permits": false
+    },
+    {
+      "name": "a scope that is neither",
+      "scope_tenant": null,
+      "is_system": false,
+      "target_tenant": "acme",
+      "is_valid": false,
+      "permits": false
+    }
+  ],
+  "scope_for_tenant": [
+    {
+      "tenant": "acme",
+      "scope": {
+        "tenant_id": "acme",
+        "is_system": false
+      },
+      "ok": true
+    },
+    {
+      "tenant": "",
+      "scope": null,
+      "ok": false
+    },
+    {
+      "tenant": "   ",
+      "scope": null,
+      "ok": false
+    },
+    {
+      "tenant": "a b",
+      "scope": {
+        "tenant_id": "a b",
+        "is_system": false
+      },
+      "ok": true
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "creating and reading back",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "vm1",
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "list",
+          "scope": "system",
+          "value": [
+            {
+              "target_id": "vm1",
+              "tenant_id": "",
+              "display_name": "",
+              "protocol": "rfb",
+              "width": 640,
+              "height": 480,
+              "is_system": false,
+              "is_static": false,
+              "created_at": "2026-01-02T03:04:06+00:00",
+              "endpoint": "vm.example:5900"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "creating the same identifier twice",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "other.example:5900"
+          },
+          "error": "ALREADY_EXISTS",
+          "message": "graphical target already exists"
+        }
+      ]
+    },
+    {
+      "name": "creating something that does not validate",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example"
+          },
+          "error": "INVALID",
+          "message": "invalid endpoint; expected host:port or rfb://host:port"
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "vm1",
+          "value": null
+        }
+      ]
+    },
+    {
+      "name": "a tenant creating its own target",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "acme",
+          "fields": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "get",
+          "scope": "acme",
+          "target_id": "vm1",
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "get",
+          "scope": "other",
+          "target_id": "vm1",
+          "value": null
+        },
+        {
+          "op": "list",
+          "scope": "other",
+          "value": []
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "vm1",
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a tenant creating a target for somebody else",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "acme",
+          "fields": {
+            "target_id": "vm1",
+            "tenant_id": "other",
+            "endpoint": "vm.example:5900"
+          },
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        }
+      ]
+    },
+    {
+      "name": "a tenant creating an unowned target",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "acme",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900"
+          },
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        }
+      ]
+    },
+    {
+      "name": "an untenanted target belongs to the system alone",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "get",
+          "scope": "acme",
+          "target_id": "vm1",
+          "value": null
+        },
+        {
+          "op": "list",
+          "scope": "acme",
+          "value": []
+        }
+      ]
+    },
+    {
+      "name": "working under a scope that is neither",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "broken",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900"
+          },
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        },
+        {
+          "op": "get",
+          "scope": "broken",
+          "target_id": "vm1",
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        },
+        {
+          "op": "list",
+          "scope": "broken",
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        },
+        {
+          "op": "delete",
+          "scope": "broken",
+          "target_id": "vm1",
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        }
+      ]
+    },
+    {
+      "name": "updating what is there",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900",
+            "display_name": "first"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "first",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "update",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5901",
+            "display_name": "second"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "second",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5901",
+            "updated_at": "2026-01-02T03:04:07+00:00"
+          }
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "vm1",
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "second",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5901",
+            "updated_at": "2026-01-02T03:04:07+00:00"
+          }
+        }
+      ]
+    },
+    {
+      "name": "updating what is not there",
+      "steps": [
+        {
+          "op": "update",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900"
+          },
+          "error": "NOT_FOUND",
+          "message": "graphical target not found"
+        }
+      ]
+    },
+    {
+      "name": "a tenant updating a target into somebody else's name",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "acme",
+          "fields": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "update",
+          "scope": "acme",
+          "fields": {
+            "target_id": "vm1",
+            "tenant_id": "other",
+            "endpoint": "vm.example:5901"
+          },
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        },
+        {
+          "op": "get",
+          "scope": "acme",
+          "target_id": "vm1",
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        }
+      ]
+    },
+    {
+      "name": "one tenant updating another's target",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "acme",
+          "fields": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "update",
+          "scope": "other",
+          "fields": {
+            "target_id": "vm1",
+            "tenant_id": "other",
+            "endpoint": "vm.example:5901"
+          },
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        },
+        {
+          "op": "get",
+          "scope": "acme",
+          "target_id": "vm1",
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        }
+      ]
+    },
+    {
+      "name": "deleting what is there",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "delete",
+          "scope": "system",
+          "target_id": "vm1",
+          "value": null
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "vm1",
+          "value": null
+        },
+        {
+          "op": "delete",
+          "scope": "system",
+          "target_id": "vm1",
+          "error": "NOT_FOUND",
+          "message": "graphical target not found"
+        }
+      ]
+    },
+    {
+      "name": "one tenant deleting another's target",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "acme",
+          "fields": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "delete",
+          "scope": "other",
+          "target_id": "vm1",
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        },
+        {
+          "op": "get",
+          "scope": "acme",
+          "target_id": "vm1",
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a seeded target is immutable",
+      "steps": [
+        {
+          "op": "add_static",
+          "fields": {
+            "target_id": "seed",
+            "endpoint": "seed.example:5900"
+          },
+          "value": null
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "seed",
+          "value": {
+            "target_id": "seed",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": true,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:05+00:00",
+            "endpoint": "seed.example:5900"
+          }
+        },
+        {
+          "op": "update",
+          "scope": "system",
+          "fields": {
+            "target_id": "seed",
+            "endpoint": "other.example:5900"
+          },
+          "error": "IMMUTABLE",
+          "message": "static graphical target is immutable"
+        },
+        {
+          "op": "delete",
+          "scope": "system",
+          "target_id": "seed",
+          "error": "IMMUTABLE",
+          "message": "static graphical target is immutable"
+        },
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "seed",
+            "endpoint": "other.example:5900"
+          },
+          "error": "ALREADY_EXISTS",
+          "message": "graphical target already exists"
+        }
+      ]
+    },
+    {
+      "name": "seeding the same identifier twice",
+      "steps": [
+        {
+          "op": "add_static",
+          "fields": {
+            "target_id": "seed",
+            "endpoint": "seed.example:5900"
+          },
+          "value": null
+        },
+        {
+          "op": "add_static",
+          "fields": {
+            "target_id": "seed",
+            "endpoint": "other.example:5900"
+          },
+          "error": "CONFLICT",
+          "message": "duplicate graphical target_id"
+        }
+      ]
+    },
+    {
+      "name": "seeding something that does not validate",
+      "steps": [
+        {
+          "op": "add_static",
+          "fields": {
+            "target_id": "seed",
+            "endpoint": "seed.example"
+          },
+          "error": "INVALID",
+          "message": "invalid endpoint; expected host:port or rfb://host:port"
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "seed",
+          "value": null
+        }
+      ]
+    },
+    {
+      "name": "a seeded target a tenant may not see",
+      "steps": [
+        {
+          "op": "add_static",
+          "fields": {
+            "target_id": "seed",
+            "tenant_id": "acme",
+            "endpoint": "s.example:5900"
+          },
+          "value": null
+        },
+        {
+          "op": "get",
+          "scope": "other",
+          "target_id": "seed",
+          "value": null
+        },
+        {
+          "op": "list",
+          "scope": "other",
+          "value": []
+        },
+        {
+          "op": "delete",
+          "scope": "other",
+          "target_id": "seed",
+          "error": "FORBIDDEN",
+          "message": "graphical target tenant scope denied"
+        },
+        {
+          "op": "get",
+          "scope": "acme",
+          "target_id": "seed",
+          "value": {
+            "target_id": "seed",
+            "tenant_id": "acme",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": true,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:05+00:00",
+            "endpoint": "s.example:5900"
+          }
+        },
+        {
+          "op": "delete",
+          "scope": "acme",
+          "target_id": "seed",
+          "error": "IMMUTABLE",
+          "message": "static graphical target is immutable"
+        }
+      ]
+    },
+    {
+      "name": "a seeded target shadows a runtime one of the same name",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "display_name": "runtime",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "runtime",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "add_static",
+          "fields": {
+            "target_id": "vm1",
+            "display_name": "seeded",
+            "endpoint": "seed.example:5900"
+          },
+          "value": null
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "vm1",
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "seeded",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": true,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:05+00:00",
+            "endpoint": "seed.example:5900"
+          }
+        },
+        {
+          "op": "list",
+          "scope": "system",
+          "value": [
+            {
+              "target_id": "vm1",
+              "tenant_id": "",
+              "display_name": "seeded",
+              "protocol": "rfb",
+              "width": 640,
+              "height": 480,
+              "is_system": true,
+              "is_static": false,
+              "created_at": "2026-01-02T03:04:05+00:00",
+              "endpoint": "seed.example:5900"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "listing comes back in order",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm2",
+            "endpoint": "b.example:5900"
+          },
+          "value": {
+            "target_id": "vm2",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "b.example:5900"
+          }
+        },
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "a.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:07+00:00",
+            "endpoint": "a.example:5900"
+          }
+        },
+        {
+          "op": "add_static",
+          "fields": {
+            "target_id": "vm0",
+            "endpoint": "c.example:5900"
+          },
+          "value": null
+        },
+        {
+          "op": "list",
+          "scope": "system",
+          "value": [
+            {
+              "target_id": "vm0",
+              "tenant_id": "",
+              "display_name": "",
+              "protocol": "rfb",
+              "width": 640,
+              "height": 480,
+              "is_system": true,
+              "is_static": false,
+              "created_at": "2026-01-02T03:04:05+00:00",
+              "endpoint": "c.example:5900"
+            },
+            {
+              "target_id": "vm1",
+              "tenant_id": "",
+              "display_name": "",
+              "protocol": "rfb",
+              "width": 640,
+              "height": 480,
+              "is_system": false,
+              "is_static": false,
+              "created_at": "2026-01-02T03:04:07+00:00",
+              "endpoint": "a.example:5900"
+            },
+            {
+              "target_id": "vm2",
+              "tenant_id": "",
+              "display_name": "",
+              "protocol": "rfb",
+              "width": 640,
+              "height": 480,
+              "is_system": false,
+              "is_static": false,
+              "created_at": "2026-01-02T03:04:06+00:00",
+              "endpoint": "b.example:5900"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "a closed registry does nothing at all",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900"
+          }
+        },
+        {
+          "op": "close",
+          "value": null
+        },
+        {
+          "op": "get",
+          "scope": "system",
+          "target_id": "vm1",
+          "error": "CLOSED",
+          "message": "graphical target registry is closed"
+        },
+        {
+          "op": "list",
+          "scope": "system",
+          "error": "CLOSED",
+          "message": "graphical target registry is closed"
+        },
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm2",
+            "endpoint": "vm.example:5900"
+          },
+          "error": "CLOSED",
+          "message": "graphical target registry is closed"
+        },
+        {
+          "op": "update",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5901"
+          },
+          "error": "CLOSED",
+          "message": "graphical target registry is closed"
+        },
+        {
+          "op": "delete",
+          "scope": "system",
+          "target_id": "vm1",
+          "error": "CLOSED",
+          "message": "graphical target registry is closed"
+        },
+        {
+          "op": "add_static",
+          "fields": {
+            "target_id": "seed",
+            "endpoint": "seed.example:5900"
+          },
+          "value": null
+        }
+      ]
+    },
+    {
+      "name": "what an update keeps from what it replaces",
+      "steps": [
+        {
+          "op": "create",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5900",
+            "created_by": "ada"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5900",
+            "created_by": "ada"
+          }
+        },
+        {
+          "op": "update",
+          "scope": "system",
+          "fields": {
+            "target_id": "vm1",
+            "endpoint": "vm.example:5901",
+            "created_by": "mallory",
+            "updated_by": "grace"
+          },
+          "value": {
+            "target_id": "vm1",
+            "tenant_id": "",
+            "display_name": "",
+            "protocol": "rfb",
+            "width": 640,
+            "height": 480,
+            "is_system": false,
+            "is_static": false,
+            "created_at": "2026-01-02T03:04:06+00:00",
+            "endpoint": "vm.example:5901",
+            "created_by": "ada",
+            "updated_by": "grace",
+            "updated_at": "2026-01-02T03:04:07+00:00"
+          }
+        }
+      ]
+    }
+  ],
+  "system_scope": {
+    "tenant_id": null,
+    "is_system": true
+  },
+  "public_copy": {
+    "value": {
+      "target_id": "vm1",
+      "tenant_id": "",
+      "display_name": "",
+      "protocol": "rfb",
+      "width": 640,
+      "height": 480,
+      "is_system": false,
+      "is_static": false,
+      "created_at": "2026-01-02T03:04:05+00:00",
+      "endpoint": "vm.example:5900",
+      "config": {
+        "vm_name": "guest-1"
+      }
+    }
+  }
+}

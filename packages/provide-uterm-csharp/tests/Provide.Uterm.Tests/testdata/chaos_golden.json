@@ -1,0 +1,331 @@
+{
+  "defaults": {
+    "disconnect_every_n_receives": 0,
+    "label": "chaos",
+    "max_jitter_ms": 0,
+    "seed": 1,
+    "timeout_every_n_receives": 0
+  },
+  "delegation": {
+    "calls": [
+      [
+        "connect",
+        "bbs.example.org",
+        2323,
+        [
+          "origin"
+        ]
+      ],
+      [
+        "send",
+        [
+          108,
+          115,
+          13
+        ]
+      ],
+      [
+        "disconnect"
+      ]
+    ],
+    "connected_after_connect": true,
+    "connected_after_disconnect": false,
+    "connected_before": false
+  },
+  "jitter": {
+    "jitter_bound_s": 0.05,
+    "jitter_within_bound": true,
+    "jittered_count": 4,
+    "timeout_delays_s": [
+      0.25
+    ],
+    "unjittered_count": 0
+  },
+  "receives": 7,
+  "schedules": [
+    {
+      "name": "no faults",
+      "outcomes": [
+        {
+          "data": "read-1",
+          "kind": "data"
+        },
+        {
+          "data": "read-2",
+          "kind": "data"
+        },
+        {
+          "data": "read-3",
+          "kind": "data"
+        },
+        {
+          "data": "read-4",
+          "kind": "data"
+        },
+        {
+          "data": "read-5",
+          "kind": "data"
+        },
+        {
+          "data": "read-6",
+          "kind": "data"
+        },
+        {
+          "data": "read-7",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "name": "disconnect every third",
+      "outcomes": [
+        {
+          "data": "read-1",
+          "kind": "data"
+        },
+        {
+          "data": "read-2",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #3"
+        },
+        {
+          "data": "read-3",
+          "kind": "data"
+        },
+        {
+          "data": "read-4",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #6"
+        },
+        {
+          "data": "read-5",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "name": "timeout every second",
+      "outcomes": [
+        {
+          "data": "read-1",
+          "kind": "data"
+        },
+        {
+          "data": "",
+          "kind": "timeout"
+        },
+        {
+          "data": "read-2",
+          "kind": "data"
+        },
+        {
+          "data": "",
+          "kind": "timeout"
+        },
+        {
+          "data": "read-3",
+          "kind": "data"
+        },
+        {
+          "data": "",
+          "kind": "timeout"
+        },
+        {
+          "data": "read-4",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "name": "disconnect every one",
+      "outcomes": [
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #1"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #2"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #3"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #4"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #5"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #6"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #7"
+        }
+      ]
+    },
+    {
+      "name": "both, disconnect wins the tie",
+      "outcomes": [
+        {
+          "data": "read-1",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #2"
+        },
+        {
+          "data": "read-2",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #4"
+        },
+        {
+          "data": "read-3",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #6"
+        },
+        {
+          "data": "read-4",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "name": "both, out of phase",
+      "outcomes": [
+        {
+          "data": "read-1",
+          "kind": "data"
+        },
+        {
+          "data": "",
+          "kind": "timeout"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #3"
+        },
+        {
+          "data": "",
+          "kind": "timeout"
+        },
+        {
+          "data": "read-2",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #6"
+        },
+        {
+          "data": "read-3",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "name": "a custom label",
+      "outcomes": [
+        {
+          "data": "read-1",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "flaky-bbs: injected disconnect on receive #2"
+        },
+        {
+          "data": "read-2",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "flaky-bbs: injected disconnect on receive #4"
+        },
+        {
+          "data": "read-3",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "flaky-bbs: injected disconnect on receive #6"
+        },
+        {
+          "data": "read-4",
+          "kind": "data"
+        }
+      ]
+    },
+    {
+      "name": "an empty label falls back",
+      "outcomes": [
+        {
+          "data": "read-1",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #2"
+        },
+        {
+          "data": "read-2",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #4"
+        },
+        {
+          "data": "read-3",
+          "kind": "data"
+        },
+        {
+          "connected_after": false,
+          "kind": "disconnect",
+          "message": "chaos: injected disconnect on receive #6"
+        },
+        {
+          "data": "read-4",
+          "kind": "data"
+        }
+      ]
+    }
+  ]
+}

@@ -65,6 +65,17 @@ step "goldens"            bash .ci/check_goldens.sh
 # The cross-language fuzz corpus: reproducible from its committed seed, and
 # still matching what the CPython reference produces. Four ports replay it.
 step "fuzz-corpus"        bash ci/check_fuzz_corpus.sh
+# Wire-contract guardrails. The protocol-version triple is declared six times
+# (Go and C# each declare it twice, for bridge and shell), signature_corpus.json
+# is committed twice, and neither duplication had anything holding it together.
+step "protocol-drift"     uv run python scripts/check_protocol_drift.py
+# The two cross-language behaviour contracts. --validate-only checks the
+# contract's own shape -- category cardinality, exact backend cells, truthful
+# served/unsupported/unserved statuses -- without launching the native adapters,
+# so it is fast enough for the static gate. The executable halves stay in the
+# live-matrix and conformance jobs.
+step "lifecycle-contract" uv run python scripts/run_session_lifecycle_security_scenarios.py --validate-only
+step "fanout-contract"    uv run python scripts/run_fanout_security_scenarios.py --validate-only
 step "package-artifacts"  uv run python scripts/verify_package_artifacts.py
 
 printf '\n=== quality-checks summary ===\n'

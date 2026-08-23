@@ -1,0 +1,315 @@
+{
+  "global_capabilities": [
+    "pam_events.ingest",
+    "profiles.connect",
+    "profiles.create",
+    "profiles.delete",
+    "profiles.get",
+    "profiles.list",
+    "profiles.update",
+    "sessions.bulk_delete",
+    "sessions.create",
+    "sessions.list",
+    "tunnels.connect",
+    "tunnels.create",
+    "tunnels.revoke_token",
+    "tunnels.rotate_token"
+  ],
+  "session_capabilities": [
+    "sessions.analyze",
+    "sessions.annotate",
+    "sessions.clear",
+    "sessions.connect",
+    "sessions.delete",
+    "sessions.disconnect",
+    "sessions.events",
+    "sessions.events_stream",
+    "sessions.events_watch",
+    "sessions.get",
+    "sessions.recording",
+    "sessions.recording_download",
+    "sessions.recording_entries",
+    "sessions.restart",
+    "sessions.set_mode",
+    "sessions.snapshot",
+    "sessions.update",
+    "sessions.webhooks.create",
+    "sessions.webhooks.delete",
+    "sessions.webhooks.list"
+  ],
+  "requests": [
+    {
+      "name": "listing sessions",
+      "method": "GET",
+      "path": "/api/sessions",
+      "outcome": "matched",
+      "capability": "sessions.list",
+      "scope": "global",
+      "roles": [],
+      "params": {}
+    },
+    {
+      "name": "creating a session",
+      "method": "POST",
+      "path": "/api/sessions",
+      "outcome": "matched",
+      "capability": "sessions.create",
+      "scope": "global",
+      "roles": [],
+      "params": {}
+    },
+    {
+      "name": "a method the route does not take",
+      "method": "PUT",
+      "path": "/api/sessions",
+      "outcome": "method_not_allowed",
+      "status": 405,
+      "allow": [
+        "DELETE",
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "name": "another method it does not take",
+      "method": "PATCH",
+      "path": "/api/sessions",
+      "outcome": "method_not_allowed",
+      "status": 405,
+      "allow": [
+        "DELETE",
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "name": "a session by id",
+      "method": "GET",
+      "path": "/api/sessions/sess-1",
+      "outcome": "matched",
+      "capability": "sessions.get",
+      "scope": "session",
+      "roles": [],
+      "params": {
+        "session_id": "sess-1"
+      }
+    },
+    {
+      "name": "a session id with capitals in it",
+      "method": "GET",
+      "path": "/api/sessions/Sess-1",
+      "outcome": "matched",
+      "capability": "sessions.get",
+      "scope": "session",
+      "roles": [],
+      "params": {
+        "session_id": "Sess-1"
+      }
+    },
+    {
+      "name": "an API prefix in capitals",
+      "method": "GET",
+      "path": "/API/sessions",
+      "outcome": "not_api"
+    },
+    {
+      "name": "deleting a session",
+      "method": "DELETE",
+      "path": "/api/sessions/sess-1",
+      "outcome": "matched",
+      "capability": "sessions.delete",
+      "scope": "session",
+      "roles": [],
+      "params": {
+        "session_id": "sess-1"
+      }
+    },
+    {
+      "name": "a session id with a slash in it",
+      "method": "GET",
+      "path": "/api/sessions/a/b",
+      "outcome": "not_found",
+      "status": 404
+    },
+    {
+      "name": "a session id that is empty",
+      "method": "GET",
+      "path": "/api/sessions//hijack",
+      "outcome": "not_found",
+      "status": 404
+    },
+    {
+      "name": "a session id with an encoded slash",
+      "method": "GET",
+      "path": "/api/sessions/a%2Fb",
+      "outcome": "invalid_route_parameter",
+      "status": 422
+    },
+    {
+      "name": "a session id with a dot in it",
+      "method": "GET",
+      "path": "/api/sessions/a.b",
+      "outcome": "invalid_route_parameter",
+      "status": 422
+    },
+    {
+      "name": "a session id with a space in it",
+      "method": "GET",
+      "path": "/api/sessions/a b",
+      "outcome": "invalid_route_parameter",
+      "status": 422
+    },
+    {
+      "name": "a session id with a bang in it",
+      "method": "GET",
+      "path": "/api/sessions/a!b",
+      "outcome": "invalid_route_parameter",
+      "status": 422
+    },
+    {
+      "name": "a session id longer than the registry takes",
+      "method": "GET",
+      "path": "/api/sessions/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "outcome": "invalid_route_parameter",
+      "status": 422
+    },
+    {
+      "name": "a session id climbing out",
+      "method": "GET",
+      "path": "/api/sessions/../x",
+      "outcome": "not_found",
+      "status": 404
+    },
+    {
+      "name": "a bad session id on a method the route lacks",
+      "method": "PUT",
+      "path": "/api/sessions/a.b",
+      "outcome": "invalid_route_parameter",
+      "status": 422
+    },
+    {
+      "name": "a path that is not an API path",
+      "method": "GET",
+      "path": "/app/session/sess-1",
+      "outcome": "not_api"
+    },
+    {
+      "name": "the root",
+      "method": "GET",
+      "path": "/",
+      "outcome": "not_api"
+    },
+    {
+      "name": "an API path nobody routes",
+      "method": "GET",
+      "path": "/api/nowhere",
+      "outcome": "not_found",
+      "status": 404
+    },
+    {
+      "name": "an API path nobody routes, with an id",
+      "method": "GET",
+      "path": "/api/nowhere/sess-1",
+      "outcome": "not_found",
+      "status": 404
+    },
+    {
+      "name": "a method in lower case",
+      "method": "get",
+      "path": "/api/sessions",
+      "outcome": "matched",
+      "capability": "sessions.list",
+      "scope": "global",
+      "roles": [],
+      "params": {}
+    },
+    {
+      "name": "a HEAD request",
+      "method": "HEAD",
+      "path": "/api/sessions",
+      "outcome": "method_not_allowed",
+      "status": 405,
+      "allow": [
+        "DELETE",
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "name": "an OPTIONS request",
+      "method": "OPTIONS",
+      "path": "/api/sessions",
+      "outcome": "method_not_allowed",
+      "status": 405,
+      "allow": [
+        "DELETE",
+        "GET",
+        "POST"
+      ]
+    }
+  ],
+  "shapes": [
+    {
+      "name": "an exact path",
+      "path": "/api/sessions",
+      "matches": [
+        "/api/sessions",
+        "/api/sessions",
+        "/api/sessions"
+      ]
+    },
+    {
+      "name": "a parameter in place",
+      "path": "/api/sessions/sess-1",
+      "matches": [
+        "/api/sessions/{session_id}",
+        "/api/sessions/{session_id}",
+        "/api/sessions/{session_id}"
+      ]
+    },
+    {
+      "name": "a parameter that is empty",
+      "path": "/api/sessions/",
+      "matches": []
+    },
+    {
+      "name": "one segment too many",
+      "path": "/api/sessions/sess-1/extra/more",
+      "matches": []
+    },
+    {
+      "name": "one segment too few",
+      "path": "/api",
+      "matches": []
+    },
+    {
+      "name": "a literal that does not match",
+      "path": "/api/session/sess-1",
+      "matches": []
+    },
+    {
+      "name": "a parameter that is not empty but is refused",
+      "path": "/api/sessions/a.b",
+      "matches": [
+        "/api/sessions/{session_id}",
+        "/api/sessions/{session_id}",
+        "/api/sessions/{session_id}"
+      ]
+    },
+    {
+      "name": "two parameters",
+      "path": "/api/sessions/sess-1/hijack",
+      "matches": []
+    },
+    {
+      "name": "nothing at all",
+      "path": "",
+      "matches": []
+    },
+    {
+      "name": "a bare slash",
+      "path": "/",
+      "matches": []
+    }
+  ]
+}

@@ -144,9 +144,7 @@ packages/*/coverage/
 packages/provide-uterm-ts/reports/
 packages/provide-uterm-ts/.stryker-tmp/
 
-# Local benchmark run output. docs/benchmarks/ is the roadmap's intended home
-# for benchmark reports, but the results themselves are per-host measurements
-# (env.json records the machine, toolchain versions and the working revision),
-# so they are regenerated, never reviewed. Ignoring only results/ keeps the
-# directory free for committed report templates.
+# Benchmark sweeps (Makefile.bench). A result is only meaningful next to its
+# env.json fingerprint and its profile, so local runs are not history --
+# see docs/benchmarks/README.md for how to keep one deliberately.
 docs/benchmarks/results/

@@ -1,0 +1,1003 @@
+{
+  "note": "Recorded from provide.uterm.server.auth.LocalIdentityProvider._principal_from_jwt_token and extract_bearer_token, under the AuthConfig that dev_idp.setup_dev_idp leaves behind.",
+  "secret": "conformance-corpus-secret-do-not-use-in-anything-real",
+  "other_secret": "conformance-corpus-other-secret-also-not-for-real-use",
+  "issuer": "provide-uterm",
+  "audience": "provide-uterm-server",
+  "clock_skew_seconds": 15,
+  "future_exp": 4102444800,
+  "past_exp": 978307200,
+  "vectors": [
+    {
+      "name": "dev_token",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.zT-QYpr7g6YMLlAWngENEHwdZ1MMsUapsT6CnvNrb4Y",
+      "why": "exactly what setup_dev_idp mints: the token the live harness announces",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "admin"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "roles_string",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjoib3BlcmF0b3IsIHZpZXdlciJ9._-2Vdz_pBX2R23f2n4vqMQID5Jq0a02u4oy2wLV4tAA",
+      "why": "a roles claim written as text rather than a list, split on commas and spaces",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "operator",
+          "viewer"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "roles_unknown",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbInN1cGVydXNlciIsInJvb3QiXX0.jay_FEI9Bf3XELYNC5Ay6zofnQPbZJ7K2UUBwORigww",
+      "why": "roles outside the allow-list are dropped and the least-privileged role stands in",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "viewer"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "roles_absent",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDB9.-0-Sgv69PCkQ9bYdbWkWRwmbqsxy8hOzlOIQ_L5iEK4",
+      "why": "no roles claim at all is the same as none this server knows",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "viewer"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "roles_mixed_case",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbIiBBZG1pbiAiLCJWSUVXRVIiXX0.sugKFcTSBOos0_Uowml2iJTo6N0FVZ3gccne_Ym5vjQ",
+      "why": "roles are trimmed and folded before they are matched",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "admin",
+          "viewer"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "scopes_string",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl0sInNjb3BlIjoic2Vzc2lvbnM6cmVhZCBzZXNzaW9uczp3cml0ZSJ9.j1ARwGI4s105f01RoqQcFGUAc_P21DLnpWdpym8hINo",
+      "why": "the scope claim is space-separated when it is text",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "admin"
+        ],
+        "scopes": [
+          "sessions:read",
+          "sessions:write"
+        ]
+      }
+    },
+    {
+      "name": "scopes_list",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl0sInNjb3BlIjpbImEiLCIgYiAiLCIiXX0.YdBL-nfJY5O3-UHQNijm8k1sP3M9zynpJbr6zr9b9Y4",
+      "why": "a scope list is trimmed, and an empty entry is not a scope",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "admin"
+        ],
+        "scopes": [
+          "a",
+          "b"
+        ]
+      }
+    },
+    {
+      "name": "tenant",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl0sInRlbmFudF9pZCI6IkFjbWUtQ29ycCJ9.myzU12jMRrZE0a2qHBkMrEpfahMmnamoGly29PxsJe0",
+      "why": "a tenant claim is canonicalised rather than taken as written",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": "Acme-Corp",
+        "roles": [
+          "admin"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "tenant_invalid",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl0sInRlbmFudF9pZCI6Im5vdCBhIHRlbmFudCEifQ.o-4rjbrnQtsrIDtgtY0DWZSKxj0Whp7ZNI8P4MJozDk",
+      "why": "a tenant that cannot be canonicalised fails the whole token",
+      "result": {
+        "accepted": false,
+        "error_type": "ValueError",
+        "error": "invalid tenant_id claim"
+      }
+    },
+    {
+      "name": "expired",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MTkwLCJleHAiOjk3ODMwNzIwMCwicm9sZXMiOlsiYWRtaW4iXX0.EQgPeLLsa2_YfKTNpgeuXkdykU5yzwaOsy_1qgRWxD0",
+      "why": "an expiry in the past, past any clock skew",
+      "result": {
+        "accepted": false,
+        "error_type": "ExpiredSignatureError",
+        "error": "Signature has expired"
+      }
+    },
+    {
+      "name": "not_yet_valid",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl0sIm5iZiI6NDEwMjQ0NDc5MH0.vvKAP6MXaCETGeMMEyEIm-41o7KNqFU8WZoSti-EWnM",
+      "why": "a not-before in the future",
+      "result": {
+        "accepted": false,
+        "error_type": "ImmatureSignatureError",
+        "error": "The token is not yet valid (nbf)"
+      }
+    },
+    {
+      "name": "wrong_issuer",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InNvbWVib2R5LWVsc2UiLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.mJIsc3QlVOsWzL-_oqM_xT9f2HgvrLiGIb-JrE_7YUE",
+      "why": "a token minted by an issuer this deployment does not trust",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidIssuerError",
+        "error": "Invalid issuer"
+      }
+    },
+    {
+      "name": "wrong_audience",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJhbm90aGVyLXNlcnZpY2UiLCJpYXQiOjk3ODMwNzIwMCwiZXhwIjo0MTAyNDQ0ODAwLCJyb2xlcyI6WyJhZG1pbiJdfQ._sbpXTj748ndtoP4AtxbJHx4eJdQ6zxo22SEVsMYXAw",
+      "why": "a token minted for a different service, which must not be replayable here",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidAudienceError",
+        "error": "Audience doesn't match"
+      }
+    },
+    {
+      "name": "no_audience",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJpYXQiOjk3ODMwNzIwMCwiZXhwIjo0MTAyNDQ0ODAwLCJyb2xlcyI6WyJhZG1pbiJdfQ.jHKoIoQE1XEOvSNJUo8rE_bDc3YZoAiiOloRAWGmCxQ",
+      "why": "an audience the validator requires and the token does not carry",
+      "result": {
+        "accepted": false,
+        "error_type": "MissingRequiredClaimError",
+        "error": "Token is missing the \"aud\" claim"
+      }
+    },
+    {
+      "name": "no_subject",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJwcm92aWRlLXV0ZXJtIiwiYXVkIjoicHJvdmlkZS11dGVybS1zZXJ2ZXIiLCJpYXQiOjk3ODMwNzIwMCwiZXhwIjo0MTAyNDQ0ODAwLCJyb2xlcyI6WyJhZG1pbiJdfQ._bLRXBxEtzKT7X8CLJYgC6CN41l7VQFNgmGWTFLDxh0",
+      "why": "the sub claim is required outright",
+      "result": {
+        "accepted": false,
+        "error_type": "MissingRequiredClaimError",
+        "error": "Token is missing the \"sub\" claim"
+      }
+    },
+    {
+      "name": "blank_subject",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIgICAiLCJpc3MiOiJwcm92aWRlLXV0ZXJtIiwiYXVkIjoicHJvdmlkZS11dGVybS1zZXJ2ZXIiLCJpYXQiOjk3ODMwNzIwMCwiZXhwIjo0MTAyNDQ0ODAwLCJyb2xlcyI6WyJhZG1pbiJdfQ.QiIz03uaoZOCI_5APTr-_MyXBG3bGZfLFJ4JehiA4PQ",
+      "why": "a subject of nothing but spaces is no subject",
+      "result": {
+        "accepted": false,
+        "error_type": "ValueError",
+        "error": "sub claim is required"
+      }
+    },
+    {
+      "name": "no_expiry",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJyb2xlcyI6WyJhZG1pbiJdfQ.BMzwPQllcj5xDHqeZUpLd-7CLrAIPtRlsyeFTFOy2DY",
+      "why": "a token that never expires is refused rather than honoured forever",
+      "result": {
+        "accepted": false,
+        "error_type": "MissingRequiredClaimError",
+        "error": "Token is missing the \"exp\" claim"
+      }
+    },
+    {
+      "name": "wrong_signature",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.9P-ikECru8Ct5jhAqGqTsBHYgTA87i-Rp9n2ooS4krc",
+      "why": "the right claims signed by the wrong key \u2014 the whole point of verifying",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidSignatureError",
+        "error": "Signature verification failed"
+      }
+    },
+    {
+      "name": "algorithm_none",
+      "token": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.",
+      "why": "the unsigned-token attack: an algorithm outside the configured list",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidAlgorithmError",
+        "error": "The specified alg value is not allowed"
+      }
+    },
+    {
+      "name": "not_a_token",
+      "token": "not.a.real.token",
+      "why": "what the Python live driver sends as its forged token",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Invalid header string: 'utf-8' codec can't decode byte 0x9e in position 0: invalid start byte"
+      }
+    },
+    {
+      "name": "not_a_jwt_at_all",
+      "token": "uterm-live-conformance-token-no-server-issued",
+      "why": "what the TypeScript live driver sends as its forged token: not three parts",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Not enough segments"
+      }
+    },
+    {
+      "name": "empty",
+      "token": "",
+      "why": "nothing at all",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Not enough segments"
+      }
+    },
+    {
+      "name": "trailing_dot",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.zT-QYpr7g6YMLlAWngENEHwdZ1MMsUapsT6CnvNrb4Y.",
+      "why": "four parts is not three",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Invalid payload padding"
+      }
+    },
+    {
+      "name": "no_key_configured",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.zT-QYpr7g6YMLlAWngENEHwdZ1MMsUapsT6CnvNrb4Y",
+      "why": "jwt mode with neither a key nor a JWKS url is a refusal, not an unverified accept",
+      "result": {
+        "accepted": false,
+        "error_type": "ValueError",
+        "error": "jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode"
+      }
+    }
+  ],
+  "edge_vectors": [
+    {
+      "name": "header_not_object",
+      "token": "WzEsMl0.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.-lZRtk8j73XY5VtjePZ_8ulD-mi8x89wdQtz5eJALUM",
+      "why": "a header that parses as JSON and is not a claim set",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Invalid header string: must be a json object"
+      }
+    },
+    {
+      "name": "header_no_alg",
+      "token": "eyJ0eXAiOiJKV1QifQ.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.plLGJBPTIonA25nGc5zCbC-pggU2UO2ALJQHgw8eE7Q",
+      "why": "a header naming no algorithm at all",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidAlgorithmError",
+        "error": "Algorithm not specified"
+      }
+    },
+    {
+      "name": "header_alg_empty",
+      "token": "eyJhbGciOiIiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.PLhyzlKTRtQOVxXq3amsSGUC5rkJwCSvg0wBwp4A8mo",
+      "why": "an empty algorithm is not a permitted one",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidAlgorithmError",
+        "error": "The specified alg value is not allowed"
+      }
+    },
+    {
+      "name": "header_alg_asymmetric",
+      "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.ya5nfBo3LUIrbiY4L1Pq2haX5Sd4ibr0AAsWG2zuPUo",
+      "settings": {
+        "jwt_algorithms": [
+          "HS256",
+          "RS256"
+        ]
+      },
+      "why": "an algorithm the deployment allows, read against a shared secret",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidKeyError",
+        "error": "Could not parse the provided public key."
+      }
+    },
+    {
+      "name": "header_padding",
+      "token": "YWJ!jZA.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.3OFPxSXhgkoeGHJ6v_jHO79Tf5vzTvEfwushA64-CiQ",
+      "why": "a header segment whose padding cannot work out",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Invalid header padding"
+      }
+    },
+    {
+      "name": "payload_padding",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.YWJ!jZA.cAZlryS6LjhCQSbZYxF-C7CZ7-96JklMaI-N9t-0vPM",
+      "why": "a payload segment whose padding cannot work out",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Invalid payload padding"
+      }
+    },
+    {
+      "name": "crypto_padding",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.YWJ!jZA",
+      "why": "a signature segment whose padding cannot work out",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Invalid crypto padding"
+      }
+    },
+    {
+      "name": "empty_signature",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.",
+      "why": "a signature segment carrying nothing at all, which is shorter than any digest",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidSignatureError",
+        "error": "Signature verification failed"
+      }
+    },
+    {
+      "name": "payload_not_object",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.WzEsMl0.HoS3dmnHajfwZFNsAGqdUajFVGBHUptJLjA2SzSnFXo",
+      "why": "a correctly signed payload that is not a claim set",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Invalid payload string: must be a json object"
+      }
+    },
+    {
+      "name": "iat_in_the_future",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6NDEwMjQ0NDgwMCwiZXhwIjo0MTAyNDQ0ODAwLCJyb2xlcyI6WyJhZG1pbiJdfQ.KhLqKdqCUHqMEpB1GEdJ5XQ8oFOnWhMPW6s5i6x8ulk",
+      "why": "issued later than now, which is as suspect as not yet valid",
+      "result": {
+        "accepted": false,
+        "error_type": "ImmatureSignatureError",
+        "error": "The token is not yet valid (iat)"
+      }
+    },
+    {
+      "name": "iat_not_a_number",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6InNvb24iLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.4jYU8cjzMmzu681uWIPFxEPIpNHMjaZMY1cIeI5AbZk",
+      "why": "an issued-at nobody can compare",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidIssuedAtError",
+        "error": "Issued At claim (iat) must be an integer."
+      }
+    },
+    {
+      "name": "nbf_not_a_number",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl0sIm5iZiI6InNvb24ifQ.AJXOqxAx8VdI1jTgG3-UR-eSminV942tE5HYxlw7x68",
+      "why": "a not-before nobody can compare",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Not Before claim (nbf) must be an integer."
+      }
+    },
+    {
+      "name": "exp_not_a_number",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOiJuZXZlciIsInJvbGVzIjpbImFkbWluIl19.oxmxaHz6LNF67yk6i6VjOaktQaDk1FPJR9UlX4YZNjs",
+      "why": "an expiry nobody can compare \u2014 present, so the required-claim check passes it",
+      "result": {
+        "accepted": false,
+        "error_type": "DecodeError",
+        "error": "Expiration Time claim (exp) must be an integer."
+      }
+    },
+    {
+      "name": "iss_not_a_string",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6NywiYXVkIjoicHJvdmlkZS11dGVybS1zZXJ2ZXIiLCJpYXQiOjk3ODMwNzIwMCwiZXhwIjo0MTAyNDQ0ODAwLCJyb2xlcyI6WyJhZG1pbiJdfQ.YSAMhlvzaacmg2DdnAuOXRibdx8FxpoWkyQW1NeYR0c",
+      "why": "an issuer that is not text",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidIssuerError",
+        "error": "Payload Issuer (iss) must be a string"
+      }
+    },
+    {
+      "name": "iss_absent",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImF1ZCI6InByb3ZpZGUtdXRlcm0tc2VydmVyIiwiaWF0Ijo5NzgzMDcyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZXMiOlsiYWRtaW4iXX0.OXKfZPXTVBTaKYpm4mvcs2cgzMMOAtxbyo1eKCo2Vkg",
+      "why": "no issuer at all, where one is configured",
+      "result": {
+        "accepted": false,
+        "error_type": "MissingRequiredClaimError",
+        "error": "Token is missing the \"iss\" claim"
+      }
+    },
+    {
+      "name": "aud_list_containing",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOlsiYW5vdGhlci1zZXJ2aWNlIiwicHJvdmlkZS11dGVybS1zZXJ2ZXIiXSwiaWF0Ijo5NzgzMDcyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZXMiOlsiYWRtaW4iXX0.GWV4y2dr2GN3f52AdnTo5PTPqqNN-8pmFUKkJsHTyZo",
+      "why": "a token minted for several audiences, one of them this one",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "admin"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "aud_not_a_list",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOnsibmFtZSI6IngifSwiaWF0Ijo5NzgzMDcyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZXMiOlsiYWRtaW4iXX0.9-61DubdRn_HLY9zuYBx0EdOToMMw6nvQNL3lNGizO4",
+      "why": "an audience claim of a shape the grammar has no reading for",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidAudienceError",
+        "error": "Invalid claim format in token"
+      }
+    },
+    {
+      "name": "aud_list_of_non_strings",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOlsxXSwiaWF0Ijo5NzgzMDcyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZXMiOlsiYWRtaW4iXX0.HNUT4wSbGAnyKQ7xc6wuToARczBi6WWbsyQwxZMBcZI",
+      "why": "an audience list holding something that is not a name",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidAudienceError",
+        "error": "Invalid claim format in token"
+      }
+    },
+    {
+      "name": "negative_clock_skew",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.zT-QYpr7g6YMLlAWngENEHwdZ1MMsUapsT6CnvNrb4Y",
+      "settings": {
+        "clock_skew_seconds": -3600
+      },
+      "why": "a skew below zero is floored rather than shortening a token's life",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "admin"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "roles_not_iterable",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjo3fQ.rE9mVkmtSicQaC0mbicFi25GlgEogoogHFqVo6ePTP4",
+      "why": "a roles claim of a type that says nothing about roles",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "viewer"
+        ],
+        "scopes": []
+      }
+    },
+    {
+      "name": "scope_not_iterable",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl0sInNjb3BlIjo3fQ.6BhQjnGdq_jI9NMytxk53rFupapER4BYQmYs4-jQKaU",
+      "why": "a scope claim of a type that says nothing about scopes",
+      "result": {
+        "accepted": true,
+        "subject_id": "dev-user",
+        "tenant_id": null,
+        "roles": [
+          "admin"
+        ],
+        "scopes": []
+      }
+    }
+  ],
+  "decode_vectors": [
+    {
+      "name": "issuer_unchecked",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6ImFueW9uZSIsImF1ZCI6InByb3ZpZGUtdXRlcm0tc2VydmVyIiwiaWF0Ijo5NzgzMDcyMDAsImV4cCI6NDEwMjQ0NDgwMCwicm9sZXMiOlsiYWRtaW4iXX0.zhtx_A3dzybFaGIvgZhk7tGiSeK7mtuUiHEGVGHkfMA",
+      "args": {
+        "algorithms": [
+          "HS256"
+        ],
+        "issuer": null,
+        "audience": "provide-uterm-server",
+        "leeway": 15
+      },
+      "why": "no issuer to check against accepts whichever one arrived",
+      "result": {
+        "accepted": true,
+        "claims": {
+          "sub": "dev-user",
+          "iss": "anyone",
+          "aud": "provide-uterm-server",
+          "iat": 978307200,
+          "exp": 4102444800,
+          "roles": [
+            "admin"
+          ]
+        }
+      }
+    },
+    {
+      "name": "audience_unchecked_with_claim",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MjAwLCJleHAiOjQxMDI0NDQ4MDAsInJvbGVzIjpbImFkbWluIl19.zT-QYpr7g6YMLlAWngENEHwdZ1MMsUapsT6CnvNrb4Y",
+      "args": {
+        "algorithms": [
+          "HS256"
+        ],
+        "issuer": "provide-uterm",
+        "audience": null,
+        "leeway": 15
+      },
+      "why": "a decoder expecting no audience, handed a token that names one",
+      "result": {
+        "accepted": false,
+        "error_type": "InvalidAudienceError",
+        "error": "Invalid audience"
+      }
+    },
+    {
+      "name": "audience_unchecked_without_claim",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJpYXQiOjk3ODMwNzIwMCwiZXhwIjo0MTAyNDQ0ODAwLCJyb2xlcyI6WyJhZG1pbiJdfQ.jHKoIoQE1XEOvSNJUo8rE_bDc3YZoAiiOloRAWGmCxQ",
+      "args": {
+        "algorithms": [
+          "HS256"
+        ],
+        "issuer": "provide-uterm",
+        "audience": null,
+        "leeway": 15
+      },
+      "why": "neither side names an audience, which is a match",
+      "result": {
+        "accepted": true,
+        "claims": {
+          "sub": "dev-user",
+          "iss": "provide-uterm",
+          "iat": 978307200,
+          "exp": 4102444800,
+          "roles": [
+            "admin"
+          ]
+        }
+      }
+    },
+    {
+      "name": "audience_empty_claim_unchecked",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiIiLCJpYXQiOjk3ODMwNzIwMCwiZXhwIjo0MTAyNDQ0ODAwLCJyb2xlcyI6WyJhZG1pbiJdfQ.FheYNgDdJC6U8FMHgYsvl7jxxbWAEzc-YD7jJZlcJgg",
+      "args": {
+        "algorithms": [
+          "HS256"
+        ],
+        "issuer": "provide-uterm",
+        "audience": null,
+        "leeway": 15
+      },
+      "why": "an empty audience claim is no audience rather than one named nothing",
+      "result": {
+        "accepted": true,
+        "claims": {
+          "sub": "dev-user",
+          "iss": "provide-uterm",
+          "aud": "",
+          "iat": 978307200,
+          "exp": 4102444800,
+          "roles": [
+            "admin"
+          ]
+        }
+      }
+    },
+    {
+      "name": "expiry_inside_the_skew",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MTkwLCJleHAiOjk3ODMwNzIxMCwicm9sZXMiOlsiYWRtaW4iXX0.IKfWPllhBVmhR-kSPaGjQi72jmcMo7sZGS-26NOpYz0",
+      "args": {
+        "algorithms": [
+          "HS256"
+        ],
+        "issuer": "provide-uterm",
+        "audience": "provide-uterm-server",
+        "leeway": 15,
+        "now": 978307220
+      },
+      "why": "an expiry a few seconds past still verifies inside the tolerated skew",
+      "result": {
+        "accepted": true,
+        "claims": {
+          "sub": "dev-user",
+          "iss": "provide-uterm",
+          "aud": "provide-uterm-server",
+          "iat": 978307190,
+          "exp": 978307210,
+          "roles": [
+            "admin"
+          ]
+        }
+      }
+    },
+    {
+      "name": "expiry_outside_the_skew",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZXYtdXNlciIsImlzcyI6InByb3ZpZGUtdXRlcm0iLCJhdWQiOiJwcm92aWRlLXV0ZXJtLXNlcnZlciIsImlhdCI6OTc4MzA3MTkwLCJleHAiOjk3ODMwNzIxMCwicm9sZXMiOlsiYWRtaW4iXX0.IKfWPllhBVmhR-kSPaGjQi72jmcMo7sZGS-26NOpYz0",
+      "args": {
+        "algorithms": [
+          "HS256"
+        ],
+        "issuer": "provide-uterm",
+        "audience": "provide-uterm-server",
+        "leeway": 15,
+        "now": 978307240
+      },
+      "why": "and stops verifying once the skew is used up",
+      "result": {
+        "accepted": false,
+        "error_type": "ExpiredSignatureError",
+        "error": "Signature has expired"
+      }
+    },
+    {
+      "name": "nothing_required",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJwcm92aWRlLXV0ZXJtIiwiYXVkIjoicHJvdmlkZS11dGVybS1zZXJ2ZXIifQ.2NloqDVSZjYmAiyHErOPwGefRcfpw1Voy2cgUB46R5I",
+      "args": {
+        "algorithms": [
+          "HS256"
+        ],
+        "issuer": "provide-uterm",
+        "audience": "provide-uterm-server",
+        "leeway": 15,
+        "require": []
+      },
+      "why": "with nothing required, a token carrying neither sub nor exp decodes",
+      "result": {
+        "accepted": true,
+        "claims": {
+          "iss": "provide-uterm",
+          "aud": "provide-uterm-server"
+        }
+      }
+    }
+  ],
+  "dev_idp": [
+    {
+      "name": "defaults",
+      "config": {},
+      "options": {},
+      "why": "what a dev_token deployment issues",
+      "result": {
+        "claims": {
+          "sub": "dev-user",
+          "iss": "provide-uterm",
+          "aud": "provide-uterm-server",
+          "roles": [
+            "admin"
+          ]
+        },
+        "claim_order": [
+          "sub",
+          "iss",
+          "aud",
+          "roles"
+        ],
+        "ttl_s": 86400,
+        "auth": {
+          "mode": "jwt",
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "secret_length": 64,
+          "worker_bearer_token": 43
+        },
+        "verifies_against_the_configured_key": true
+      }
+    },
+    {
+      "name": "named_issuer",
+      "config": {
+        "jwt_issuer": "someone-else",
+        "jwt_audience": "another-service"
+      },
+      "options": {},
+      "why": "an issuer and audience a config already named are kept",
+      "result": {
+        "claims": {
+          "sub": "dev-user",
+          "iss": "someone-else",
+          "aud": "another-service",
+          "roles": [
+            "admin"
+          ]
+        },
+        "claim_order": [
+          "sub",
+          "iss",
+          "aud",
+          "roles"
+        ],
+        "ttl_s": 86400,
+        "auth": {
+          "mode": "jwt",
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "jwt_issuer": "someone-else",
+          "jwt_audience": "another-service",
+          "secret_length": 64,
+          "worker_bearer_token": 43
+        },
+        "verifies_against_the_configured_key": true
+      }
+    },
+    {
+      "name": "subject_and_roles",
+      "config": {},
+      "options": {
+        "subject": "someone",
+        "roles": [
+          "operator",
+          "viewer"
+        ]
+      },
+      "why": "who the token is for, and what it may do",
+      "result": {
+        "claims": {
+          "sub": "someone",
+          "iss": "provide-uterm",
+          "aud": "provide-uterm-server",
+          "roles": [
+            "operator",
+            "viewer"
+          ]
+        },
+        "claim_order": [
+          "sub",
+          "iss",
+          "aud",
+          "roles"
+        ],
+        "ttl_s": 86400,
+        "auth": {
+          "mode": "jwt",
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "secret_length": 64,
+          "worker_bearer_token": 43
+        },
+        "verifies_against_the_configured_key": true
+      }
+    },
+    {
+      "name": "tenant",
+      "config": {},
+      "options": {
+        "tenant": "acme"
+      },
+      "why": "a tenant-scoped dev token",
+      "result": {
+        "claims": {
+          "sub": "dev-user",
+          "iss": "provide-uterm",
+          "aud": "provide-uterm-server",
+          "roles": [
+            "admin"
+          ],
+          "tenant_id": "acme"
+        },
+        "claim_order": [
+          "sub",
+          "iss",
+          "aud",
+          "roles",
+          "tenant_id"
+        ],
+        "ttl_s": 86400,
+        "auth": {
+          "mode": "jwt",
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "secret_length": 64,
+          "worker_bearer_token": 43
+        },
+        "verifies_against_the_configured_key": true
+      }
+    },
+    {
+      "name": "blank_tenant",
+      "config": {},
+      "options": {
+        "tenant": "   "
+      },
+      "why": "a tenant of nothing but spaces is no tenant rather than one named nothing",
+      "result": {
+        "claims": {
+          "sub": "dev-user",
+          "iss": "provide-uterm",
+          "aud": "provide-uterm-server",
+          "roles": [
+            "admin"
+          ]
+        },
+        "claim_order": [
+          "sub",
+          "iss",
+          "aud",
+          "roles"
+        ],
+        "ttl_s": 86400,
+        "auth": {
+          "mode": "jwt",
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "secret_length": 64,
+          "worker_bearer_token": 43
+        },
+        "verifies_against_the_configured_key": true
+      }
+    },
+    {
+      "name": "worker_token_already_set",
+      "config": {
+        "worker_bearer_token": "a-configured-worker-token-of-sufficient-width"
+      },
+      "options": {},
+      "why": "a worker token a config already set is not replaced",
+      "result": {
+        "claims": {
+          "sub": "dev-user",
+          "iss": "provide-uterm",
+          "aud": "provide-uterm-server",
+          "roles": [
+            "admin"
+          ]
+        },
+        "claim_order": [
+          "sub",
+          "iss",
+          "aud",
+          "roles"
+        ],
+        "ttl_s": 86400,
+        "auth": {
+          "mode": "jwt",
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "secret_length": 64,
+          "worker_bearer_token": "a-configured-worker-token-of-sufficient-width"
+        },
+        "verifies_against_the_configured_key": true
+      }
+    },
+    {
+      "name": "short_ttl",
+      "config": {},
+      "options": {
+        "ttl_s": 60
+      },
+      "why": "a token that lives a minute",
+      "result": {
+        "claims": {
+          "sub": "dev-user",
+          "iss": "provide-uterm",
+          "aud": "provide-uterm-server",
+          "roles": [
+            "admin"
+          ]
+        },
+        "claim_order": [
+          "sub",
+          "iss",
+          "aud",
+          "roles"
+        ],
+        "ttl_s": 60,
+        "auth": {
+          "mode": "jwt",
+          "jwt_algorithms": [
+            "HS256"
+          ],
+          "jwt_issuer": "provide-uterm",
+          "jwt_audience": "provide-uterm-server",
+          "secret_length": 64,
+          "worker_bearer_token": 43
+        },
+        "verifies_against_the_configured_key": true
+      }
+    }
+  ],
+  "bearer_headers": [
+    {
+      "header": "Bearer abc",
+      "token": "abc"
+    },
+    {
+      "header": "bearer abc",
+      "token": "abc"
+    },
+    {
+      "header": "BEARER abc",
+      "token": "abc"
+    },
+    {
+      "header": "Bearer  abc",
+      "token": "abc"
+    },
+    {
+      "header": "Bearer abc def",
+      "token": "abc def"
+    },
+    {
+      "header": "Bearer",
+      "token": null
+    },
+    {
+      "header": "Bearer ",
+      "token": null
+    },
+    {
+      "header": "Basic abc",
+      "token": null
+    },
+    {
+      "header": "abc",
+      "token": null
+    },
+    {
+      "header": "",
+      "token": null
+    },
+    {
+      "header": "   ",
+      "token": null
+    },
+    {
+      "header": " Bearer abc ",
+      "token": "abc"
+    }
+  ]
+}

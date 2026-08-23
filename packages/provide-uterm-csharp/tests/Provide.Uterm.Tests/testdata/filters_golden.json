@@ -1,0 +1,173 @@
+{
+ "constants": {
+  "DO": 253,
+  "DONT": 254,
+  "ESC": 27,
+  "IAC": 255,
+  "SB": 250,
+  "SE": 240,
+  "WILL": 251,
+  "WONT": 252
+ },
+ "escape": [
+  {
+   "consumed": 0,
+   "name": "empty stream after ESC",
+   "remaining": "",
+   "stream": ""
+  },
+  {
+   "consumed": 2,
+   "name": "CSI cursor up",
+   "remaining": "72657374",
+   "stream": "5b4172657374"
+  },
+  {
+   "consumed": 5,
+   "name": "CSI with parameters",
+   "remaining": "72657374",
+   "stream": "5b313b324872657374"
+  },
+  {
+   "consumed": 2,
+   "name": "CSI with a final byte at the low end of the range",
+   "remaining": "72657374",
+   "stream": "5b4072657374"
+  },
+  {
+   "consumed": 2,
+   "name": "CSI with a final byte at the high end of the range",
+   "remaining": "72657374",
+   "stream": "5b7e72657374"
+  },
+  {
+   "consumed": 7,
+   "name": "CSI with a byte just below the final-byte range",
+   "remaining": "72657374",
+   "stream": "5b3f313034396872657374"
+  },
+  {
+   "consumed": 4,
+   "name": "CSI truncated before the final byte",
+   "remaining": "",
+   "stream": "5b313b32"
+  },
+  {
+   "consumed": 1,
+   "name": "CSI with nothing after the bracket",
+   "remaining": "",
+   "stream": "5b"
+  },
+  {
+   "consumed": 2,
+   "name": "SS3 cursor key",
+   "remaining": "72657374",
+   "stream": "4f5072657374"
+  },
+  {
+   "consumed": 1,
+   "name": "SS3 with the key byte missing",
+   "remaining": "",
+   "stream": "4f"
+  },
+  {
+   "consumed": 1,
+   "name": "two-character alt combo",
+   "remaining": "72657374",
+   "stream": "6172657374"
+  },
+  {
+   "consumed": 1,
+   "name": "ESC ESC",
+   "remaining": "72657374",
+   "stream": "1b72657374"
+  }
+ ],
+ "generator": "packages/provide-uterm-ts/testdata/gen_filters_golden.py",
+ "iac": [
+  {
+   "consumed": 0,
+   "name": "empty stream after IAC",
+   "remaining": "",
+   "stream": ""
+  },
+  {
+   "consumed": 2,
+   "name": "WILL + option",
+   "remaining": "72657374",
+   "stream": "fb0172657374"
+  },
+  {
+   "consumed": 2,
+   "name": "WONT + option",
+   "remaining": "72657374",
+   "stream": "fc0172657374"
+  },
+  {
+   "consumed": 2,
+   "name": "DO + option",
+   "remaining": "72657374",
+   "stream": "fd0172657374"
+  },
+  {
+   "consumed": 2,
+   "name": "DONT + option",
+   "remaining": "72657374",
+   "stream": "fe0172657374"
+  },
+  {
+   "consumed": 1,
+   "name": "WILL with the option byte missing",
+   "remaining": "",
+   "stream": "fb"
+  },
+  {
+   "consumed": 1,
+   "name": "escaped IAC IAC",
+   "remaining": "72657374",
+   "stream": "ff72657374"
+  },
+  {
+   "consumed": 1,
+   "name": "unknown command byte",
+   "remaining": "72657374",
+   "stream": "0172657374"
+  },
+  {
+   "consumed": 5,
+   "name": "subnegotiation terminated by IAC SE",
+   "remaining": "72657374",
+   "stream": "fa1800fff072657374"
+  },
+  {
+   "consumed": 7,
+   "name": "subnegotiation with an escaped IAC inside",
+   "remaining": "72657374",
+   "stream": "fa18ffff00fff072657374"
+  },
+  {
+   "consumed": 3,
+   "name": "subnegotiation truncated before IAC",
+   "remaining": "",
+   "stream": "fa1800"
+  },
+  {
+   "consumed": 3,
+   "name": "subnegotiation truncated after IAC",
+   "remaining": "",
+   "stream": "fa18ff"
+  },
+  {
+   "consumed": 3,
+   "name": "subnegotiation with an empty payload",
+   "remaining": "72657374",
+   "stream": "fafff072657374"
+  },
+  {
+   "consumed": 6,
+   "name": "subnegotiation with IAC then a non-SE byte",
+   "remaining": "72657374",
+   "stream": "fa18ff00fff072657374"
+  }
+ ]
+}

@@ -467,17 +467,17 @@ public sealed partial class ResumeLifecycleIntegrationTests
                 _release?.Task.WaitAsync(cancellationToken) ?? Task.CompletedTask;
         }
 
-        public sealed class ActiveCheckGate
-        {
-            private readonly TaskCompletionSource _attempted = NewSignal();
-            private readonly TaskCompletionSource _release = NewSignal();
+    public sealed class ActiveCheckGate
+    {
+        private readonly TaskCompletionSource _attempted = NewSignal();
+        private readonly ManualResetEventSlim _release = new(false);
 
-            public Task Attempted => _attempted.Task;
-            internal void MarkAttempted() => _attempted.TrySetResult();
-            internal void Wait() => _release.Task.GetAwaiter().GetResult();
-            public void Release() => _release.TrySetResult();
-        }
+        public Task Attempted => _attempted.Task;
+        internal void MarkAttempted() => _attempted.TrySetResult();
+        internal void Wait() => _release.Wait();
+        public void Release() => _release.Set();
     }
+}
 
     private sealed class RecordingBrowser : IWorkerWs
     {

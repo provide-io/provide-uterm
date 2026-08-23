@@ -80,8 +80,15 @@ def test_a_library_older_than_its_sources_names_them(built, monkeypatch) -> None
     event, fields = events[0]
     assert event == "capture_library_is_stale"
     assert fields["newer_sources"] == ["capture.c"]
+    # remedy and remedy_dir are SEPARATE fields, not one interpolated string.
+    # Telemetry's secret scanner redacts a whole field value when any part of it
+    # looks like a credential, and macOS $TMPDIR carries a high-entropy segment —
+    # so a remedy with the directory inside it came out redacted in exactly the
+    # case a developer needed to read it. Asserting them apart is what keeps
+    # them apart.
     assert "make" in str(fields["remedy"])
-    assert str(source_dir) in str(fields["remedy"])
+    assert str(source_dir) not in str(fields["remedy"])
+    assert str(source_dir) == str(fields["remedy_dir"])
     assert str(lib) == fields["library"]
 
 

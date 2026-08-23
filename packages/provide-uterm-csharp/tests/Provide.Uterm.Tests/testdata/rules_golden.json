@@ -1,0 +1,1023 @@
+{
+  "coerced": [
+    {
+      "dump": {
+        "flows": [],
+        "game": "g",
+        "menus": [],
+        "metadata": {},
+        "prompts": [
+          {
+            "default_action": null,
+            "id": "a",
+            "input_type": "multi_key",
+            "kind": "unknown",
+            "kv_extract": [],
+            "match": {
+              "flags": 10,
+              "match_mode": "regex",
+              "pattern": "x"
+            },
+            "negative_match": null,
+            "notes": null,
+            "screen": {
+              "cursor_col_max": null,
+              "cursor_col_min": null,
+              "cursor_row_max": null,
+              "cursor_row_min": 5,
+              "expect_cursor_at_end": true
+            }
+          }
+        ],
+        "version": "1.0"
+      },
+      "name": "a quoted cursor row",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": {
+              "pattern": "x"
+            },
+            "screen": {
+              "cursor_row_min": "5"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "dump": {
+        "flows": [],
+        "game": "g",
+        "menus": [],
+        "metadata": {},
+        "prompts": [
+          {
+            "default_action": null,
+            "id": "a",
+            "input_type": "multi_key",
+            "kind": "unknown",
+            "kv_extract": [],
+            "match": {
+              "flags": 10,
+              "match_mode": "regex",
+              "pattern": "x"
+            },
+            "negative_match": null,
+            "notes": null,
+            "screen": {
+              "cursor_col_max": null,
+              "cursor_col_min": null,
+              "cursor_row_max": null,
+              "cursor_row_min": null,
+              "expect_cursor_at_end": true
+            }
+          }
+        ],
+        "version": "1.0"
+      },
+      "name": "quoted flags",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": {
+              "flags": "10",
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "dump": {
+        "flows": [
+          {
+            "description": "d",
+            "id": "f",
+            "steps": [
+              {
+                "block_if_matches": [],
+                "expects_prompt": null,
+                "gate_prompts": [],
+                "id": "s",
+                "keys": null,
+                "kind": "wait",
+                "timing": {
+                  "max_wait_ms": 8000,
+                  "min_wait_ms": 0,
+                  "require_stable_screen": true,
+                  "retry_ms": 50
+                }
+              }
+            ]
+          }
+        ],
+        "game": "g",
+        "menus": [],
+        "metadata": {},
+        "prompts": [],
+        "version": "1.0"
+      },
+      "name": "a quoted timing",
+      "payload": {
+        "flows": [
+          {
+            "description": "d",
+            "id": "f",
+            "steps": [
+              {
+                "id": "s",
+                "kind": "wait",
+                "timing": {
+                  "retry_ms": "50"
+                }
+              }
+            ]
+          }
+        ],
+        "game": "g"
+      }
+    }
+  ],
+  "default_flags": 10,
+  "empty_dump": {
+    "flows": [],
+    "game": "none",
+    "menus": [],
+    "metadata": {},
+    "prompts": [],
+    "version": "1.0"
+  },
+  "empty_patterns": [],
+  "full_dump": {
+    "flows": [
+      {
+        "description": "log in and get to the command prompt",
+        "id": "login_flow",
+        "steps": [
+          {
+            "block_if_matches": [
+              {
+                "flags": 10,
+                "match_mode": "contains",
+                "pattern": "banned"
+              }
+            ],
+            "expects_prompt": "cmd",
+            "gate_prompts": [
+              "login"
+            ],
+            "id": "send_name",
+            "keys": "player\r",
+            "kind": "send_keys",
+            "timing": {
+              "max_wait_ms": 5000,
+              "min_wait_ms": 100,
+              "require_stable_screen": true,
+              "retry_ms": 50
+            }
+          },
+          {
+            "block_if_matches": [],
+            "expects_prompt": null,
+            "gate_prompts": [],
+            "id": "wait_a_bit",
+            "keys": null,
+            "kind": "wait",
+            "timing": {
+              "max_wait_ms": 8000,
+              "min_wait_ms": 0,
+              "require_stable_screen": true,
+              "retry_ms": 250
+            }
+          }
+        ]
+      }
+    ],
+    "game": "tw2002",
+    "menus": [
+      {
+        "id": "second",
+        "notes": null,
+        "options": [],
+        "prompt_match": {
+          "flags": 10,
+          "match_mode": "regex",
+          "pattern": "Sub:"
+        },
+        "title_match": null
+      },
+      {
+        "id": "main",
+        "notes": "the top level",
+        "options": [
+          {
+            "key": "1",
+            "label": "Play"
+          },
+          {
+            "key": "Q",
+            "label": "Quit"
+          }
+        ],
+        "prompt_match": {
+          "flags": 10,
+          "match_mode": "regex",
+          "pattern": "Choice:"
+        },
+        "title_match": {
+          "flags": 10,
+          "match_mode": "regex",
+          "pattern": "Main Menu"
+        }
+      }
+    ],
+    "metadata": {
+      "author": "someone",
+      "revision": 7
+    },
+    "prompts": [
+      {
+        "default_action": null,
+        "id": "login",
+        "input_type": "multi_key",
+        "kind": "login_name",
+        "kv_extract": [
+          {
+            "field": "sector",
+            "flags": 10,
+            "regex": "Sector\\s+(\\d+)",
+            "required": true,
+            "type": "int",
+            "validate_rule": null
+          },
+          {
+            "field": "credits",
+            "flags": 10,
+            "regex": "Credits\\s+(\\d+)",
+            "required": false,
+            "type": "string",
+            "validate_rule": {
+              "min": 0
+            }
+          }
+        ],
+        "match": {
+          "flags": 10,
+          "match_mode": "regex",
+          "pattern": "Enter your name:"
+        },
+        "negative_match": null,
+        "notes": "the first thing it asks",
+        "screen": {
+          "cursor_col_max": null,
+          "cursor_col_min": null,
+          "cursor_row_max": 24,
+          "cursor_row_min": 1,
+          "expect_cursor_at_end": true
+        }
+      },
+      {
+        "default_action": null,
+        "id": "pause",
+        "input_type": "any_key",
+        "kind": "pause",
+        "kv_extract": [],
+        "match": {
+          "flags": 10,
+          "match_mode": "contains",
+          "pattern": "press any key"
+        },
+        "negative_match": {
+          "flags": 10,
+          "match_mode": "contains",
+          "pattern": "STARDOCK (closed)"
+        },
+        "notes": null,
+        "screen": {
+          "cursor_col_max": null,
+          "cursor_col_min": null,
+          "cursor_row_max": null,
+          "cursor_row_min": null,
+          "expect_cursor_at_end": false
+        }
+      },
+      {
+        "default_action": {
+          "block_if_matches": [],
+          "expects_prompt": null,
+          "gate_prompts": [],
+          "id": "say_yes",
+          "keys": "Y",
+          "kind": "send_keys",
+          "timing": {
+            "max_wait_ms": 8000,
+            "min_wait_ms": 0,
+            "require_stable_screen": true,
+            "retry_ms": 250
+          }
+        },
+        "id": "confirm",
+        "input_type": "single_key",
+        "kind": "confirm",
+        "kv_extract": [],
+        "match": {
+          "flags": 10,
+          "match_mode": "exact",
+          "pattern": "(Y/N)?"
+        },
+        "negative_match": null,
+        "notes": null,
+        "screen": {
+          "cursor_col_max": null,
+          "cursor_col_min": null,
+          "cursor_row_max": null,
+          "cursor_row_min": null,
+          "expect_cursor_at_end": true
+        }
+      }
+    ],
+    "version": "2.1"
+  },
+  "full_input": {
+    "flows": [
+      {
+        "description": "log in and get to the command prompt",
+        "id": "login_flow",
+        "steps": [
+          {
+            "block_if_matches": [
+              {
+                "match_mode": "contains",
+                "pattern": "banned"
+              }
+            ],
+            "expects_prompt": "cmd",
+            "gate_prompts": [
+              "login"
+            ],
+            "id": "send_name",
+            "keys": "player\r",
+            "kind": "send_keys",
+            "timing": {
+              "max_wait_ms": 5000,
+              "min_wait_ms": 100,
+              "retry_ms": 50
+            }
+          },
+          {
+            "id": "wait_a_bit",
+            "kind": "wait"
+          }
+        ]
+      }
+    ],
+    "game": "tw2002",
+    "menus": [
+      {
+        "id": "second",
+        "prompt_match": {
+          "pattern": "Sub:"
+        },
+        "title_match": null
+      },
+      {
+        "id": "main",
+        "notes": "the top level",
+        "options": [
+          {
+            "key": "1",
+            "label": "Play"
+          },
+          {
+            "key": "Q",
+            "label": "Quit"
+          }
+        ],
+        "prompt_match": {
+          "pattern": "Choice:"
+        },
+        "title_match": {
+          "pattern": "Main Menu"
+        }
+      }
+    ],
+    "metadata": {
+      "author": "someone",
+      "revision": 7
+    },
+    "prompts": [
+      {
+        "id": "login",
+        "input_type": "multi_key",
+        "kind": "login_name",
+        "kv_extract": [
+          {
+            "field": "sector",
+            "regex": "Sector\\s+(\\d+)",
+            "required": true,
+            "type": "int"
+          },
+          {
+            "field": "credits",
+            "regex": "Credits\\s+(\\d+)",
+            "validate": {
+              "min": 0
+            }
+          }
+        ],
+        "match": {
+          "pattern": "Enter your name:"
+        },
+        "notes": "the first thing it asks",
+        "screen": {
+          "cursor_row_max": 24,
+          "cursor_row_min": 1,
+          "expect_cursor_at_end": true
+        }
+      },
+      {
+        "id": "pause",
+        "input_type": "any_key",
+        "kind": "pause",
+        "match": {
+          "match_mode": "contains",
+          "pattern": "press any key"
+        },
+        "negative_match": {
+          "match_mode": "contains",
+          "pattern": "STARDOCK (closed)"
+        },
+        "screen": {
+          "expect_cursor_at_end": false
+        }
+      },
+      {
+        "default_action": {
+          "id": "say_yes",
+          "keys": "Y",
+          "kind": "send_keys"
+        },
+        "id": "confirm",
+        "input_type": "single_key",
+        "kind": "confirm",
+        "match": {
+          "match_mode": "exact",
+          "pattern": "(Y/N)?"
+        },
+        "negative_match": null
+      }
+    ],
+    "version": "2.1"
+  },
+  "full_patterns": [
+    {
+      "auto_detected": false,
+      "expect_cursor_at_end": true,
+      "id": "login",
+      "input_type": "multi_key",
+      "kv_extract": [
+        {
+          "field": "sector",
+          "flags": 10,
+          "regex": "Sector\\s+(\\d+)",
+          "required": true,
+          "type": "int",
+          "validate": null
+        },
+        {
+          "field": "credits",
+          "flags": 10,
+          "regex": "Credits\\s+(\\d+)",
+          "required": false,
+          "type": "string",
+          "validate": {
+            "min": 0
+          }
+        }
+      ],
+      "notes": "the first thing it asks",
+      "regex": "Enter your name:"
+    },
+    {
+      "auto_detected": false,
+      "expect_cursor_at_end": false,
+      "id": "pause",
+      "input_type": "any_key",
+      "negative_regex": "STARDOCK\\ \\(closed\\)",
+      "notes": "",
+      "regex": "press\\ any\\ key"
+    },
+    {
+      "auto_detected": false,
+      "expect_cursor_at_end": true,
+      "id": "confirm",
+      "input_type": "single_key",
+      "notes": "",
+      "regex": "^\\(Y/N\\)\\?$"
+    }
+  ],
+  "invalid": [
+    {
+      "error": "ValidationError",
+      "name": "no game",
+      "payload": {
+        "prompts": []
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a prompt with no id",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "match": {
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a prompt with no match",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a"
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a match with no pattern",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": {}
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "an unknown input type",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "input_type": "chord",
+            "match": {
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "an unknown prompt kind",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "kind": "vibes",
+            "match": {
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "an unknown match mode",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": {
+              "match_mode": "fuzzy",
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a pattern that is not a string",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": {
+              "pattern": 7
+            }
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "an id that is not a string",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": 7,
+            "match": {
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "prompts that are not a list",
+      "payload": {
+        "game": "g",
+        "prompts": {
+          "id": "a"
+        }
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "an extraction rule with no field",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "kv_extract": [
+              {
+                "regex": "x"
+              }
+            ],
+            "match": {
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "an extraction rule with no regex",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "kv_extract": [
+              {
+                "field": "f"
+              }
+            ],
+            "match": {
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a menu with no prompt match",
+      "payload": {
+        "game": "g",
+        "menus": [
+          {
+            "id": "m"
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a flow step with no kind",
+      "payload": {
+        "flows": [
+          {
+            "description": "d",
+            "id": "f",
+            "steps": [
+              {
+                "id": "s"
+              }
+            ]
+          }
+        ],
+        "game": "g"
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "an unknown action kind",
+      "payload": {
+        "flows": [
+          {
+            "description": "d",
+            "id": "f",
+            "steps": [
+              {
+                "id": "s",
+                "kind": "explode"
+              }
+            ]
+          }
+        ],
+        "game": "g"
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a flow with no description",
+      "payload": {
+        "flows": [
+          {
+            "id": "f",
+            "steps": []
+          }
+        ],
+        "game": "g"
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "not an object at all",
+      "payload": [
+        "game"
+      ]
+    },
+    {
+      "error": "ValidationError",
+      "name": "a screen constraint that is a string",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": {
+              "pattern": "x"
+            },
+            "screen": "bottom"
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a screen constraint that is a list",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": {
+              "pattern": "x"
+            },
+            "screen": []
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a timing block that is a string",
+      "payload": {
+        "flows": [
+          {
+            "description": "d",
+            "id": "f",
+            "steps": [
+              {
+                "id": "s",
+                "kind": "wait",
+                "timing": "fast"
+              }
+            ]
+          }
+        ],
+        "game": "g"
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a timing block that is a list",
+      "payload": {
+        "flows": [
+          {
+            "description": "d",
+            "id": "f",
+            "steps": [
+              {
+                "id": "s",
+                "kind": "wait",
+                "timing": []
+              }
+            ]
+          }
+        ],
+        "game": "g"
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a match block that is a string",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": "Command"
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a number where a string belongs",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "match": {
+              "pattern": "x"
+            },
+            "notes": 7
+          }
+        ]
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a version that is a number",
+      "payload": {
+        "game": "g",
+        "version": 7
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "a gate prompt that is not a string",
+      "payload": {
+        "flows": [
+          {
+            "description": "d",
+            "id": "f",
+            "steps": [
+              {
+                "gate_prompts": [
+                  7
+                ],
+                "id": "s",
+                "kind": "wait"
+              }
+            ]
+          }
+        ],
+        "game": "g"
+      }
+    },
+    {
+      "error": "ValidationError",
+      "name": "an extraction type that is a number",
+      "payload": {
+        "game": "g",
+        "prompts": [
+          {
+            "id": "a",
+            "kv_extract": [
+              {
+                "field": "f",
+                "regex": "r",
+                "type": 7
+              }
+            ],
+            "match": {
+              "pattern": "x"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "minimal_dump": {
+    "flows": [],
+    "game": "tw2002",
+    "menus": [],
+    "metadata": {},
+    "prompts": [
+      {
+        "default_action": null,
+        "id": "cmd",
+        "input_type": "multi_key",
+        "kind": "unknown",
+        "kv_extract": [],
+        "match": {
+          "flags": 10,
+          "match_mode": "regex",
+          "pattern": "Command"
+        },
+        "negative_match": null,
+        "notes": null,
+        "screen": {
+          "cursor_col_max": null,
+          "cursor_col_min": null,
+          "cursor_row_max": null,
+          "cursor_row_min": null,
+          "expect_cursor_at_end": true
+        }
+      }
+    ],
+    "version": "1.0"
+  },
+  "minimal_input": {
+    "game": "tw2002",
+    "prompts": [
+      {
+        "id": "cmd",
+        "match": {
+          "pattern": "Command"
+        }
+      }
+    ]
+  },
+  "minimal_patterns": [
+    {
+      "auto_detected": false,
+      "expect_cursor_at_end": true,
+      "id": "cmd",
+      "input_type": "multi_key",
+      "notes": "",
+      "regex": "Command"
+    }
+  ],
+  "regex_modes": [
+    {
+      "mode": "regex",
+      "name": "a regex is the author's own",
+      "pattern": "Command \\[TL=[\\d:]+\\]:",
+      "regex": "Command \\[TL=[\\d:]+\\]:"
+    },
+    {
+      "mode": "contains",
+      "name": "contains is escaped",
+      "pattern": "Command [TL=",
+      "regex": "Command\\ \\[TL="
+    },
+    {
+      "mode": "exact",
+      "name": "exact is escaped and anchored",
+      "pattern": "Command [TL=00:00:00]:",
+      "regex": "^Command\\ \\[TL=00:00:00\\]:$"
+    },
+    {
+      "mode": "contains",
+      "name": "contains with a space",
+      "pattern": "STARDOCK is",
+      "regex": "STARDOCK\\ is"
+    },
+    {
+      "mode": "contains",
+      "name": "contains with nothing in it",
+      "pattern": "",
+      "regex": ""
+    },
+    {
+      "mode": "exact",
+      "name": "exact with nothing in it",
+      "pattern": "",
+      "regex": "^$"
+    },
+    {
+      "mode": "regex",
+      "name": "a regex with nothing in it",
+      "pattern": "",
+      "regex": ""
+    },
+    {
+      "mode": "contains",
+      "name": "contains with every metacharacter",
+      "pattern": "a b()[]{}?*+-|^$\\.&~#",
+      "regex": "a\\ b\\(\\)\\[\\]\\{\\}\\?\\*\\+\\-\\|\\^\\$\\\\\\.\\&\\~\\#"
+    }
+  ]
+}

@@ -38,12 +38,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # fetch-depth: 0 so the protocol-drift step below has a base ref to
+          # diff against. The default shallow clone has no origin/<base>, and
+          # the diff would fail as "could not diff" rather than passing.
+          #
+          # No `submodules: true`: the branch that added this still carried
+          # provide-telemetry as a submodule, which main dropped for the
+          # published package on 2026-08-20.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d  # v10.0.0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
       - run: uv sync --frozen --group dev
       - run: uv run python scripts/check_docs_accuracy.py
+      # Pull requests only: a change to a wire-contract source must carry the
+      # protocol matrix with it. The unconditional half of this check (version
+      # agreement across the six declaration sites, twinned-fixture identity)
+      # runs in ci/quality_checks.sh; this needs a base ref to diff against,
+      # which only a PR event has.
+      - if: github.event_name == 'pull_request'
+        run: uv run python scripts/check_protocol_drift.py --changed-against origin/${{ github.base_ref }}
 
   quality:
     runs-on: ubuntu-latest
@@ -734,11 +750,14 @@ jobs:
       # in this job restores it, and an unmatched filter exits 0 — so the
       # adapter silently produced no observations instead of failing loudly.
       - run: dotnet build packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/Provide.Uterm.Tests.csproj
-      # Security-sensitive cross-language contracts execute their native
-      # adapters here. Keeping these outside the default Python testpaths must
-      # not let a missing scenario category or a backend observation drift
-      # pass CI unnoticed.
-      - run: uv run pytest -q tests/conformance/test_fanout_security_coverage.py -o addopts=--import-mode=importlib
+      # The WHOLE conformance directory, not a hand-picked subset. It sits
+      # outside the default Python testpaths, so anything not named here never
+      # runs on a push. This step used to list only live/ and the fan-out
+      # coverage file, which left the cross-language API-parity spec
+      # (test_api_conformance.py) unenforced -- splitting a C# file for the LOC
+      # cap dropped eight required symbols and CI stayed green. Every file here
+      # is a static or in-process parity check needing no credentials.
+      - run: uv run pytest -q tests/conformance/ -o addopts=--import-mode=importlib
       # Every client against every server. Prints every gap before it runs.
       - run: bash ci/live_matrix.sh
 

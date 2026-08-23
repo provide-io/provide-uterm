@@ -168,7 +168,20 @@ public sealed partial class WebhookManager : IAsyncDisposable
         }
 
         var (sub, unsubscribe) = _eventBus.Watch(cfg.SessionId, cfg.EventTypes, cfg.Pattern);
-        var cancel = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        CancellationTokenSource cancel;
+        try
+        {
+            cancel = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        }
+        catch (ObjectDisposedException)
+        {
+            // If shutdown has already disposed the shared token source, the window for
+            // a late registration has already passed. Drop the subscription so nothing
+            // leaks, and keep registration semantics deterministic (no delivery worker).
+            unsubscribe();
+            return null;
+        }
+
         var worker = new DeliveryWorker(unsubscribe, cancel);
         // Read the token HERE, not inside the lambda. Inside, the read happens on
         // a pool thread whenever the work item is picked up, which can be after
@@ -404,6 +417,33 @@ public sealed partial class WebhookManager : IAsyncDisposable
     /// Never call this from inside a delivery worker: it awaits them.
     /// <see cref="Unregister"/> is the one that is safe from in there.
     /// </remarks>
+    /// <summary>
+    /// Test seam: runs inside <see cref="ShutdownAsync"/> after the worker list
+    /// has been snapshotted and cleared, and before the shared token source is
+    /// cancelled. Null in production, where shutdown is unchanged.
+    /// </summary>
+    /// <remarks>
+    /// This window is the only place cancelling <c>_shutdown</c> does work that
+    /// no per-worker <c>Release</c> can. A webhook registered here is absent
+    /// from the snapshot, so nothing will ever call <c>Release</c> on it, and
+    /// disposing a token source does not cancel it — only the cascade from the
+    /// shared source stops that worker's loop. Without a seam the window is
+    /// reachable solely by winning a thread race, which is not a test.
+    /// </remarks>
+    internal Action? ShutdownRaceHook { get; set; }
+
+    /// <summary>Test seam: the loop tasks of every worker registered right now.</summary>
+    internal IReadOnlyList<Task> ActiveLoops
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _workers.Values.Select(w => w.Loop).ToList();
+            }
+        }
+    }
+
     public async Task ShutdownAsync()
     {
         // Idempotent: the server shuts the registry down from DisposeAsync, a host
@@ -422,6 +462,8 @@ public sealed partial class WebhookManager : IAsyncDisposable
             _workers.Clear();
             _webhooks.Clear();
         }
+
+        ShutdownRaceHook?.Invoke();
 
         await _shutdown.CancelAsync().ConfigureAwait(false);
         foreach (var worker in workers)

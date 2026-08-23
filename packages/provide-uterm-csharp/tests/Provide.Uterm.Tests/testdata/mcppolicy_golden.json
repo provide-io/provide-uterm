@@ -1,0 +1,678 @@
+{
+  "roles": {
+    "viewer": 0,
+    "operator": 1,
+    "admin": 2,
+    "": -1,
+    "root": -1,
+    "Admin": -1,
+    "superuser": -1
+  },
+  "role_ladder": [
+    {
+      "actual": "viewer",
+      "minimum": "viewer",
+      "allowed": true
+    },
+    {
+      "actual": "viewer",
+      "minimum": "operator",
+      "allowed": false
+    },
+    {
+      "actual": "viewer",
+      "minimum": "admin",
+      "allowed": false
+    },
+    {
+      "actual": "operator",
+      "minimum": "viewer",
+      "allowed": true
+    },
+    {
+      "actual": "operator",
+      "minimum": "operator",
+      "allowed": true
+    },
+    {
+      "actual": "operator",
+      "minimum": "admin",
+      "allowed": false
+    },
+    {
+      "actual": "admin",
+      "minimum": "viewer",
+      "allowed": true
+    },
+    {
+      "actual": "admin",
+      "minimum": "operator",
+      "allowed": true
+    },
+    {
+      "actual": "admin",
+      "minimum": "admin",
+      "allowed": true
+    },
+    {
+      "actual": "",
+      "minimum": "viewer",
+      "allowed": false
+    },
+    {
+      "actual": "",
+      "minimum": "operator",
+      "allowed": false
+    },
+    {
+      "actual": "",
+      "minimum": "admin",
+      "allowed": false
+    },
+    {
+      "actual": "root",
+      "minimum": "viewer",
+      "allowed": false
+    },
+    {
+      "actual": "root",
+      "minimum": "operator",
+      "allowed": false
+    },
+    {
+      "actual": "root",
+      "minimum": "admin",
+      "allowed": false
+    },
+    {
+      "actual": "Admin",
+      "minimum": "viewer",
+      "allowed": false
+    },
+    {
+      "actual": "Admin",
+      "minimum": "operator",
+      "allowed": false
+    },
+    {
+      "actual": "Admin",
+      "minimum": "admin",
+      "allowed": false
+    },
+    {
+      "actual": "superuser",
+      "minimum": "viewer",
+      "allowed": false
+    },
+    {
+      "actual": "superuser",
+      "minimum": "operator",
+      "allowed": false
+    },
+    {
+      "actual": "superuser",
+      "minimum": "admin",
+      "allowed": false
+    }
+  ],
+  "tool_roles": {
+    "hijack_begin": "admin",
+    "hijack_heartbeat": "admin",
+    "hijack_read": "operator",
+    "hijack_send": "admin",
+    "hijack_step": "admin",
+    "hijack_release": "admin",
+    "gui_hijack_begin": "admin",
+    "gui_hijack_release": "admin",
+    "gui_screenshot": "operator",
+    "gui_click": "admin",
+    "gui_type": "admin",
+    "gui_key": "operator",
+    "gui_drag": "operator",
+    "session_list": "viewer",
+    "session_status": "viewer",
+    "session_read": "viewer",
+    "server_health": "viewer",
+    "session_connect": "operator",
+    "session_disconnect": "operator",
+    "session_set_mode": "operator",
+    "session_watch": "viewer",
+    "session_subscribe": "viewer",
+    "session_annotate": "operator",
+    "fanout_group_create": "operator",
+    "fanout_send": "admin",
+    "session_create": "admin",
+    "worker_input_mode": "admin",
+    "worker_disconnect": "admin"
+  },
+  "unknown_tool": {
+    "role": null,
+    "error": "No authorization policy registered for MCP tool 'session_delete'"
+  },
+  "hijack_lease_required": [
+    "gui_drag",
+    "gui_key"
+  ],
+  "allowed_connectors": [
+    "pty",
+    "shell",
+    "ssh",
+    "telnet",
+    "websocket",
+    "ws"
+  ],
+  "connectors": {
+    "shell": true,
+    "telnet": true,
+    "ssh": true,
+    "ws": true,
+    "websocket": true,
+    "pty": true,
+    "ushell": false,
+    "vnc": false,
+    "": false,
+    "SHELL": false
+  },
+  "max_user_pattern_len": 512,
+  "max_keystroke_bytes": 4096,
+  "allow_private_hosts": false,
+  "inet_aton": [
+    {
+      "value": "127.0.0.1",
+      "address": "127.0.0.1"
+    },
+    {
+      "value": "1.2.3.4",
+      "address": "1.2.3.4"
+    },
+    {
+      "value": "0.0.0.0",
+      "address": "0.0.0.0"
+    },
+    {
+      "value": "255.255.255.255",
+      "address": "255.255.255.255"
+    },
+    {
+      "value": "256.0.0.1",
+      "address": null
+    },
+    {
+      "value": "1.2.3.4.5",
+      "address": null
+    },
+    {
+      "value": "1.2.3.4.0",
+      "address": null
+    },
+    {
+      "value": "1.2.3.4.5.6",
+      "address": null
+    },
+    {
+      "value": "1.2.3.",
+      "address": null
+    },
+    {
+      "value": ".1.2.3",
+      "address": null
+    },
+    {
+      "value": "1..2.3",
+      "address": null
+    },
+    {
+      "value": "",
+      "address": null
+    },
+    {
+      "value": " 1.2.3.4",
+      "address": null
+    },
+    {
+      "value": "1.2.3.4 ",
+      "address": "1.2.3.4"
+    },
+    {
+      "value": "1.2.3.4\n",
+      "address": "1.2.3.4"
+    },
+    {
+      "value": "127.1",
+      "address": "127.0.0.1"
+    },
+    {
+      "value": "127.0.1",
+      "address": "127.0.0.1"
+    },
+    {
+      "value": "2130706433",
+      "address": "127.0.0.1"
+    },
+    {
+      "value": "4294967295",
+      "address": "255.255.255.255"
+    },
+    {
+      "value": "0177.0.0.1",
+      "address": "127.0.0.1"
+    },
+    {
+      "value": "0x7f.0.0.1",
+      "address": "127.0.0.1"
+    },
+    {
+      "value": "0x7f000001",
+      "address": "127.0.0.1"
+    },
+    {
+      "value": "0x7f.1",
+      "address": "127.0.0.1"
+    },
+    {
+      "value": "0377.0377.0377.0377",
+      "address": "255.255.255.255"
+    },
+    {
+      "value": "0400.0.0.1",
+      "address": null
+    },
+    {
+      "value": "010",
+      "address": "0.0.0.8"
+    },
+    {
+      "value": "0x",
+      "address": null
+    },
+    {
+      "value": "0xg",
+      "address": null
+    },
+    {
+      "value": "-1",
+      "address": null
+    },
+    {
+      "value": "+1",
+      "address": null
+    },
+    {
+      "value": "1e3",
+      "address": null
+    },
+    {
+      "value": "1.2.3.0x4",
+      "address": "1.2.3.4"
+    },
+    {
+      "value": "localhost",
+      "address": null
+    },
+    {
+      "value": "1.2.3.4/24",
+      "address": null
+    },
+    {
+      "value": "1.16777215",
+      "address": "1.255.255.255"
+    },
+    {
+      "value": "1.16777216",
+      "address": null
+    },
+    {
+      "value": "1.2.65535",
+      "address": "1.2.255.255"
+    },
+    {
+      "value": "1.2.65536",
+      "address": null
+    },
+    {
+      "value": "1.2.3.255",
+      "address": "1.2.3.255"
+    },
+    {
+      "value": "1.2.3.256",
+      "address": null
+    },
+    {
+      "value": "0",
+      "address": "0.0.0.0"
+    },
+    {
+      "value": "1.2.3.4\t",
+      "address": "1.2.3.4"
+    },
+    {
+      "value": "1.2.3.4x",
+      "address": null
+    },
+    {
+      "value": "0xffffffff",
+      "address": "255.255.255.255"
+    }
+  ],
+  "inet_aton_libc_divergent": [
+    "4294967296",
+    "999999999999",
+    "0x100000000"
+  ],
+  "hosts": [
+    {
+      "name": "an ordinary name",
+      "host": "bbs.example.com",
+      "internal": false
+    },
+    {
+      "name": "loopback, written out",
+      "host": "127.0.0.1",
+      "internal": true
+    },
+    {
+      "name": "loopback, by name",
+      "host": "localhost",
+      "internal": true
+    },
+    {
+      "name": "loopback, by name with a root dot",
+      "host": "localhost.",
+      "internal": true
+    },
+    {
+      "name": "loopback, by name in capitals",
+      "host": "LOCALHOST",
+      "internal": true
+    },
+    {
+      "name": "a name under the localhost subtree",
+      "host": "api.localhost",
+      "internal": true
+    },
+    {
+      "name": "a name under the localhost subtree with a root dot",
+      "host": "api.localhost.",
+      "internal": true
+    },
+    {
+      "name": "something merely ending in localhost",
+      "host": "notlocalhost",
+      "internal": false
+    },
+    {
+      "name": "the cloud metadata name",
+      "host": "metadata.google.internal",
+      "internal": true
+    },
+    {
+      "name": "the short metadata name",
+      "host": "metadata",
+      "internal": true
+    },
+    {
+      "name": "the cloud metadata address",
+      "host": "169.254.169.254",
+      "internal": true
+    },
+    {
+      "name": "another link-local address",
+      "host": "169.254.1.1",
+      "internal": true
+    },
+    {
+      "name": "a private address",
+      "host": "10.0.0.5",
+      "internal": true
+    },
+    {
+      "name": "another private address",
+      "host": "192.168.1.1",
+      "internal": true
+    },
+    {
+      "name": "a carrier-grade NAT address",
+      "host": "100.64.0.1",
+      "internal": false
+    },
+    {
+      "name": "the unspecified address",
+      "host": "0.0.0.0",
+      "internal": true
+    },
+    {
+      "name": "a reserved address",
+      "host": "240.0.0.1",
+      "internal": true
+    },
+    {
+      "name": "the broadcast address",
+      "host": "255.255.255.255",
+      "internal": true
+    },
+    {
+      "name": "a benchmarking address",
+      "host": "198.18.0.1",
+      "internal": true
+    },
+    {
+      "name": "the IPv6 unspecified address",
+      "host": "::",
+      "internal": true
+    },
+    {
+      "name": "a public address",
+      "host": "93.184.216.34",
+      "internal": false
+    },
+    {
+      "name": "loopback as one decimal number",
+      "host": "2130706433",
+      "internal": true
+    },
+    {
+      "name": "loopback in octal",
+      "host": "0177.0.0.1",
+      "internal": true
+    },
+    {
+      "name": "loopback in hex",
+      "host": "0x7f.1",
+      "internal": true
+    },
+    {
+      "name": "loopback shortened",
+      "host": "127.1",
+      "internal": true
+    },
+    {
+      "name": "loopback shortened further",
+      "host": "127.0.1",
+      "internal": true
+    },
+    {
+      "name": "the metadata address as one decimal number",
+      "host": "2852039166",
+      "internal": true
+    },
+    {
+      "name": "a public address as one decimal number",
+      "host": "1568399394",
+      "internal": false
+    },
+    {
+      "name": "loopback in IPv6",
+      "host": "::1",
+      "internal": true
+    },
+    {
+      "name": "loopback in IPv6 with brackets",
+      "host": "[::1]",
+      "internal": true
+    },
+    {
+      "name": "an IPv6 unique-local address",
+      "host": "fd00::1",
+      "internal": true
+    },
+    {
+      "name": "an IPv6 link-local address",
+      "host": "fe80::1",
+      "internal": true
+    },
+    {
+      "name": "a public IPv6 address",
+      "host": "2001:db8::1",
+      "internal": true
+    },
+    {
+      "name": "a name with spaces around it",
+      "host": "  localhost  ",
+      "internal": true
+    },
+    {
+      "name": "nothing at all",
+      "host": "",
+      "internal": false
+    },
+    {
+      "name": "a name that is only a dot",
+      "host": ".",
+      "internal": false
+    },
+    {
+      "name": "a number that is not an address",
+      "host": "999999999999",
+      "internal": false
+    }
+  ],
+  "patterns": [
+    {
+      "name": "no pattern at all",
+      "pattern": null,
+      "rejection": null
+    },
+    {
+      "name": "an ordinary pattern",
+      "pattern": "error: \\d+",
+      "rejection": null
+    },
+    {
+      "name": "an empty pattern",
+      "pattern": "",
+      "rejection": null
+    },
+    {
+      "name": "a nested quantifier",
+      "pattern": "(a+)+",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
+      }
+    },
+    {
+      "name": "a quantified backreference",
+      "pattern": "(a)\\1+",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern rejected: catastrophic-backtracking construct (nested quantifier or quantified backreference)"
+      }
+    },
+    {
+      "name": "a pattern at the length cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rejection": null
+    },
+    {
+      "name": "a pattern over the length cap",
+      "pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "pattern too long (max 512 chars)"
+      }
+    },
+    {
+      "name": "a pattern that will not compile",
+      "pattern": "(unclosed",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: missing ), unterminated subpattern at position 0"
+      }
+    },
+    {
+      "name": "a pattern with a lone bracket",
+      "pattern": "[a-",
+      "rejection": {
+        "success": false,
+        "error": "invalid_pattern",
+        "detail": "invalid pattern: unterminated character set at position 0"
+      }
+    }
+  ],
+  "ids": [
+    {
+      "name": "an ordinary id",
+      "id": "sess-1",
+      "rejection": null
+    },
+    {
+      "name": "an id with a slash in it",
+      "id": "../etc/passwd",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: '../etc/passwd'"
+      }
+    },
+    {
+      "name": "an id with a dot segment",
+      "id": "..",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: '..'"
+      }
+    },
+    {
+      "name": "an empty id",
+      "id": "",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: ''"
+      }
+    },
+    {
+      "name": "an id with a null byte",
+      "id": "a\u0000b",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a\\x00b'"
+      }
+    },
+    {
+      "name": "an id with a space",
+      "id": "a b",
+      "rejection": {
+        "success": false,
+        "error": "invalid_id",
+        "detail": "invalid session_id: 'a b'"
+      }
+    },
+    {
+      "name": "an id of digits",
+      "id": "12345",
+      "rejection": null
+    },
+    {
+      "name": "an id with dots",
+      "id": "a.b",
+      "rejection": null
+    }
+  ]
+}

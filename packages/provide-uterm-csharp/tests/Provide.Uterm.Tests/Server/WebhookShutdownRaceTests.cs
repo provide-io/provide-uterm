@@ -26,7 +26,7 @@ public sealed class WebhookShutdownRaceTests
     /// </summary>
     private sealed class GatedTransport : HttpMessageHandler
     {
-        private readonly ManualResetEventSlim _release = new(false);
+        private readonly TaskCompletionSource<bool> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _lateSends;
 
         internal ManualResetEventSlim Entered { get; } = new(false);
@@ -34,31 +34,30 @@ public sealed class WebhookShutdownRaceTests
         /// <summary>Requests to anything other than /held — expected to stay 0.</summary>
         internal int LateSends => Volatile.Read(ref _lateSends);
 
-        protected override Task<HttpResponseMessage> SendAsync(
+        protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
             if (request.RequestUri!.AbsolutePath == "/held")
             {
                 Entered.Set();
-                _release.Wait();
+                await _release.Task.WaitAsync(cancellationToken);
             }
             else
             {
                 Interlocked.Increment(ref _lateSends);
             }
 
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            return new HttpResponseMessage(HttpStatusCode.OK);
         }
 
-        internal void Release() => _release.Set();
+        internal void Release() => _release.TrySetResult(true);
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                _release.Set();
-                _release.Dispose();
+                _release.TrySetResult(true);
                 Entered.Dispose();
             }
 
@@ -122,7 +121,7 @@ public sealed class WebhookShutdownRaceTests
 
         var held = manager.Register("held", "http://127.0.0.1:9/held", null, null, null);
         Publish(bus, "held");
-        Assert.True(transport.Entered.Wait(10_000), "the held webhook never reached the transport");
+        await WaitForAsync(() => transport.Entered.IsSet, "a held webhook to reach the transport");
 
         var shutdown = Task.Run(() => manager.ShutdownAsync());
 

@@ -1,0 +1,833 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_recording_golden.py",
+ "events": [
+  {
+   "ts": 1.5,
+   "event": "read",
+   "data": {
+    "n": 1
+   }
+  },
+  {
+   "ts": 2.5,
+   "event": "write",
+   "data": {
+    "n": 2
+   }
+  },
+  {
+   "ts": 3.5,
+   "event": "read",
+   "data": {
+    "n": 3
+   }
+  },
+  {
+   "ts": 4.5,
+   "event": "write",
+   "data": {
+    "n": 4
+   }
+  },
+  {
+   "ts": 5.5,
+   "event": "read",
+   "data": {
+    "n": 5
+   }
+  }
+ ],
+ "queries": [
+  {
+   "limit": 200,
+   "offset": null,
+   "event": null,
+   "memory": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 2.5,
+     "event": "write",
+     "data": {
+      "n": 2
+     }
+    },
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 4.5,
+     "event": "write",
+     "data": {
+      "n": 4
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 2.5,
+     "event": "write",
+     "data": {
+      "n": 2
+     }
+    },
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 4.5,
+     "event": "write",
+     "data": {
+      "n": 4
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  },
+  {
+   "limit": 2,
+   "offset": null,
+   "event": null,
+   "memory": [
+    {
+     "ts": 4.5,
+     "event": "write",
+     "data": {
+      "n": 4
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "ts": 4.5,
+     "event": "write",
+     "data": {
+      "n": 4
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  },
+  {
+   "limit": 2,
+   "offset": 0,
+   "event": null,
+   "memory": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    }
+   ],
+   "file": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    }
+   ]
+  },
+  {
+   "limit": 2,
+   "offset": 1,
+   "event": null,
+   "memory": [
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 2.5,
+     "event": "write",
+     "data": {
+      "n": 2
+     }
+    }
+   ],
+   "file": [
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 2.5,
+     "event": "write",
+     "data": {
+      "n": 2
+     }
+    }
+   ]
+  },
+  {
+   "limit": 2,
+   "offset": 99,
+   "event": null,
+   "memory": [],
+   "file": []
+  },
+  {
+   "limit": 2,
+   "offset": -1,
+   "event": null,
+   "memory": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    }
+   ],
+   "file": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    }
+   ]
+  },
+  {
+   "limit": 200,
+   "offset": null,
+   "event": "read",
+   "memory": [
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  },
+  {
+   "limit": 2,
+   "offset": null,
+   "event": "read",
+   "memory": [
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  },
+  {
+   "limit": 2,
+   "offset": 1,
+   "event": "read",
+   "memory": [
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  },
+  {
+   "limit": 200,
+   "offset": null,
+   "event": "nosuch",
+   "memory": [],
+   "file": []
+  },
+  {
+   "limit": 0,
+   "offset": null,
+   "event": null,
+   "memory": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 2.5,
+     "event": "write",
+     "data": {
+      "n": 2
+     }
+    },
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 4.5,
+     "event": "write",
+     "data": {
+      "n": 4
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 2.5,
+     "event": "write",
+     "data": {
+      "n": 2
+     }
+    },
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 4.5,
+     "event": "write",
+     "data": {
+      "n": 4
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  },
+  {
+   "limit": 1,
+   "offset": null,
+   "event": null,
+   "memory": [
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  },
+  {
+   "limit": -5,
+   "offset": null,
+   "event": null,
+   "memory": [
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  },
+  {
+   "limit": 99999,
+   "offset": null,
+   "event": null,
+   "memory": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 2.5,
+     "event": "write",
+     "data": {
+      "n": 2
+     }
+    },
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 4.5,
+     "event": "write",
+     "data": {
+      "n": 4
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ],
+   "file": [
+    {
+     "event": "log_start",
+     "data": {
+      "kind": "corpus"
+     },
+     "session_id": "s1"
+    },
+    {
+     "ts": 1.5,
+     "event": "read",
+     "data": {
+      "n": 1
+     }
+    },
+    {
+     "ts": 2.5,
+     "event": "write",
+     "data": {
+      "n": 2
+     }
+    },
+    {
+     "ts": 3.5,
+     "event": "read",
+     "data": {
+      "n": 3
+     }
+    },
+    {
+     "ts": 4.5,
+     "event": "write",
+     "data": {
+      "n": 4
+     }
+    },
+    {
+     "ts": 5.5,
+     "event": "read",
+     "data": {
+      "n": 5
+     }
+    }
+   ]
+  }
+ ],
+ "memory_after_end": [
+  {
+   "event": "log_start",
+   "data": {
+    "kind": "corpus"
+   },
+   "session_id": "s1"
+  },
+  {
+   "ts": 1.5,
+   "event": "read",
+   "data": {
+    "n": 1
+   }
+  },
+  {
+   "ts": 2.5,
+   "event": "write",
+   "data": {
+    "n": 2
+   }
+  },
+  {
+   "ts": 3.5,
+   "event": "read",
+   "data": {
+    "n": 3
+   }
+  },
+  {
+   "ts": 4.5,
+   "event": "write",
+   "data": {
+    "n": 4
+   }
+  },
+  {
+   "ts": 5.5,
+   "event": "read",
+   "data": {
+    "n": 5
+   }
+  },
+  {
+   "event": "log_stop",
+   "data": {},
+   "session_id": "s1"
+  }
+ ],
+ "file_after_end": [
+  {
+   "event": "log_start",
+   "data": {
+    "kind": "corpus"
+   },
+   "session_id": "s1"
+  },
+  {
+   "ts": 1.5,
+   "event": "read",
+   "data": {
+    "n": 1
+   }
+  },
+  {
+   "ts": 2.5,
+   "event": "write",
+   "data": {
+    "n": 2
+   }
+  },
+  {
+   "ts": 3.5,
+   "event": "read",
+   "data": {
+    "n": 3
+   }
+  },
+  {
+   "ts": 4.5,
+   "event": "write",
+   "data": {
+    "n": 4
+   }
+  },
+  {
+   "ts": 5.5,
+   "event": "read",
+   "data": {
+    "n": 5
+   }
+  },
+  {
+   "event": "log_stop",
+   "data": {},
+   "session_id": "s1"
+  }
+ ],
+ "memory_meta": {
+  "session_id": "s1",
+  "exists": true
+ },
+ "deterministic_meta": {
+  "session_id": "s1",
+  "exists": true,
+  "size_bytes": 237
+ },
+ "memory_meta_missing": {
+  "session_id": "nosuch",
+  "exists": false,
+  "size_bytes": 0
+ },
+ "file_meta_exists_keys": [
+  "exists",
+  "path",
+  "session_id",
+  "size_bytes"
+ ],
+ "file_meta_exists": {
+  "session_id": "s1",
+  "exists": true
+ },
+ "file_meta_missing": {
+  "session_id": "nosuch",
+  "exists": false,
+  "size_bytes": 0,
+  "path": null
+ },
+ "file_path_present": true,
+ "file_path_missing": true,
+ "null_meta": {
+  "session_id": "s1",
+  "exists": false,
+  "size_bytes": 0
+ },
+ "null_entries": [],
+ "null_path": null,
+ "limits": [
+  {
+   "input": 0,
+   "normalized": 200
+  },
+  {
+   "input": 1,
+   "normalized": 1
+  },
+  {
+   "input": 2,
+   "normalized": 2
+  },
+  {
+   "input": 200,
+   "normalized": 200
+  },
+  {
+   "input": 499,
+   "normalized": 499
+  },
+  {
+   "input": 500,
+   "normalized": 500
+  },
+  {
+   "input": 501,
+   "normalized": 500
+  },
+  {
+   "input": 99999,
+   "normalized": 500
+  },
+  {
+   "input": -1,
+   "normalized": 1
+  },
+  {
+   "input": -500,
+   "normalized": 1
+  }
+ ]
+}

@@ -129,7 +129,15 @@ public class GraphicalTargetsRestTests
         }));
 
         await reg.AddStaticAsync(new Def { TargetId = "s2", Protocol = "memory", Width = 1, Height = 1 });
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await reg.AddStaticAsync(new Def { TargetId = "s2", Protocol = "memory", Width = 1, Height = 1 }));
+        // CONFLICT, matching the reference and the shared golden corpus. The
+        // constructor above still throws InvalidOperationException: seeding via
+        // the constructor is a C#-only convenience with no counterpart in the
+        // reference (its __init__ takes no targets), so it stays a programmer
+        // error rather than a request refusal.
+        var duplicate = await Assert.ThrowsAsync<GraphicalTargetException>(
+            async () => await reg.AddStaticAsync(new Def { TargetId = "s2", Protocol = "memory", Width = 1, Height = 1 }));
+        Assert.Equal(GraphicalTargetErrorCode.Conflict, duplicate.Code);
+        Assert.Equal("duplicate graphical target_id", duplicate.Message);
     }
 
     [Fact]

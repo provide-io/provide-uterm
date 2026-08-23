@@ -1,0 +1,228 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_session_adapters_golden.py",
+ "telnet_defaults": {
+  "cols": 80,
+  "rows": 25,
+  "term": "ANSI",
+  "connect_timeout": 30.0,
+  "receive_encoding": "cp437",
+  "control_frames": false
+ },
+ "ws_defaults": {
+  "cols": 80,
+  "rows": 25,
+  "ping_interval": 20,
+  "ping_timeout": 20,
+  "close_timeout": 10,
+  "origin": null,
+  "additional_headers": null,
+  "receive_encoding": "cp437",
+  "text_frame_encoding": "latin-1",
+  "control_frames": false
+ },
+ "telnet_session_defaults": {
+  "cols": 80,
+  "rows": 25,
+  "term": "ANSI",
+  "connect_timeout": 30.0,
+  "receive_encoding": "cp437",
+  "control_frames": false
+ },
+ "ws_session_defaults": {
+  "cols": 80,
+  "rows": 25,
+  "ping_interval": 20,
+  "ping_timeout": 20,
+  "close_timeout": 10,
+  "origin": null,
+  "additional_headers": null,
+  "receive_encoding": "cp437",
+  "text_frame_encoding": "latin-1",
+  "control_frames": false
+ },
+ "encodes": [
+  {
+   "name": "ascii",
+   "text": "hello",
+   "bytes": [
+    104,
+    101,
+    108,
+    108,
+    111
+   ]
+  },
+  {
+   "name": "carriage return",
+   "text": "ls\r",
+   "bytes": [
+    108,
+    115,
+    13
+   ]
+  },
+  {
+   "name": "box drawing",
+   "text": "╔═╗",
+   "bytes": [
+    201,
+    205,
+    187
+   ]
+  },
+  {
+   "name": "shaded blocks",
+   "text": "░▒▓█",
+   "bytes": [
+    176,
+    177,
+    178,
+    219
+   ]
+  },
+  {
+   "name": "accented latin",
+   "text": "café",
+   "bytes": [
+    99,
+    97,
+    102,
+    130
+   ]
+  },
+  {
+   "name": "greek in the high range",
+   "text": "αβΓ",
+   "bytes": [
+    224,
+    63,
+    226
+   ]
+  },
+  {
+   "name": "currency",
+   "text": "£¥₧",
+   "bytes": [
+    156,
+    157,
+    158
+   ]
+  },
+  {
+   "name": "arrows",
+   "text": "↑↓→←",
+   "bytes": [
+    63,
+    63,
+    63,
+    63
+   ]
+  },
+  {
+   "name": "empty",
+   "text": "",
+   "bytes": []
+  },
+  {
+   "name": "no-break space",
+   "text": "⌂ ",
+   "bytes": [
+    63,
+    255
+   ]
+  }
+ ],
+ "decodes": [
+  {
+   "name": "ascii",
+   "bytes": [
+    104,
+    105
+   ],
+   "text": "hi"
+  },
+  {
+   "name": "box drawing",
+   "bytes": [
+    201,
+    205,
+    187
+   ],
+   "text": "╔═╗"
+  },
+  {
+   "name": "shaded blocks",
+   "bytes": [
+    176,
+    177,
+    178,
+    219
+   ],
+   "text": "░▒▓█"
+  },
+  {
+   "name": "accented",
+   "bytes": [
+    130,
+    129
+   ],
+   "text": "éü"
+  },
+  {
+   "name": "the whole high half",
+   "bytes": [
+    128,
+    129,
+    130,
+    131,
+    132,
+    133,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147,
+    148,
+    149,
+    150,
+    151,
+    152,
+    153,
+    154,
+    155,
+    156,
+    157,
+    158,
+    159
+   ],
+   "text": "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒ"
+  },
+  {
+   "name": "nulls and controls",
+   "bytes": [
+    0,
+    7,
+    27,
+    91,
+    51,
+    49,
+    109
+   ],
+   "text": "\u0000\u0007\u001b[31m"
+  },
+  {
+   "name": "empty",
+   "bytes": [],
+   "text": ""
+  }
+ ]
+}

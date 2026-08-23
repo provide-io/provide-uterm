@@ -1,10 +1,20 @@
 # uterm Risk-Ranked Action Plan (Living)
 
-Date: 2026-08-15
-Branch: `main` (`origin/main`)
-Owner of this document: Architecture + release owners
+- Date: 2026-08-16
+- Branch: `hardening/risk-ranked-action-plan`
+- Merged to `main`: **no** — see below
+- Owner of this document: Architecture + release owners
+
+**Where this work actually lives.** This document and every `[x]` in it are on
+`hardening/risk-ranked-action-plan`, which has no open PR and is not merged.
+`main` does not carry this file. Read against `main`, the matrix below describes
+a hardening cycle that `main` has not received, so treat every completed row as
+"done on the branch" until the merge lands. The branch fast-forwards from `main`
+cleanly (`main` is an ancestor of it), and its evidence is local command output:
+no full CI run has ever executed against the branch.
 
 Purpose
+
 - Provide a stable, actionable plan for reducing production risk across all implementations.
 - Keep scope explicit for each language/backend.
 - Keep this document current by updating status, owners, and completion criteria as work is done.
@@ -22,46 +32,209 @@ Purpose
 
 ## TS scope decision (committed)
 
-- **Decision (2026-08-15): keep TypeScript as **partial backend only**.**
+- **Decision (2026-08-15): keep TypeScript as partial backend only.**
 - **Reasoning:** TypeScript has strong protocol, client, and partial server libraries, but is not yet a parity replacement for Python/Go/C# in lifecycle + WS + full route coverage.
 - **Enforcement:** TypeScript is listed as `N`/unserved for unsupported protocol cells, and CI/live matrix jobs continue to run the served set as Python/Go/C# only.
 - **Impact:** We will not advertise TypeScript as a full served backend until this scope is closed.
+- **Vocabulary:** `docs/parity-labels.md` now defines `served` / `unserved` / `unsupported` / `partial` / `N/A` once, and every parity table links to it. The PR template's protocol checklist restates the rule that a TS cell may not be marked `served` without a mounted server surface.
 
 ## Risk-ranked action matrix
 
-| Rank | Area | Description | Owner | Dependencies | Evidence to capture | Acceptance criteria | Command(s) |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| P0 | TS backend parity scope and contract | Enforce TypeScript as partial (no full backend parity claim): complete route/transport module coverage remains explicit and unserved. | ADR / product owner + TS core owner | `docs/protocol-matrix.md`, `docs/feature-roadmap.md`, package exports | Signed decision doc + matrix evidence (unsupported cells where expected) | TypeScript remains unserved for full parity cells with explicit unsupported status, and this is documented in matrix/docs and enforced in CI selector lists | `npm run lint --workspace=packages/provide-uterm-ts`<br>`npm run build --workspace=packages/provide-uterm-ts`<br>`python conformance/live/harness --list-drivers` |
-| P1 | Lifecycle/fanout race hardening | Expand lifecycle and fanout stress tests where ownership, resume, pause, and delivery races are most failure-prone. | Python + Go + C# test owners, with Cloudflare representative tests | Existing conformance scenario files and cross-language harness | New failing repro tests that now pass; improved coverage in timing/ordering edges | Red-team timing tests for attach/detach/reconnect and delivery races executed in CI and stable across languages | `GOWORK=off uv run pytest -q tests/conformance/live/test_matrix.py`<br>`cd packages/provide-uterm-go && GOWORK=off go test ./...`<br>`cd packages/provide-uterm-csharp && dotnet test --no-restore`<br>`cd packages/provide-uterm-cloudflare && uv run pytest -q tests/test_security.py::test_*` |
-| P1 | Protocol drift guardrails | Prevent behavior drift by enforcing protocol/spec + fixture + docs checks on any change touching wire contracts. | Platform/runtime owners + CI owner | `spec/`, `spec/*_corpus.json`, docs protocol matrix | Diff checks and a PR checklist for protocol changes | CI fails on stale matrix/docs when protocol changes; every protocol commit updates corpus/tests | `uv run python scripts/run_session_lifecycle_security_scenarios.py --validate-only`<br>`uv run python scripts/run_fanout_security_scenarios.py --validate-only` |
-| P1 | Cloudflare behavior parity boundaries | Codify and continuously test Cloudflare-specific intentional divergences from FastAPI/Go/C# behavior. | Cloudflare owner + architecture owner | `docs/operations/*.md`, ARD notes, conformance harness | Explicit doc matrix row for each divergence + tests that assert edge behavior | Any change to shared protocol touching edge-runtime behavior must update divergence table and edge tests | `cd packages/provide-uterm-cloudflare && uv run pytest -q tests/conformance` |
-| P2 | C# quality debt cleanup | Resolve high-volume analyzer warnings and low-signal anti-patterns to reduce future bug risk and review friction. | C# core owner | Current warning list, `dotnet` test output | Warning baseline tracked in CI/artifact | Reduced warning count; no new warning class introduced by PRs | `cd packages/provide-uterm-csharp && dotnet test --no-restore --verbosity minimal` |
-| P2 | Benchmark reproducibility and comparability | Standardize benchmark commands, warmup, sample sizing, and environment constraints to avoid local-machine bias. | SRE/performance owner + each language owner | Benchmark scripts in root/scripts or CI workflows | Shared command matrix with reproducible results logs | Same benchmark harness produces stable deltas across CI retries and commit history | `make -f Makefile.bench bench-local` *(to be created)*<br>`make -f Makefile.bench bench-ci` *(to be created)* |
-| P3 | Documentation and review hygiene | Keep roadmap, remediation status, and implementation matrices in sync after each language/backend change. | Docs owner + release owner | `docs/roadmap/uterm-code-review-remediation.md`, `docs/ARCHITECTURE.md` | Auto-sync checklist and review checkpoint updates on each merge | 100% of parity-related PRs update docs; stale claims removed within 1 review cycle | `rg -n "served|parity|unsupported" docs packages -S`<br>Targeted doc review in PR checklist |
+| Rank | Area | Status | Description | Evidence captured | Command(s) |
+| --- | --- | --- | --- | --- | --- |
+| P0 | TS backend parity scope and contract | `[x]` | Enforce TypeScript as partial (no full backend parity claim): complete route/transport module coverage remains explicit and unserved. | Decision restated in `docs/parity-labels.md` with the served set named (Python, Go, C#, Cloudflare); root and TS READMEs corrected from "not yet a full backend" to "not a served backend"; the two shared contracts pin `typescript` to `unserved` and their validators refuse any other status. | `uv run python scripts/run_session_lifecycle_security_scenarios.py --validate-only`<br>`uv run python scripts/run_fanout_security_scenarios.py --validate-only` |
+| P1 | Lifecycle/fanout race hardening | `[x]` | Expand lifecycle and fanout stress tests where ownership, resume, pause, and delivery races are most failure-prone. | Two new race categories in `spec/session_lifecycle_security_scenarios.json` (10 → 12 scenarios), executed natively by Python, Go, C#, and Cloudflare. Found a real defect: see LIFECYCLE FINDING below. | `uv run python scripts/run_session_lifecycle_security_scenarios.py` |
+| P1 | Protocol drift guardrails | `[x]` | Prevent behavior drift by enforcing protocol/spec + fixture + docs checks on any change touching wire contracts. | `scripts/check_protocol_drift.py` in the static gate; the two contract validations wired in beside it; `.github/pull_request_template.md` carries the protocol checklist; `tests/scripts/test_check_protocol_drift.py` proves the gate is not vacuous. | `bash ci/quality_checks.sh`<br>`uv run python scripts/check_protocol_drift.py --changed-against origin/main` |
+| P1 | Cloudflare behavior parity boundaries | `[x]` | Codify and continuously test Cloudflare-specific intentional divergences from FastAPI/Go/C# behavior. | `docs/cloudflare-divergence-matrix.md`: 11 rows, each with intent, `file:line` evidence, and a pinning test. 23 new offline tests in `tests/test_edge_divergence_matrix.py`. Found a stale doc claim: see DOC FINDING below. | `uv run --frozen --package provide-uterm-cloudflare --extra dev pytest -q packages/provide-uterm-cloudflare/tests` |
+| P1 | Mutation gate integrity | `[x]` | Keep the 100%-score perimeter meaningful: no file enforcing nothing, no excuse outliving the mutant it excused, and a scoped run that agrees with a full one. | `control_channel.py` was the only red leg of thirty-seven in the full-perimeter sweep — 89.94%, all 34 survivors inside the decoder — and now runs 319 killed, 15 excused, 100.00%. Nineteen stale allowlist entries dropped: every one named a mutant in state KILLED, which falsifies the equivalence claim it was making, and the twenty-seven survivors were each replayed through `mutmut show` and checked against their written reasons. A perimeter file that generates no mutants now fails unless declared with a reason — `control_channel_patterns.py` had been enforcing nothing, because mutmut skips decorated classes wholesale and both of its classes are `@dataclass`. Scoped runs were silently dropping `test_snapshot_diagnostics_kill.py`, since `BRIDGE_HUB_MUTATION_TESTS` is a second hand-maintained list rather than a mirror of the root selection: 48 phantom survivors at 69.43% became 157 killed at 100.00% on the identical command. See MUTATION FINDING below for the residual risk. | `uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 0 --min-mutation-score 100 --paths PATH`<br>`python3 ci/mutation_full_matrix.py` |
+| P2 | C# quality debt cleanup | `[x]` | Resolve high-volume analyzer warnings and low-signal anti-patterns to reduce future bug risk and review friction. | Eight compiler warnings → zero, two of which were real defects (see C# FINDINGS below), plus 28 xUnit analyzer warnings the gate had been unable to see at all. `ci/warning_gate.py` + `ci/warning-baseline.json` ratchet both, failing on a new warning and on a stale baseline entry alike. Coverage 97.44% → 97.53%. | `make -C packages/provide-uterm-csharp quality-gate` |
+| P2 | Benchmark reproducibility and comparability | `[x]` | Standardize benchmark commands, warmup, sample sizing, and environment constraints to avoid local-machine bias. | `Makefile.bench` declares every parameter once and exposes two profiles; `scripts/bench_env_fingerprint.py` writes the machine beside every result; `docs/benchmarks/README.md` states what makes two numbers comparable. | `make -f Makefile.bench bench-local`<br>`make -f Makefile.bench bench-ci` |
+| P3 | Documentation and review hygiene | `[x]` | Keep roadmap, remediation status, and implementation matrices in sync after each language/backend change. | `docs/parity-labels.md` is the single vocabulary; eight documents normalized onto it; the PR template makes the doc update a checklist item rather than a convention. | `uv run python scripts/check_docs_accuracy.py`<br>`rg -n "served\|parity\|unsupported" docs packages -S` |
 
-## 90-day execution plan
+## Findings from the 2026-08-15 hardening pass
 
-### Week 1–2
-- Finalize TS parity scope with ownership signoff (completed).
-- Add/lock CI checks that enforce the chosen TS scope (already aligned: live matrix excludes TS from served server set).
-- Publish first revision of divergence matrix for Cloudflare.
+These were not on the plan. Each was found by doing a plan item, which is the argument for the guardrails the items added.
 
-### Week 2–5
-- Add at least 6 new lifecycle/fanout race tests in the Python/Go/C# harnesses.
-- Add TS/CF equivalents where behavior is intended.
-- Run full conformance matrix against all served implementations.
+**LIFECYCLE FINDING — C# approvals never expired (fixed).** Adding the
+`approval_expiry_refuses_late_claim` race case turned the C# cell red on first
+run: `POST /api/approvals/{id}/approve` returned `200 approved` for a request
+whose deadline had passed by ~999 seconds, and delivered the held command.
+`InMemoryApprovalStore.CleanupExpired()` was the only code that could retire a
+deadline and **nothing in production called it** — Go ticks it from
+`StartSweeps`, Python from `sweep_expired_approvals`, and the C# port has no
+sweep at all. Unlike Python's `claim_request`, C#'s `Claim` also had no inline
+deadline re-check, so there was no second line of defence. Fixed by checking the
+deadline on every read and write path, which is what the reference does inline.
+The scenario is the A/B: it was red before the fix and green after, with no
+change to the assertion.
 
-### Week 4–7
-- Add protocol-drift check to CI gate (or fail-fast script) in repo workflows.
-- Require protocol change checklist in PR template for any `spec/` diff.
+**DOC FINDING — the protocol matrix described a refusal that does not exist
+(fixed).** `docs/protocol-matrix.md` advertised Cloudflare as
+`hijack_control=rest`, refusing `hijack_request` / `hijack_release` /
+`hijack_step` with `use_rest_hijack_api`. The Worker emits `"ws"` from all three
+of its hello paths and serves all three frames; `use_rest_hijack_api` occurred
+nowhere in the tree except that table. The Worker had reached WS-hijack parity
+and only the doc still disagreed — dangerous in that direction, because the
+obvious way to resolve the drift is to regress the Worker to match the doc.
 
-### Week 6–8
-- Establish benchmark harness and run baseline capture on all languages.
-- Add benchmark report template and historical artifact path (`docs/benchmarks/` or CI artifacts).
+**C# FINDINGS — two warnings were defects, not noise (fixed).**
+`CS0649` on `InMemoryGraphicalTargetRegistry._closed` was the only signal that
+the port carried the closed-state guard but never the `Close()` that sets it,
+leaving `GraphicalTargetErrorCode.Closed` unreachable while Python and
+TypeScript both expose `close()`. `CS0414` on `MemoryEngine._open` advertised a
+closed-state guard the reference deliberately does not have. Neither was
+reachable by a test, which is exactly why the compiler was the only witness.
 
-### Week 8–10
-- Resolve first wave of C# warnings and track remaining technical debt.
-- Clean up docs/roadmap links and mark parity scope in one pass.
+**CI FINDINGS — two gates were already failing on `main` (fixed).**
+`docs-quality` was red because this document used markdown hard line breaks and
+`check_docs_accuracy.py` rejects trailing whitespace. The C# `build-binaries`
+stage failed with `NETSDK1102` after an SDK update, because `PublishAot` and
+`PublishTrimmed` cannot apply to the framework-dependent publish the Makefile
+performs — so the C# gate could not reach its final stage regardless of what
+the suite did.
+
+**MUTATION FINDING — an excuse can silently retarget, and the ported fix does
+not apply here.** The full-perimeter run reported a survivor at
+`x_session_capability_handlers__mutmut_999` alongside a stale-entry warning for
+`__mutmut_993`. Those are one fact, not two: the `recording_download` family
+shifted by three, the documented equivalents moved from 993/996 to 996/999, the
+old ids stopped excusing anything, and a genuinely-equivalent argument drop
+resurfaced at its new number as an unexplained survivor. mutmut numbers mutants
+sequentially within the enclosing function, and that factory carries roughly a
+thousand of them, so any edit earlier in the file renumbers everything after it
+and slides an excuse onto a different mutant. The warning and the survivor read
+as unrelated problems, which is what makes it expensive to diagnose twice. Go,
+C# and TS were moved to content-addressed keys for exactly this reason; mutmut's
+results output exposes no per-mutant content, so that fix cannot be ported
+as-is, and the Python allowlist stays exposed to it. Diagnosis and mechanism are
+recorded next to the entries; a durable fix is still open.
+
+## Backlog of "ready next" tasks
+
+- [x] TS-DECIDE-001: Publish parity decision and enforce via CI matrix/docs.
+- [x] P1-LIFECYCLE-001: Add race matrix cases for owner handoff and stale approval expiry.
+- [x] P1-PROTO-001: Add protocol version and fixture drift checks to CI.
+- [x] P1-CF-001: Add/refresh Cloudflare divergence matrix and edge-only regression tests.
+- [x] P2-CSHARP-QUALITY-001: Address warning clusters from `dotnet test` output.
+- [x] P2-BENCH-001: Create repeatable benchmark scripts/containers for cross-language comparison.
+- [x] P3-DOCS-001: Consolidate parity labels in `README` and server docs.
+
+### Opened by this pass
+
+Items are listed once, `[x]` or `[ ]`, in the order they were found. Several
+were opened and closed inside the same pass, which is why the section mixes
+both: wiring C# to the shared golden corpus paid for itself immediately, and
+`CSHARP-STATIC-001`, `CSHARP-FRAMES-001` and `CSHARP-GOLDEN-002` were all found
+by it or by the full test gate rather than by review.
+
+- [x] **CSHARP-GOLDEN-001 (P2): C# now executes a shared golden corpus.** 82
+  cases over all 22 scenarios of `graphicaltargets_golden.json`, read in place
+  from the TypeScript package rather than copied, so it cannot become another
+  twinned fixture to drift. This is the corpus whose "a closed registry does
+  nothing at all" scenario the missing `Close()` had been hiding from.
+- [x] **CSHARP-STATIC-001 (P1): seeding a duplicate returned an uncoded error.**
+  `AddStaticCore` threw a raw `InvalidOperationException` where the reference
+  (`graphical_targets.py:433`), Go, and the corpus all give
+  `CONFLICT`/"duplicate graphical target_id" — so a REST caller got an
+  unhandled 500 instead of a coded refusal. Its `Validate()` call was also
+  missing the `ArgumentException -> INVALID` wrapper that `CreateCore` and
+  `UpdateCore` both have, so a bad seeded `target_id`, protocol or size escaped
+  the same way. Found by the corpus on its first run.
+- [x] **CSHARP-FRAMES-001 (P1): the C# snapshot frame was missing two wire
+  fields, and its corpus copy hid that.** `SnapshotFrame` had no `bytes_read`
+  or `chunks_read` — neither string occurred anywhere in the C# tree — so the
+  port could not carry either ingest counter in or out. Its committed copy of
+  `python_golden.json` was missing exactly those two fields, so the corpus was
+  asserting the gap was correct. Both fields added to the frame and to the
+  mapper's encode and decode paths (omitted when null, as Go's `omitzero` does
+  and as the reference's "a worker predating them omits both" intends), and the
+  copy is byte-identical with Go's again.
+
+  The same copy had also dropped `mcp_supported`/`vnc_supported`. That one is
+  *not* a gap: `spec/behavior.json` `hello_defaults.csharp` deliberately sets
+  `mcp_supported: false` because MCP is de-scoped from the port. Deleting the
+  keys was the wrong way to say so, because it silently took the snapshot
+  counters with it. The divergence is now declared in the golden test and fails
+  if it ever stops being true.
+- [x] **CSHARP-GOLDEN-002 (P2): C#'s committed fixtures were outside every
+  drift check.** Two independent holes, both closed. All six of C#'s Go-twinned
+  corpora (plus the four-way `behavior_vectors.json` group) are now in
+  `TWINNED_FIXTURES` in `scripts/check_protocol_drift.py`, where only
+  `ctrlmsg/signature_corpus.json` had been; A/B'd by restoring the pre-fix
+  copy, which the gate now rejects. And `.ci/check_goldens.sh` no longer stops
+  at `-maxdepth 1`, so the five C# corpora that live in per-subject
+  subdirectories are visible to it at all.
+
+  Widening that find required pruning `bin/` and `obj/` in the same change: the
+  C# test project copies its whole testdata tree next to the built assembly, so
+  ten more "corpora" appear under `bin/Debug` and `bin/Release` after a build —
+  paths that are not in the repository, which is the exact failure mode the
+  script's prune list already existed for. The no-generator note also now
+  separates copies (held to their source by the drift gate) from corpora that
+  genuinely nothing can re-derive, because calling a copy "cannot be
+  drift-checked" invites someone to write a generator for a file whose only job
+  is to equal another file.
+
+  No generator was hidden by the old depth limit — 161 at depth 1, 161 at any
+  depth — so that half is a trap disarmed rather than a bug fixed.
+- [x] **CSHARP-GOLDEN-003 (P2): 104 shared corpora have a C# counterpart and
+  none were consumed before this pass.** Highest value first: `pyjson`
+  (`CanonicalJson` must match `json.dumps(sort_keys=True,
+  separators=(",",":"))` byte for byte or every identity HMAC diverges),
+  `serverauthz`, `egress`, `pattern_safety`, `hub_lease`, `managerprocess`,
+  `serverauth`, `tunnelinvites`+`tokenhash`, `controlplane`.
+- [x] **CSHARP-RFB-001 (P2): endpoint parsing diverges from the corpus in 27
+  cases.** `GraphicalTargetParsing` keeps the brackets on an IPv6 host
+  (`"[2001:db8::1]"` rather than `"2001:db8::1"` — and that string is what a
+  connection dials), reports the wrong message for a malformed port because
+  `Uri.TryCreate` rejects before any port is examined, and disagrees on
+  IPvFuture, zone ids and bracketed credentials.
+- [x] **CSHARP-SECHEADERS-001 (P2): no security response-header resolver.**
+  `securityheaders_golden.json` has no C# counterpart and the tree has no hits
+  for CSP, HSTS or `X-Content-Type-Options`.
+- [x] **CSHARP-XUNIT-001 (P2): 28 baselined xUnit analyzer warnings.** They
+  were invisible until `ci/warning_gate.py`'s code pattern was widened to
+  accept a lower-case analyzer prefix; the gate had been reporting
+  "0 warning(s)" over a build that had 28. C# tests were migrated toward async
+  call-sites in the tracked follow-up, and the baseline file no longer carries
+  those entries.
+- [x] **CSHARP-APPROVAL-002 (P1): the C# approvals subsystem was unreachable
+  from production traffic.** C# had no policy gate on the browser input path,
+  so nothing but a test ever created an approval request, and `HandleApprove`
+  had no `ResolveApproval` equivalent — it claimed the request and returned 200
+  without injecting the held command, so it could never answer the 409 Python
+  and Go return on refused delivery. The store fix made it correct; it did not
+  make the feature real.
+
+  Go's hold path is now ported: `IInputPolicyGate` with a no-op default (so an
+  ungated deployment is byte-for-byte unchanged), parked browsers with bounded
+  hold buffers, ownership re-validation on park, the `approval_pending`
+  broadcast, one-shot revision claim, buffer replay on approve and discard on
+  reject, and the refusal case where the owner loses the lease between decision
+  and injection — `outcome: "refused"` and REST 409, which C# previously could
+  not produce at all. The three frame types C# had defined and never sent are
+  now sent.
+
+  Non-vacuity: reverting only the input seam turns 7 of 10 integration tests
+  red. The 3 that stay green are the no-gate default and the two sweep tests,
+  which drive the hub directly.
+- [x] **CSHARP-APPROVAL-003 (P2): no approval sweep.** A 30-second
+  `CleanupExpired` sweep now runs with the server, and `OnExpired` releases the
+  parked browser rather than leaving it held with its input buffered.
+
+Closed in this pass, kept here only as pointers to where the answer landed:
+
+- [x] **DOC-TUNNEL-001 (P2)** — both documents were true about different
+  things. Cloudflare *does* mount `/tunnel/{worker_id}`; what it lacks is the
+  mux. `docs/security-language-parity.md`'s flat denial was the wrong half, and
+  row 11 of `docs/cloudflare-divergence-matrix.md` overstated it in the other
+  direction. The `unserved` label on the fragmentation row stands.
+- [x] **DOC-COUNT-001 (P3)** — 28 is the real count and the README already
+  enforced it; two independent off-by-ones elsewhere, one of them a doc
+  miscounting its own sub-list rather than a TS-only extra tool.
+- [x] **DOC-FANOUT-001 (P3)** — neither `unserved` nor `N/A`: the REST routes
+  are mounted and the browser socket has no `fanout_send` case at all, so the
+  honest label is the words `N — not implemented (REST only)`.
 
 ## Execution roles and cadence
 
@@ -73,16 +246,6 @@ Purpose
   - Every P0/P1 item includes commands + evidence + tests in PRs.
   - No new "served parity" claim without implementation + harness updates.
 
-## Backlog of "ready next" tasks
-
-- [x] TS-DECIDE-001: Publish parity decision and enforce via CI matrix/docs.
-- [ ] P1-LIFECYCLE-001: Add race matrix cases for owner handoff and stale approval expiry.
-- [ ] P1-PROTO-001: Add protocol version and fixture drift checks to CI.
-- [ ] P1-CF-001: Add/refresh Cloudflare divergence matrix and edge-only regression tests.
-- [ ] P2-CSHARP-QUALITY-001: Address warning clusters from `dotnet test` output.
-- [ ] P2-BENCH-001: Create repeatable benchmark scripts/containers for cross-language comparison.
-- [ ] P3-DOCS-001: Consolidate parity labels in `README` and server docs.
-
 ## Maintenance checklist for this plan (run on each major merge)
 
 - Update owner, status, and ETA on changed items.
@@ -91,4 +254,6 @@ Purpose
 - Confirm no task drift between:
   - `docs/roadmap/uterm-code-review-remediation.md`
   - `docs/protocol-matrix.md`
+  - `docs/parity-labels.md`
+  - `docs/cloudflare-divergence-matrix.md`
   - `docs/ARCHITECTURE.md`

@@ -109,8 +109,8 @@ public class ClientDefaultsAuthConfigTests
         var ex = await Assert.ThrowsAsync<ApiException>(() => client.HealthAsync());
         Assert.Equal(400, ex.StatusCode);
 
-        Assert.Throws<ArgumentException>(() => client.AcquireAsync("../x").GetAwaiter().GetResult());
-        Assert.Throws<ArgumentException>(() => client.AcquireAsync("").GetAwaiter().GetResult());
+        await Assert.ThrowsAsync<ArgumentException>(() => client.AcquireAsync("../x"));
+        await Assert.ThrowsAsync<ArgumentException>(() => client.AcquireAsync(""));
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class ClientDefaultsAuthConfigTests
     }
 
     [Fact]
-    public void Auth_Fingerprint_And_NullResolver()
+    public async Task Auth_Fingerprint_And_NullResolver()
     {
         // Minimal fake "ssh-ed25519 AAAA comment" line (invalid key body is fine for prefix path if b64 ok)
         var blob = Encoding.UTF8.GetBytes("ssh-ed25519 " + Convert.ToBase64String(Encoding.UTF8.GetBytes("key-bytes")) + " user@host");
@@ -135,11 +135,11 @@ public class ClientDefaultsAuthConfigTests
         Assert.StartsWith("SHA256:", raw, StringComparison.Ordinal);
 
         var nullRes = new NullResolver();
-        Assert.Null(nullRes.ResolveAsync("fp", Array.Empty<byte>(), "u").GetAwaiter().GetResult());
+        Assert.Null(await nullRes.ResolveAsync("fp", Array.Empty<byte>(), "u"));
     }
 
     [Fact]
-    public void Auth_AuthorizedKeysFileResolver()
+    public async Task Auth_AuthorizedKeysFileResolver()
     {
         var path = Path.Combine(Path.GetTempPath(), "ak-" + Guid.NewGuid().ToString("N"));
         try
@@ -149,10 +149,10 @@ public class ClientDefaultsAuthConfigTests
             File.WriteAllText(path, "# comment\n\n" + line + "\n");
             var fp = SshAuth.FingerprintFromOpenSshBlob(Encoding.UTF8.GetBytes(line));
             var resolver = new SshAuth.AuthorizedKeysFileResolver(path);
-            var id = resolver.ResolveAsync(fp, Encoding.UTF8.GetBytes(line), "alice").GetAwaiter().GetResult();
+            var id = await resolver.ResolveAsync(fp, Encoding.UTF8.GetBytes(line), "alice");
             Assert.NotNull(id);
             Assert.False(string.IsNullOrEmpty(id!.Subject));
-            Assert.Null(resolver.ResolveAsync("SHA256:nope", Array.Empty<byte>(), "x").GetAwaiter().GetResult());
+            Assert.Null(await resolver.ResolveAsync("SHA256:nope", Array.Empty<byte>(), "x"));
         }
         finally
         {

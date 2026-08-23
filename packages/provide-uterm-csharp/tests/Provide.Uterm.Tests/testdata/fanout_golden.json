@@ -1,0 +1,75 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_fanout_golden.py",
+ "group_defaults": {
+  "mode": "parallel",
+  "stop_on_first_error": false,
+  "error_pattern": null,
+  "quiesce_ms": 500,
+  "max_response_ms": 10000,
+  "divergence_threshold": 0.8,
+  "grants": []
+ },
+ "result_defaults": {
+  "error": null,
+  "approval_required": false,
+  "approval_id": null
+ },
+ "group_fields": [
+  "group_id",
+  "name",
+  "worker_ids",
+  "created_by",
+  "created_at",
+  "mode",
+  "stop_on_first_error",
+  "error_pattern",
+  "quiesce_ms",
+  "max_response_ms",
+  "divergence_threshold",
+  "grants"
+ ],
+ "result_fields": [
+  "group_id",
+  "send_id",
+  "command",
+  "sent_at",
+  "results",
+  "divergent_sessions",
+  "failed_sessions",
+  "error",
+  "approval_required",
+  "approval_id"
+ ],
+ "session_result_fields": [
+  "worker_id",
+  "ok",
+  "output_delta",
+  "elapsed_ms",
+  "divergent"
+ ],
+ "store": {
+  "missing_is_none": true,
+  "alice": [
+   "g1",
+   "g2",
+   "g4"
+  ],
+  "bob": [
+   "g2",
+   "g3"
+  ],
+  "carol": [
+   "g4"
+  ],
+  "dave": [
+   "g4"
+  ],
+  "stranger": [],
+  "replaced_grants": [
+   "zoe"
+  ],
+  "bob_after_delete": [
+   "g2"
+  ]
+ }
+}

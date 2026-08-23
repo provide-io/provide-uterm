@@ -33,7 +33,7 @@ public class UshellConnectorTests
     }
 
     [Fact]
-    public void Poll_Welcome_Then_FlowPause_Withholds_Pending()
+    public async Task Poll_Welcome_Then_FlowPause_Withholds_Pending()
     {
         var c = NewConn();
         Assert.Empty(c.PollMessages()); // not connected
@@ -46,13 +46,13 @@ public class UshellConnectorTests
         Assert.Contains("ushell", welcome[1]["data"]?.ToString() ?? "", StringComparison.Ordinal);
 
         // inject pending via HandleInput then pause
-        _ = c.HandleInput("help\r");
+        c.HandleInput("help\r");
         Assert.Empty(c.HandleControl("flow_pause"));
         Assert.Empty(c.PollMessages()); // withheld
         Assert.Empty(c.HandleControl("flow_resume"));
         // help output was returned from HandleInput, not pending — seed pending via IConnector path
         var ic = (IConnector)c;
-        ic.HandleInputAsync("clear\r").GetAwaiter().GetResult();
+        await ic.HandleInputAsync("clear\r");
         var polled = c.PollMessages();
         Assert.NotEmpty(polled);
         Assert.Contains("2J", FrameData(polled), StringComparison.Ordinal);
@@ -78,7 +78,7 @@ public class UshellConnectorTests
     {
         var c = NewConn("snap");
         c.Start();
-        _ = c.HandleInput("xy");
+        c.HandleInput("xy");
         var snap = c.HandleControl("snapshot_request");
         Assert.Single(snap);
         Assert.Equal("snapshot", snap[0]["type"]);
@@ -96,7 +96,7 @@ public class UshellConnectorTests
     {
         var c = NewConn("ana", new Dictionary<string, object?> { ["alpha"] = 1, ["__hid"] = 2 });
         c.Start();
-        _ = c.HandleInput("z");
+        c.HandleInput("z");
         var analysis = c.GetAnalysis();
         Assert.Contains("session: ana", analysis, StringComparison.Ordinal);
         Assert.Contains("connected: true", analysis, StringComparison.Ordinal);
@@ -155,7 +155,7 @@ public class UshellConnectorTests
     }
 
     [Fact]
-    public void Animated_Render_Queues_Frames_On_Poll()
+    public async Task Animated_Render_Queues_Frames_On_Poll()
     {
         var c = new UshellConnector("anim", new UshellConnectorConfig
         {
@@ -183,7 +183,7 @@ public class UshellConnectorTests
                     }
                 }
 
-                Thread.Sleep(5);
+                await Task.Delay(5);
             }
 
             Assert.Contains(saw, s => s.Contains("F1", StringComparison.Ordinal) || s.Contains("F2", StringComparison.Ordinal));

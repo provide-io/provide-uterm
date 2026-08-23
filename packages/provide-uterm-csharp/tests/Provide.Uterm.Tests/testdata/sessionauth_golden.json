@@ -1,0 +1,140 @@
+{
+  "control_hash": "9e5836dcb8b57402be2c21486e99f951bd38180f366f5346039f3f1e8107820d",
+  "control_token": "control-token-value",
+  "cookie_name": "uterm_tunnel_w-session",
+  "roles": [
+    {
+      "jwt_role": "admin",
+      "name": "an admin",
+      "owner": null,
+      "result": "admin",
+      "roles": [
+        "admin"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "operator",
+      "name": "an operator",
+      "owner": null,
+      "result": "operator",
+      "roles": [
+        "operator"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "viewer",
+      "name": "a viewer",
+      "owner": null,
+      "result": "viewer",
+      "roles": [
+        "viewer"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "viewer",
+      "name": "no role at all",
+      "owner": null,
+      "result": "viewer",
+      "roles": [],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "viewer",
+      "name": "the owner, holding viewer",
+      "owner": "u1",
+      "result": "operator",
+      "roles": [
+        "viewer"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "operator",
+      "name": "the owner, holding operator",
+      "owner": "u1",
+      "result": "operator",
+      "roles": [
+        "operator"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "admin",
+      "name": "the owner, holding admin",
+      "owner": "u1",
+      "result": "admin",
+      "roles": [
+        "admin"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "viewer",
+      "name": "somebody else, holding viewer",
+      "owner": "u2",
+      "result": "viewer",
+      "roles": [
+        "viewer"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "viewer",
+      "name": "an unowned session",
+      "owner": null,
+      "result": "viewer",
+      "roles": [
+        "viewer"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "viewer",
+      "name": "an owner of nothing",
+      "owner": "",
+      "result": "viewer",
+      "roles": [
+        "viewer"
+      ],
+      "subject": "u1"
+    },
+    {
+      "jwt_role": "viewer",
+      "name": "a subject of nothing",
+      "owner": "u1",
+      "result": "viewer",
+      "roles": [
+        "viewer"
+      ],
+      "subject": ""
+    }
+  ],
+  "share_hash": "f6c485f7eddf89aa289319d9fc5ae82a80a4da44f0ed2dc5e9806f748964d75f",
+  "share_roles": [
+    {
+      "name": "the control token",
+      "role": "admin",
+      "token": "control-token-value"
+    },
+    {
+      "name": "the share token",
+      "role": "viewer",
+      "token": "share-token-value"
+    },
+    {
+      "name": "neither",
+      "role": null,
+      "token": "nonsense"
+    },
+    {
+      "name": "nothing",
+      "role": null,
+      "token": ""
+    }
+  ],
+  "share_token": "share-token-value",
+  "worker_id": "w-session"
+}

@@ -1,0 +1,151 @@
+{
+  "digest_hex_length": 64,
+  "digests": [
+    {
+      "hex": "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
+      "input": ""
+    },
+    {
+      "hex": "8928aae63c84d87ea098564d1e03ad813f107add474e56aedd286349c0c03ea4",
+      "input": "a"
+    },
+    {
+      "hex": "324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf",
+      "input": "hello"
+    },
+    {
+      "hex": "256c83b297114d201b30179f3f0ef0cace9783622da5974326b436178aeef610",
+      "input": "hello world"
+    },
+    {
+      "hex": "f4e8abefd2d76d84a676bdf0c1bfa28c3c286f9acd5ea5b37d145ae76a7f7851",
+      "input": "GdK7Zx2qLm9nP4rT6vY8wA1bC3dE5fH7jK9lM0nO2pQ"
+    },
+    {
+      "hex": "9724124bb1b9fc9ec85897cd3217ca92f044cac3f85f44b09ef63b3bfc5e69df",
+      "input": "héllo → ✓"
+    },
+    {
+      "hex": "0f98212afe70d6d0386a85e334b4eea4295f705cad83a6ccd248894bcad56e86",
+      "input": "🔑🔑🔑🔑🔑🔑🔑🔑"
+    },
+    {
+      "hex": "32afe327aece2cc8275e868be2ea929410f47bcfbac87d8197d92c972a290d3d",
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "hex": "164ffb7089bae6f5a62fb0795e751dc9e88eac92e1a5b2fafe93a25abf2d9c3b",
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "hex": "03b0758fa71d249c846c2304a2b9996e6ae66ffa7e5528f9e612e089a360fc8d",
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "hex": "1c4d8053a9f123414914d859ee8e010e5d1e7be1de49da5e6c04958c96c56f34",
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "hex": "cb9d468022b930d52da4d9b0226ef9c997e0acc119eeb08afefb8219bc53972b",
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "hex": "99da5101f1f947c80e6ecbf89498bea9946f231eb226e0ded7c80ec4cd723f57",
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "hex": "ab75119ede14ef06ebf31f745fb655ed006cccfe8054c635308a557f7c9beaba",
+      "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "hex": "03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+      "input": "\u0000"
+    },
+    {
+      "hex": "ee155ace9c40292074cb6aff8c9ccdd273c81648ff1149ef36bcea6ebb8a3e25",
+      "input": "\u0001"
+    },
+    {
+      "hex": "20b73e9998550ff93757de1f69623777598d84f9f00ee103da27460aad71a920",
+      "input": ""
+    },
+    {
+      "hex": "29e99f767933f762dede31ef28ee6d60ad637563f2fcde7b9e1769ddc0a5db72",
+      "input": "ÿ"
+    }
+  ],
+  "store_digests": [
+    {
+      "hex": "",
+      "input": ""
+    },
+    {
+      "hex": "8928aae63c84d87ea098564d1e03ad813f107add474e56aedd286349c0c03ea4",
+      "input": "a"
+    },
+    {
+      "hex": "324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf",
+      "input": "hello"
+    },
+    {
+      "hex": "256c83b297114d201b30179f3f0ef0cace9783622da5974326b436178aeef610",
+      "input": "hello world"
+    }
+  ],
+  "verifications": [
+    {
+      "name": "the right token",
+      "plain": "secret",
+      "result": true,
+      "stored": "ae4aafb3c7d8616b739f05a30d06b4e2236fdea712168159f346e8a3efd57d9e"
+    },
+    {
+      "name": "the wrong token",
+      "plain": "wrong",
+      "result": false,
+      "stored": "ae4aafb3c7d8616b739f05a30d06b4e2236fdea712168159f346e8a3efd57d9e"
+    },
+    {
+      "name": "an empty token",
+      "plain": "",
+      "result": false,
+      "stored": "ae4aafb3c7d8616b739f05a30d06b4e2236fdea712168159f346e8a3efd57d9e"
+    },
+    {
+      "name": "an empty stored hash",
+      "plain": "secret",
+      "result": false,
+      "stored": ""
+    },
+    {
+      "name": "both empty",
+      "plain": "",
+      "result": false,
+      "stored": ""
+    },
+    {
+      "name": "a stored hash that is not a hash",
+      "plain": "secret",
+      "result": false,
+      "stored": "nonsense"
+    },
+    {
+      "name": "a stored hash of the wrong length",
+      "plain": "secret",
+      "result": false,
+      "stored": "ae4aafb3c7d8616b739f05a30d06b4e2"
+    },
+    {
+      "name": "a token differing in one character",
+      "plain": "secreT",
+      "result": false,
+      "stored": "ae4aafb3c7d8616b739f05a30d06b4e2236fdea712168159f346e8a3efd57d9e"
+    },
+    {
+      "name": "a token with trailing space",
+      "plain": "secret ",
+      "result": false,
+      "stored": "ae4aafb3c7d8616b739f05a30d06b4e2236fdea712168159f346e8a3efd57d9e"
+    }
+  ]
+}

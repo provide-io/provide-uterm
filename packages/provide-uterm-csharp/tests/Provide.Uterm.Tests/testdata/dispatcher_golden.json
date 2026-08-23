@@ -1,0 +1,184 @@
+{
+  "prompt": "\u001b[32m❯\u001b[0m ",
+  "help": "\u001b[1m\u001b[36mushell commands\u001b[0m\r\n  \u001b[2mhelp [cmd]          \u001b[0mthis help text, or detail for <cmd>\r\n  \u001b[2mclear               \u001b[0merase the terminal screen\r\n  \u001b[2mpy <expr>           \u001b[0mevaluate Python expression or statement\r\n  \u001b[2msessions            \u001b[0mlist active sessions from KV registry\r\n  \u001b[2msessions kill <id>  \u001b[0mforce-terminate a session DO\r\n  \u001b[2mkv list             \u001b[0mlist all KV session keys\r\n  \u001b[2mkv get <key>        \u001b[0mread a KV value\r\n  \u001b[2mkv set <key> <value>\u001b[0mwrite a KV entry\r\n  \u001b[2mkv delete <key>     \u001b[0mdelete a KV entry\r\n  \u001b[2mfetch [-X METHOD] <url> [body]\u001b[0mHTTP request (GET by default)\r\n  \u001b[2mrender [flags] <url>\u001b[0mrender image as ANSI art\r\n  \u001b[2mcast [--fps N] [--loop] <url>\u001b[0mfetch and replay an asciicast v2 file\r\n  \u001b[2mstorage list        \u001b[0mlist DO storage keys\r\n  \u001b[2mstorage get <key>   \u001b[0mread a DO storage value\r\n  \u001b[2menv                 \u001b[0mshow available context keys\r\n  \u001b[2mexit / quit         \u001b[0mend this shell session\r\n",
+  "command_help": {
+    "cast": "cast [--fps N] [--loop] <url>\r\n  Fetch and replay an asciicast v2 (.cast) recording file.\r\n  Supports http://, https://, and file:// URLs.\r\n  --fps N    playback speed (default: 15)\r\n  --loop     repeat the recording until interrupted\r\n",
+    "clear": "clear — erase the terminal screen (ANSI reset).\r\n",
+    "env": "env — show available context keys and their types.\r\n",
+    "exit": "exit / quit — end this shell session.\r\n",
+    "fetch": "fetch [-X METHOD] <url> [body] — HTTP request.\r\n  Default method is GET.  Use -X POST, -X PUT, etc. to change it.\r\n  Optional body is sent as the request body.\r\n",
+    "help": "help [cmd] — show all commands or detail for <cmd>.\r\n",
+    "kv": "kv list                  — list all KV keys with session: prefix.\r\nkv get <key>             — read a KV value (session: prefix added if absent).\r\nkv set <key> <value>     — write a KV entry.\r\nkv delete <key>          — delete a KV entry.\r\n",
+    "py": "py <expr> — evaluate a Python expression or exec a statement.\r\nVariables persist across py calls for the session lifetime.\r\nAvailable: json, datetime, re, hashlib, base64, plus safe builtins.\r\n",
+    "quit": "exit / quit — end this shell session.\r\n",
+    "render": "render [--mode truecolor|256|16] [--cols N] [--rows N] [--fps N] [--loop] <url>\r\n  Render an image as ANSI art in the terminal.\r\n  Supports PNG, JPEG, GIF, APNG, WebP, BMP, TIFF, and more.\r\n  Animated images stream frames; use --loop to repeat.\r\n  Requires: pip install 'provide-uterm[emulator]'\r\n",
+    "sessions": "sessions — list all sessions from the KV registry.\r\nsessions kill <id> — force-terminate a session Durable Object.\r\n",
+    "storage": "storage list         — list all DO storage keys.\r\nstorage get <key>    — read a DO storage value by key.\r\n"
+  },
+  "lines": [
+    {
+      "name": "nothing at all",
+      "line": "",
+      "output": [
+        "\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "only spaces",
+      "line": "   ",
+      "output": [
+        "\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "an interrupt",
+      "line": "\u0003",
+      "output": [
+        "\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "leaving",
+      "line": "exit",
+      "output": [
+        "\u001b[2mGoodbye.\r\n\u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "leaving the other way",
+      "line": "quit",
+      "output": [
+        "\u001b[2mGoodbye.\r\n\u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "an end-of-file",
+      "line": "\u0004",
+      "output": [
+        "\u001b[2mGoodbye.\r\n\u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "leaving, shouted",
+      "line": "EXIT",
+      "output": [
+        "\u001b[2mGoodbye.\r\n\u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "leaving with something after it",
+      "line": "exit now",
+      "output": [
+        "\u001b[2mGoodbye.\r\n\u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "asking for help",
+      "line": "help",
+      "output": [
+        "\u001b[1m\u001b[36mushell commands\u001b[0m\r\n  \u001b[2mhelp [cmd]          \u001b[0mthis help text, or detail for <cmd>\r\n  \u001b[2mclear               \u001b[0merase the terminal screen\r\n  \u001b[2mpy <expr>           \u001b[0mevaluate Python expression or statement\r\n  \u001b[2msessions            \u001b[0mlist active sessions from KV registry\r\n  \u001b[2msessions kill <id>  \u001b[0mforce-terminate a session DO\r\n  \u001b[2mkv list             \u001b[0mlist all KV session keys\r\n  \u001b[2mkv get <key>        \u001b[0mread a KV value\r\n  \u001b[2mkv set <key> <value>\u001b[0mwrite a KV entry\r\n  \u001b[2mkv delete <key>     \u001b[0mdelete a KV entry\r\n  \u001b[2mfetch [-X METHOD] <url> [body]\u001b[0mHTTP request (GET by default)\r\n  \u001b[2mrender [flags] <url>\u001b[0mrender image as ANSI art\r\n  \u001b[2mcast [--fps N] [--loop] <url>\u001b[0mfetch and replay an asciicast v2 file\r\n  \u001b[2mstorage list        \u001b[0mlist DO storage keys\r\n  \u001b[2mstorage get <key>   \u001b[0mread a DO storage value\r\n  \u001b[2menv                 \u001b[0mshow available context keys\r\n  \u001b[2mexit / quit         \u001b[0mend this shell session\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "asking about a command",
+      "line": "help render",
+      "output": [
+        "render [--mode truecolor|256|16] [--cols N] [--rows N] [--fps N] [--loop] <url>\r\n  Render an image as ANSI art in the terminal.\r\n  Supports PNG, JPEG, GIF, APNG, WebP, BMP, TIFF, and more.\r\n  Animated images stream frames; use --loop to repeat.\r\n  Requires: pip install 'provide-uterm[emulator]'\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "asking about a command, shouted",
+      "line": "help RENDER",
+      "output": [
+        "render [--mode truecolor|256|16] [--cols N] [--rows N] [--fps N] [--loop] <url>\r\n  Render an image as ANSI art in the terminal.\r\n  Supports PNG, JPEG, GIF, APNG, WebP, BMP, TIFF, and more.\r\n  Animated images stream frames; use --loop to repeat.\r\n  Requires: pip install 'provide-uterm[emulator]'\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "asking about something that is not a command",
+      "line": "help sideways",
+      "output": [
+        "\u001b[31merror:\u001b[0m no help for 'sideways'\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "clearing the screen",
+      "line": "clear",
+      "output": [
+        "\u001b[2J\u001b[H\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "clearing with something after it",
+      "line": "clear all",
+      "output": [
+        "\u001b[2J\u001b[H\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "a command nobody defined",
+      "line": "sideways",
+      "output": [
+        "\u001b[31merror:\u001b[0m unknown command: 'sideways' — type \u001b[1mhelp\u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "a command nobody defined, with an argument",
+      "line": "sideways and then some",
+      "output": [
+        "\u001b[31merror:\u001b[0m unknown command: 'sideways' — type \u001b[1mhelp\u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "a command with leading spaces",
+      "line": "   help   ",
+      "output": [
+        "\u001b[1m\u001b[36mushell commands\u001b[0m\r\n  \u001b[2mhelp [cmd]          \u001b[0mthis help text, or detail for <cmd>\r\n  \u001b[2mclear               \u001b[0merase the terminal screen\r\n  \u001b[2mpy <expr>           \u001b[0mevaluate Python expression or statement\r\n  \u001b[2msessions            \u001b[0mlist active sessions from KV registry\r\n  \u001b[2msessions kill <id>  \u001b[0mforce-terminate a session DO\r\n  \u001b[2mkv list             \u001b[0mlist all KV session keys\r\n  \u001b[2mkv get <key>        \u001b[0mread a KV value\r\n  \u001b[2mkv set <key> <value>\u001b[0mwrite a KV entry\r\n  \u001b[2mkv delete <key>     \u001b[0mdelete a KV entry\r\n  \u001b[2mfetch [-X METHOD] <url> [body]\u001b[0mHTTP request (GET by default)\r\n  \u001b[2mrender [flags] <url>\u001b[0mrender image as ANSI art\r\n  \u001b[2mcast [--fps N] [--loop] <url>\u001b[0mfetch and replay an asciicast v2 file\r\n  \u001b[2mstorage list        \u001b[0mlist DO storage keys\r\n  \u001b[2mstorage get <key>   \u001b[0mread a DO storage value\r\n  \u001b[2menv                 \u001b[0mshow available context keys\r\n  \u001b[2mexit / quit         \u001b[0mend this shell session\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "a command in mixed case",
+      "line": "HeLp",
+      "output": [
+        "\u001b[1m\u001b[36mushell commands\u001b[0m\r\n  \u001b[2mhelp [cmd]          \u001b[0mthis help text, or detail for <cmd>\r\n  \u001b[2mclear               \u001b[0merase the terminal screen\r\n  \u001b[2mpy <expr>           \u001b[0mevaluate Python expression or statement\r\n  \u001b[2msessions            \u001b[0mlist active sessions from KV registry\r\n  \u001b[2msessions kill <id>  \u001b[0mforce-terminate a session DO\r\n  \u001b[2mkv list             \u001b[0mlist all KV session keys\r\n  \u001b[2mkv get <key>        \u001b[0mread a KV value\r\n  \u001b[2mkv set <key> <value>\u001b[0mwrite a KV entry\r\n  \u001b[2mkv delete <key>     \u001b[0mdelete a KV entry\r\n  \u001b[2mfetch [-X METHOD] <url> [body]\u001b[0mHTTP request (GET by default)\r\n  \u001b[2mrender [flags] <url>\u001b[0mrender image as ANSI art\r\n  \u001b[2mcast [--fps N] [--loop] <url>\u001b[0mfetch and replay an asciicast v2 file\r\n  \u001b[2mstorage list        \u001b[0mlist DO storage keys\r\n  \u001b[2mstorage get <key>   \u001b[0mread a DO storage value\r\n  \u001b[2menv                 \u001b[0mshow available context keys\r\n  \u001b[2mexit / quit         \u001b[0mend this shell session\r\n\u001b[32m❯\u001b[0m "
+      ]
+    }
+  ],
+  "env": [
+    {
+      "name": "bindings to show",
+      "keys": [
+        "env"
+      ],
+      "output": [
+        "\u001b[1m\u001b[36mcontext\u001b[0m\r\n  \u001b[2mKV                  \u001b[0mobject\r\n  \u001b[2mSESSIONS            \u001b[0mobject\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "no bindings, but a context",
+      "keys": [
+        "list_kv_sessions",
+        "storage"
+      ],
+      "output": [
+        "\u001b[1m\u001b[36mcontext\u001b[0m\r\n  \u001b[2mlist_kv_sessions    \u001b[0m\r\n  \u001b[2mstorage             \u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "nothing at all",
+      "keys": [],
+      "output": [
+        "\u001b[2m(empty context)\u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    },
+    {
+      "name": "a context with a private key",
+      "keys": [
+        "_hidden",
+        "shown"
+      ],
+      "output": [
+        "\u001b[1m\u001b[36mcontext\u001b[0m\r\n  \u001b[2mshown               \u001b[0m\r\n\u001b[32m❯\u001b[0m "
+      ]
+    }
+  ]
+}

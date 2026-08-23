@@ -261,6 +261,175 @@ class TestSnapshotWaitTimeout:
         assert result is None
         assert _warnings(log, "snapshot_wait_timeout") == []
 
+    async def test_a_fractional_age_is_reported_to_exactly_three_decimals(self) -> None:
+        """Kills `round(..., 3)` -> `round(..., None)` / `round(...)` / `round(..., 4)`.
+
+        The sibling test above ages by a whole 5.0 seconds, which survives all
+        three: `round(5.0, None)` is `5`, and `5 == 5.0`. Only an age with a
+        fourth decimal separates truncate-to-int, 3 places and 4 places.
+        """
+        hub = self._hub()
+        state = WorkerTermState()
+        state.last_snapshot = {"screen": "stale", "ts": _FROZEN_NOW - 1.23456789}
+        hub.registry._workers["bot1"] = state
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()) as log,
+        ):
+            await hub.wait_for_snapshot("bot1", timeout_ms=50)
+
+        assert _warnings(log, "snapshot_wait_timeout")[0]["cached_age_s"] == 1.235
+
+    async def test_a_cached_snapshot_with_no_ts_ages_from_the_epoch(self) -> None:
+        """Kills `snap.get("ts", 0)` -> default None / absent / 1.
+
+        A snapshot that carries no ``ts`` at all is what the ``0`` default is
+        for, and it is the only input that can see it: with any ts present the
+        default is dead code. The resulting age is absurd — the whole of unix
+        time — which is the honest answer and exactly what makes it legible in
+        a log as "this frame has no timestamp".
+        """
+        hub = self._hub()
+        state = WorkerTermState()
+        state.last_snapshot = {"screen": "no timestamp at all"}
+        hub.registry._workers["bot1"] = state
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()) as log,
+        ):
+            result = await hub.wait_for_snapshot("bot1", timeout_ms=50)
+
+        assert result is None
+        assert _warnings(log, "snapshot_wait_timeout")[0]["cached_age_s"] == _FROZEN_NOW
+
+    async def test_a_string_ts_is_suppressed_when_the_seq_path_skips_the_compare(self) -> None:
+        """Kills `suppress(TypeError, ValueError)` -> `suppress(TypeError,)` / `(TypeError, None)`.
+
+        The sibling test above shows a junk ts normally raises in the poll loop
+        before the timeout block runs — but only on the wall-clock path. Given
+        an ``after_event_seq``, freshness is decided by ``event_seq`` alone and
+        ``ts`` is never compared, so a junk ts reaches ``float()`` intact. That
+        is the input the suppress was written for, and the only one that
+        exercises it.
+        """
+        hub = self._hub()
+        state = WorkerTermState()
+        state.last_snapshot = {"screen": "stale", "event_seq": 1, "ts": "not-a-number"}
+        hub.registry._workers["bot1"] = state
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()) as log,
+        ):
+            result = await hub.wait_for_snapshot("bot1", timeout_ms=50, after_event_seq=5)
+
+        assert result is None
+        assert _warnings(log, "snapshot_wait_timeout") == [
+            {"worker_id": "bot1", "timeout_ms": 50, "had_cached": True, "cached_age_s": None}
+        ]
+
+    async def test_a_list_ts_is_suppressed_when_the_seq_path_skips_the_compare(self) -> None:
+        """Kills `suppress(TypeError, ValueError)` -> `suppress(ValueError)` / `(None, ValueError)`.
+
+        Same route as the string case, but ``float()`` raises TypeError rather
+        than ValueError — the other half of the suppress tuple, and the half a
+        string can never reach.
+        """
+        hub = self._hub()
+        state = WorkerTermState()
+        state.last_snapshot = {"screen": "stale", "event_seq": 1, "ts": []}
+        hub.registry._workers["bot1"] = state
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()) as log,
+        ):
+            result = await hub.wait_for_snapshot("bot1", timeout_ms=50, after_event_seq=5)
+
+        assert result is None
+        assert _warnings(log, "snapshot_wait_timeout") == [
+            {"worker_id": "bot1", "timeout_ms": 50, "had_cached": True, "cached_age_s": None}
+        ]
+
+    async def test_the_callers_event_seq_reaches_the_freshness_check(self) -> None:
+        """Kills `after_event_seq=after_event_seq` -> `after_event_seq=None`.
+
+        A snapshot that is fresh by ``event_seq`` but stale by wall clock is
+        the whole reason the parameter exists: dropping it on the way to
+        ``_snapshot_is_fresh`` sends the caller back to the proxy the rewrite
+        replaced, and the wait times out holding the frame it asked for.
+        """
+        hub = self._hub()
+        state = WorkerTermState()
+        state.last_snapshot = {"screen": "newer frame", "event_seq": 9, "ts": _FROZEN_NOW - 10.0}
+        hub.registry._workers["bot1"] = state
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()) as log,
+        ):
+            result = await hub.wait_for_snapshot("bot1", timeout_ms=50, after_event_seq=5)
+
+        assert result == state.last_snapshot
+        assert _warnings(log, "snapshot_wait_timeout") == []
+
+
+class TestSnapshotWaitTimeoutCounter:
+    """Kills every mutation of `snapshot_wait_timeout.add(1, {"worker_id": ...})`.
+
+    The counter is the aggregate half of the pair the 2026-08-14 investigation
+    needed: the log says which frame, the counter says how often. Nothing reads
+    it back in-process, so it is asserted at the call — increment AND label,
+    since a counter with a mangled attribute key aggregates into a dimension
+    nobody queries and reads as zero.
+    """
+
+    @staticmethod
+    def _hub() -> TermHub:
+        hub = TermHub()
+        hub.request_snapshot = AsyncMock()  # type: ignore[method-assign]
+        return hub
+
+    async def test_a_timeout_increments_the_counter_by_one_labelled_by_worker(self) -> None:
+        """Kills `add(1, None)`, `add(1)`, `add(2, ...)` and both key renames."""
+        hub = self._hub()
+        hub.registry._workers["bot1"] = WorkerTermState()
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()),
+            patch.object(polling_service.snapshot_metrics, "snapshot_wait_timeout", MagicMock()) as counter,
+        ):
+            await hub.wait_for_snapshot("bot1", timeout_ms=50)
+
+        counter.add.assert_called_once_with(1, {"worker_id": "bot1"})
+
+    async def test_a_fresh_snapshot_does_not_increment_the_counter(self) -> None:
+        """The counter must track timeouts, not waits — otherwise it measures traffic."""
+        hub = self._hub()
+        state = WorkerTermState()
+        state.last_snapshot = {"screen": "fresh", "ts": _FROZEN_NOW + 1.0}
+        hub.registry._workers["bot1"] = state
+
+        with (
+            patch.object(polling_service.time, "time", return_value=_FROZEN_NOW),
+            patch.object(polling_service.asyncio, "sleep", new_callable=AsyncMock),
+            patch.object(polling_service, "logger", MagicMock()),
+            patch.object(polling_service.snapshot_metrics, "snapshot_wait_timeout", MagicMock()) as counter,
+        ):
+            result = await hub.wait_for_snapshot("bot1", timeout_ms=50)
+
+        assert result is not None
+        counter.add.assert_not_called()
+
 
 async def test_asyncio_is_not_shadowed() -> None:
     """Guard for the patches above: they patch polling_service's own asyncio."""

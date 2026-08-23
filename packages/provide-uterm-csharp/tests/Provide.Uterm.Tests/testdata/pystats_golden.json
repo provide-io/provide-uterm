@@ -1,0 +1,274 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_pystats_golden.py",
+ "variances": [
+  {
+   "name": "two values",
+   "data": [
+    1.0,
+    2.0
+   ],
+   "variance": 0.5,
+   "naive_agrees": true
+  },
+  {
+   "name": "three integers",
+   "data": [
+    1.0,
+    2.0,
+    3.0
+   ],
+   "variance": 1.0,
+   "naive_agrees": true
+  },
+  {
+   "name": "identical values",
+   "data": [
+    2.5,
+    2.5,
+    2.5
+   ],
+   "variance": 0.0,
+   "naive_agrees": true
+  },
+  {
+   "name": "zeros",
+   "data": [
+    0.0,
+    0.0
+   ],
+   "variance": 0.0,
+   "naive_agrees": true
+  },
+  {
+   "name": "negatives",
+   "data": [
+    -1.0,
+    -2.0,
+    -3.0
+   ],
+   "variance": 1.0,
+   "naive_agrees": true
+  },
+  {
+   "name": "mixed signs",
+   "data": [
+    -1.0,
+    0.0,
+    1.0
+   ],
+   "variance": 1.0,
+   "naive_agrees": true
+  },
+  {
+   "name": "tenths",
+   "data": [
+    0.1,
+    0.1,
+    0.1
+   ],
+   "variance": 0.0,
+   "naive_agrees": false
+  },
+  {
+   "name": "tenths, uneven",
+   "data": [
+    0.1,
+    0.2,
+    0.3
+   ],
+   "variance": 0.009999999999999998,
+   "naive_agrees": true
+  },
+  {
+   "name": "hundredths",
+   "data": [
+    0.05,
+    0.05,
+    0.05,
+    0.05
+   ],
+   "variance": 0.0,
+   "naive_agrees": true
+  },
+  {
+   "name": "keystroke intervals, even",
+   "data": [
+    0.09999999999990905,
+    0.10000000000013642,
+    0.09999999999990905
+   ],
+   "variance": 1.7232929428188076e-26,
+   "naive_agrees": false
+  },
+  {
+   "name": "keystroke intervals, human",
+   "data": [
+    0.12,
+    0.19,
+    0.07,
+    0.34
+   ],
+   "variance": 0.013800000000000002,
+   "naive_agrees": true
+  },
+  {
+   "name": "one long pause",
+   "data": [
+    0.05,
+    0.05,
+    4.9
+   ],
+   "variance": 7.840833333333334,
+   "naive_agrees": false
+  },
+  {
+   "name": "sub-millisecond",
+   "data": [
+    0.0001,
+    0.0001
+   ],
+   "variance": 0.0,
+   "naive_agrees": true
+  },
+  {
+   "name": "large magnitudes",
+   "data": [
+    10000000000.0,
+    10000000001.0,
+    10000000002.0
+   ],
+   "variance": 1.0,
+   "naive_agrees": true
+  },
+  {
+   "name": "tiny magnitudes",
+   "data": [
+    1e-10,
+    2e-10,
+    3e-10
+   ],
+   "variance": 1e-20,
+   "naive_agrees": true
+  },
+  {
+   "name": "wide spread",
+   "data": [
+    1e-08,
+    100000000.0
+   ],
+   "variance": 4999999999999999.0,
+   "naive_agrees": false
+  },
+  {
+   "name": "many values",
+   "data": [
+    0.0,
+    0.14285714285714285,
+    0.2857142857142857,
+    0.42857142857142855,
+    0.5714285714285714,
+    0.7142857142857143,
+    0.8571428571428571,
+    1.0,
+    1.1428571428571428,
+    1.2857142857142858,
+    1.4285714285714286,
+    1.5714285714285714,
+    1.7142857142857142,
+    1.8571428571428572,
+    2.0,
+    2.142857142857143,
+    2.2857142857142856,
+    2.4285714285714284,
+    2.5714285714285716,
+    2.7142857142857144
+   ],
+   "variance": 0.7142857142857143,
+   "naive_agrees": true
+  },
+  {
+   "name": "repeating decimal",
+   "data": [
+    0.3333333333333333,
+    0.6666666666666666,
+    1.0
+   ],
+   "variance": 0.11111111111111112,
+   "naive_agrees": true
+  }
+ ],
+ "ratios": [
+  {
+   "name": "zero",
+   "value": 0.0,
+   "numerator": "0",
+   "denominator": "1"
+  },
+  {
+   "name": "one",
+   "value": 1.0,
+   "numerator": "1",
+   "denominator": "1"
+  },
+  {
+   "name": "minus one",
+   "value": -1.0,
+   "numerator": "-1",
+   "denominator": "1"
+  },
+  {
+   "name": "a half",
+   "value": 0.5,
+   "numerator": "1",
+   "denominator": "2"
+  },
+  {
+   "name": "a tenth",
+   "value": 0.1,
+   "numerator": "3602879701896397",
+   "denominator": "36028797018963968"
+  },
+  {
+   "name": "two and a half",
+   "value": 2.5,
+   "numerator": "5",
+   "denominator": "2"
+  },
+  {
+   "name": "ten billion",
+   "value": 10000000000.0,
+   "numerator": "10000000000",
+   "denominator": "1"
+  },
+  {
+   "name": "ten to the minus ten",
+   "value": 1e-10,
+   "numerator": "7737125245533627",
+   "denominator": "77371252455336267181195264"
+  },
+  {
+   "name": "largest safe integer",
+   "value": 9007199254740991.0,
+   "numerator": "9007199254740991",
+   "denominator": "1"
+  },
+  {
+   "name": "smallest normal",
+   "value": 2.2250738585072014e-308,
+   "numerator": "1",
+   "denominator": "44942328371557897693232629769725618340449424473557664318357520289433168951375240783177119330601884005280028469967848339414697442203604155623211857659868531094441973356216371319075554900311523529863270738021251442209537670585615720368478277635206809290837627671146574559986811484619929076208839082406056034304"
+  },
+  {
+   "name": "smallest subnormal",
+   "value": 5e-324,
+   "numerator": "1",
+   "denominator": "202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784"
+  },
+  {
+   "name": "a larger subnormal",
+   "value": 6.099e-320,
+   "numerator": "12345",
+   "denominator": "202402253307310618352495346718917307049556649764142118356901358027430339567995346891960383701437124495187077864316811911389808737385793476867013399940738509921517424276566361364466907742093216341239767678472745068562007483424692698618103355649159556340810056512358769552333414615230502532186327508646006263307707741093494784"
+  }
+ ]
+}

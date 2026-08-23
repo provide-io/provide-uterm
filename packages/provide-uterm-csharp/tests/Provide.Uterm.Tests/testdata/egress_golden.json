@@ -1,0 +1,318 @@
+{
+  "dns_ttl_s": 60.0,
+  "literals": [
+    {
+      "input": "8.8.8.8",
+      "permissive": null,
+      "strict": null
+    },
+    {
+      "input": "203.0.113.10",
+      "permissive": null,
+      "strict": "connector peer '203.0.113.10' is a blocked internal address"
+    },
+    {
+      "input": "169.254.169.254",
+      "permissive": "connector peer '169.254.169.254' is a blocked metadata address",
+      "strict": "connector peer '169.254.169.254' is a blocked metadata address"
+    },
+    {
+      "input": "100.100.100.200",
+      "permissive": "connector peer '100.100.100.200' is a blocked metadata address",
+      "strict": "connector peer '100.100.100.200' is a blocked metadata address"
+    },
+    {
+      "input": "fd00:ec2::254",
+      "permissive": "connector peer 'fd00:ec2::254' is a blocked metadata address",
+      "strict": "connector peer 'fd00:ec2::254' is a blocked metadata address"
+    },
+    {
+      "input": "::ffff:169.254.169.254",
+      "permissive": "connector peer '::ffff:169.254.169.254' is a blocked metadata address",
+      "strict": "connector peer '::ffff:169.254.169.254' is a blocked metadata address"
+    },
+    {
+      "input": "2002:a9fe:a9fe::",
+      "permissive": "connector peer '2002:a9fe:a9fe::' is a blocked metadata address",
+      "strict": "connector peer '2002:a9fe:a9fe::' is a blocked metadata address"
+    },
+    {
+      "input": "64:ff9b::169.254.169.254",
+      "permissive": "connector peer '64:ff9b::169.254.169.254' is a blocked metadata address",
+      "strict": "connector peer '64:ff9b::169.254.169.254' is a blocked metadata address"
+    },
+    {
+      "input": "::169.254.169.254",
+      "permissive": "connector peer '::169.254.169.254' is a blocked metadata address",
+      "strict": "connector peer '::169.254.169.254' is a blocked metadata address"
+    },
+    {
+      "input": "[169.254.169.254]",
+      "permissive": "connector peer '[169.254.169.254]' is a blocked metadata address",
+      "strict": "connector peer '[169.254.169.254]' is a blocked metadata address"
+    },
+    {
+      "input": " 169.254.169.254 ",
+      "permissive": "connector peer ' 169.254.169.254 ' is a blocked metadata address",
+      "strict": "connector peer ' 169.254.169.254 ' is a blocked metadata address"
+    },
+    {
+      "input": "127.0.0.1",
+      "permissive": null,
+      "strict": "connector peer '127.0.0.1' is a blocked internal address"
+    },
+    {
+      "input": "::1",
+      "permissive": null,
+      "strict": "connector peer '::1' is a blocked internal address"
+    },
+    {
+      "input": "10.0.0.1",
+      "permissive": null,
+      "strict": "connector peer '10.0.0.1' is a blocked internal address"
+    },
+    {
+      "input": "192.168.1.10",
+      "permissive": null,
+      "strict": "connector peer '192.168.1.10' is a blocked internal address"
+    },
+    {
+      "input": "172.16.0.1",
+      "permissive": null,
+      "strict": "connector peer '172.16.0.1' is a blocked internal address"
+    },
+    {
+      "input": "169.254.1.1",
+      "permissive": null,
+      "strict": "connector peer '169.254.1.1' is a blocked internal address"
+    },
+    {
+      "input": "224.0.0.1",
+      "permissive": null,
+      "strict": "connector peer '224.0.0.1' is a blocked internal address"
+    },
+    {
+      "input": "240.0.0.1",
+      "permissive": null,
+      "strict": "connector peer '240.0.0.1' is a blocked internal address"
+    },
+    {
+      "input": "0.0.0.0",
+      "permissive": null,
+      "strict": "connector peer '0.0.0.0' is a blocked internal address"
+    },
+    {
+      "input": "100.64.0.0",
+      "permissive": null,
+      "strict": "connector peer '100.64.0.0' is a blocked internal address"
+    },
+    {
+      "input": "100.64.0.1",
+      "permissive": null,
+      "strict": "connector peer '100.64.0.1' is a blocked internal address"
+    },
+    {
+      "input": "100.127.255.255",
+      "permissive": null,
+      "strict": "connector peer '100.127.255.255' is a blocked internal address"
+    },
+    {
+      "input": "100.63.255.255",
+      "permissive": null,
+      "strict": null
+    },
+    {
+      "input": "100.128.0.0",
+      "permissive": null,
+      "strict": null
+    },
+    {
+      "input": "::",
+      "permissive": null,
+      "strict": "connector peer '::' is a blocked internal address"
+    },
+    {
+      "input": "fe80::1",
+      "permissive": null,
+      "strict": "connector peer 'fe80::1' is a blocked internal address"
+    },
+    {
+      "input": "fc00::1",
+      "permissive": null,
+      "strict": "connector peer 'fc00::1' is a blocked internal address"
+    },
+    {
+      "input": "100:0:0:1::1",
+      "permissive": null,
+      "strict": "connector peer '100:0:0:1::1' is a blocked internal address"
+    },
+    {
+      "input": "200::1",
+      "permissive": null,
+      "strict": "connector peer '200::1' is a blocked internal address"
+    },
+    {
+      "input": "1000::1",
+      "permissive": null,
+      "strict": "connector peer '1000::1' is a blocked internal address"
+    },
+    {
+      "input": "ff02::1",
+      "permissive": null,
+      "strict": "connector peer 'ff02::1' is a blocked internal address"
+    },
+    {
+      "input": "::ffff:127.0.0.1",
+      "permissive": null,
+      "strict": "connector peer '::ffff:127.0.0.1' is a blocked internal address"
+    },
+    {
+      "input": "2002:7f00:1::",
+      "permissive": null,
+      "strict": "connector peer '2002:7f00:1::' is a blocked internal address"
+    },
+    {
+      "input": "64:ff9b::127.0.0.1",
+      "permissive": null,
+      "strict": "connector peer '64:ff9b::127.0.0.1' is a blocked internal address"
+    },
+    {
+      "input": "::127.0.0.1",
+      "permissive": null,
+      "strict": "connector peer '::127.0.0.1' is a blocked internal address"
+    },
+    {
+      "input": "::0.0.0.1",
+      "permissive": null,
+      "strict": "connector peer '::0.0.0.1' is a blocked internal address"
+    }
+  ],
+  "malformed": {
+    "peer_error": "ValueError",
+    "peer_is_block": false,
+    "webhook_empty": null,
+    "webhook_no_scheme": null
+  },
+  "metadata_ips": [
+    "100.100.100.200",
+    "169.254.169.254",
+    "fd00:ec2::254"
+  ],
+  "nat64_prefix": "64:ff9b::/96",
+  "resolve_timeout_s": 5.0,
+  "targets": [
+    {
+      "host": "example.org",
+      "name": "a public name",
+      "permissive": null,
+      "strict": null
+    },
+    {
+      "host": "policy.example.org",
+      "name": "the webhook host",
+      "permissive": null,
+      "strict": null
+    },
+    {
+      "host": "metadata.example",
+      "name": "a name that resolves to metadata",
+      "permissive": "connector target 'metadata.example' resolves to a blocked metadata address",
+      "strict": "connector target 'metadata.example' resolves to a blocked metadata address"
+    },
+    {
+      "host": "mixed.example",
+      "name": "one bad address among good ones",
+      "permissive": "connector target 'mixed.example' resolves to a blocked metadata address",
+      "strict": "connector target 'mixed.example' resolves to a blocked metadata address"
+    },
+    {
+      "host": "internal.example",
+      "name": "a name that resolves to an internal address",
+      "permissive": null,
+      "strict": "connector target 'internal.example' resolves to a blocked internal address"
+    },
+    {
+      "host": "wrapped.example",
+      "name": "a name that resolves to a wrapped metadata address",
+      "permissive": "connector target 'wrapped.example' resolves to a blocked metadata address",
+      "strict": "connector target 'wrapped.example' resolves to a blocked metadata address"
+    },
+    {
+      "host": "empty.example",
+      "name": "a name that resolves to nothing",
+      "permissive": "could not resolve connector host 'empty.example'",
+      "strict": "could not resolve connector host 'empty.example'"
+    },
+    {
+      "host": "broken.example",
+      "name": "a name that will not resolve",
+      "permissive": "could not resolve connector host 'broken.example'",
+      "strict": "could not resolve connector host 'broken.example'"
+    },
+    {
+      "host": "169.254.169.254",
+      "name": "the literal 169.254.169.254",
+      "permissive": "connector target '169.254.169.254' resolves to a blocked metadata address",
+      "strict": "connector target '169.254.169.254' resolves to a blocked metadata address"
+    },
+    {
+      "host": "10.0.0.1",
+      "name": "the literal 10.0.0.1",
+      "permissive": null,
+      "strict": "connector target '10.0.0.1' resolves to a blocked internal address"
+    },
+    {
+      "host": "8.8.8.8",
+      "name": "the literal 8.8.8.8",
+      "permissive": null,
+      "strict": null
+    }
+  ],
+  "webhooks": [
+    {
+      "blocked": null,
+      "name": "a public https url",
+      "url": "https://policy.example.org/decide"
+    },
+    {
+      "blocked": "webhook target 'http://169.254.169.254/latest/meta-data/' resolves to a blocked metadata address",
+      "name": "a metadata literal",
+      "url": "http://169.254.169.254/latest/meta-data/"
+    },
+    {
+      "blocked": "webhook target 'http://[fd00:ec2::254]/token' resolves to a blocked metadata address",
+      "name": "a bracketed ipv6 literal",
+      "url": "http://[fd00:ec2::254]/token"
+    },
+    {
+      "blocked": null,
+      "name": "an internal literal, which is allowed",
+      "url": "https://10.0.0.1/decide"
+    },
+    {
+      "blocked": "webhook target 'http://[64:ff9b::169.254.169.254]/token' resolves to a blocked metadata address",
+      "name": "a wrapped metadata literal",
+      "url": "http://[64:ff9b::169.254.169.254]/token"
+    },
+    {
+      "blocked": null,
+      "name": "a url with no host at all",
+      "url": "file:///etc/passwd"
+    },
+    {
+      "blocked": "webhook target 'https://metadata.example/decide' resolves to a blocked metadata address",
+      "name": "a name that resolves to metadata",
+      "url": "https://metadata.example/decide"
+    },
+    {
+      "blocked": "webhook target 'https://empty.example/decide' could not be resolved",
+      "name": "a name that resolves to nothing",
+      "url": "https://empty.example/decide"
+    },
+    {
+      "blocked": "webhook target 'https://broken.example/decide' could not be resolved",
+      "name": "a name that will not resolve",
+      "url": "https://broken.example/decide"
+    }
+  ]
+}

@@ -9,6 +9,36 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      No PublishAot / PublishTrimmed here, deliberately.
+
+      They were added for the container image, and an AOT build of this server
+      cannot answer a single request. Routes return anonymous types through
+      Results.Json, and ASP.NET minimal APIs build their request delegates
+      reflectively; AOT has no runtime code generation, so endpoint
+      construction throws and every route answers 500 with an empty body:
+
+        System.NotSupportedException: JsonTypeInfo metadata for type
+        'Task`1[IResult]' was not provided by TypeInfoResolver of type '[]'
+
+      Worse than useless, it was a trap. The SDK stamps
+
+        "System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault": false
+
+      into uterm.runtimeconfig.json for an ORDINARY build once PublishAot is
+      declared, so a plain `dotnet run` produced a server that logged 200 and
+      returned 500. That disguised two CI failures as startup and health-check
+      problems. `make build-binaries` was unaffected only because it passes the
+      no-self-contained flag, which switched these off.
+
+      Reviving AOT is a project, not a flag: 47 anonymous-type responses become
+      declared records, all of them need JsonSerializable entries in a
+      JsonSerializerContext on the resolver chain, the host moves to
+      CreateSlimBuilder, and Shell/Commands.cs stops deserializing JsonElement.
+      For a process that starts once and runs for days, the startup win does
+      not pay for that. If short-lived CLI startup ever matters, split the CLI
+      out of the server assembly and AOT only that.
+    -->
     <!-- Ship as lowercase `uterm` (matches Go/Python CLI names). -->
     <AssemblyName>uterm</AssemblyName>
   </PropertyGroup>

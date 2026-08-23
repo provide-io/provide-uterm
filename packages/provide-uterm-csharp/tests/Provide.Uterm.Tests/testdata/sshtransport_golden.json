@@ -1,0 +1,163 @@
+{
+  "peers": [
+    {
+      "name": "an address and port",
+      "other": "fallback",
+      "peer": [
+        "10.0.0.2",
+        5003
+      ],
+      "result": [
+        "10.0.0.2",
+        5003
+      ]
+    },
+    {
+      "name": "an address alone",
+      "other": "fallback",
+      "peer": [
+        "10.0.0.2"
+      ],
+      "result": [
+        "10.0.0.2"
+      ]
+    },
+    {
+      "name": "nothing",
+      "other": "fallback",
+      "peer": null,
+      "result": null
+    },
+    {
+      "name": "an empty tuple",
+      "other": "fallback",
+      "peer": [],
+      "result": null
+    }
+  ],
+  "reads": [
+    {
+      "name": "bytes",
+      "result": [
+        104,
+        101,
+        108,
+        108,
+        111
+      ]
+    },
+    {
+      "name": "a bytearray",
+      "result": [
+        104,
+        101,
+        108,
+        108,
+        111
+      ]
+    },
+    {
+      "name": "text",
+      "result": [
+        104,
+        101,
+        108,
+        108,
+        111
+      ]
+    },
+    {
+      "name": "text that is not ascii",
+      "result": [
+        104,
+        195,
+        169,
+        108,
+        108,
+        111,
+        32,
+        226,
+        134,
+        146,
+        32,
+        226,
+        156,
+        147
+      ]
+    },
+    {
+      "name": "text carrying a lone surrogate",
+      "result": [
+        97,
+        63,
+        98
+      ]
+    },
+    {
+      "name": "nothing",
+      "result": []
+    },
+    {
+      "name": "an empty string",
+      "result": []
+    },
+    {
+      "name": "something that is neither",
+      "result": []
+    },
+    {
+      "name": "nothing at all",
+      "result": []
+    },
+    {
+      "name": "a closed connection",
+      "result": []
+    },
+    {
+      "name": "an end of file",
+      "result": []
+    },
+    {
+      "name": "a cancelled read",
+      "result": []
+    }
+  ],
+  "writes": {
+    "after_close": {
+      "closed": 1,
+      "drained": 0,
+      "exited": [
+        0
+      ],
+      "written": []
+    },
+    "drain_failure": {
+      "closed": 1,
+      "exited": [
+        0
+      ]
+    },
+    "live": {
+      "drained": 1,
+      "written": [
+        [
+          111,
+          110,
+          101
+        ],
+        [
+          116,
+          119,
+          111
+        ]
+      ]
+    },
+    "write_failure": {
+      "attempts": 0,
+      "closed": 1,
+      "exited": [
+        0
+      ]
+    }
+  }
+}

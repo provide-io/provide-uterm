@@ -89,7 +89,7 @@ public class CoverageTo97Wave7Tests
     }
 
     [Fact]
-    public void Lease_Clamp_And_FailingWorker_Pause()
+    public async Task Lease_Clamp_And_FailingWorker_Pause()
     {
         Assert.Equal(1, HijackLeaseManager.ClampDashboardLease(0));
         Assert.Equal(1, HijackLeaseManager.ClampDashboardLease(-5));
@@ -102,7 +102,7 @@ public class CoverageTo97Wave7Tests
 
         var fail = new FailWs();
         hub.Conn.RegisterWorker("wf", fail);
-        var (ok, reason) = hub.TryAcquireRestHijackAsync("wf", "op", 30, "h1", 10).GetAwaiter().GetResult();
+        var (ok, reason) = await hub.TryAcquireRestHijackAsync("wf", "op", 30, "h1", 10);
         Assert.False(ok);
         Assert.Equal("no_worker", reason);
 
@@ -121,9 +121,9 @@ public class CoverageTo97Wave7Tests
         Assert.False(ok4);
         Assert.Equal("already_hijacked", r4);
 
-        hub.Conn.ForceReleaseHijackAsync("w2").GetAwaiter().GetResult();
+        await hub.Conn.ForceReleaseHijackAsync("w2");
         hub.Conn.RegisterWorker("w2", good);
-        var (ok6, _) = hub.TryAcquireRestHijackAsync("w2", "owner-a", 30, "hx2", 30).GetAwaiter().GetResult();
+        var (ok6, _) = await hub.TryAcquireRestHijackAsync("w2", "owner-a", 30, "hx2", 30);
         if (ok6)
         {
             var ext = hub.Lease.ExtendLease("w2", "hx2", "wrong-owner", 30, 40);
