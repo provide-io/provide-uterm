@@ -91,11 +91,17 @@ async def test_two_sessions_concurrent_long_polls(two_session_server: Any) -> No
         poll2 = asyncio.create_task(watch_events(base_url, "s2", timeout_ms=6000, max_events=1))
         await asyncio.sleep(0.5)
 
-        # Fire events in reverse order to make sure routing is correct
+        # Fire events in reverse order to make sure routing is correct, but fire
+        # BOTH before awaiting either. timeout_ms is a server-side window that
+        # starts when the request lands, so sending s1 only after poll2 had been
+        # awaited to completion put poll1's 6s deadline behind a full HTTP round
+        # trip: on a loaded runner poll1 timed out with zero events and the test
+        # failed as `assert 0 == 1`. Ordering the sends, not the awaits, is what
+        # this is testing -- the deadline is not.
         await w2.send_json(snapshot_msg("$ s2 concurrent", "s2"))
-        resp2 = await asyncio.wait_for(poll2, timeout=15.0)
-
         await w1.send_json(snapshot_msg("$ s1 concurrent", "s1"))
+
+        resp2 = await asyncio.wait_for(poll2, timeout=15.0)
         resp1 = await asyncio.wait_for(poll1, timeout=15.0)
 
     assert resp1.status_code == 200
