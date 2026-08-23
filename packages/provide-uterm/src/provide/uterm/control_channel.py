@@ -379,9 +379,25 @@ class ControlFrameDecoder:
         data_parts: list[memoryview] = []
         data_start = 0  # start of current plain-data slice
 
-        while idx < buf_len:
+        # Bounded rather than `while idx < buf_len`. Every path through the body
+        # moves idx forward by at least one byte -- the scan by one, an escaped
+        # DLE by two, a parsed frame by the header plus its payload -- so buf_len
+        # passes is already more than the walk can need, and the one extra is the
+        # pass that sees idx == buf_len and breaks. Nothing here can exhaust the
+        # bound; the point is what happens if something ever does. An offset that
+        # stays put, or moves backwards, would otherwise spin this loop forever
+        # inside whatever read loop called feed(), with data_parts and events
+        # growing on every pass. The bound turns that into a rejected stream.
+        for _ in range(buf_len + 1):
+            if idx >= buf_len:
+                break
             if buf[idx] != _DLE_BYTE:
-                idx += 1
+                # Jump to the next DLE instead of stepping a byte at a time.
+                # ``buf`` is a view over ``_buffer_bytes``, so the two share
+                # indices; searching the bytearray gets a C-level scan over the
+                # run of plain data, which is the bulk of terminal output.
+                nxt = self._buffer_bytes.find(_DLE_BYTE, idx)
+                idx = buf_len if nxt < 0 else nxt
                 continue
 
             if idx + 1 >= buf_len:
@@ -409,6 +425,8 @@ class ControlFrameDecoder:
             chunk, idx = result
             data_start = idx
             events.append(chunk)
+        else:
+            raise self._report_error("control frame parse did not advance")
 
         next_offset = self._flush_remaining(buf, idx, data_start, data_parts, events)
         if next_offset >= len(self._buffer_bytes):
