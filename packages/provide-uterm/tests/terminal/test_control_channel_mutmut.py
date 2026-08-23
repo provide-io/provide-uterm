@@ -381,3 +381,264 @@ class TestFinishResetsEveryBuffer:
         with pytest.raises(ControlFrameProtocolError):
             decoder.finish()
         assert decoder.feed(encode_control_frame({"type": "ping"})) == [ControlChunk({"type": "ping"})]
+
+
+class TestDecodeDataPartsHonoursItsDeclaredArgument:
+    """Kills the two branches of ``_decode_data_parts`` the decoder never takes.
+
+    The signature says ``Sequence[memoryview | bytes]`` and the body has an
+    empty-input branch, but every in-module call site passes a non-empty list of
+    memoryviews. So the ``bytes`` branch and the empty branch are reachable only
+    through the declared contract — which left ``part.decode("utf-8")`` free to
+    become ``decode(None)`` and the empty case free to return anything at all.
+    """
+
+    def test_no_parts_decode_to_the_empty_string(self) -> None:
+        assert ControlFrameDecoder._decode_data_parts([]) == ""
+
+    def test_a_lone_bytes_part_decodes_as_utf8(self) -> None:
+        """Kills `decode(None)` and `decode("XXutf-8XX")` — both raise here."""
+        assert ControlFrameDecoder._decode_data_parts([b"h\xc3\xa9llo"]) == "héllo"
+
+
+class TestDrainAlwaysMovesTheScanForward:
+    """Kills `idx += 1` -> `idx = 1` and `idx += 2` -> `idx -= 2`.
+
+    Both send the scan somewhere it has already been, and on almost every input
+    that means an unbounded spin rather than a wrong answer — a timeout, which
+    only counts as a kill by luck of test ordering. Each case below is one of
+    the few inputs that terminates under its mutant, so the failure is an
+    assertion rather than a hang. Both inputs also terminate under the *other*
+    mutant, so neither test can be the one that wedges the other's run.
+    """
+
+    def test_a_trailing_escaped_dle_is_one_literal_dle(self) -> None:
+        """Kills `idx += 2` -> `idx -= 2`: the backwards jump walks off the buffer."""
+        decoder = ControlFrameDecoder()
+        assert decoder.feed(DLE + DLE) == [DataChunk(DLE)]
+
+    def test_an_escaped_dle_followed_by_stx_is_data_not_a_frame(self) -> None:
+        """Kills `idx += 1` -> `idx = 1`: the reset lands back on the escape's
+        second DLE and reads the STX after it as a frame prefix, dropping it."""
+        decoder = ControlFrameDecoder()
+        assert decoder.feed(DLE + DLE + STX) == [DataChunk(DLE + STX)]
+
+
+class TestFrameEndIsPastThePayloadNotBeforeIt:
+    """Kills `start + payload_bytes` -> `start - payload_bytes` in the frame end.
+
+    Subtracting sends the parse offset backwards, and for any normal payload it
+    lands before the frame start and re-parses the same frame forever — another
+    timeout rather than a kill. A payload shorter than the header walks the
+    offset back *into* the header instead, which terminates and leaves the tail
+    of the header as trailing data.
+    """
+
+    def test_the_helper_returns_the_offset_after_the_payload(self) -> None:
+        """Asserted on the helper directly, because ``_drain`` cannot reach it fast.
+
+        Every frame whose payload is at least header-sized sends the offset
+        behind the frame start, and the scan re-parses the same frame forever —
+        so the tests that go through ``feed`` hang instead of failing, and the
+        mutant is reported as a timeout rather than killed. Calling the helper
+        skips the loop entirely.
+        """
+        decoder = ControlFrameDecoder()
+        assert decoder._payload_end_for_utf8_length(b'{"a":1}', 0, 7) == (7, '{"a":1}')
+
+    def test_a_minimal_frame_decodes_to_one_chunk_and_no_trailing_data(self) -> None:
+        """A payload shorter than the header is the one size that terminates.
+
+        The offset lands back inside the header rather than before the frame,
+        so the scan finishes and leaves the tail of the header as trailing data.
+        """
+        decoder = ControlFrameDecoder()
+        assert decoder.feed(encode_control_frame({})) == [ControlChunk({})]
+
+
+class TestTheWholeLengthFieldIsValidated:
+    """Kills `buf[idx + 2 : idx + 10]` -> `buf[idx + 3 : idx + 10]`.
+
+    Dropping the first of the eight length digits does not change the parsed
+    value — the field is zero-padded and no frame is 0x10000000 bytes — so the
+    only thing it changes is that the dropped digit stops being checked for
+    being hex at all. A junk first digit is then read as a valid frame.
+    """
+
+    def test_a_non_hex_first_length_digit_is_rejected(self) -> None:
+        decoder = ControlFrameDecoder()
+        with pytest.raises(ControlFrameProtocolError) as excinfo:
+            decoder.feed(DLE + STX + "z0000002:{}")
+        assert str(excinfo.value) == "invalid control header"
+
+
+class TestOverflowNamesTheSizeAndLeavesAUsableDecoder:
+    """Kills `buffered_bytes = len(...)` -> None and the byte-buffer reset -> None.
+
+    The overflow error exists to tell the operator how far over the limit the
+    peer went, so the count in the message is the whole point of computing it.
+    And the reset beside it is what lets the decoder keep working afterwards:
+    set to None, the next feed dies in ``bytearray.extend`` instead.
+    """
+
+    def test_the_message_carries_the_buffered_size(self) -> None:
+        decoder = ControlFrameDecoder(max_buffer_bytes=5)
+        with pytest.raises(ControlFrameProtocolError) as excinfo:
+            decoder.feed("toolong")
+        assert str(excinfo.value) == "control frame buffer overflow: 7 > 5"
+
+    def test_the_decoder_still_decodes_after_an_overflow(self) -> None:
+        decoder = ControlFrameDecoder(max_buffer_bytes=5)
+        with pytest.raises(ControlFrameProtocolError):
+            decoder.feed("toolong")
+        assert decoder._buffer_bytes == bytearray()
+        assert decoder.feed("o") == [DataChunk("o")]
+
+
+class TestDrainKeepsTheUnconsumedTail:
+    """Kills the three buffer assignments at the end of ``_drain``.
+
+    ``_drain`` ends by either clearing the buffer or re-seating it on the bytes
+    it could not consume. Nothing asserted either arm, so the text buffer could
+    be set to None in both, and the parts list could be dropped entirely — the
+    tail would still be decoded on the next feed, because the byte buffer is the
+    one the parser reads. These pin the other two so they stay in step with it.
+    """
+
+    def test_a_fully_consumed_feed_clears_the_text_buffer(self) -> None:
+        decoder = ControlFrameDecoder()
+        decoder.feed("a")
+        assert decoder._buffer == ""
+        assert decoder._buffer_parts == []
+
+    def test_an_unconsumed_tail_is_kept_as_text_and_as_one_part(self) -> None:
+        decoder = ControlFrameDecoder()
+        decoder.feed("a" + DLE + STX)
+        assert decoder._buffer == DLE + STX
+        assert decoder._buffer_parts == [DLE + STX]
+        assert decoder._buffer_bytes == bytearray((DLE + STX).encode())
+
+
+class TestWhichLayerReportsATruncatedFrame:
+    """Kills `final=True` -> False/None in ``finish`` and in ``_drain``'s
+    ``_try_parse_frame`` call.
+
+    Both spellings end in the same ``truncated control frame`` error, so the
+    exception alone cannot tell them apart: with ``final`` falsy the parser
+    reports the frame as merely incomplete, ``_drain`` re-seats the tail, and
+    ``finish``'s residual check raises instead. The difference is *which* layer
+    decides, and the error hook can see it — it is called with the bytes still
+    buffered when the parser rejects the frame, and after the residual branch
+    has already cleared them when the fallback does.
+    """
+
+    def test_the_parser_rejects_it_while_the_bytes_are_still_buffered(self) -> None:
+        seen: list[bytes] = []
+
+        def note(_code: str) -> None:
+            seen.append(bytes(decoder._buffer_bytes))
+
+        decoder = ControlFrameDecoder(on_error=note)
+        decoder.feed("a" + DLE + STX)
+        with pytest.raises(ControlFrameProtocolError):
+            decoder.finish()
+        assert seen == [(DLE + STX).encode()]
+
+    def test_the_residual_branch_clears_the_buffers_before_it_reports(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Kills the same three resets ``TestFinishResetsEveryBuffer`` covers.
+
+        That test reads the buffers after ``finish`` returns, by which point the
+        ``except`` clause has re-run identical resets and hidden any change. The
+        hook is the only observer that runs between the two.
+        """
+        seen: list[tuple[str, list[str], bytearray]] = []
+
+        def note(_code: str) -> None:
+            seen.append((decoder._buffer, decoder._buffer_parts, decoder._buffer_bytes))
+
+        decoder = ControlFrameDecoder(on_error=note)
+        decoder._buffer = "leftover"
+        decoder._buffer_parts = ["leftover"]
+        monkeypatch.setattr(decoder, "_drain", lambda *, final: [])
+
+        with pytest.raises(ControlFrameProtocolError):
+            decoder.finish()
+        assert seen == [("", [], bytearray())]
+
+
+class TestFeedClearsTheByteBufferOnAProtocolError:
+    """Kills the ``_buffer_bytes`` reset in ``feed``'s except clause -> None.
+
+    ``feed`` clears three buffers when the drain rejects the stream.
+    ``test_feed_protocol_error_clears_state_exactly`` asserts the text buffer
+    and the parts list, but not the byte buffer — the only one of the three the
+    parser actually reads. Set to None it passes every existing assertion and
+    then dies in ``bytearray.extend`` on the next feed, so one bad chunk would
+    take the connection down instead of one frame.
+    """
+
+    def test_a_rejected_chunk_leaves_a_usable_decoder(self) -> None:
+        decoder = ControlFrameDecoder()
+        with pytest.raises(ControlFrameProtocolError):
+            decoder.feed(DLE + "x")
+        assert decoder._buffer_bytes == bytearray()
+        assert decoder.feed("o") == [DataChunk("o")]
+
+
+class TestDrainRejectsAParseThatDoesNotAdvance:
+    """Covers ``_drain``'s bound, which no real input can reach.
+
+    Every offset update in the loop is a strict increase — ``idx += 1`` in the
+    scan, ``idx += 2`` over an escaped DLE, and a frame end of at least
+    ``idx + _HEADER_BYTES`` — so a correct decoder always walks off the end of
+    the buffer well inside the bound. The bound is there for the case where one
+    of those stops being true: without it the loop spins inside the caller's
+    read loop, accumulating parts and events on every pass, and the only thing
+    that ends it is the process. Reaching it takes a parser that reports a frame
+    without consuming one.
+    """
+
+    def test_a_frame_end_that_stands_still_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        payload = {"type": "ping"}
+        decoder = ControlFrameDecoder()
+        monkeypatch.setattr(
+            decoder,
+            "_try_parse_frame",
+            lambda _buf, idx, _buf_len, *, final: (ControlChunk(payload), idx),
+        )
+        with pytest.raises(ControlFrameProtocolError) as excinfo:
+            decoder.feed(encode_control_frame(payload))
+        assert str(excinfo.value) == "control frame parse did not advance"
+
+    def test_a_frame_end_that_goes_backwards_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Standing still and moving backwards are separate failures of the same
+        invariant; the bound has to catch both, and only the second distinguishes
+        a bound that tests for equality from one that tests for progress."""
+        payload = {"type": "ping"}
+        decoder = ControlFrameDecoder()
+        monkeypatch.setattr(
+            decoder,
+            "_try_parse_frame",
+            lambda _buf, idx, _buf_len, *, final: (ControlChunk(payload), max(0, idx - 1)),
+        )
+        with pytest.raises(ControlFrameProtocolError) as excinfo:
+            decoder.feed(encode_control_frame(payload))
+        assert str(excinfo.value) == "control frame parse did not advance"
+
+    def test_a_one_byte_buffer_stays_inside_the_bound(self) -> None:
+        """Pins the bound at ``buf_len + 1``.
+
+        The shortest buffer is the tight case, not the longest: the scan jumps
+        to the next DLE rather than stepping, so any run of plain data takes two
+        passes — one to cross it, one to see the end. At one byte the bound is
+        exactly those two, and ``buf_len - 1`` is zero passes, which reports a
+        single ordinary byte of output as a decoder that never advanced.
+        """
+        decoder = ControlFrameDecoder()
+        assert decoder.feed("x") == [DataChunk("x")]
+
+    def test_plain_data_with_no_frame_in_it_is_one_chunk(self) -> None:
+        """Covers the miss arm of the jump: no DLE ahead, so the scan goes
+        straight to the end of the buffer rather than reporting a frame at -1."""
+        decoder = ControlFrameDecoder()
+        assert decoder.feed("x" * 64) == [DataChunk("x" * 64)]

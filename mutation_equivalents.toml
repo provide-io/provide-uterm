@@ -1032,3 +1032,113 @@ reason = "create_profile model_dump mode padded -- same, no field distinguishes 
 [[equivalent]]
 mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_184"
 reason = "create_profile model_dump mode uppercased -- same, no field distinguishes the modes."
+
+# --- control_channel.py ----------------------------------------------------
+#
+# Nine residual mutants, each checked against the unmutated decoder over 12,000
+# randomly generated frame streams (random chunk boundaries, random buffer
+# caps, and an error hook that both records and raises) comparing returned
+# chunks, raised errors, hook calls, and the three buffer attributes after
+# every feed. The other eighteen residual mutants of this file were killed by
+# tests rather than listed here; three of those were only found because that
+# same comparison distinguished them, so a "no difference" below is a measured
+# result, not an argument that stood in for one.
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_coerce_input__mutmut_7"
+reason = """\
+Codec-name case flip: chunk.encode("utf-8") -> encode("UTF-8"). Python's codec \
+registry lookup is case-insensitive (encodings.normalize_encoding), so both \
+select the identical codec and produce byte-identical output."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_decode_data_parts__mutmut_9"
+reason = """\
+Codec-name case flip on the single-memoryview branch: part.tobytes().decode("utf-8") \
+-> decode("UTF-8"). Case-insensitive codec lookup; identical decoded text."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_decode_data_parts__mutmut_12"
+reason = """\
+Codec-name case flip on the single-bytes branch: part.decode("utf-8") -> decode("UTF-8"). \
+Case-insensitive codec lookup; identical decoded text. The two sibling mutants of this \
+same line (decode(None), decode("XXutf-8XX")) are NOT equivalent and are killed by \
+TestDecodeDataPartsHonoursItsDeclaredArgument, which reaches this branch by calling the \
+staticmethod with the bytes its signature declares."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_decode_data_parts__mutmut_17"
+reason = """\
+Codec-name case flip on the merged-parts branch: merged.decode("utf-8") -> decode("UTF-8"). \
+Case-insensitive codec lookup; identical decoded text."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_101"
+reason = """\
+Codec-name case flip when re-seating the unconsumed tail: \
+self._buffer_bytes.decode("utf-8") -> decode("UTF-8"). Case-insensitive codec lookup; \
+identical text buffer."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_payload_end_for_utf8_length__mutmut_9"
+reason = """\
+Codec-name case flip on the payload decode: payload.decode("utf-8") -> decode("UTF-8"). \
+Case-insensitive codec lookup, and the UnicodeDecodeError raised for a length that splits \
+a code point is raised identically by both spellings."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_try_parse_frame__mutmut_31"
+reason = """\
+Codec-name case flip on the header length field: length_hex.decode("ascii") -> \
+decode("ASCII"). Case-insensitive codec lookup, and the field has already been checked \
+against string.hexdigits, so every byte reaching the decode is ASCII either way."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_38"
+reason = """\
+Escaped-DLE data slice guard: `if data_start < idx` -> `<= idx`. The two differ only when \
+data_start == idx, where the mutant appends the zero-length slice buf[idx:idx]. That part \
+contributes no bytes, and the next statement appends the literal DLE view unconditionally, \
+so data_parts is non-empty in both spellings and _decode_data_parts concatenates to the \
+same string -- only its internal single-part vs merged-parts branch differs, and both \
+branches decode the same bytes."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁfeed__mutmut_12"
+reason = """\
+self._drain(final=False) -> final=None. `final` is only ever read as a truth value -- \
+`if final:` in _drain and twice in _try_parse_frame, which _drain passes it on to -- and \
+None and False are both falsy, so no branch anywhere below this call can tell them apart. \
+The sibling mutants that flip finish()'s `final=True` to a falsy value ARE distinguishable \
+(they move truncation detection from the parser to finish()'s residual branch) and are \
+killed by TestWhichLayerReportsATruncatedFrame."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_13"
+reason = """\
+Loop bound slack: `for _ in range(buf_len + 1)` -> `range(buf_len + 2)`. The bound is \
+unreachable by construction -- every path through the body moves idx forward by at least \
+one byte, so the walk ends well inside it -- and it exists only to stop a defect that \
+stops advancing from spinning the loop forever. Such a defect exhausts either bound and \
+raises the identical error; the mutant only lets it take one more pass first. Nothing \
+observable distinguishes them: 27,978 streams (single-chunk and split, comparing chunks, \
+errors, hook calls and all three buffers after every feed) found zero divergences. The \
+bound in the OTHER direction is not equivalent and is not excused here -- `range(buf_len - 1)` \
+rejects a one-byte buffer, which TestDrainRejectsAParseThatDoesNotAdvance pins."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_24"
+reason = """\
+Scan-miss sentinel: `idx = buf_len if nxt < 0 else nxt` -> `if nxt <= 0`. The two differ \
+only when nxt == 0, which cannot happen: the branch runs only when buf[idx] is not a DLE, \
+and bytearray.find starts its search AT idx, so a hit is always at an index greater than \
+idx (>= 1 even when idx is 0) and a miss is -1. nxt is therefore never 0, and the added \
+case is unreachable. The mutants of this comparison that DO change reachable behaviour \
+(`> 0`, `>= 0`, `== 0`, `!= 0`) are killed, not excused."""
+
+[[equivalent]]
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_25"
+reason = """\
+Scan-miss sentinel: `idx = buf_len if nxt < 0 else nxt` -> `if nxt < 1`. `nxt < 1` and \
+`nxt < 0` differ only on nxt == 0, which bytearray.find cannot return here -- see the \
+_drain__mutmut_24 entry above for why."""
