@@ -4,7 +4,7 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
-## [0.6.0] — 2026-08-16
+## [0.5.1] — 2026-08-23
 
 A cross-language hardening cycle. The C# port gained the capability work it was
 missing, and a run of gaps turned up where suites existed but nothing invoked
