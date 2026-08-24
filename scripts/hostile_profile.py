@@ -36,7 +36,7 @@ import os
 import time
 from collections import Counter
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx2
@@ -111,27 +111,33 @@ def _read_dev_token(token_path: str | None = None) -> str | None:
     return token or None
 
 
-async def _await_hello(ws_url: str, token: str, timeout_s: float) -> str:
+async def _await_hello(ws_url: str, token: str, timeout_s: float) -> tuple[str, Any]:
     """Open an authenticated browser WS and wait for the ``hello`` control frame.
 
     Returns ``COMPLETED`` once a ``hello`` control frame arrives, or ``ERROR`` if
     the stream closes before one is seen. Connection failures propagate to the
     caller for classification.
     """
-    async with websockets.connect(
+    ws = await websockets.connect(
         ws_url,
         additional_headers={"Authorization": f"Bearer {token}"},
         open_timeout=timeout_s,
         close_timeout=timeout_s,
-    ) as ws:
+    )
+    try:
         decoder = ControlFrameDecoder()
         async for raw in ws:
             # The inline control channel is text framed; coerce binary frames defensively.
             text = raw if isinstance(raw, str) else raw.decode()
             for event in decoder.feed(text):
                 if isinstance(event, ControlChunk) and event.control.get("type") == "hello":
-                    return COMPLETED
-        return ERROR  # stream ended without a hello frame
+                    return COMPLETED, ws
+        return ERROR, ws  # stream ended without a hello frame
+    except BaseException:
+        # Only on the failure path -- a socket nobody will read from again.
+        with contextlib.suppress(Exception):
+            await ws.close()
+        raise
 
 
 async def _authenticated_session_once(ws_url: str, token: str, budget_s: float, timeout_s: float) -> tuple[str, float]:
@@ -141,15 +147,30 @@ async def _authenticated_session_once(ws_url: str, token: str, budget_s: float, 
     complete. ``COMPLETED`` (received its ``hello`` within ``budget_s``) is the
     success condition; a refusal/hang/error under valid auth means the server
     failed to stay available to legitimate users while under attack.
+
+    ``budget_s`` covers reaching ``hello`` and nothing else. Teardown happens
+    below, after ``wait_for`` has returned: a close handshake that stalls says
+    nothing about whether the server served this client, and counting it here
+    reported a server that had answered in 2ms as having hung for five seconds.
+    The give-away is that it reproduces with ZERO hostile connections, which no
+    availability-under-attack signal should.
     """
     start = time.perf_counter()
+    ws = None
     try:
-        outcome = await asyncio.wait_for(_await_hello(ws_url, token, timeout_s), timeout=budget_s)
+        outcome, ws = await asyncio.wait_for(_await_hello(ws_url, token, timeout_s), timeout=budget_s)
     except TimeoutError:
         outcome = HUNG
     except Exception as exc:
         outcome = _classify_ws_failure(exc)
-    return outcome, time.perf_counter() - start
+    latency = time.perf_counter() - start
+    # Closed AFTER the measurement, and after wait_for has returned. A close in
+    # _await_hello -- even in a finally, even shielded -- still runs inside the
+    # coroutine wait_for is timing, so it stayed inside the budget.
+    if ws is not None:
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(ws.close(), timeout=timeout_s)
+    return outcome, latency
 
 
 async def _burst_ws_once(ws_url: str, timeout_s: float) -> str:
