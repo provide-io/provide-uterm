@@ -657,3 +657,40 @@ class TestDrainRejectsAParseThatDoesNotAdvance:
         straight to the end of the buffer rather than reporting a frame at -1."""
         decoder = ControlFrameDecoder()
         assert decoder.feed("x" * 64) == [DataChunk("x" * 64)]
+
+
+class TestAThrowingErrorHookDoesNotWedgeTheDecoder:
+    """The residual-branch resets are what survive a hook that raises.
+
+    ``finish`` clears the buffers and then calls ``_report_error``, which
+    notifies the hook. A hook that raises does not raise
+    ``ControlFrameProtocolError``, so it escapes the ``except`` clause that
+    would otherwise repeat those resets — leaving them as the only ones that
+    ran. Remove them as "redundant" and ``_buffer`` keeps the rejected frame's
+    text, which the residual check reads: every later ``finish()`` then reports
+    a truncated frame that is not there, for the life of the decoder.
+    """
+
+    @staticmethod
+    def _wedged_decoder() -> ControlFrameDecoder:
+        def boom(_code: str) -> None:
+            raise RuntimeError("hook exploded")
+
+        decoder = ControlFrameDecoder(on_error=boom)
+        decoder._buffer = "leftover"
+        decoder._buffer_parts = ["leftover"]
+        decoder._drain = lambda *, final: []  # type: ignore[method-assign]
+        with pytest.raises(RuntimeError):
+            decoder.finish()
+        return decoder
+
+    def test_the_buffers_are_clear_after_the_hook_escapes(self) -> None:
+        decoder = self._wedged_decoder()
+        assert decoder._buffer == ""
+        assert decoder._buffer_parts == []
+        assert decoder._buffer_bytes == bytearray()
+
+    def test_a_later_finish_does_not_report_a_frame_that_is_not_there(self) -> None:
+        decoder = self._wedged_decoder()
+        decoder._drain = lambda *, final: []  # type: ignore[method-assign]
+        assert decoder.finish() == []
