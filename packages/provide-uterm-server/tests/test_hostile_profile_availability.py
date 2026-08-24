@@ -47,19 +47,28 @@ _spec.loader.exec_module(hp)
 
 
 class _FakeConnect:
-    """Stand-in for ``websockets.connect(...)`` as an async CM + async iterator."""
+    """Stand-in for ``websockets.connect(...)``: awaitable, async-iterable, closeable.
+
+    Awaited rather than entered as a context manager, matching the production
+    code: closing inside ``async with`` put the close handshake inside the
+    caller's latency budget, which is what made a served client look hung.
+    """
 
     def __init__(self, *, frames: list[str] | None = None, exc: BaseException | None = None) -> None:
         self._frames = frames or []
         self._exc = exc
+        self.closed = False
 
-    async def __aenter__(self) -> _FakeConnect:
-        if self._exc is not None:
-            raise self._exc
-        return self
+    def __await__(self):  # type: ignore[no-untyped-def]
+        async def _connect() -> _FakeConnect:
+            if self._exc is not None:
+                raise self._exc
+            return self
 
-    async def __aexit__(self, *_args: object) -> bool:
-        return False
+        return _connect().__await__()
+
+    async def close(self) -> None:
+        self.closed = True
 
     async def __aiter__(self):  # type: ignore[no-untyped-def]
         for frame in self._frames:
@@ -142,13 +151,38 @@ class TestAuthenticatedSessionOnce:
         assert outcome == hp.REFUSED
 
     async def test_budget_exceeded_yields_hung(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def _slow(*_a: object, **_k: object) -> str:
+        async def _slow(*_a: object, **_k: object) -> tuple[str, object]:
             await asyncio.sleep(1.0)
-            return hp.COMPLETED
+            return hp.COMPLETED, None
 
         monkeypatch.setattr(hp, "_await_hello", _slow)
         outcome, _latency = await hp._authenticated_session_once("ws://x/term", "tok", budget_s=0.01, timeout_s=5.0)
         assert outcome == hp.HUNG
+
+    async def test_a_slow_close_does_not_make_a_served_client_look_hung(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The budget covers reaching hello, not tearing the socket down.
+
+        The close handshake used to sit inside it -- `async with` closes on the
+        way out of the `return` -- so a session that received its hello in
+        milliseconds and then stalled closing was reported as HUNG, which this
+        lane prints as the server having failed to stay available. Measured on
+        the C# server, that was 125 stalls in 600 sessions with the server
+        answering every one of them in under 20ms.
+        """
+
+        class _SlowClosing(_FakeConnect):
+            async def close(self) -> None:
+                await asyncio.sleep(0.5)
+                self.closed = True
+
+        socket = _SlowClosing(frames=[_hello_wire()])
+        monkeypatch.setattr(hp.websockets, "connect", lambda *a, **k: socket)
+
+        outcome, latency = await hp._authenticated_session_once("ws://x/term", "tok", budget_s=0.1, timeout_s=5.0)
+
+        assert outcome == hp.COMPLETED, "a served client was reported as unserved"
+        assert latency < 0.5, "the close handshake was counted as server latency"
+        assert socket.closed, "the socket was leaked instead of closed"
 
     async def test_stream_closes_without_hello_yields_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         other = encode_control_frame({"type": "hijack_state"})
