@@ -26,9 +26,11 @@ them — several defects were sitting behind gates that had never executed.
   AOT is kept off framework-dependent publishes.
 - The capture layer no longer folds a stale-library remedy into the redacted
   value.
-- The control decoder is seeded through the buffer it actually drains, and the
-  redundant reset in `finish()` — four mutants on unobservable statements — is
-  gone.
+- The control decoder is seeded through the buffer it actually drains. (The
+  reset in `finish()` that this cycle removed as "unobservable" was put back on
+  merge: the error hook runs between it and the `except` clause that repeats
+  it, so a caller can see the difference, and a hook that raises escapes the
+  handler entirely and would leave the rejected frame's bytes in place.)
 - Release-version consistency no longer sweeps a git submodule's `VERSION`
   into this repository's invariant.
 - `localStorage` is provided to the app test suite when the runtime's own
