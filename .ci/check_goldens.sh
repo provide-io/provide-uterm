@@ -275,7 +275,11 @@ while IFS= read -r corpus; do
     continue
   fi
 
-  hash="$(printf '%s\n' "$_corpus_hashes" | awk -F'\t' -v c="$corpus" '$2 == c { print $1; exit }')"
+  # No `exit` in the awk: it closes the pipe on the first match while printf is
+  # still writing the other 160 lines, printf takes SIGPIPE, and pipefail turns
+  # a run in which every golden matched into "FAIL: goldens". Reading all input
+  # and latching the first match costs nothing at this size and cannot race.
+  hash="$(printf '%s\n' "$_corpus_hashes" | awk -F'\t' -v c="$corpus" '$2 == c && !seen { print $1; seen = 1 }')"
   same="$(printf '%s\n' "$_corpus_hashes" | awk -F'\t' -v h="$hash" '$1 == h' | wc -l | tr -d ' ')"
   if (( same > 1 )); then
     copies=$((copies + 1))
