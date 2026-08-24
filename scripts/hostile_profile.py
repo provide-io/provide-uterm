@@ -140,6 +140,37 @@ async def _await_hello(ws_url: str, token: str, timeout_s: float) -> tuple[str, 
         raise
 
 
+async def _close_draining(ws: Any, timeout_s: float) -> None:
+    """Close a socket we have stopped reading, without deadlocking on it.
+
+    websockets stops reading the transport once its receive queue fills, and
+    this lane stops reading the moment ``hello`` arrives -- while the server
+    keeps sending: hijack_state, presence_sync, and a hijack_state broadcast for
+    every OTHER session disconnecting at the same time. Ten concurrent sessions
+    is enough to fill the queue, at which point the peer's close frame sits
+    unread in the socket buffer and ``close()`` waits for a reply its own paused
+    reader will never collect. Measured at 125 stalls in 600 sessions; draining
+    concurrently, or lifting max_queue, is 0 in 600.
+
+    A real browser reads continuously and never reaches this state, so this is
+    a property of the probe, not of any server it points at.
+    """
+    sink = asyncio.create_task(_drain(ws))
+    try:
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(ws.close(), timeout=timeout_s)
+    finally:
+        sink.cancel()
+        with contextlib.suppress(BaseException):
+            await sink
+
+
+async def _drain(ws: Any) -> None:
+    with contextlib.suppress(Exception):
+        async for _ in ws:
+            pass
+
+
 async def _authenticated_session_once(ws_url: str, token: str, budget_s: float, timeout_s: float) -> tuple[str, float]:
     """Run one *legitimate* authenticated browser session; report (outcome, latency).
 
@@ -168,8 +199,7 @@ async def _authenticated_session_once(ws_url: str, token: str, budget_s: float, 
     # _await_hello -- even in a finally, even shielded -- still runs inside the
     # coroutine wait_for is timing, so it stayed inside the budget.
     if ws is not None:
-        with contextlib.suppress(Exception):
-            await asyncio.wait_for(ws.close(), timeout=timeout_s)
+        await _close_draining(ws, timeout_s)
     return outcome, latency
 
 
