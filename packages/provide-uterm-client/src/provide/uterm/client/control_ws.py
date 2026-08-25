@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 from collections import deque
 from collections.abc import Mapping
@@ -176,11 +178,41 @@ def connect_test_ws(client: Any, url: str, *args: Any, role: WsRole | None = Non
     return _SyncTestWsConnection(client, url, args, kwargs, actual_role)
 
 
+async def _drain_until_closed(ws: Any) -> None:
+    """Keep consuming so the transport stays readable while the socket closes."""
+    with contextlib.suppress(Exception):
+        async for _ in ws:
+            pass
+
+
 @asynccontextmanager
 async def connect_async_ws(uri: str, *args: Any, role: WsRole | None = None, **kwargs: Any) -> Any:
-    """Wrap ``websockets.connect`` with the inline protocol client."""
+    """Wrap ``websockets.connect`` with the inline protocol client.
+
+    The socket is drained while it closes. websockets stops reading the
+    transport once its receive queue fills (default max_queue=16), and a caller
+    that reads until it sees what it wants and then leaves this block stops
+    consuming with frames still queued. The peer's close frame then sits unread
+    in the socket buffer and ``close()`` waits on a reply its own paused reader
+    will never collect -- for the full close_timeout, ten seconds by default.
+    Measured against the C# server: 29 of 200 exits blocked the full ten
+    seconds; with the drain, none.
+
+    A caller that reads to end-of-stream never reaches this state, which is why
+    it took a specific shape of consumer to surface: read one frame, leave.
+    """
     import websockets
 
     actual_role = role or ("worker" if "/ws/worker/" in uri else "browser")
-    async with websockets.connect(uri, *args, **kwargs) as ws:
+    ws = await websockets.connect(uri, *args, **kwargs)
+    try:
         yield AsyncInlineWebSocketClient(ws, role=actual_role)
+    finally:
+        sink = asyncio.create_task(_drain_until_closed(ws))
+        try:
+            with contextlib.suppress(Exception):
+                await ws.close()
+        finally:
+            sink.cancel()
+            with contextlib.suppress(BaseException):
+                await sink
