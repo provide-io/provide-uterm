@@ -184,6 +184,17 @@ cover:
 _cover_batch_3d:
 	$(call DOTNET_COVER_BATCH,3d,$(TEST_BATCH_3D))
 
+# One `cover` batch on its own, under the same collector and the same
+# serialization the full target uses. `cover` is the only place a couple of
+# timing-sensitive tests have ever failed, and reproducing that needs the
+# instrumentation and the single-threaded run, not just the test -- but it does
+# not need the other six batches. BATCH names the suffix: `BATCH=2` runs
+# TEST_BATCH_2. No coverage floor is applied; one batch cannot meet it.
+.PHONY: cover-batch
+cover-batch:
+	@rm -rf coverage-out
+	$(call DOTNET_COVER_BATCH,$(BATCH),$(TEST_BATCH_$(BATCH)))
+
 build-binaries:
 	@rm -rf bin
 	@mkdir -p bin

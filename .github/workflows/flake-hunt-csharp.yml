@@ -1,17 +1,21 @@
 name: "🎲 C# Flake Hunt"
 
-# Diagnostic only, dispatch only. Runs one C# test many times on a Windows
-# runner and reports a failure rate, for the unfixed and the fixed code side by
+# Diagnostic only, dispatch only. Repeats the thing that failed on a Windows
+# runner and reports a failure rate for the unfixed and the fixed code side by
 # side. A ~4%-per-run flake is invisible to a single CI run in either direction.
 on:
   workflow_dispatch:
     inputs:
-      iterations:
-        description: "Runs per arm"
+      mode:
+        description: "cover (coverlet + serialized batch 2) or test (one test alone)"
         required: false
-        default: "400"
+        default: "cover"
+      iterations:
+        description: "Runs per shard, per arm"
+        required: false
+        default: "45"
       filter:
-        description: "xUnit --filter expression"
+        description: "xUnit --filter expression (mode=test only)"
         required: false
         default: "FullyQualifiedName~Sequential_Members_Share_One_Total_Response_Budget"
       base_sha:
@@ -30,6 +34,10 @@ jobs:
       fail-fast: false
       matrix:
         arm: [baseline, fixed]
+        # Shards multiply the sample without lengthening the wall clock. The
+        # index is not used by the script -- the runs are independent samples
+        # of the same thing, and their counts add up.
+        shard: [1, 2, 3]
     defaults:
       run:
         # Git Bash, so the script runs unchanged from what a developer runs.
@@ -43,10 +51,15 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v6.0.0
         with:
           dotnet-version: "10.0.x"
-      # Run the test `iterations` times and print the failure count.
+      # Windows images do not ship GNU make, which mode=cover drives.
+      - name: Install make
+        shell: powershell
+        run: choco install make --yes --no-progress
+      # Repeat the run `iterations` times and print the failure counts.
       - name: Measure failure rate
         env:
           ARM: ${{ matrix.arm }}
+          MODE: ${{ inputs.mode }}
           BASE_SHA: ${{ inputs.base_sha }}
           ITERATIONS: ${{ inputs.iterations }}
           FILTER: ${{ inputs.filter }}
