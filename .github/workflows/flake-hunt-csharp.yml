@@ -1,0 +1,53 @@
+name: "🎲 C# Flake Hunt"
+
+# Diagnostic only, dispatch only. Runs one C# test many times on a Windows
+# runner and reports a failure rate, for the unfixed and the fixed code side by
+# side. A ~4%-per-run flake is invisible to a single CI run in either direction.
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Runs per arm"
+        required: false
+        default: "400"
+      filter:
+        description: "xUnit --filter expression"
+        required: false
+        default: "FullyQualifiedName~Sequential_Members_Share_One_Total_Response_Budget"
+      base_sha:
+        description: "Commit the baseline arm restores its test files from"
+        required: true
+
+permissions:
+  contents: read
+
+# Script policy: the loop lives in ci/csharp_flake_hunt.sh, never inline here.
+jobs:
+  hunt:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [baseline, fixed]
+    defaults:
+      run:
+        # Git Bash, so the script runs unchanged from what a developer runs.
+        shell: bash
+    steps:
+      # Full history: the baseline arm checks its test files out of base_sha.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      # The C# port targets .NET 10.
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+      # Run the test `iterations` times and print the failure count.
+      - name: Measure failure rate
+        env:
+          ARM: ${{ matrix.arm }}
+          BASE_SHA: ${{ inputs.base_sha }}
+          ITERATIONS: ${{ inputs.iterations }}
+          FILTER: ${{ inputs.filter }}
+        run: bash ci/csharp_flake_hunt.sh
