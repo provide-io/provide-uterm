@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
@@ -346,6 +347,41 @@ class TestSyncTestWsConnectionGetattr:
         assert conn.some_prop == "value_from_ws"
 
 
+class _AwaitableWs:
+    """Socket double for the post-fix contract: awaited, iterated, closed.
+
+    connect_async_ws awaits ``websockets.connect(...)`` rather than entering it
+    as a context manager, because closing inside ``async with`` gave the caller
+    no way to keep reading while the socket closed.
+    """
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    def __await__(self):  # type: ignore[no-untyped-def]
+        async def _connect() -> _AwaitableWs:
+            return self
+
+        return _connect().__await__()
+
+    async def close(self) -> None:
+        self.closed = True
+
+    # Also usable as an async context manager, so this double works against the
+    # PRE-fix shape too and the regression guard below fails on the deadlock it
+    # is about rather than on a protocol mismatch.
+    async def __aenter__(self):  # type: ignore[no-untyped-def]
+        return self
+
+    async def __aexit__(self, *_exc: object) -> bool:
+        await self.close()
+        return False
+
+    async def __aiter__(self):  # type: ignore[no-untyped-def]
+        return
+        yield  # pragma: no cover - makes this an async generator
+
+
 class TestConnectAsyncWs:
     """Cover connect_async_ws function (lines 179-183)."""
 
@@ -358,10 +394,8 @@ class TestConnectAsyncWs:
             connect_async_ws,
         )
 
-        mock_ws = AsyncMock()
-        mock_ctx = MagicMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ws)
-        mock_ctx.__aexit__ = AsyncMock(return_value=None)
+        mock_ws = _AwaitableWs()
+        mock_ctx = mock_ws
 
         with patch("websockets.connect", return_value=mock_ctx) as mock_connect:
             async with connect_async_ws("ws://example.com/ws/browser/x") as client:
@@ -369,6 +403,85 @@ class TestConnectAsyncWs:
                 # _role is stored on the decoder, not on the client directly
                 assert client._decoder._role == "browser"
             mock_connect.assert_called_once_with("ws://example.com/ws/browser/x")
+
+    async def test_the_socket_is_drained_while_it_closes(self) -> None:
+        """A close that needs a concurrent reader must still complete.
+
+        websockets stops reading the transport once its receive queue fills, so
+        a caller that reads what it wants and leaves this block stops consuming
+        with frames still queued; the peer's close frame then sits unread and
+        close() waits on a reply its own paused reader will never collect. This
+        double reproduces that dependency directly: its close() only finishes
+        while something is iterating it. Against the pre-fix version -- which
+        closed inside `async with`, with nothing reading -- this times out.
+        """
+        from unittest.mock import patch
+
+        from provide.uterm.client.control_ws import connect_async_ws
+
+        class _RequiresConcurrentDrain(_AwaitableWs):
+            def __init__(self) -> None:
+                super().__init__()
+                self.reading = asyncio.Event()
+
+            async def __aiter__(self):  # type: ignore[no-untyped-def]
+                self.reading.set()
+                await asyncio.sleep(3600)  # a live socket does not end on its own
+                yield ""  # pragma: no cover - unreachable
+
+            async def close(self) -> None:
+                await asyncio.wait_for(self.reading.wait(), timeout=1.0)
+                self.closed = True
+
+        socket = _RequiresConcurrentDrain()
+        with patch("websockets.connect", return_value=socket):
+            async with connect_async_ws("ws://host/ws/browser/x"):
+                pass  # read nothing, leave immediately
+
+        assert socket.closed, "the socket was never closed"
+
+    async def test_the_drain_consumes_the_frames_left_behind(self) -> None:
+        """The drain must actually read what the caller did not.
+
+        Draining matters because unread frames are what pause the transport in
+        the first place; a drain that never consumes anything would close the
+        socket without lifting the pause.
+        """
+        from unittest.mock import patch
+
+        from provide.uterm.client.control_ws import connect_async_ws
+
+        class _WithBacklog(_AwaitableWs):
+            """close() completes only once the backlog has been read.
+
+            That is the real dependency: the peer's close frame is behind those
+            frames in the socket buffer, so close cannot finish until they are
+            consumed. Modelling close as instantaneous would let the drain be
+            cancelled before it ran and still pass.
+            """
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.consumed: list[str] = []
+                self.emptied = asyncio.Event()
+
+            async def __aiter__(self):  # type: ignore[no-untyped-def]
+                for frame in ("left-behind-1", "left-behind-2"):
+                    self.consumed.append(frame)
+                    yield frame
+                self.emptied.set()
+
+            async def close(self) -> None:
+                await asyncio.wait_for(self.emptied.wait(), timeout=1.0)
+                self.closed = True
+
+        socket = _WithBacklog()
+        with patch("websockets.connect", return_value=socket):
+            async with connect_async_ws("ws://host/ws/browser/x"):
+                pass  # leave without reading the backlog
+
+        assert socket.consumed == ["left-behind-1", "left-behind-2"]
+        assert socket.closed
 
     async def test_connect_async_ws_infers_worker_role(self) -> None:
         """Covers role inference in connect_async_ws."""
@@ -379,10 +492,8 @@ class TestConnectAsyncWs:
             connect_async_ws,
         )
 
-        mock_ws = AsyncMock()
-        mock_ctx = MagicMock()
-        mock_ctx.__aenter__ = AsyncMock(return_value=mock_ws)
-        mock_ctx.__aexit__ = AsyncMock(return_value=None)
+        mock_ws = _AwaitableWs()
+        mock_ctx = mock_ws
 
         with patch("websockets.connect", return_value=mock_ctx):
             async with connect_async_ws("ws://host/ws/worker/abc") as client:
