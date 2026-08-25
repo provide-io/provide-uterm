@@ -4,7 +4,7 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
-## [0.5.1] — 2026-08-23
+## [0.5.1] — 2026-08-25
 
 A cross-language hardening cycle. The C# port gained the capability work it was
 missing, and a run of gaps turned up where suites existed but nothing invoked
@@ -35,6 +35,13 @@ them — several defects were sitting behind gates that had never executed.
   into this repository's invariant.
 - `localStorage` is provided to the app test suite when the runtime's own
   global shadows the one jsdom installs (node >= 24).
+- **`connect_async_ws` could block for the whole close timeout.** websockets
+  stops reading the transport once its receive queue fills, so a caller that
+  read the frame it wanted and then left the context manager stopped consuming
+  with frames still queued. The peer's close frame then sat unread and `close()`
+  waited on a reply its own paused reader would never collect — ten seconds by
+  default. The socket is now drained while it closes: 125 stalls in 600 sessions
+  before, none after.
 
 ### Testing and CI
 
@@ -47,6 +54,9 @@ them — several defects were sitting behind gates that had never executed.
   nineteen allowlist entries for mutants that are in fact killed were dropped,
   and the renumbered `sessions` entries were repaired.
 - A fan-out adapter that blows its deadline now reports where it hung.
+- The hostile probe no longer charges connection teardown to server latency, and
+  its `stop` kills whatever holds the port rather than assuming a pidfile.
+- The goldens check no longer fails on a broken pipe it caused itself.
 
 ## [0.5.0] — 2026-08-23
 
