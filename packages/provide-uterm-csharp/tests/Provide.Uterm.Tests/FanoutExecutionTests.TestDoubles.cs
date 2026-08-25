@@ -250,9 +250,18 @@ public sealed partial class FanoutExecutionTests
         private readonly int _delayMs;
         public SlowReadSubscription(int delayMs) => _delayMs = delayMs;
 
+        // The read deliberately ignores the token it is handed. A read that stops on
+        // the collector's own per-read bound ends the member at whatever that bound's
+        // timer decides, and .NET timers on Windows are tick-rounded and may fire up
+        // to a tick early -- so the two nested bounds could sum to just under the
+        // shared budget, leave RemainingMs at 1, and let the next member be sent.
+        // With the bound ignored, the only thing that can end this read is the shared
+        // OperationBudget deadline, which sets IsCancellationRequested rather than
+        // relying on truncated elapsed-millisecond arithmetic. That is the invariant
+        // this hub exists to exercise, and it holds whichever way the timers round.
         public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
         {
-            await Task.Delay(_delayMs, ct);
+            await Task.Delay(_delayMs, CancellationToken.None);
             return null;
         }
 

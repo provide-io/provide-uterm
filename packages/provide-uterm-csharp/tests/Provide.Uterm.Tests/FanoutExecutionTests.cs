@@ -122,7 +122,12 @@ public sealed partial class FanoutExecutionTests
     [Fact]
     public async Task Sequential_Members_Share_One_Total_Response_Budget()
     {
-        var hub = new SlowReadHub(55);
+        // 70ms reads against an 80ms total budget: w1's read fits, and w2 is then
+        // left 10ms of budget against a read that wants 70. The shared deadline is
+        // therefore certain to be what ends w2 -- a 60ms margin, several timer ticks
+        // wide -- so w3 is skipped because the budget CTS fired, not because the
+        // elapsed-millisecond arithmetic happened to land on zero.
+        var hub = new SlowReadHub(70);
         var controller = NewController(hub, "sequential", ["w1", "w2", "w3"]);
         var clock = Stopwatch.StartNew();
 
