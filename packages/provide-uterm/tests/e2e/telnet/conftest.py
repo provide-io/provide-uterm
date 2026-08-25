@@ -318,7 +318,9 @@ async def drain_for_snapshot_with_text(
             break
         snap = await _drain_until(ws, "snapshot", timeout=min(0.5, remaining))
         if snap is None:
-            return None
+            # No snapshot in this slice -- keep waiting on the outer deadline.
+            # Returning here would collapse *timeout* to a single 0.5s window.
+            continue
         if text in snap.get("screen", ""):
             return snap
     return None
