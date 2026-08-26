@@ -140,6 +140,17 @@ jobs:
           name: dist-provide-uterm
           path: dist/
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+        with:
+          # Re-running a release must not die on files PyPI already has. Without
+          # this, a re-run reaches PyPI, gets "file already exists", fails the job
+          # -- and sign-and-release needs all three PyPI jobs, so the Sigstore
+          # bundles and SLSA provenance for that version become unreachable. The
+          # TestPyPI steps have carried this from the start; the PyPI ones did not,
+          # which is what left 0.5.1 published but unsignable.
+          #
+          # It hides nothing: PyPI refuses to replace an existing file either way,
+          # so the only behaviour this changes is fatal -> no-op.
+          skip-existing: true
 
   # ── Stage 2: server, client, platform (depend on provide-uterm) ─────
   testpypi-dependents:
@@ -215,6 +226,17 @@ jobs:
           name: dist-${{ matrix.package }}
           path: dist/
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+        with:
+          # Re-running a release must not die on files PyPI already has. Without
+          # this, a re-run reaches PyPI, gets "file already exists", fails the job
+          # -- and sign-and-release needs all three PyPI jobs, so the Sigstore
+          # bundles and SLSA provenance for that version become unreachable. The
+          # TestPyPI steps have carried this from the start; the PyPI ones did not,
+          # which is what left 0.5.1 published but unsignable.
+          #
+          # It hides nothing: PyPI refuses to replace an existing file either way,
+          # so the only behaviour this changes is fatal -> no-op.
+          skip-existing: true
 
   # ── Stage 3: provide-uterm-cloudflare (depends on core) ─────────────
   testpypi-cloudflare:
@@ -272,6 +294,17 @@ jobs:
           name: dist-provide-uterm-cloudflare
           path: dist/
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+        with:
+          # Re-running a release must not die on files PyPI already has. Without
+          # this, a re-run reaches PyPI, gets "file already exists", fails the job
+          # -- and sign-and-release needs all three PyPI jobs, so the Sigstore
+          # bundles and SLSA provenance for that version become unreachable. The
+          # TestPyPI steps have carried this from the start; the PyPI ones did not,
+          # which is what left 0.5.1 published but unsignable.
+          #
+          # It hides nothing: PyPI refuses to replace an existing file either way,
+          # so the only behaviour this changes is fatal -> no-op.
+          skip-existing: true
 
   # ── Sigstore signing + GitHub Release upload ─────────────────────────
   sign-and-release:
