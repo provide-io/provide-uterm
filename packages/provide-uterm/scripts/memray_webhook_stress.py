@@ -20,7 +20,7 @@ from typing import Any
 
 import httpx2
 
-from provide.uterm.server import webhooks as _webhooks_mod
+from provide.uterm.server import _http
 from provide.uterm.server.webhooks import WebhookConfig, WebhookManager
 
 # Silence per-request HTTP logging — measurable allocations otherwise.
@@ -32,9 +32,15 @@ NUM_EVENTS = 5_000
 
 
 def _install_mock_transport() -> None:
-    """Replace ``httpx2.AsyncClient`` in the webhooks module with a stub that
-    returns ``200 OK`` immediately. Avoids real DNS / sockets / TLS so the
-    measured allocations isolate the dispatcher's own work.
+    """Replace the package's async HTTP client factory with one that answers
+    ``200 OK`` immediately. Avoids real DNS / sockets / TLS so the measured
+    allocations isolate the dispatcher's own work.
+
+    The patch goes on ``_http.async_client``, which is what ``_deliver`` calls.
+    It used to patch ``webhooks.httpx2.AsyncClient``, but b07da1ca routed
+    outbound HTTP through the one factory and webhooks stopped importing httpx2
+    at all, so the patch started raising AttributeError -- and because this
+    profile only runs on the nightly schedule, that went unnoticed.
     """
 
     def _handler(_request: httpx2.Request) -> httpx2.Response:
@@ -42,12 +48,13 @@ def _install_mock_transport() -> None:
 
     transport = httpx2.MockTransport(_handler)
 
-    class _StubClient(httpx2.AsyncClient):
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            kwargs["transport"] = transport
-            super().__init__(*args, **kwargs)
+    def _stub_async_client(*, timeout: float | None = None, **kwargs: Any) -> httpx2.AsyncClient:
+        if timeout is not None:
+            kwargs["timeout"] = timeout
+        kwargs["transport"] = transport
+        return httpx2.AsyncClient(**kwargs)
 
-    _webhooks_mod.httpx2.AsyncClient = _StubClient  # type: ignore[misc]
+    _http.async_client = _stub_async_client  # type: ignore[assignment]
 
 
 async def _fake_resolver(_hostname: str) -> tuple[str, ...]:
