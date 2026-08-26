@@ -18,6 +18,14 @@ on:
         description: "xUnit --filter expression (mode=test only)"
         required: false
         default: "FullyQualifiedName~Sequential_Members_Share_One_Total_Response_Budget"
+      attribute:
+        description: "Test name a red iteration is attributed to"
+        required: false
+        default: "Sequential_Members_Share_One_Total_Response_Budget"
+      restore:
+        description: "Space-separated files the baseline arm restores"
+        required: false
+        default: ""
       base_sha:
         description: "Commit the baseline arm restores its test files from"
         required: true
@@ -63,4 +71,6 @@ jobs:
           BASE_SHA: ${{ inputs.base_sha }}
           ITERATIONS: ${{ inputs.iterations }}
           FILTER: ${{ inputs.filter }}
+          ATTRIBUTE: ${{ inputs.attribute }}
+          RESTORE_FILES: ${{ inputs.restore }}
         run: bash ci/csharp_flake_hunt.sh

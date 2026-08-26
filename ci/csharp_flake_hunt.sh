@@ -37,6 +37,11 @@ PROJECT="$CSHARP/tests/Provide.Uterm.Tests"
 # The arm under study lives entirely in these two files: the test's own
 # constants and the hub double it drives.
 RESTORE=("$PROJECT/FanoutExecutionTests.cs" "$PROJECT/FanoutExecutionTests.TestDoubles.cs")
+# A different flake lives in different files; RESTORE_FILES names them, relative
+# to the repo root, so the baseline arm can be pointed anywhere without an edit.
+if [ -n "${RESTORE_FILES:-}" ]; then
+  read -r -a RESTORE <<< "$RESTORE_FILES"
+fi
 # Usable outside Actions, where neither of these is set.
 RUNNER_TEMP="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 GITHUB_STEP_SUMMARY="${GITHUB_STEP_SUMMARY:-/dev/null}"
