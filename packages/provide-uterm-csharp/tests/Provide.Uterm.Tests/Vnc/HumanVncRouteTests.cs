@@ -169,6 +169,92 @@ public class HumanVncRouteTests
     }
 
     [Fact]
+    public async Task Ws_Relay_Closes_The_Socket_Rather_Than_Aborting_It()
+    {
+        // When the upstream ends, the relay has to close the WebSocket, not abort
+        // it. Cancelling the token that drives ws.ReceiveAsync aborts the socket,
+        // and an aborted socket resets the connection: the peer is denied the close
+        // handshake, and whatever the transport had not flushed is discarded. On
+        // Linux and macOS the client's buffered bytes survive the reset and only a
+        // second read notices, which is why this had been failing on Windows alone
+        // -- there the reset drops the buffer, so the FIRST read is the one that
+        // throws.
+        var (server, baseUrl, token, _, _) = await StartServerAsync(blockPrivate: false);
+        await using (server)
+        {
+            using var client = HijackClient.WithBearer(baseUrl, token);
+            var acq = await client.AcquireAsync(WorkerId, owner: "operator", leaseS: 60);
+            var hid = acq["hijack_id"]!.ToString()!;
+
+            var video = Encoding.ASCII.GetBytes("RFB-SERVER-VIDEO");
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var peerPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+            // The peer takes the client's handshake and then hangs up, which is the
+            // end-of-session the relay has to pass on cleanly. It pauses first so the
+            // client-side pump is parked in a WebSocket read when the upstream ends:
+            // that is the state in which cancelling the relay token aborts the socket,
+            // and a pump that has not started its read yet just exits quietly.
+            var peerTask = Task.Run(async () =>
+            {
+                using var peer = await listener.AcceptTcpClientAsync().ConfigureAwait(false);
+                await using var peerStream = peer.GetStream();
+                await peerStream.WriteAsync(video).ConfigureAwait(false);
+                await peerStream.FlushAsync().ConfigureAwait(false);
+                var seen = 0;
+                var buf = new byte[4096];
+                while (seen < 14 + 8)
+                {
+                    var n = await peerStream.ReadAsync(buf).ConfigureAwait(false);
+                    if (n <= 0) break;
+                    seen += n;
+                }
+
+                await Task.Delay(150).ConfigureAwait(false);
+            });
+
+            var upstreamTcp = new TcpClient();
+            await upstreamTcp.ConnectAsync(IPAddress.Loopback, peerPort);
+            server.HumanVncUpstreamFactory = _ =>
+            {
+                Stream s = upstreamTcp.GetStream();
+                return Task.FromResult<(Stream, IAsyncDisposable?)>((s, new TcpLifetime(upstreamTcp)));
+            };
+
+            using var ws = new ClientWebSocket();
+            ws.Options.SetRequestHeader("Authorization", "Bearer " + token);
+            var uri = new Uri(baseUrl.Replace("http://", "ws://", StringComparison.Ordinal)
+                               + $"/worker/{WorkerId}/hijack/{hid}/gui/vnc?target_id=unused-with-factory");
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            await ws.ConnectAsync(uri, cts.Token);
+
+            // Handshake + KeyEvent, so the relay's client-side pump consumes them and
+            // parks in the next read.
+            var handshake = new byte[14];
+            Encoding.ASCII.GetBytes("RFB 003.008\n").CopyTo(handshake, 0);
+            handshake[12] = 1;
+            handshake[13] = 1;
+            var key = new byte[8];
+            key[0] = 4;
+            await ws.SendAsync(handshake.AsMemory(), WebSocketMessageType.Binary, true, cts.Token);
+            await ws.SendAsync(key.AsMemory(), WebSocketMessageType.Binary, true, cts.Token);
+
+            var first = await ws.ReceiveAsync(new byte[64], cts.Token);
+            Assert.Equal(WebSocketMessageType.Binary, first.MessageType);
+
+            // The read that an aborted socket turns into a WebSocketException.
+            var closing = await ws.ReceiveAsync(new byte[64], cts.Token);
+            Assert.Equal(WebSocketMessageType.Close, closing.MessageType);
+            Assert.Equal(WebSocketState.CloseReceived, ws.State);
+
+            listener.Stop();
+            try { await peerTask.WaitAsync(TimeSpan.FromSeconds(2)); }
+            catch { /* best-effort */ }
+        }
+    }
+
+    [Fact]
     public async Task Ws_Relay_With_Factory_Forwards_Key_When_Owner()
     {
         var (server, baseUrl, token, _, _) = await StartServerAsync(blockPrivate: false);

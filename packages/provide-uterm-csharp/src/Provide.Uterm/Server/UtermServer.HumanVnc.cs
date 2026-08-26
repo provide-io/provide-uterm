@@ -244,7 +244,14 @@ public sealed partial class UtermServer
         {
             await HumanRelay.RelayAsync(
                     clientSrc, upstream, upstream, clientDst,
-                    canInject, sessionId, leaseId, principalId, principalRole, token)
+                    canInject, sessionId, leaseId, principalId, principalRole, token,
+                    // Sent as soon as either direction ends, while the socket is still
+                    // alive, so the client-side pump's parked receive completes with a
+                    // close frame instead of being aborted out from under it.
+                    onFirstCompletion: () => ws.State is WebSocketState.Open
+                        ? ws.CloseOutputAsync(
+                            WebSocketCloseStatus.NormalClosure, "relay closed", CancellationToken.None)
+                        : Task.CompletedTask)
                 .ConfigureAwait(false);
         }
         catch (Exception)
