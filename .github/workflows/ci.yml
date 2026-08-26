@@ -92,8 +92,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash ci/report_perimeter_status.sh
-      # Echo workflows that are standing red on main. Advisory: these are not
-      # this push's checks, and the script never fails the build.
+      # Echo workflows that are standing red on main, plus the last SCHEDULED CI
+      # run -- whose schedule-only jobs (memory-regression) no push ever runs, so
+      # nothing else can surface them. Advisory: these are not this push's checks,
+      # and the script never fails the build.
       - if: matrix.python-version == '3.13'
         name: Standing-red workflow status (advisory)
         env:

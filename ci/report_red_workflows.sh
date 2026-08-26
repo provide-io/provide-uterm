@@ -31,8 +31,11 @@
 set -uo pipefail
 
 # Workflows that gate nothing but whose redness matters. `CI` is deliberately
-# absent: a push already fails on it, so echoing it back would be noise.
+# absent HERE: a push already fails on it, so echoing it back would be noise.
+# That reasoning covers only the jobs a push actually runs, though -- see the
+# scheduled-CI section at the bottom for the ones it does not.
 WATCHED="${WATCHED_WORKFLOWS:-hostile-client.yml container-scan.yml}"
+CI_WORKFLOW="${CI_WORKFLOW:-ci.yml}"
 
 red_report=""
 
@@ -64,14 +67,84 @@ Run: ${url}
 "
 done
 
-[ -z "${red_report}" ] && exit 0
+# ── The scheduled CI run ──────────────────────────────────────────────────
+#
+# CI is left out of WATCHED because a push fails on it directly. That is true of
+# the jobs a push runs, and false of the ones it does not: the scheduled run
+# carries jobs no push ever executes, so for those there is no push to fail and
+# nobody to read the result. memory-regression is one. Its webhook profile broke
+# on 2026-08-18 when outbound HTTP moved behind one client factory, failed every
+# nightly run afterwards, and was found on 08-26 only because someone happened to
+# glance at an unrelated red run.
+#
+# So: report the last SCHEDULED run on main, and say which of its failing jobs a
+# push would never have run -- those are the ones with no other way to surface.
+sched_report=""
+sched=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${CI_WORKFLOW}/runs?status=completed&branch=main&event=schedule&per_page=1" 2>/dev/null) || {
+  echo "could not read scheduled ${CI_WORKFLOW} runs; skipping"
+  sched=""
+}
+
+sched_conclusion=$(echo "${sched:-}" | jq -r '.workflow_runs[0].conclusion // empty' 2>/dev/null)
+if [ -z "${sched_conclusion}" ]; then
+  echo "no completed scheduled ${CI_WORKFLOW} run on main; nothing to report"
+elif [ "${sched_conclusion}" = "success" ]; then
+  echo "scheduled ${CI_WORKFLOW} green on main as of $(echo "${sched}" | jq -r '.workflow_runs[0].created_at' | cut -c1-10)"
+else
+  sched_url=$(echo "${sched}" | jq -r '.workflow_runs[0].html_url // empty')
+  sched_started=$(echo "${sched}" | jq -r '.workflow_runs[0].created_at // empty' | cut -c1-10)
+  sched_id=$(echo "${sched}" | jq -r '.workflow_runs[0].id // empty')
+
+  # `gh run view --json jobs` pages internally; a raw jobs API call stops at 30
+  # and would have hidden memory-regression, which sat at position 31 of 49.
+  sched_failed=$(gh run view "${sched_id}" --json jobs --jq '
+    .jobs[] | select(.conclusion=="failure") | .name' 2>/dev/null)
+
+  # Which of those a push would never have run. Compared against the newest
+  # completed push run on main rather than a hardcoded list, so a job added to
+  # the schedule later is covered without editing this script.
+  push_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${CI_WORKFLOW}/runs?status=completed&branch=main&event=push&per_page=1" 2>/dev/null \
+    | jq -r '.workflow_runs[0].id // empty')
+  # Only jobs that actually RAN on that push count. A job gated off by an `if:`
+  # still appears in the run with conclusion "skipped", so matching on the name
+  # alone finds memory-regression in every push run and quietly suppresses the
+  # very annotation this exists to print.
+  push_names=""
+  if [ -n "${push_id}" ]; then
+    push_names=$(gh run view "${push_id}" --json jobs --jq '
+      .jobs[] | select(.conclusion != "skipped") | .name' 2>/dev/null)
+  fi
+
+  while IFS= read -r job; do
+    [ -z "${job}" ] && continue
+    if [ -n "${push_names}" ] && ! printf '%s\n' "${push_names}" | grep -qxF "${job}"; then
+      sched_report="${sched_report}
+  - ${job} — schedule-only; no push ever runs this"
+    else
+      sched_report="${sched_report}
+  - ${job}"
+    fi
+  done <<< "${sched_failed}"
+
+  [ -z "${sched_report}" ] && sched_report="
+  (could not read job detail)"
+
+  sched_report="
+### Scheduled CI — red on main since at least ${sched_started}
+${sched_report}
+
+Run: ${sched_url}
+"
+fi
+
+[ -z "${red_report}${sched_report}" ] && exit 0
 
 {
   echo "## ⚠️ Standing red on main"
   echo
-  echo "These workflows are not part of this push's checks, so nothing here"
-  echo "failed because of your change. They were already red on main."
-  echo "${red_report}"
+  echo "These are not part of this push's checks, so nothing here failed because"
+  echo "of your change. They were already red on main."
+  echo "${red_report}${sched_report}"
   echo "This note is advisory and does not affect this build."
 } >> "${GITHUB_STEP_SUMMARY}"
 
