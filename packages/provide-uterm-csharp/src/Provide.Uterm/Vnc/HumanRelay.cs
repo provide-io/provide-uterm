@@ -55,7 +55,8 @@ public static class HumanRelay
         string leaseId,
         string principalId,
         string principalRole,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Func<Task>? onFirstCompletion = null)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var token = linked.Token;
@@ -83,17 +84,6 @@ public static class HumanRelay
                 {
                     // clean client EOF mid-message treated as end-of-relay
                 }
-                finally
-                {
-                    try
-                    {
-                        linked.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // already torn down
-                    }
-                }
             },
             CancellationToken.None);
 
@@ -112,34 +102,47 @@ public static class HumanRelay
                 {
                     // upstream closed
                 }
-                finally
-                {
-                    try
-                    {
-                        linked.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // already torn down
-                    }
-                }
             },
             CancellationToken.None);
 
         // Wait for first completion, then drain the other (bounded).
         var first = await Task.WhenAny(clientPump, serverPump).ConfigureAwait(false);
-        try
+
+        // Tell the peer the relay is over BEFORE anything is cancelled. The pump
+        // that is still running is parked on a read, and for the client side that
+        // read is a WebSocket receive: cancelling its token aborts the socket, which
+        // resets the connection, denies the peer its close handshake and discards
+        // whatever the transport had not flushed. Announcing the close instead lets
+        // that read finish on its own with a close frame.
+        if (onFirstCompletion is not null)
         {
-            linked.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // ignore
+            try
+            {
+                await onFirstCompletion().ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // best-effort: the peer may already be gone
+            }
         }
 
         var drain = Task.WhenAll(clientPump, serverPump);
         var finished = await Task.WhenAny(drain, Task.Delay(TimeSpan.FromSeconds(2), CancellationToken.None))
             .ConfigureAwait(false);
+        if (!ReferenceEquals(finished, drain))
+        {
+            // The peer never answered the close. Cancelling is the only way out now,
+            // and an abort here costs nothing that was still deliverable.
+            try
+            {
+                linked.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // ignore
+            }
+        }
+
         if (ReferenceEquals(finished, drain))
         {
             // Observe exceptions from both; prefer client-pump filter errors.
