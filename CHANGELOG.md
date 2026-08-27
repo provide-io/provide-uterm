@@ -4,6 +4,68 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
+Destined for 0.5.2. A flake cycle: three tests that had been failing
+intermittently in CI were each root-caused rather than retried, and none of the
+three turned out to be timing noise. One was a defect in shipped code. A nightly
+profile was also found to have been failing since a refactor eight days earlier,
+with nothing anywhere to say so.
+
+### Fixed
+
+- **The human VNC relay reset connections instead of closing them.** Both pumps
+  cancelled a shared token when either direction ended, and the pump still
+  running is parked on a read — on the client side, a `ws.ReceiveAsync` holding
+  that same token. Cancelling it *aborts* the WebSocket rather than closing it,
+  which resets the connection: the peer is denied its close handshake and
+  anything the transport had not flushed is discarded. The graceful `CloseAsync`
+  further down could never run, because by the time it looked the state was
+  `Aborted` and its guard skipped it. The relay now announces the close while the
+  socket is still alive and cancels only if the peer does not answer inside the
+  existing two-second drain. A real VNC client was being reset rather than closed
+  at end of session, and could lose the tail of the stream.
+
+### Testing and CI
+
+- **The telnet snapshot wait was a ten-second budget that only ever waited half a
+  second.** `drain_for_snapshot_with_text` polls in 0.5s slices so it can
+  re-check its own deadline, but it treated a slice that ended without a snapshot
+  as end-of-stream and returned. It passed whenever the first slice happened to
+  catch a frame and failed when the runner was starved.
+- **The C# sequential-budget test decided on arithmetic rather than on the
+  deadline.** The second member's collect is clamped to exactly what the first
+  left, so the two nested bounds always summed to within one timer tick of the
+  budget, and a tick-rounded timer landing early left `RemainingMs` at 1 — enough
+  to send a member that should have been skipped. The hub's read now ignores its
+  per-read bound, leaving the shared deadline as the only thing that can end it.
+  Measured on Windows: 6 failures in 135 before, 0 in 135 after.
+- A dispatch-only flake hunt (`ci/csharp_flake_hunt.sh`) repeats one test many
+  times per arm on a Windows runner and reports a rate, because a ~4% flake is
+  invisible to a single run in either direction. Its first form looped the test
+  alone and uninstrumented and reported 0 failures in 400 for *both* arms —
+  it reproduced nothing, so it measured nothing. Repeating what actually failed
+  — `make cover-batch BATCH=2`, coverlet-instrumented and single-threaded —
+  reproduced it at 4.4%, matching the observed CI rate. The conditions were the
+  whole story.
+- **The memray webhook profile had not run since 2026-08-18.** It stubbed the
+  network by assigning to `webhooks.httpx2.AsyncClient`; `b07da1ca` routed
+  outbound HTTP through one client factory and webhooks stopped importing httpx2
+  at all, so the assignment raised `AttributeError` on every nightly run.
+- **A red scheduled CI run is now reported on your next push.**
+  `report_red_workflows.sh` excluded CI on the grounds that a push already fails
+  on it — true of the jobs a push runs, and false of the ones it does not. The
+  scheduled run carries jobs no push executes, so those had no reader at all,
+  which is how the memray break sat unnoticed for six days. Failing jobs a push
+  would never have run are marked as such. Advisory, and silent when green.
+
+### Release
+
+- The PyPI publish steps carry `skip-existing: true`, which the TestPyPI steps
+  always had. Without it a release re-run reaches PyPI, gets "file already
+  exists" and fails the job — and `sign-and-release` needs all three PyPI jobs,
+  so the Sigstore bundles, release assets and SLSA provenance became unreachable
+  for any version whose files were already up. Nothing is hidden: PyPI refuses to
+  replace an existing file either way, so the only change is fatal to no-op.
+
 ## [0.5.1] — 2026-08-25
 
 A cross-language hardening cycle. The C# port gained the capability work it was
