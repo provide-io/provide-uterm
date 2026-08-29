@@ -4,7 +4,9 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
-Destined for 0.5.2. A flake cycle: three tests that had been failing
+## [0.5.2] — 2026-08-29
+
+A flake cycle: three tests that had been failing
 intermittently in CI were each root-caused rather than retried, and none of the
 three turned out to be timing noise. One was a defect in shipped code. A nightly
 profile was also found to have been failing since a refactor eight days earlier,
@@ -56,6 +58,14 @@ with nothing anywhere to say so.
   scheduled run carries jobs no push executes, so those had no reader at all,
   which is how the memray break sat unnoticed for six days. Failing jobs a push
   would never have run are marked as such. Advisory, and silent when green.
+- **External state is now read in the same turn it is reported.** A state claim
+  is only true as of the moment it was read, and three wrong answers in one
+  session came from the gap: a release run called "never triggered" that fired
+  fifteen minutes later, browsers called logged-out four calls after logging in,
+  and a scheduled run called green because its one failing job sat at position 31
+  of 49 and the jobs API stops at 30. `scripts/state.sh` makes re-reading one
+  timestamped call — git position, push *and* scheduled CI with failing jobs, the
+  release run, and both package indexes — and encodes those three traps directly.
 
 ### Release
 
@@ -65,6 +75,16 @@ with nothing anywhere to say so.
   so the Sigstore bundles, release assets and SLSA provenance became unreachable
   for any version whose files were already up. Nothing is hidden: PyPI refuses to
   replace an existing file either way, so the only change is fatal to no-op.
+- **Release verification installed extras-gated packages without their extras.**
+  The 0.5.1 run died at `Verify TestPyPI · provide-uterm-platform` with
+  `ModuleNotFoundError: No module named 'fastapi'`: `provide.uterm.manager`
+  imports fastapi eagerly and fastapi lives behind the `[manager]` extra, so a
+  bare install cannot import it. `PackageSpec` now carries `install_extras` and
+  the verify step reads the install spec from `scripts/package_metadata.py`
+  rather than keeping a second copy of the table in shell. Only platform needs
+  one — server and client import cleanly bare, and requesting extras a package
+  does not need would have verification exercise a fatter environment than any
+  user gets, hiding the next packaging regression instead of catching it.
 
 ## [0.5.1] — 2026-08-25
 
