@@ -2342,7 +2342,7 @@ provides-extras = ["server", "cli", "tunnel", "gateway", "annotation", "all", "d
 
 [[package]]
 name = "provide-uterm-workspace"
-version = "0.5.1"
+version = "0.5.2"
 source = { virtual = "." }
 dependencies = [
     { name = "provide-telemetry" },
