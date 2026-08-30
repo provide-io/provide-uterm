@@ -29,6 +29,29 @@ ROOT = Path(__file__).resolve().parents[4]
 CONTRACT_PATH = Path(os.environ.get("FANOUT_SECURITY_SCENARIO_CONTRACT", ROOT / "spec/fanout_security_scenarios.json"))
 OUTPUT_PATH = os.environ.get("FANOUT_SECURITY_SCENARIO_OUTPUT")
 
+# The response budget for scenarios that do not ask for one.
+#
+# Nineteen of the twenty scenarios test authorization semantics -- who may send,
+# who is refused, who is notified. Exactly one, ``total_response_deadline``,
+# tests the deadline itself, and it names its own 20ms. So this default is
+# incidental to every scenario that inherits it, and it must be large enough
+# that the clock never decides their outcome.
+#
+# 100ms was not. A member whose budget expires is reported in
+# ``failed_members`` -- deliberately: that is what ``total_response_deadline``
+# asserts. Under load the C# port reached that state on a member that was
+# authorized and delivered to, turning
+# ``current_authorization_revocation`` into ``failed_members: [w1, w2]``
+# against an expected ``[w2]``. Reproduced exactly by shrinking this number:
+# 40ms passes, 30ms and 20ms produce that failure verbatim, 1ms fails earlier
+# still with nothing delivered at all.
+#
+# Costs nothing. A collect returns once output has been quiet for quiesce_ms,
+# not when the budget runs out, so raising the ceiling does not slow a scenario
+# that behaves. Only ``continuous_output`` runs to the deadline, and that one
+# sets its own.
+DEFAULT_MAX_RESPONSE_MS = 5_000
+
 
 class _Session:
     def __init__(self, worker_id: str) -> None:
@@ -176,7 +199,7 @@ async def _build(
             created_at=time.time(),
             grants=list(group_data["grants"]),
             quiesce_ms=1,
-            max_response_ms=input_data.get("max_response_ms", 100),
+            max_response_ms=input_data.get("max_response_ms", DEFAULT_MAX_RESPONSE_MS),
         ),
         principal=creator,
     )

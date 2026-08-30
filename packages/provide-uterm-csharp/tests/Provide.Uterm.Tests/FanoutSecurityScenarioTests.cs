@@ -26,6 +26,37 @@ public sealed class FanoutSecurityScenarioTests
         WriteIndented = true,
     };
 
+    /// <summary>
+    /// The response budget for scenarios that do not ask for one.
+    /// </summary>
+    /// <remarks>
+    /// Nineteen of the twenty scenarios test authorization semantics -- who may
+    /// send, who is refused, who is notified. Only <c>total_response_deadline</c>
+    /// tests the deadline itself, and it names its own 20ms. So this number is
+    /// incidental to every scenario that inherits it, and it must be far enough
+    /// out that the clock never decides one.
+    ///
+    /// 100ms was not, here least of all: this port quiesces for 25ms where the
+    /// other three quiesce for 1, so a quarter of the budget was gone before any
+    /// output could settle. A member whose budget expires is reported in
+    /// <c>failed_members</c> by design -- that is exactly what
+    /// <c>total_response_deadline</c> asserts -- and under load this port
+    /// reached that state on a member that was authorized and delivered to,
+    /// turning <c>current_authorization_revocation</c> into
+    /// <c>failed_members: [w1, w2]</c> against an expected <c>[w2]</c>.
+    ///
+    /// Reproduced exactly by shrinking this number: 40ms passes, 30ms and 20ms
+    /// produce that failure verbatim, and 1ms fails earlier still with nothing
+    /// delivered at all. That 40ms floor on an idle machine against a 100ms
+    /// ceiling is the whole margin, and a loaded runner spends it.
+    ///
+    /// Costs nothing. A collect returns once output has been quiet for
+    /// QuiesceMs, not when the budget runs out, so raising the ceiling does not
+    /// slow a scenario that behaves. Only <c>continuous_output</c> runs to the
+    /// deadline, and that scenario sets its own.
+    /// </remarks>
+    private const int DefaultMaxResponseMs = 5_000;
+
     [Fact]
     public async Task Interprets_Every_Applicable_CSharp_Scenario()
     {
@@ -296,7 +327,8 @@ public sealed class FanoutSecurityScenarioTests
         {
             GroupId = Text(group, "id"), Name = "fixture-group", WorkerIds = Strings(group["members"]),
             CreatedBy = Text(group, "creator"), Grants = Strings(group["grants"]), Mode = "parallel",
-            QuiesceMs = 25, MaxResponseMs = Number(input, "max_response_ms") is > 0 and var value ? value : 100,
+            QuiesceMs = 25,
+            MaxResponseMs = Number(input, "max_response_ms") is > 0 and var value ? value : DefaultMaxResponseMs,
             DivergenceThreshold = 0.8,
         };
     }
