@@ -84,10 +84,15 @@ def _main(argv: list[str]) -> int:
     """Print the pip install spec for a package, so shell callers share this table.
 
     ci/install_from_testpypi.sh needs the extras, and a second copy of them in
-    shell would be a second thing to forget to update.
+    shell would be a second thing to forget to update. ``--names`` prints every
+    published name instead, which the same script uses to pre-fetch our own
+    distributions from TestPyPI before resolving anything against PyPI.
     """
+    if len(argv) == 2 and argv[1] == "--names":
+        sys.stdout.write("\n".join(package.name for package in PUBLISHED_PACKAGES) + "\n")
+        return 0
     if len(argv) != 2:
-        sys.stderr.write("usage: package_metadata.py <package>\n")
+        sys.stderr.write("usage: package_metadata.py <package> | --names\n")
         return 2
     by_name = {package.name: package for package in PUBLISHED_PACKAGES}
     package = by_name.get(argv[1])
