@@ -81,14 +81,18 @@ spec="$("$PYTHON" "$ROOT/scripts/package_metadata.py" "$package")"
 wheelhouse="$(mktemp -d)"
 trap 'rm -rf "${wheelhouse}"' EXIT
 
-# --no-cache-dir is load-bearing, not hygiene. pip caches the index response,
-# so once it has seen a page without this version it will keep answering from
-# that copy: locally, pip reported "from versions: 0.5.0, 0.5.1, 0.5.2" forty
+# --no-cache-dir, because pip caches the index response and will otherwise
+# keep answering from a page it fetched before this version existed:
+# locally, pip reported "from versions: 0.5.0, 0.5.1, 0.5.2" forty
 # minutes after 0.5.3 was published and served by both the HTML and the PEP 691
 # JSON views, and the same command with --no-cache-dir downloaded it at once.
-# A retry loop around a cached negative answer is decorative -- every one of the
-# sixty attempts would re-read the same stale page and the job would spend
-# thirty minutes to fail exactly as fast as it would have failed immediately.
+# The cache does expire, so the retry loop gets there eventually -- measured:
+# the same script without this flag ground through several minutes of attempts
+# and then succeeded. So this buys minutes per verify job, not correctness. It
+# is still the right default: a release should not spend its time waiting for a
+# cache entry to age out of a runner that will be destroyed afterwards, and a
+# retry that is really waiting on a local TTL reads like an index problem to
+# whoever is watching the log.
 fetch() {  # fetch <name>; no dependency resolution, TestPyPI only, uncached
   pip download --no-deps --no-cache-dir \
     --index-url "${TESTPYPI_SIMPLE}/" \
