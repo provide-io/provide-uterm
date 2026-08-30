@@ -70,10 +70,19 @@ jobs:
         with:
           node-version-file: ".nvmrc"
 
+      # Version comes from go.mod, as it does in all five setup-go steps in
+      # ci.yml. This step was the one holdout with a literal "1.22" while
+      # go.mod asked for 1.26.6, and the skew was invisible for as long as it
+      # was harmless: setup-go v5 left GOTOOLCHAIN unset, so Go quietly
+      # downloaded the toolchain go.mod wanted and the pin never bound. v6
+      # sets GOTOOLCHAIN=local to make the pinned version authoritative, which
+      # turned the stale literal into "go.mod requires go >= 1.26.6 (running
+      # go 1.22.12)" and killed the server at startup. Reading the version from
+      # go.mod removes the second place to remember.
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.22"
+          go-version-file: "packages/provide-uterm-go/go.mod"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0

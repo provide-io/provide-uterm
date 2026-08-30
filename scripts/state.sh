@@ -54,16 +54,29 @@ fi
 # Latest run for one workflow and one event, with its failing jobs. Jobs are
 # fetched with --paginate and per_page=100 on purpose: the default page is 30,
 # and a run with 49 jobs silently hides everything past the thirtieth.
+# An empty *event* means "newest run whatever triggered it". Filtering by event
+# is right when a trigger runs jobs no other trigger does -- CI's schedule --
+# and wrong when several triggers run the SAME thing, because then the filter
+# hides newer evidence. mutation-full was pinned to event=schedule and so
+# reported a nine-day-old red cron while four dispatched runs of the identical
+# perimeter had gone green, the newest of them thirty-five minutes earlier.
+# Reporting that stale result as current is the exact mistake this script
+# exists to stop, so the event is now a deliberate choice per workflow rather
+# than the default.
 run_line() {
-  local wf="$1" event="$2" label="$3" runs id concl created url
-  runs=$(gh api "repos/${REPO}/actions/workflows/${wf}/runs?branch=main&event=${event}&per_page=1" 2>/dev/null) || {
+  local wf="$1" event="$2" label="$3" runs id concl created url trigger filter=""
+  [ -n "$event" ] && filter="&event=${event}"
+  runs=$(gh api "repos/${REPO}/actions/workflows/${wf}/runs?branch=main${filter}&per_page=1" 2>/dev/null) || {
     printf '  %-22s (could not read)\n' "$label"; return 0; }
   id=$(echo "$runs" | jq -r '.workflow_runs[0].id // empty')
   [ -z "$id" ] && { printf '  %-22s (no run)\n' "$label"; return 0; }
   concl=$(echo "$runs" | jq -r '.workflow_runs[0].conclusion // .workflow_runs[0].status')
   created=$(echo "$runs" | jq -r '.workflow_runs[0].created_at' | cut -c1-16)
   url=$(echo "$runs" | jq -r '.workflow_runs[0].html_url')
-  printf '  %-22s %-11s %s  %s\n' "$label" "$concl" "$created" "$url"
+  # The trigger is printed, not assumed: "green" means nothing until you know
+  # which run was green and what set it off.
+  trigger=$(echo "$runs" | jq -r '.workflow_runs[0].event')
+  printf '  %-22s %-11s %s  %-16s %s\n' "$label" "$concl" "$created" "($trigger)" "$url"
   [ "$concl" = "success" ] && return 0
   gh api --paginate "repos/${REPO}/actions/runs/${id}/jobs?per_page=100" 2>/dev/null \
     | jq -r '.jobs[] | select(.conclusion=="failure") | "      FAIL  \(.name)"' | sort -u
@@ -77,7 +90,9 @@ if want "${SECTIONS[@]+"${SECTIONS[@]}"}"; then
   # The scheduled run executes jobs no push does, so a green push says nothing
   # about it.
   run_line ci.yml schedule "CI · schedule"
-  run_line mutation-full.yml schedule "mutation-full"
+  # No event filter: the weekly cron and a manual dispatch run the SAME
+  # perimeter, so the newest of either is the current answer.
+  run_line mutation-full.yml "" "mutation-full"
   run_line hostile-client.yml push "hostile-client"
 fi
 
