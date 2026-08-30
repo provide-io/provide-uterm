@@ -41,7 +41,8 @@ def test_packages_that_import_cleanly_declare_no_extras() -> None:
     provide-uterm-server and provide-uterm-client both import their declared
     names from a bare install -- their heavier dependencies sit behind lazy
     imports -- so requesting extras for them would install more than a user gets
-    and hide a real packaging regression rather than catch it.
+    and hide a real packaging regression rather than catch it. The same holds
+    for provide-uterm-annotation, whose only dependency is provide-uterm.
     """
     bare = {p.name for p in PUBLISHED_PACKAGES if not p.install_extras}
     assert bare == {
@@ -49,6 +50,7 @@ def test_packages_that_import_cleanly_declare_no_extras() -> None:
         "provide-uterm-server",
         "provide-uterm-client",
         "provide-uterm-cloudflare",
+        "provide-uterm-annotation",
     }
 
 
