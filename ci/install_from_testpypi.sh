@@ -60,48 +60,72 @@ WAIT_SECONDS="${TESTPYPI_WAIT_DELAY:-30}"
 # already succeeded.
 spec="$("$PYTHON" "$ROOT/scripts/package_metadata.py" "$package")"
 
-# The index normalises names to lowercase with dashes; the FILES it lists use
-# the underscored distribution name. Match on the file so a project page that
-# exists but has not yet listed this version does not read as success.
-file_stem="${package//-/_}-${version}"
-
-echo "waiting for ${package}==${version} on ${TESTPYPI_SIMPLE}"
-served=0
-for i in $(seq 1 "${WAIT_ATTEMPTS}"); do
-  if curl -sSf --max-time 30 "${TESTPYPI_SIMPLE}/${package}/" 2>/dev/null | grep -qF "${file_stem}"; then
-    echo "index is serving ${file_stem} (attempt ${i})"
-    served=1
-    break
-  fi
-  if [ "${i}" -lt "${WAIT_ATTEMPTS}" ]; then
-    echo "not indexed yet (attempt ${i}/${WAIT_ATTEMPTS}) — waiting ${WAIT_SECONDS}s…"
-    sleep "${WAIT_SECONDS}"
-  fi
-done
-
-if [ "${served}" -ne 1 ]; then
-  echo "TestPyPI never served ${file_stem} after ~$(( (WAIT_ATTEMPTS - 1) * WAIT_SECONDS / 60 )) minutes" >&2
-  exit 1
-fi
-
 # Phase 1: fetch OUR distributions from TestPyPI, resolving nothing.
+#
+# The retry lives here, around the download that will actually be consumed,
+# rather than around a separate probe of the index. An earlier version polled
+# the simple page with curl and then installed with pip, which is two different
+# views of the same index: on v0.5.3 the curl probe reported "index is serving
+# provide_uterm-0.5.3" and pip, three seconds later, reported "from versions:
+# 0.5.1, 0.5.2". Two curls a minute apart disagreed with each other as well, so
+# the edges were simply still converging. A gate that a later step can fail is
+# not a gate. Whoever waits must be whoever consumes.
 #
 # Every package in this release that is already up is pulled, not just the one
 # under test: a dependent names its siblings, and if they are absent here pip
 # would satisfy `provide-uterm>=0.5.0` from PyPI with the PREVIOUS release and
-# verify the new package against an old core. Siblings published later in the
-# pipeline simply are not there yet, which is why a miss is tolerated.
+# verify the new package against an old core. Siblings are fetched only after
+# the package under test has appeared, by which point the index has demonstrably
+# converged; one that is still missing then belongs to a stage of the pipeline
+# that has not run yet, which is the one case worth tolerating.
 wheelhouse="$(mktemp -d)"
 trap 'rm -rf "${wheelhouse}"' EXIT
 
+# --no-cache-dir is load-bearing, not hygiene. pip caches the index response,
+# so once it has seen a page without this version it will keep answering from
+# that copy: locally, pip reported "from versions: 0.5.0, 0.5.1, 0.5.2" forty
+# minutes after 0.5.3 was published and served by both the HTML and the PEP 691
+# JSON views, and the same command with --no-cache-dir downloaded it at once.
+# A retry loop around a cached negative answer is decorative -- every one of the
+# sixty attempts would re-read the same stale page and the job would spend
+# thirty minutes to fail exactly as fast as it would have failed immediately.
+fetch() {  # fetch <name>; no dependency resolution, TestPyPI only, uncached
+  pip download --no-deps --no-cache-dir \
+    --index-url "${TESTPYPI_SIMPLE}/" \
+    --dest "${wheelhouse}" \
+    "${1}==${version}"
+}
+
+echo "waiting for ${package}==${version} on ${TESTPYPI_SIMPLE}"
+fetched=0
+for i in $(seq 1 "${WAIT_ATTEMPTS}"); do
+  if fetch "${package}" > "${wheelhouse}/.fetch.log" 2>&1; then
+    echo "fetched ${package}==${version} (attempt ${i})"
+    fetched=1
+    break
+  fi
+  if [ "${i}" -lt "${WAIT_ATTEMPTS}" ]; then
+    echo "not downloadable yet (attempt ${i}/${WAIT_ATTEMPTS}) — waiting ${WAIT_SECONDS}s…"
+    sleep "${WAIT_SECONDS}"
+  fi
+done
+
+if [ "${fetched}" -ne 1 ]; then
+  # The last error, not a summary of it. The previous version discarded pip's
+  # output and reported "not on TestPyPI yet" for what was really "pip cannot
+  # see it yet", which sent the reader to the wrong index.
+  echo "could not download ${package}==${version} from TestPyPI after" \
+       "~$(( (WAIT_ATTEMPTS - 1) * WAIT_SECONDS / 60 )) minutes; last pip output:" >&2
+  cat "${wheelhouse}/.fetch.log" >&2
+  exit 1
+fi
+
 for name in $("$PYTHON" "$ROOT/scripts/package_metadata.py" --names); do
-  if pip download --no-deps --no-binary :none: \
-       --index-url "${TESTPYPI_SIMPLE}/" \
-       --dest "${wheelhouse}" \
-       "${name}==${version}" >/dev/null 2>&1; then
-    echo "  fetched ${name}==${version} from TestPyPI"
+  [ "${name}" = "${package}" ] && continue
+  if fetch "${name}" >/dev/null 2>&1; then
+    echo "  fetched sibling ${name}==${version}"
   else
-    echo "  ${name}==${version} not on TestPyPI yet — skipping"
+    echo "  sibling ${name}==${version} not published yet — skipping"
   fi
 done
 
