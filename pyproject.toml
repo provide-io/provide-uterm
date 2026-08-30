@@ -23,7 +23,7 @@ dev = [
     "detect-secrets>=1.5.0",
     "fastapi>=0.141.1",
     "httpx2>=2.10",
-    "hypothesis>=6.165.2",
+    "hypothesis>=6.166.0",
     "memray>=1.20.0; sys_platform != 'win32'",
     "mutmut>=3.7.0",
     "Pillow>=12.3.0",
@@ -42,9 +42,9 @@ dev = [
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8",
     "reuse>=6.2.0",
-    "ruff>=0.16.2",
-    "ty>=0.0.39",
-    "uv>=0.11.16",
+    "ruff>=0.16.5",
+    "ty>=0.0.75",
+    "uv>=0.12.7",
     "uvicorn>=0.47.0",
     "vulture>=2.16",
     "websockets>=16.0",
@@ -57,7 +57,7 @@ dev = [
     # versions import from rich.console and support 3.11 again, so no rich pin
     # is needed. Its pywrangler also requires wrangler >=4.109, which is why
     # that npm tool is a pinned devDependency rather than whatever npx cached.
-    "workers-py>=1.11",
+    "workers-py>=1.17.0",
     "pyyaml>=6.0",
     "xenon>=0.9.3",
     "mcp>=2.0.0",
