@@ -69,6 +69,22 @@ def test_the_cli_prints_the_spec_shell_callers_need() -> None:
         assert result.stdout.strip() == package.install_spec
 
 
+def test_the_cli_lists_every_published_name() -> None:
+    """The pre-fetch loop pulls all our distributions before resolving anything.
+
+    It has to: a dependent names its siblings, and if they were absent from the
+    local wheelhouse pip would satisfy ``provide-uterm>=0.5.0`` from PyPI with
+    the *previous* release and verify the new package against an old core.
+    """
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "package_metadata.py"), "--names"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.split() == [package.name for package in PUBLISHED_PACKAGES]
+
+
 def test_the_cli_rejects_an_unknown_package() -> None:
     result = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "package_metadata.py"), "not-a-package"],
