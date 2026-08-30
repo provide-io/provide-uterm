@@ -340,6 +340,23 @@ func semanticPrincipal(actor semanticActor) *serverauth.Principal {
 	}
 }
 
+// defaultMaxResponseMS is the response budget for scenarios that do not ask for
+// one. Nineteen of the twenty scenarios test authorization semantics; only
+// total_response_deadline tests the deadline, and it names its own 20ms. So
+// this number is incidental to every scenario that inherits it and must be far
+// enough out that the clock never decides one.
+//
+// It was 100ms in all four ports. A member whose budget expires is reported in
+// failed_members by design, and under load the C# port reached that state on a
+// member that was authorized and delivered to, reporting [w1 w2] where the
+// contract says [w2]. Go has more headroom than C# did -- it quiesces for 1ms
+// where C# quiesced for 25 -- but the fragility is the same shape, so the
+// default moves in every port rather than only the one that failed first.
+//
+// Costs nothing: a collect returns once output has been quiet for QuiesceMS,
+// not when the budget runs out.
+const defaultMaxResponseMS = 5000
+
 func buildSemanticController(t *testing.T, input semanticInput) (*fanout.Controller, *semanticHub) {
 	t.Helper()
 	readable := semanticControllerReadableSet(input)
@@ -352,7 +369,7 @@ func buildSemanticController(t *testing.T, input semanticInput) (*fanout.Control
 	group := &fanout.Group{
 		GroupID: input.Group.ID, Name: "fixture-group", WorkerIDs: append([]string(nil), input.Group.Members...),
 		CreatedBy: input.Group.Creator, Grants: append([]string(nil), input.Group.Grants...), Mode: "parallel",
-		QuiesceMS: 1, MaxResponseMS: 100, DivergenceThreshold: 0.8,
+		QuiesceMS: 1, MaxResponseMS: defaultMaxResponseMS, DivergenceThreshold: 0.8,
 	}
 	if _, err := controller.CreateGroup(group, input.Group.Creator); err != nil {
 		t.Fatal(err)

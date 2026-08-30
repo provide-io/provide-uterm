@@ -12,6 +12,26 @@ import { type ApprovalIdentity, FanOutController, type FanOutControllerHub, type
 import { type FanOutResult, fanOutGroup, InMemoryFanOutStore } from "./models.ts";
 import { createFanoutRoutes, type FanoutRoutesController } from "./routes.ts";
 
+/**
+ * The response budget for scenarios that do not ask for one.
+ *
+ * Nineteen of the twenty scenarios test authorization semantics; only
+ * `total_response_deadline` tests the deadline, and it names its own 20ms. So
+ * this number is incidental to every scenario that inherits it, and it has to
+ * be far enough out that the clock never decides one.
+ *
+ * It was 100ms in all four ports. A member whose budget expires is reported in
+ * `failed_members` by design, and under load the C# port reached that state on
+ * a member that was authorized and delivered to, reporting `[w1, w2]` where
+ * the contract says `[w2]`. Reproduced exactly by shrinking the number there:
+ * 40ms passes, 30ms and 20ms produce that failure verbatim. The default moves
+ * in every port rather than only the one that failed first.
+ *
+ * Costs nothing: a collect returns once output has been quiet for quiesceMs,
+ * not when the budget runs out.
+ */
+const DEFAULT_MAX_RESPONSE_MS = 5_000;
+
 interface ActorInput {
   subject: string;
   authenticated: boolean;
@@ -218,7 +238,7 @@ async function buildController(input: ScenarioInput): Promise<{ controller: FanO
     createdBy: input.group.creator,
     createdAt: 1,
     grants: [...input.group.grants],
-    maxResponseMs: input.max_response_ms ?? 100,
+    maxResponseMs: input.max_response_ms ?? DEFAULT_MAX_RESPONSE_MS,
     quiesceMs: 1,
   });
   await controller.createGroup(group, input.group.creator);
