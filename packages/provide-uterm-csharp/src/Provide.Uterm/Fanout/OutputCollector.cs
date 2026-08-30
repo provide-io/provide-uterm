@@ -40,11 +40,22 @@ internal static class OutputCollector
         {
             var remaining = maxResponseMs - (int)clock.ElapsedMilliseconds;
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(Math.Min(quiesceMs, remaining));
             FanoutOutputEvent? item;
             try
             {
-                item = await subscription.ReadAsync(timeout.Token).ConfigureAwait(false);
+                // Start the read before arming the window, and arm it only if
+                // the read did not already have output to hand back. A reader
+                // checks its token before its buffer -- ChannelReader.ReadAsync
+                // does exactly that -- so arming first means an expired window
+                // can throw away output that was sitting there the whole time,
+                // and the collector reports a silence that never happened.
+                //
+                // Output that is already available has not been quiet for any
+                // length of time, so no deadline should be able to outrank it.
+                // Only a read that must actually wait gets a window.
+                var read = subscription.ReadAsync(timeout.Token);
+                if (!read.IsCompleted) timeout.CancelAfter(Math.Min(quiesceMs, remaining));
+                item = await read.ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
