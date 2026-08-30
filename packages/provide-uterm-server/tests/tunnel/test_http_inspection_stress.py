@@ -115,8 +115,13 @@ def test_format_log_line_never_crashes(method, url, status, duration, size):
     size=st.integers(min_value=0, max_value=10**6),
 )
 def test_format_log_line_5xx_always_has_warning(method, url, status, duration, size):
+    # Asserted as a suffix, not as "somewhere in the line". `url` is arbitrary
+    # text and may contain the sentinel itself, so a substring check answers
+    # "does this line contain a warning glyph" when the question is "did the
+    # formatter append one". Here that made the test pass for a reason it was
+    # not testing; in the non-5xx case below it made it fail outright.
     line = format_log_line(method, url, status, duration, size)
-    assert "⚠" in line
+    assert line.endswith(" ⚠")
 
 
 @given(
@@ -127,8 +132,13 @@ def test_format_log_line_5xx_always_has_warning(method, url, status, duration, s
     size=st.integers(min_value=0, max_value=10**6),
 )
 def test_format_log_line_non_5xx_no_warning(method, url, status, duration, size):
+    # The nightly deep profile found this by generating a url that IS the
+    # sentinel: format_log_line("GET", "⚠", 100, 0.0, 0) returns
+    # "← 100 GET ⚠ (0ms, 0B)", which contains the glyph without the
+    # formatter having warned about anything. The warning is a suffix, so ask
+    # about the suffix.
     line = format_log_line(method, url, status, duration, size)
-    assert "⚠" not in line
+    assert not line.endswith(" ⚠")
 
 
 @given(
