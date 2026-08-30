@@ -4,6 +4,58 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.3] — 2026-08-30
+
+A release-pipeline release. Nothing in the runtime changed; everything here is
+about the machinery that ships it and the tests that guard it, four of the five
+items found by CI failing on work that had nothing to do with them.
+
+### Release
+
+- **`provide-uterm-annotation` is published by the pipeline.** It was uploaded
+  by hand once and never added to `release.yml`, so it stopped tracking its
+  siblings: they reached 0.5.2 through the pipeline while it sat at 0.5.1 on
+  PyPI and had never been uploaded to TestPyPI at all. The gap widened by one
+  version every release and would not have closed itself. It requires
+  `provide-uterm`, so it joins stage 2 with the other dependents.
+- **The release upload no longer fails after doing its work.** 0.5.2 was the
+  first release ever to reach `sign-and-release`, and it went red on "asset
+  under the same name already exists": `gh-action-sigstore-python` defaults
+  `release-signing-artifacts` to true on a release event and had already
+  attached all twenty files. `--clobber`, for the same reason `skip-existing`
+  is on the PyPI steps — a step that can re-run must not fail on work already
+  done.
+
+### Testing and CI
+
+- **The fan-out authorization scenarios are no longer decided by the clock.**
+  Nineteen of the twenty test authorization semantics and only
+  `total_response_deadline` names a budget, but the rest inherited a 100ms
+  default they never asked for. A member whose budget expires is reported in
+  `failed_members` by design, so under load an authorized, delivered-to member
+  joined the refused one and `current_authorization_revocation` reported
+  `[w1, w2]` against an expected `[w2]`. Reproduced by shrinking the number
+  rather than waiting for it: 40ms passes, 30ms and 20ms fail verbatim. The
+  default moves to 5000 in all four ports.
+- **A property test asked whether a glyph appeared, not whether the formatter
+  warned.** `format_log_line` appends ` ⚠` only for 5xx, and the nightly deep
+  profile eventually generated a URL that *is* that character, so a non-5xx
+  line contained it without anything having warned. The warning is a suffix;
+  both directions now assert the suffix. The 5xx case was wrong too and simply
+  never failed — a URL containing the glyph would have satisfied it even if the
+  formatter had stopped appending one.
+- **The Go version comes from `go.mod`.** `hostile-client.yml` pinned a literal
+  `1.22` while `go.mod` asked for 1.26.6, which was harmless only because
+  setup-go v5 left `GOTOOLCHAIN` unset and Go fetched the toolchain anyway.
+  v6 sets `GOTOOLCHAIN=local` by design, making the stale pin fatal: the server
+  exited at startup. `ci.yml` already read `go.mod` in all five of its
+  setup-go steps; this was the last holdout.
+- **`scripts/state.sh` reported a stale cron as current.** It asked for
+  `mutation-full` with `event=schedule` and so surfaced a nine-day-old red run
+  while four dispatched runs of the same perimeter had gone green. That is the
+  exact mistake the script exists to prevent. The event filter is now a
+  per-workflow decision, and every line prints the trigger that produced it.
+
 ## [0.5.2] — 2026-08-29
 
 A flake cycle: three tests that had been failing
