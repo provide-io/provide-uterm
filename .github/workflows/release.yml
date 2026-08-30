@@ -332,13 +332,27 @@ jobs:
             dist/*.tar.gz
             dist/*.whl
 
-      # Attach signed artifacts to the GitHub Release
+      # Attach signed artifacts to the GitHub Release.
+      #
+      # --clobber because this step cannot assume it is the first to upload.
+      # gh-action-sigstore-python defaults release-signing-artifacts to true on
+      # a release event, so by the time this runs the signing step has ALREADY
+      # attached every .whl, .tar.gz and .sigstore.json. Without --clobber gh
+      # exits 1 with "asset under the same name already exists" and fails the
+      # job after the release is, in fact, complete -- which is exactly what
+      # happened on v0.5.2, the first release ever to reach this job.
+      #
+      # Kept rather than deleted as redundant: it is what guarantees everything
+      # in dist/ is attached, and it stays correct if the signing action's
+      # upload default changes under us. Same reasoning as skip-existing on the
+      # PyPI steps -- a step that re-runs must not fail on work already done.
       - name: Upload to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release upload "$GITHUB_REF_NAME"
           dist/**
+          --clobber
           --repo "$GITHUB_REPOSITORY"
 
   # ── SLSA Level 3 provenance attestation ──────────────────────────────
