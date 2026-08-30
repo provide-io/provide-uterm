@@ -349,9 +349,10 @@ func semanticPrincipal(actor semanticActor) *serverauth.Principal {
 // It was 100ms in all four ports. A member whose budget expires is reported in
 // failed_members by design, and under load the C# port reached that state on a
 // member that was authorized and delivered to, reporting [w1 w2] where the
-// contract says [w2]. Go has more headroom than C# did -- it quiesces for 1ms
-// where C# quiesced for 25 -- but the fragility is the same shape, so the
-// default moves in every port rather than only the one that failed first.
+// contract says [w2]. Go had more headroom than C# did -- C# was quiescing for
+// 25ms against a 100ms budget, since raised to 5000 and lowered to 1ms like the
+// rest of us -- but the fragility is the same shape, so the default moves in
+// every port rather than only the one that failed first.
 //
 // Costs nothing: a collect returns once output has been quiet for QuiesceMS,
 // not when the budget runs out.

@@ -36,9 +36,11 @@ public sealed class FanoutSecurityScenarioTests
     /// incidental to every scenario that inherits it, and it must be far enough
     /// out that the clock never decides one.
     ///
-    /// 100ms was not, here least of all: this port quiesces for 25ms where the
+    /// 100ms was not, here least of all: this port quiesced for 25ms where the
     /// other three quiesce for 1, so a quarter of the budget was gone before any
-    /// output could settle. A member whose budget expires is reported in
+    /// output could settle. (That 25 is now 1 as well -- it was hiding a race in
+    /// OutputCollector rather than describing this port, and the collector no
+    /// longer has it.) A member whose budget expires is reported in
     /// <c>failed_members</c> by design -- that is exactly what
     /// <c>total_response_deadline</c> asserts -- and under load this port
     /// reached that state on a member that was authorized and delivered to,
@@ -327,7 +329,7 @@ public sealed class FanoutSecurityScenarioTests
         {
             GroupId = Text(group, "id"), Name = "fixture-group", WorkerIds = Strings(group["members"]),
             CreatedBy = Text(group, "creator"), Grants = Strings(group["grants"]), Mode = "parallel",
-            QuiesceMs = 25,
+            QuiesceMs = 1,
             MaxResponseMs = Number(input, "max_response_ms") is > 0 and var value ? value : DefaultMaxResponseMs,
             DivergenceThreshold = 0.8,
         };
