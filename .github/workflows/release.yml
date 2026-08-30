@@ -4,7 +4,12 @@
 # Publish all workspace packages to TestPyPI (staging) then PyPI (production),
 # with Sigstore signing and GitHub Release asset upload.
 #
-# Dependency order: provide-uterm → provide-uterm-{server,client,platform} → provide-uterm-cloudflare
+# Dependency order: provide-uterm → provide-uterm-{server,client,platform,annotation} → provide-uterm-cloudflare
+#
+# provide-uterm-annotation was published by hand and left out of this matrix,
+# so it stopped tracking its siblings: they reached 0.5.2 through this pipeline
+# while it sat at 0.5.1 on PyPI and had never been uploaded to TestPyPI at all.
+# It is a dependent (it requires provide-uterm), so it belongs in stage 2.
 
 name: "🚀 Release"
 
@@ -58,6 +63,7 @@ jobs:
           - provide-uterm-client
           - provide-uterm-platform
           - provide-uterm-cloudflare
+          - provide-uterm-annotation
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
@@ -168,6 +174,7 @@ jobs:
           - provide-uterm-server
           - provide-uterm-client
           - provide-uterm-platform
+          - provide-uterm-annotation
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
@@ -190,6 +197,7 @@ jobs:
           - provide-uterm-server
           - provide-uterm-client
           - provide-uterm-platform
+          - provide-uterm-annotation
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -220,6 +228,7 @@ jobs:
           - provide-uterm-server
           - provide-uterm-client
           - provide-uterm-platform
+          - provide-uterm-annotation
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:

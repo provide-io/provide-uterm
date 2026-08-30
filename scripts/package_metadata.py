@@ -70,6 +70,13 @@ PUBLISHED_PACKAGES: tuple[PackageSpec, ...] = (
         required_members=("provide/uterm/cloudflare/py.typed",),
         entry_points={"uterm-cf": "provide.uterm.cloudflare.cli:main"},
     ),
+    PackageSpec(
+        name="provide-uterm-annotation",
+        import_names=("provide.uterm.annotation",),
+        required_members=("provide/uterm/annotation/py.typed",),
+        # No console scripts: it is a library layer, not a tool.
+        entry_points={},
+    ),
 )
 
 
@@ -77,6 +84,7 @@ DEPENDENT_PACKAGES: tuple[str, ...] = (
     "provide-uterm-server",
     "provide-uterm-client",
     "provide-uterm-platform",
+    "provide-uterm-annotation",
 )
 
 

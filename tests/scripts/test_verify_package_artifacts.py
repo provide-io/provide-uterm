@@ -30,6 +30,7 @@ def test_published_packages_cover_workspace_python_distributions() -> None:
         "provide-uterm-client",
         "provide-uterm-platform",
         "provide-uterm-cloudflare",
+        "provide-uterm-annotation",
     ]
 
 
@@ -40,6 +41,8 @@ def test_entry_point_expectations_cover_cli_packages() -> None:
     assert by_name["provide-uterm-client"] == {"uterm-mcp": "provide.uterm.ai.cli:main"}
     assert by_name["provide-uterm-platform"] == {"uterm-manager": "provide.uterm.manager.cli:main"}
     assert by_name["provide-uterm-cloudflare"] == {"uterm-cf": "provide.uterm.cloudflare.cli:main"}
+    # A library layer, not a tool: it ships no console script.
+    assert by_name["provide-uterm-annotation"] == {}
 
 
 def test_required_package_data_includes_py_typed_and_server_frontend() -> None:
