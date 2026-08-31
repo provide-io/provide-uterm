@@ -315,6 +315,34 @@ jobs:
           # so the only behaviour this changes is fatal -> no-op.
           skip-existing: true
 
+  # ── NuGet: the C# port ───────────────────────────────────────────────
+  # Packs on every release and pushes when NUGET_API_KEY is configured; the
+  # script reports a skip into the run summary rather than failing or passing
+  # quietly. Independent of the PyPI jobs -- a NuGet outage must not be able to
+  # hold up signing the Python artifacts.
+  nuget-csharp:
+    name: NuGet · Provide.Uterm
+    needs: [build]
+    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    environment: nuget
+    steps:
+      # Source is needed to pack; the Python dists are irrelevant here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Pinned by go.mod's sibling convention: the SDK the port targets.
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      # Pack, check the tag matches packages/provide-uterm-csharp/VERSION, push.
+      - name: Pack and publish to NuGet
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: ci/publish_nuget.sh
+
   # ── Sigstore signing + GitHub Release upload ─────────────────────────
   sign-and-release:
     name: Sign & upload to GitHub Release

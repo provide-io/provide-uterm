@@ -8,12 +8,43 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <Version>0.0.0-dev</Version>
+
+    <!--
+      The version is read from the VERSION file beside this one, never written
+      here. It used to be the literal 0.0.0-dev, and because this port has no
+      packages/provide-uterm-csharp/VERSION the release consistency check (which
+      walks packages/*/VERSION) had nothing to compare: the six Python packages
+      went 0.5.0 to 0.5.4 while this one stayed at 0.0.0-dev, unnoticed. Reading
+      the file is what makes that impossible rather than merely fixed once.
+    -->
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION').Trim())</Version>
     <Authors>provide.io</Authors>
     <Company>provide.io llc</Company>
     <Copyright>Copyright (c) 2025-2026 provide.io llc. All rights reserved.</Copyright>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/provide-io/provide-uterm</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/provide-io/provide-uterm</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>terminal;pty;ssh;telnet;websocket;xterm;session;recording</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!--
+      Symbols and source, so a consumer can step into the package rather than
+      guess. SourceLink ships in the SDK, so this needs no PackageReference;
+      ContinuousIntegrationBuild is what makes the build deterministic and is
+      set only on CI, where the checkout path is stable.
+    -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
+
+  <!-- The readme a NuGet consumer sees; only packable projects carry it. -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 
   <!--
     provide-telemetry is consumed as a published NuGet package, pinned like
