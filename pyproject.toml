@@ -8,10 +8,10 @@ name = "provide-uterm-workspace"
 version = "0.5.5"
 requires-python = ">=3.11"
 dependencies = [
-    "provide-uterm[emulator,ssh]>=0.5.0",
-    "provide-uterm-annotation>=0.5.0",
-    "provide-uterm-server[all]>=0.5.1",
-    "provide-uterm-platform[all]>=0.5.1",
+    "provide-uterm[emulator,ssh]>=0.5.5",
+    "provide-uterm-annotation>=0.5.5",
+    "provide-uterm-server[all]>=0.5.5",
+    "provide-uterm-platform[all]>=0.5.5",
     "provide-telemetry>=0.7",
 ]
 
