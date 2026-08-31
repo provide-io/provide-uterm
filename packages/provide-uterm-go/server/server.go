@@ -20,6 +20,7 @@ import (
 
 	ptel "github.com/provide-io/provide-telemetry/go"
 
+	uterm "github.com/provide-io/provide-uterm/packages/provide-uterm-go"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
@@ -193,7 +194,7 @@ func New(deps Deps) (*Server, error) {
 		deps.Clock = hub.NewRealClock()
 	}
 	if deps.Version == "" {
-		deps.Version = "0.0.0-dev"
+		deps.Version = uterm.Version
 	}
 	if deps.Logger == nil {
 		deps.Logger = ptel.GetLogger(context.Background(), "provide.uterm.server")
