@@ -20,6 +20,16 @@ export interface EventSubscription {
    * when the worker has disconnected.
    */
   next(timeoutMs: number): Promise<Record<string, unknown> | undefined | null>;
+  /**
+   * Events already buffered and not yet handed back by {@link next}.
+   *
+   * Required rather than optional: it is the only signal that separates a
+   * member still talking from one that finished, and a subscription allowed
+   * to stay silent about it would report every truncated response as
+   * complete. Every bus this models has it -- a queue length in Go, `qsize`
+   * in Python.
+   */
+  pending(): number;
   /** Release the subscription's queue on the bus. */
   close(): Promise<void>;
 }
@@ -46,6 +56,14 @@ export interface CollectedOutput {
 
 /** An output subscription opened before worker dispatch. */
 export interface OutputCapture {
+  /**
+   * Whether the last {@link collect} stopped with output still queued.
+   *
+   * The controller reports such a member as not ok: a response cut off at the
+   * budget is not a complete one, and returning it as ok makes truncation
+   * indistinguishable from a member that simply finished quickly.
+   */
+  deadlineExceeded: boolean;
   /** Collect from the already-open subscription. */
   collect(options: Omit<CollectOutputOptions, "subscribe"> & { startedAt?: number }): Promise<CollectedOutput>;
   /** Close the subscription exactly once. */
@@ -94,8 +112,10 @@ export async function openOutputCapture(
   const now = options.now ?? monotonicNow;
   const subscription = await options.subscribe();
   let closed = false;
-  return {
+  const capture: OutputCapture = {
+    deadlineExceeded: false,
     async collect(collectOptions): Promise<CollectedOutput> {
+      capture.deadlineExceeded = false;
       const start = collectOptions.startedAt ?? now();
       const termChunks: string[] = [];
       let lastSnapshotScreen = "";
@@ -120,6 +140,15 @@ export async function openOutputCapture(
           lastSnapshotScreen = screen;
         }
       }
+      // Truncated means we stopped with more still queued -- the member had
+      // not finished talking. Deriving it from what is left, rather than from
+      // WHICH exit fired, is what makes it reliable: the loop only reaches the
+      // exhausted-budget exit if an event happens to land in the final
+      // microseconds, so keying on that loses the truncation whenever the
+      // producer stalls near the end. It also keeps a group whose quiesce is
+      // longer than its cap correct, since a member that answered and went
+      // quiet leaves nothing pending. Go's collector pins exactly this case.
+      capture.deadlineExceeded = subscription.pending() > 0;
       return {
         output: termChunks.length > 0 ? termChunks.join("") : lastSnapshotScreen,
         elapsedMs: Math.trunc((now() - start) * 1000),
@@ -133,6 +162,7 @@ export async function openOutputCapture(
       await subscription.close();
     },
   };
+  return capture;
 }
 
 export async function collectOutput(options: CollectOutputOptions): Promise<CollectedOutput> {

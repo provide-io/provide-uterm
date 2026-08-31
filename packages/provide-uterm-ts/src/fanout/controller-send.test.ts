@@ -26,6 +26,8 @@ class FakeHub implements FanOutControllerHub {
   readonly immediateOutputs = new Map<string, string>();
   readonly captureBuffers = new Map<string, string[]>();
   readonly captureFailures = new Set<string>();
+  /** Workers whose collect stopped with output still queued. */
+  readonly truncated = new Set<string>();
   readonly closes = new Map<string, number>();
   onApprovalExpired: ((approval: ApprovalIdentity) => void) | undefined;
 
@@ -64,6 +66,7 @@ class FakeHub implements FanOutControllerHub {
     const buffer: string[] = [];
     this.captureBuffers.set(workerId, buffer);
     return {
+      deadlineExceeded: this.truncated.has(workerId),
       collect: async () =>
         buffer.length > 0 ? { output: buffer.join(""), elapsedMs: 7 } : this.collectOutput(workerId),
       close: async () => {
@@ -386,6 +389,7 @@ describe("FanOutController parallel send", () => {
         appendEvent: async () => {},
         addApproval: (request) => ({ id: String(request.id), revision: 1 }),
         openOutputCapture: async () => ({
+          deadlineExceeded: false,
           collect: async (options) => {
             seen = options;
             return { output: "", elapsedMs: 0 };
@@ -414,6 +418,7 @@ describe("FanOutController parallel send", () => {
         appendEvent: async () => {},
         addApproval: (request) => ({ id: String(request.id), revision: 1 }),
         openOutputCapture: async () => ({
+          deadlineExceeded: false,
           collect: async (options) => {
             seen = options;
             return { output: "", elapsedMs: 0 };
@@ -435,6 +440,24 @@ describe("FanOutController parallel send", () => {
     );
     await controller.send("g1", "x", actor("alice"));
     expect(seen).toMatchObject({ quiesceMs: 33, maxMs: 44 });
+  });
+
+  it("reports a member still talking at the budget as not ok", async () => {
+    // Same rule as the sequential path, and for the same reason: the fan-out
+    // has to say which members it heard out and which it cut off.
+    const { hub, controller } = build();
+    await seed(controller, ["w1", "w2"]);
+    hub.outputs.set("w1", "steady state");
+    hub.outputs.set("w2", "steady state");
+    hub.truncated.add("w2");
+
+    const result = await controller.send("g1", "tail -f", actor("alice"));
+
+    expect(result.failedSessions).toStrictEqual(["w2"]);
+    expect(result.results[1]).toMatchObject({ workerId: "w2", ok: false, outputDelta: "steady state" });
+    // A cut-off transcript compared against the complete ones would flag the
+    // healthy members as the divergent ones, so it is left out of the vote.
+    expect(result.divergentSessions).toStrictEqual([]);
   });
 });
 
@@ -528,6 +551,25 @@ describe("FanOutController sequential send", () => {
     hub.outputs.set("w3", "wildly different output");
     const result = await controller.send("g1", "check", actor("alice"));
     expect(result.divergentSessions).toStrictEqual(["w3"]);
+  });
+
+  it("reports a member still talking at the budget as not ok, keeping its partial output", async () => {
+    // A response cut off at max_response_ms is not a complete one. Reporting
+    // it as ok makes truncation indistinguishable from a member that simply
+    // finished quickly, which is the one thing the caller cannot tell.
+    const { hub, controller } = build();
+    await seed(controller, ["w1", "w2"], { mode: "sequential" });
+    hub.outputs.set("w1", "first half of a very ");
+    hub.outputs.set("w2", "first half of a very ");
+    hub.truncated.add("w1");
+
+    const result = await controller.send("g1", "tail -f", actor("alice"));
+
+    expect(result.failedSessions).toStrictEqual(["w1"]);
+    expect(result.results[0]).toMatchObject({ workerId: "w1", ok: false, outputDelta: "first half of a very " });
+    expect(result.results[1]).toMatchObject({ workerId: "w2", ok: true });
+    // Only w2 answered, so there is nothing for it to diverge from.
+    expect(result.divergentSessions).toStrictEqual([]);
   });
 
   it("treats any mode that is not sequential as parallel", async () => {

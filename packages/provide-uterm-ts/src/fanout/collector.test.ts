@@ -29,6 +29,12 @@ class ScriptedSubscription implements EventSubscription {
   }
 
   /** Wait up to `timeoutMs` for the next event. */
+  /** One buffered event when the script has another ready to hand over. */
+  pending(): number {
+    const step = this.#script[this.#index];
+    return step !== undefined && "event" in step ? 1 : 0;
+  }
+
   async next(timeoutMs: number): Promise<Record<string, unknown> | undefined | null> {
     const step = this.#script[this.#index];
     if (step === undefined) {
@@ -72,6 +78,19 @@ async function collect(
   return { ...result, subscription };
 }
 
+/** Open a real capture over a script, so its truncation flag can be read. */
+async function scriptedCapture(
+  script: Array<{ event: Record<string, unknown> } | { silenceMs: number } | { disconnect: true }>,
+) {
+  const clock = { now: 0 };
+  const capture = await openOutputCapture({
+    subscribe: async () => new ScriptedSubscription(script, clock),
+    now: () => clock.now / 1000,
+  });
+  if (capture === undefined) throw new Error("a subscribing capture is never undefined");
+  return capture;
+}
+
 /** A term event carrying `data`. */
 function term(data: unknown) {
   return { event: { type: "term", data: { data } } };
@@ -88,6 +107,7 @@ describe("collectOutput", () => {
     const capture = await openOutputCapture({
       subscribe: async () => ({
         next: async () => undefined,
+        pending: () => 0,
         close: async () => {
           closes += 1;
         },
@@ -204,6 +224,7 @@ describe("collectOutput", () => {
       async next(): Promise<never> {
         throw new Error("bus exploded");
       },
+      pending: () => 0,
       async close() {
         this.closed = true;
       },
@@ -218,6 +239,51 @@ describe("collectOutput", () => {
     const { output, elapsedMs } = await collect([term("never read")], { maxMs: 0 });
     expect(output).toBe("");
     expect(elapsedMs).toBe(0);
+  });
+
+  it("reports a response that was still arriving when the budget ran out", async () => {
+    // The one thing a caller cannot otherwise tell from a short but complete
+    // response: what came back is a prefix, not the answer. The stream is
+    // still going here -- the script has more to say after the cap.
+    const capture = await scriptedCapture([
+      term("a"),
+      { silenceMs: 100 },
+      term("b"),
+      { silenceMs: 100 },
+      term("c"),
+      { silenceMs: 100 },
+      term("d"),
+    ]);
+
+    const { output } = await capture.collect({ quiesceMs: 200, maxMs: 300 });
+
+    expect(output).toBe("abc");
+    expect(capture.deadlineExceeded).toBe(true);
+  });
+
+  it("does not report a member that answered and went quiet, even under a quiesce longer than the cap", async () => {
+    // Such a group ALWAYS ends its collect on the cap, so a rule keyed on
+    // which exit fired would report every one of its members as cut off. Go's
+    // collector pins this case; the flag is read off what is still queued.
+    const capture = await scriptedCapture([term("done"), { silenceMs: 5000 }]);
+
+    const { output } = await capture.collect({ quiesceMs: 1000, maxMs: 40 });
+
+    expect(output).toBe("done");
+    expect(capture.deadlineExceeded).toBe(false);
+  });
+
+  it("clears the truncation flag at the start of each collect", async () => {
+    // A capture is collected from once per send, but it is the controller's
+    // handle rather than the collect's return value -- a flag left set would
+    // report the next send's healthy member as cut off.
+    const capture = await scriptedCapture([term("a"), term("b"), { silenceMs: 5000 }]);
+    await capture.collect({ quiesceMs: 200, maxMs: 0 });
+    expect(capture.deadlineExceeded).toBe(true);
+
+    await capture.collect({ quiesceMs: 200, maxMs: 10_000 });
+
+    expect(capture.deadlineExceeded).toBe(false);
   });
 
   it("waits no longer than the remaining budget", async () => {

@@ -83,24 +83,18 @@ def applicable_ids(contract: dict[str, Any], backend: str) -> set[str]:
 def semantic_status(scenario: dict[str, Any], backend: str) -> str:
     """Derive backend support from scenario semantics rather than its opaque ID."""
     input_data = _dict(scenario.get("input"))
-    continuous_output = _dict(input_data.get("workers")).get("continuous_output") is True
     governed = _dict(input_data.get("policy")).get("action") != "allow"
+    # continuous_output excuses nobody any more. Every port's collector now
+    # records whether a collect stopped with output still queued at
+    # max_response_ms, and every port's controller reports such a member as
+    # not ok -- so a member that never falls quiet is a result all four can
+    # state rather than one any of them has to sit out.
     if backend == "typescript":
-        return "unserved" if continuous_output else "component_execute"
+        return "component_execute"
     if backend == "python":
-        # continuous_output no longer excuses python. Its collector reports
-        # whether a collect ended on max_response_ms rather than on quiet, and
-        # its controller marks such a member not ok -- so a member that never
-        # falls quiet is now a result python can state, not one it has to sit
-        # out. go and typescript still return what they returned before,
-        # because they still return ok for a response cut off at the budget.
+        # Python is the reference server and the only port with a policy gate,
+        # so a governed scenario is one it executes rather than refuses.
         return "execute"
-    if backend == "go":
-        # go joins python: its collector records whether a collect ended with
-        # output still arriving at max_response_ms, and its controller reports
-        # such a member as not ok. typescript still returns ok for a response
-        # cut off at the budget, so it still sits this one out.
-        return "unsupported_fail_closed" if governed else "execute"
     return "unsupported_fail_closed" if governed else "execute"
 
 
@@ -172,7 +166,7 @@ def validate_contract(contract: dict[str, Any]) -> list[str]:
     for backend in BACKENDS:
         if _dict(backends.get(backend)) != EXPECTED_SURFACES[backend]:
             if backend == "typescript":
-                errors.append("typescript must remain an unserved component and must not advertise a server")
+                errors.append("typescript must remain a component surface and must not advertise a server")
             else:
                 errors.append(f"{backend}: server capability metadata mismatch")
 

@@ -592,12 +592,21 @@ export class FanOutController {
 
       const answered: Answered[] = [];
       const results = group.workerIds.map((workerId, index) => {
-        if (captures[index] === undefined) {
+        const capture = captures[index];
+        if (capture === undefined) {
           return this.#failedRow(workerId);
         }
         const output = collected[index];
         if (output === undefined) {
           return this.#failedRow(workerId);
+        }
+        if (capture.deadlineExceeded) {
+          // Delivered to, but still talking when the budget ran out. Keep the
+          // partial output on the row and report the member as not ok, so the
+          // caller cannot read a truncated response as a complete one. Left
+          // out of `answered` too: a cut-off transcript compared against
+          // complete ones flags the healthy members as the divergent ones.
+          return { workerId, ok: false, outputDelta: output.output, elapsedMs: output.elapsedMs, divergent: false };
         }
         answered.push({ index, output: output.output });
         return { workerId, ok: true, outputDelta: output.output, elapsedMs: output.elapsedMs, divergent: false };
@@ -647,8 +656,13 @@ export class FanOutController {
         }
         const startedAt = performance.now() / 1000;
         const { output, elapsedMs } = await capture.collect({ ...timings, startedAt });
-        answered.push({ index: results.length, output });
-        results.push({ workerId, ok: true, outputDelta: output, elapsedMs, divergent: false });
+        // Same rule as the parallel path: still talking when the budget ran
+        // out is not a complete response.
+        const cutShort = capture.deadlineExceeded;
+        if (!cutShort) {
+          answered.push({ index: results.length, output });
+        }
+        results.push({ workerId, ok: !cutShort, outputDelta: output, elapsedMs, divergent: false });
 
         if (group.stopOnFirstError && group.errorPattern !== undefined) {
           stopped = new RegExp(group.errorPattern).test(output);

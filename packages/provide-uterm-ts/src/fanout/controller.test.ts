@@ -26,6 +26,8 @@ class FakeHub implements FanOutControllerHub {
   readonly refusing = new Set<string>();
   /** Workers whose collection throws. */
   readonly exploding = new Set<string>();
+  /** Workers whose collect stopped with output still queued. */
+  readonly truncated = new Set<string>();
   /** What each worker prints. */
   readonly outputs = new Map<string, string>();
   /** Approval expiry subscriber, as the hub's approval store would set it. */
@@ -68,6 +70,7 @@ class FakeHub implements FanOutControllerHub {
 
   async openOutputCapture(workerId: string) {
     return {
+      deadlineExceeded: this.truncated.has(workerId),
       collect: async (options: { quiesceMs: number; maxMs: number }) => this.collectOutput(workerId, options),
       close: async () => {},
     };
