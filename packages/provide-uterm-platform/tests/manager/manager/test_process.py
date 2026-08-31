@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import sys
 import time
@@ -19,6 +20,44 @@ from provide.uterm.manager.config import ManagerConfig
 from provide.uterm.manager.core import AgentManager
 from provide.uterm.manager.models import AgentStatusBase
 from provide.uterm.manager.process import AgentProcessManager
+
+
+def _process_is_alive(pid: int) -> bool:
+    """Report whether ``pid`` is still a running process; a zombie counts as dead.
+
+    ``AgentProcessManager.__init__`` calls ``_try_set_subreaper()``, so on Linux
+    THIS pytest process adopts orphaned grandchildren. A dead-but-unreaped
+    grandchild would answer ``os.kill(pid, 0)`` as alive forever, so reap it
+    first -- which also keeps the session free of accumulating zombies.
+    """
+    if os.name == "nt":
+        # os.kill(pid, 0) maps to TerminateProcess on Windows: it would kill the
+        # very process this function only means to observe.
+        import ctypes
+
+        process_query_limited_information = 0x1000
+        still_active = 259
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+
+    with contextlib.suppress(ChildProcessError, OSError):
+        os.waitpid(pid, os.WNOHANG)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 class FakeWorkerPlugin:
@@ -468,22 +507,26 @@ class TestProcessTreeHelpers:
                 await asyncio.sleep(0.05)
             assert process.poll() is not None, "parent process did not exit within 5s of kill_agent()"
 
-            # Wait for the heartbeat to stabilise — sample until two
-            # consecutive readings show the same mtime, then assert that
-            # remains true through the platform-specific settle window.
-            # Polling avoids the fixed-sleep flake on slow runners.
-            settle_window = 0.5 if os.name == "nt" else 0.25
-            stable_deadline = time.time() + 5.0
-            stopped_mtime = heartbeat_file.stat().st_mtime_ns
-            while time.time() < stable_deadline:
+            # Wait for the child ITSELF to go away, then assert its heartbeat
+            # is frozen. Inferring death from mtime stability was unsound: the
+            # child writes every 50ms and the previous poll sampled every 50ms,
+            # so a live child that merely lost its scheduling slot for a single
+            # window read as dead. A loaded runner hit exactly that, then the
+            # child wrote again during the settle sleep (CI caught it mid
+            # write_text, st_size=0). The pid is already on disk, so ask the
+            # kernel rather than inferring from a file's timestamps.
+            child_pid = int(child_pid_file.read_text().strip())
+            death_deadline = time.time() + 10.0
+            while time.time() < death_deadline and _process_is_alive(child_pid):
                 await asyncio.sleep(0.05)
-                current = heartbeat_file.stat().st_mtime_ns
-                if current == stopped_mtime:
-                    break
-                stopped_mtime = current
-            await asyncio.sleep(settle_window)
+            assert not _process_is_alive(child_pid), f"child process {child_pid} survived kill_agent()"
+
+            # The child is gone, so this can no longer race it; it still pins
+            # the behaviour the test is named for.
+            stopped_mtime = heartbeat_file.stat().st_mtime_ns
+            await asyncio.sleep(0.5 if os.name == "nt" else 0.25)
             assert heartbeat_file.stat().st_mtime_ns == stopped_mtime, (
-                "child heartbeat kept advancing after kill_agent()"
+                "child heartbeat kept advancing after the child process exited"
             )
         finally:
             if process.poll() is None:
