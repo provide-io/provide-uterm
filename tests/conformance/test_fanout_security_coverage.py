@@ -159,7 +159,7 @@ def test_false_typescript_server_capability_claim_is_rejected() -> None:
 
     errors = runner.validate_contract(contract)
 
-    assert any("typescript" in error and "unserved component" in error for error in errors)
+    assert any("typescript" in error and "component surface" in error for error in errors)
 
 
 def test_scenario_ids_are_opaque_and_statuses_derive_from_semantic_inputs() -> None:
