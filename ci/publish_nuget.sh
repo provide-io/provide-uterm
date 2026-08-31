@@ -9,12 +9,10 @@
 #
 # NUGET_API_KEY is not a stored secret: it is the short-lived key the NuGet/login
 # action mints by exchanging the workflow's OIDC token, the same trusted
-# publishing model the PyPI jobs use. It is empty until the publishing policy
-# exists on nuget.org, and this reports that skip into the run summary rather
-# than failing the release or, worse, passing quietly. Same shape as the cosign
-# notice in scripts/release_governance_check.sh -- and the lesson of
-# provide-uterm-annotation, which sat three versions behind because nothing said
-# out loud that it was not being published.
+# publishing model the PyPI jobs use. The empty-key branch below is a backstop,
+# not the expected path -- the login step fails the job first if the claim stops
+# matching the nuget.org policy. It exists so that a key that is somehow empty
+# still says so out loud instead of pushing nothing and reporting success.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -39,9 +37,9 @@ fi
 if [ -z "${NUGET_API_KEY:-}" ]; then
   summary "### NuGet: packed ${version}, not pushed"
   summary ""
-  summary "Trusted publishing is not yet configured, so \`Provide.Uterm.${version}\` was"
-  summary "built and verified but not pushed. Create a trusted publishing policy on"
-  summary "nuget.org for provide.io / provide-io/provide-uterm / release.yml to enable it."
+  summary "No key was minted, so \`Provide.Uterm.${version}\` was built and verified but"
+  summary "not pushed. The login step should have failed first -- if it did not, check"
+  summary "the \`release-provide-uterm\` policy on nuget.org still matches this workflow."
   exit 0
 fi
 
