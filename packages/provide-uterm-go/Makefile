@@ -6,6 +6,27 @@
 
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
+
+# golangci-lint's cache defaults to one user-level directory shared by every
+# checkout on the machine, and its entries are keyed on package content rather
+# than on path. Two worktrees at the same commit therefore collide: whichever
+# runs first stores issues carrying ITS absolute file paths, and the second is
+# served those issues verbatim. That stays invisible until the first checkout
+# is deleted. Then the nolint and generated-file processors cannot reopen the
+# source they are meant to filter against, log "Can't process results by ...
+# processor", and pass the issue through UNFILTERED -- so every //nolint in the
+# module leaks at once. Reproduced deterministically: 34 phantom issues,
+# errcheck and staticcheck, against a tree that lints clean on its own cache.
+#
+# The failure is worse than a false alarm, because it is not stable in one
+# direction: `make lint` starts depending on what else has been checked out
+# lately, which is how three SA4023 hits appeared once in the Go gate and were
+# gone on re-run. Giving each checkout its own cache makes the collision
+# impossible. Go tooling skips dot-directories so ./... is unaffected, it is
+# .gitignore'd, and a removed worktree takes its cache with it.
+GO_MK_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+export GOLANGCI_LINT_CACHE := $(GO_MK_DIR).golangci-cache
+
 # 97.0, not 100.0: the library/wire packages are all at (or within a hair of)
 # 100%. A pass across manager/server/gateway/cli proved the "these need fault
 # injection" assumption largely wrong — real child processes and real live
