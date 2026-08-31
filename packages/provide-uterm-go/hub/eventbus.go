@@ -23,11 +23,16 @@ type Subscription struct {
 	Queue      chan map[string]any
 	eventTypes map[string]bool // nil = accept all types
 	pattern    *regexp.Regexp  // nil = no text filter
-	dropped    int
+
+	// Atomic because deliver runs OUTSIDE the bus lock -- Enqueue copies the
+	// target list under b.mu and releases it before delivering, so two
+	// producers for one worker increment this concurrently. A plain int is a
+	// data race there, which -race reports and which can lose counts.
+	dropped atomic.Int64
 }
 
 // Dropped returns the number of events dropped for this subscription.
-func (s *Subscription) Dropped() int { return s.dropped }
+func (s *Subscription) Dropped() int { return int(s.dropped.Load()) }
 
 // EventBus is the real-time event fanout layer. Port of
 // provide.uterm.server.bridge.hub.event_bus.EventBus.
@@ -131,7 +136,7 @@ func (b *EventBus) deliver(sub *Subscription, workerID string, event map[string]
 		case <-sub.Queue:
 		default:
 		}
-		sub.dropped++
+		sub.dropped.Add(1)
 		if b.onMetric != nil {
 			b.onMetric("event_bus_subscriber_drop_total", 1)
 		}
@@ -190,7 +195,7 @@ func (b *EventBus) putSentinel(sub *Subscription) {
 		// Full: drop the oldest event, account for it, and retry the send.
 		select {
 		case <-sub.Queue:
-			sub.dropped++
+			sub.dropped.Add(1)
 			if b.onMetric != nil {
 				b.onMetric("event_bus_subscriber_drop_total", 1)
 			}
