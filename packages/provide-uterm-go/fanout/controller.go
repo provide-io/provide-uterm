@@ -321,12 +321,20 @@ func (c *Controller) sendParallel(ctx context.Context, group *Group, data string
 	var successOutputs []string
 	var successIdx []int
 	for i, wid := range group.WorkerIDs {
-		if sendOK[i] {
+		switch {
+		case sendOK[i] && !captures[i].DeadlineExceeded:
 			d := deltas[i]
 			results = append(results, SessionResult{WorkerID: wid, OK: true, OutputDelta: &d, ElapsedMS: elapsed[i]})
 			successOutputs = append(successOutputs, d)
 			successIdx = append(successIdx, len(results)-1)
-		} else {
+		case sendOK[i]:
+			// Delivered to, but still talking when the budget ran out. Keep the
+			// partial output on the row and report the member, so the caller
+			// cannot read a truncated response as a complete one.
+			d := deltas[i]
+			results = append(results, SessionResult{WorkerID: wid, OK: false, OutputDelta: &d, ElapsedMS: elapsed[i]})
+			failed = append(failed, wid)
+		default:
 			results = append(results, SessionResult{WorkerID: wid, OK: false})
 			failed = append(failed, wid)
 		}
@@ -383,11 +391,18 @@ func (c *Controller) sendSequential(ctx context.Context, group *Group, data stri
 			continue
 		}
 		delta, elapsed := capture.Collect(ctx, quiesceMS, maxMS)
+		cutShort := capture.DeadlineExceeded
 		capture.Close()
 		d := delta
-		results = append(results, SessionResult{WorkerID: wid, OK: true, OutputDelta: &d, ElapsedMS: elapsed})
-		successOutputs = append(successOutputs, delta)
-		successIdx = append(successIdx, len(results)-1)
+		results = append(results, SessionResult{WorkerID: wid, OK: !cutShort, OutputDelta: &d, ElapsedMS: elapsed})
+		if cutShort {
+			// Same rule as the parallel path: still talking when the budget
+			// ran out is not a complete response.
+			failed = append(failed, wid)
+		} else {
+			successOutputs = append(successOutputs, delta)
+			successIdx = append(successIdx, len(results)-1)
+		}
 		if group.StopOnFirstError && errRe != nil && errRe.MatchString(delta) {
 			stopped = true
 		}
