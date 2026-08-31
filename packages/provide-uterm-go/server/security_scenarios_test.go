@@ -12,10 +12,12 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
@@ -114,12 +116,14 @@ func emptySemanticObservation(s semanticScenario, code int, err *string) semanti
 }
 
 type semanticHub struct {
-	mu        sync.Mutex
-	bus       *hub.EventBus
-	accepted  map[string]bool
-	output    map[string]string
-	delivered []string
-	observers []string
+	mu         sync.Mutex
+	bus        *hub.EventBus
+	accepted   map[string]bool
+	output     map[string]string
+	continuous bool
+	budget     time.Duration
+	delivered  []string
+	observers  []string
 }
 
 func newSemanticHub(input semanticInput) *semanticHub {
@@ -127,7 +131,15 @@ func newSemanticHub(input semanticInput) *semanticHub {
 	for _, workerID := range input.Workers.AcceptedMembers {
 		accepted[workerID] = true
 	}
-	return &semanticHub{bus: hub.NewEventBus(hub.EventBusOptions{}), accepted: accepted, output: input.Workers.ImmediateOutput}
+	budgetMS := input.MaxResponseMS
+	if budgetMS <= 0 {
+		budgetMS = defaultMaxResponseMS
+	}
+	return &semanticHub{
+		bus: hub.NewEventBus(hub.EventBusOptions{}), accepted: accepted,
+		output: input.Workers.ImmediateOutput, continuous: input.Workers.Continuous,
+		budget: time.Duration(budgetMS) * time.Millisecond,
+	}
 }
 
 func (h *semanticHub) SendWorker(_ context.Context, workerID string, _ map[string]any) (bool, error) {
@@ -141,8 +153,53 @@ func (h *semanticHub) SendWorker(_ context.Context, workerID string, _ map[strin
 		h.bus.Enqueue(workerID, map[string]any{
 			"type": "term", "data": map[string]any{"data": h.output[workerID]},
 		})
+		if h.continuous {
+			// Fill before returning: the collect starts as soon as this send
+			// does, and quiesce is 1ms, so a member whose first refill waits
+			// on the scheduler reads as having gone quiet immediately.
+			h.topUp(workerID)
+			// Four producers, not one: a single goroutine cannot outpace the
+			// collector, because enqueuing copies the event under the bus lock
+			// while consuming only reads. Measured 3 of 40 collects draining
+			// the queue dry at the deadline with one producer, and 0 of 200
+			// with four.
+			for range 4 {
+				go h.neverFallQuiet(workerID)
+			}
+		}
 	}
 	return accepted, nil
+}
+
+// neverFallQuiet emits output the way tail -f does, so the collect can only end
+// on its budget. QuiesceMS is 1 here, so a member that pauses even briefly ends
+// the collect as quiesced rather than cut short; enqueuing without a gap keeps
+// the subscription stocked, which is what makes the deadline decide.
+//
+// Self-limiting rather than stopped by the caller: it outlives the budget by a
+// wide margin and then returns, so no scenario can leak a spinning goroutine
+// into the ones that run after it.
+// topUp enqueues a burst that outruns the collector between reschedules. The
+// bus keeps 500 per subscription and drops the oldest, so this saturates rather
+// than grows.
+func (h *semanticHub) topUp(workerID string) {
+	for range 600 {
+		h.bus.Enqueue(workerID, map[string]any{
+			"type": "term", "data": map[string]any{"data": "."},
+		})
+	}
+}
+
+func (h *semanticHub) neverFallQuiet(workerID string) {
+	stopAt := time.Now().Add(h.budget*5 + 50*time.Millisecond)
+	for time.Now().Before(stopAt) {
+		// A burst per turn, not one event: the collector drains far faster
+		// than this goroutine is rescheduled, so enqueuing singly left the
+		// queue empty at the moment the budget expired and the member read as
+		// having finished. Depth is what keeps "still talking" true.
+		h.topUp(workerID)
+		runtime.Gosched()
+	}
 }
 
 func (h *semanticHub) Broadcast(_ context.Context, workerID string, message map[string]any) error {

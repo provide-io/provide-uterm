@@ -96,8 +96,10 @@ def semantic_status(scenario: dict[str, Any], backend: str) -> str:
         # because they still return ok for a response cut off at the budget.
         return "execute"
     if backend == "go":
-        if continuous_output:
-            return "unserved"
+        # go joins python: its collector records whether a collect ended with
+        # output still arriving at max_response_ms, and its controller reports
+        # such a member as not ok. typescript still returns ok for a response
+        # cut off at the budget, so it still sits this one out.
         return "unsupported_fail_closed" if governed else "execute"
     return "unsupported_fail_closed" if governed else "execute"
 

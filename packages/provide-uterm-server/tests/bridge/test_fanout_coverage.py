@@ -508,3 +508,39 @@ class TestSequentialResponseDeadline:
         assert result.failed_sessions == ["w1"]
         row = next(r for r in result.results if r.worker_id == "w1")
         assert row.ok is False
+
+
+class TestQuiesceLongerThanBudget:
+    """A member that answered and went quiet is ok even when the cap ends the collect.
+
+    When quiesce_ms exceeds max_response_ms the collect can never observe a
+    full quiet window -- it always ends on the cap. Reporting those members as
+    cut off would fail that configuration wholesale, so only output still
+    arriving when the budget expires counts as truncation. Go's
+    TestFanoutParallelCollectionDeadlineStartsAtAcceptedDispatch pins the same
+    case, and is what caught this rule being too broad.
+    """
+
+    async def test_quiet_member_hitting_the_cap_is_not_failed(self) -> None:
+        hub = await _make_hub_with_workers("w1")
+        ctrl = FanOutController(hub)
+        group = _make_group(["w1"])
+        await ctrl.create_group(group, principal="admin")
+
+        _orig_send = hub.send_worker
+
+        async def _send_then_one_line(wid: str, msg: dict) -> bool:  # type: ignore[type-arg]
+            result = await _orig_send(wid, msg)
+            await hub.append_event(wid, "term", {"data": "done"})
+            return result
+
+        hub.send_worker = _send_then_one_line  # type: ignore[assignment]
+
+        # quiesce (1s) far exceeds the cap (40ms): the collect can only end on
+        # the cap, yet the member said its piece and stopped.
+        result = await ctrl._send_parallel(group, "id\n", 1_000, 40, principal="admin")
+
+        assert result.failed_sessions == []
+        row = next(r for r in result.results if r.worker_id == "w1")
+        assert row.ok is True
+        assert row.output_delta == "done"

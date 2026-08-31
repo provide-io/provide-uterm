@@ -99,6 +99,10 @@ class OutputCapture:
             elapsed = time.monotonic() - start
             remaining = max_s - elapsed
             if remaining <= 0:
+                # Reached only by coming back around after consuming an event:
+                # output was still arriving when the budget ran out. That is
+                # the truncation worth reporting, and the one thing a caller
+                # cannot otherwise tell from a short but complete response.
                 self.deadline_exceeded = True
                 break
             try:
@@ -106,11 +110,12 @@ class OutputCapture:
                     self._subscription.queue.get(), timeout=min(remaining, quiesce_s)
                 )
             except TimeoutError:
-                # The wait was bounded by whichever is smaller. When that was
-                # ``remaining``, this timeout IS the budget running out, not the
-                # member falling quiet -- the two are only distinguishable here,
-                # because both leave the loop the same way.
-                self.deadline_exceeded = remaining <= quiesce_s
+                # Quiet, or the cap cut a quiesce window short. Either way the
+                # member had stopped talking, so what was collected is what it
+                # had to say -- not a truncation. A group whose quiesce_ms is
+                # longer than its max_ms always lands here, and reporting every
+                # such member as cut off would fail that configuration
+                # wholesale. Go's collector pins exactly this case.
                 break
             if event is None:
                 break

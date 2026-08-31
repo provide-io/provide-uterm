@@ -38,6 +38,13 @@ type Capture struct {
 	sub       *hub.Subscription
 	remove    func()
 	closeOnce sync.Once
+
+	// DeadlineExceeded reports whether the last Collect ended on maxMS rather
+	// than on quiet. The controller reports such a member as not ok: a
+	// response cut off at the budget is not a complete one, and returning it
+	// as ok makes truncation indistinguishable from a member that simply
+	// finished quickly.
+	DeadlineExceeded bool
 }
 
 // OpenCapture registers the worker's output subscription without starting its
@@ -71,7 +78,9 @@ func (c *Capture) Collect(ctx context.Context, quiesceMS, maxMS int) (string, in
 	if c == nil || c.sub == nil {
 		return "", 0
 	}
-	return collectSubscription(ctx, c.sub, quiesceMS, maxMS)
+	out, elapsedMS, cutShort := collectSubscription(ctx, c.sub, quiesceMS, maxMS)
+	c.DeadlineExceeded = cutShort
+	return out, elapsedMS
 }
 
 // Collect subscribes to the bus and accumulates output for workerID.
@@ -89,7 +98,9 @@ func (OutputCollector) Collect(
 	return capture.Collect(ctx, quiesceMS, maxMS)
 }
 
-func collectSubscription(ctx context.Context, sub *hub.Subscription, quiesceMS, maxMS int) (string, int) {
+func collectSubscription(
+	ctx context.Context, sub *hub.Subscription, quiesceMS, maxMS int,
+) (string, int, bool) {
 
 	quiesce := time.Duration(quiesceMS) * time.Millisecond
 	start := time.Now()
@@ -132,8 +143,11 @@ loop:
 				}
 			}
 		case <-timer.C:
-			// Quiesced (no event within the window), or the hard cap was hit
-			// when remaining < quiesce.
+			// Quiet, or the cap cut a quiesce window short. Either way the
+			// member had stopped talking, so what was collected is what it
+			// had to say -- not a truncation. A group whose quiesce is longer
+			// than its cap always lands here, and reporting every such member
+			// as cut off would make that configuration fail wholesale.
 			break loop
 		case <-ctx.Done():
 			timer.Stop()
@@ -142,8 +156,19 @@ loop:
 	}
 
 	elapsedMS := int(time.Since(start) / time.Millisecond)
+
+	// Truncated means we stopped with more still queued -- the member had not
+	// finished talking. Deriving it from what is left, rather than from WHICH
+	// exit fired, is what makes it reliable: the loop only reaches the
+	// remaining <= 0 exit if an event happens to land in the final
+	// microseconds, so keying on that lost the truncation whenever the
+	// producer stalled near the end. It also keeps a group whose quiesce is
+	// longer than its cap correct, since a member that answered and went
+	// quiet leaves nothing pending.
+	deadlineExceeded := len(sub.Queue) > 0
+
 	if hadTerm {
-		return termChunks.String(), elapsedMS
+		return termChunks.String(), elapsedMS, deadlineExceeded
 	}
-	return lastSnapshot, elapsedMS
+	return lastSnapshot, elapsedMS, deadlineExceeded
 }
