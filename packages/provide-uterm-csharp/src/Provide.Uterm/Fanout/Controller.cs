@@ -458,10 +458,16 @@ public sealed class Controller
     {
         var remainingMs = budget.RemainingMs;
         if (remainingMs <= 0) return new SessionResult { WorkerId = workerId, Ok = false };
-        var (output, elapsed) = await AwaitBoundedAsync(
+        var (output, elapsed, cutShort) = await AwaitBoundedAsync(
             token => OutputCollector.CollectAsync(subscription, quiesceMs, remainingMs, token), budget)
             .ConfigureAwait(false);
-        return new SessionResult { WorkerId = workerId, Ok = true, OutputDelta = output, ElapsedMs = elapsed };
+        // Delivered to, but still talking when the budget ran out. Keep the
+        // partial output on the row and report the member as not ok, so the
+        // caller cannot read a truncated response as a complete one. Both send
+        // paths derive FailedSessions from the row, and the divergence vote
+        // already counts only the rows that are ok -- a cut-off transcript
+        // compared against complete ones would flag the healthy members.
+        return new SessionResult { WorkerId = workerId, Ok = !cutShort, OutputDelta = output, ElapsedMs = elapsed };
     }
 
     private Task NotifyAsync(Group group, Result result, string wid, string data, string principal, CancellationToken ct) =>

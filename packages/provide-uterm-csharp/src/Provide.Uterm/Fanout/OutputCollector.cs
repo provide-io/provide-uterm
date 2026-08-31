@@ -13,18 +13,29 @@ public sealed record FanoutOutputEvent(string Type, string Text);
 public interface IFanoutOutputSubscription : IAsyncDisposable
 {
     ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct);
+
+    /// <summary>Events already buffered and not yet handed back by <see cref="ReadAsync"/>.</summary>
+    /// <remarks>
+    /// Required rather than defaulted to zero: it is the only signal that
+    /// separates a member still talking from one that finished, and a
+    /// subscription allowed to stay silent about it would have every truncated
+    /// response reported as complete. Every bus this models has it -- a channel
+    /// reader's Count here, a queue length in Go, qsize in Python.
+    /// </remarks>
+    int Pending { get; }
 }
 
 internal sealed class EmptyFanoutOutputSubscription : IFanoutOutputSubscription
 {
     internal static readonly EmptyFanoutOutputSubscription Instance = new();
     public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct) => ValueTask.FromResult<FanoutOutputEvent?>(null);
+    public int Pending => 0;
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
 
 internal static class OutputCollector
 {
-    internal static async Task<(string Output, int ElapsedMs)> CollectAsync(
+    internal static async Task<(string Output, int ElapsedMs, bool DeadlineExceeded)> CollectAsync(
         IFanoutOutputSubscription subscription,
         int quiesceMs,
         int maxResponseMs,
@@ -71,7 +82,14 @@ internal static class OutputCollector
                 // short by what was left of the response budget has not: the
                 // caller is owed the cancellation, because a member starved of
                 // budget by the members ahead of it did not answer.
-                if (remaining < quiesceMs) throw;
+                //
+                // Only when it said nothing at all, though. A member that
+                // answered and then went quiet HAS answered, whatever the
+                // budget did to a window it no longer needed. A group whose
+                // quiesce is longer than its cap cuts every window short by
+                // construction, and throwing there reported every one of its
+                // members as failed. Go's collector pins exactly that case.
+                if (remaining < quiesceMs && term.Length == 0 && snapshot.Length == 0) throw;
                 break;
             }
 
@@ -86,6 +104,14 @@ internal static class OutputCollector
             }
         }
 
-        return (term.Length > 0 ? term.ToString() : snapshot, (int)clock.ElapsedMilliseconds);
+        // Truncated means we stopped with more still queued -- the member had
+        // not finished talking. Deriving it from what is LEFT, rather than from
+        // which exit fired, is what makes it reliable: the loop reaches its own
+        // budget condition only if an event happens to land in the final
+        // moments, so keying on that lost the truncation whenever the producer
+        // stalled near the end.
+        var deadlineExceeded = subscription.Pending > 0;
+
+        return (term.Length > 0 ? term.ToString() : snapshot, (int)clock.ElapsedMilliseconds, deadlineExceeded);
     }
 }

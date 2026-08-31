@@ -35,6 +35,8 @@ public sealed class OutputCollectorTests
             foreach (var item in items) _events.Writer.TryWrite(item);
         }
 
+        public int Pending => _events.Reader.Count;
+
         public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken cancellationToken) =>
             _events.Reader.ReadAsync(cancellationToken);
 
@@ -45,13 +47,64 @@ public sealed class OutputCollectorTests
         }
     }
 
+    /// <summary>A member that never stops talking, so its queue never runs dry.</summary>
+    private sealed class NeverQuietSubscription : IFanoutOutputSubscription
+    {
+        private readonly Channel<FanoutOutputEvent?> _events = Channel.CreateUnbounded<FanoutOutputEvent?>();
+
+        // Refilled on the way past rather than from a racing producer thread:
+        // what this models is a stream with more to come at every instant, and
+        // a background writer would only sometimes manage that.
+        public int Pending => Math.Max(1, _events.Reader.Count);
+
+        public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken cancellationToken)
+        {
+            _events.Writer.TryWrite(new FanoutOutputEvent("term", "."));
+            return _events.Reader.ReadAsync(cancellationToken);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            _events.Writer.TryComplete();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task Reports_A_Response_That_Was_Still_Arriving_When_The_Budget_Ran_Out()
+    {
+        // The one thing a caller cannot otherwise tell from a short but
+        // complete response: what came back is a prefix, not the answer.
+        var (output, _, deadlineExceeded) = await OutputCollector.CollectAsync(
+            new NeverQuietSubscription(), quiesceMs: 1, maxResponseMs: 20, CancellationToken.None);
+
+        Assert.NotEqual("", output);
+        Assert.True(deadlineExceeded);
+    }
+
+    [Fact]
+    public async Task Collects_A_Member_That_Answered_Then_Went_Quiet_Under_A_Quiesce_Longer_Than_The_Cap()
+    {
+        // Such a group cuts EVERY quiesce window short by construction, so
+        // treating "the budget ended the wait" as a failure reported every one
+        // of its members as failed even though they answered. Go's collector
+        // pins this case; the truncation flag is read off what is still queued.
+        var subscription = new QueuedSubscription(new FanoutOutputEvent("term", "done"));
+
+        var (output, _, deadlineExceeded) = await OutputCollector.CollectAsync(
+            subscription, quiesceMs: 1_000, maxResponseMs: 40, CancellationToken.None);
+
+        Assert.Equal("done", output);
+        Assert.False(deadlineExceeded);
+    }
+
     [Fact]
     public async Task Collects_Output_That_Was_Already_Waiting()
     {
         var subscription = new QueuedSubscription(
             new FanoutOutputEvent("term", "imm"), new FanoutOutputEvent("term", "ediate"));
 
-        var (output, _) = await OutputCollector.CollectAsync(
+        var (output, _, _) = await OutputCollector.CollectAsync(
             subscription, quiesceMs: 1, maxResponseMs: 5_000, CancellationToken.None);
 
         Assert.Equal("immediate", output);
@@ -62,7 +115,7 @@ public sealed class OutputCollectorTests
     {
         var clock = Stopwatch.StartNew();
 
-        var (output, elapsed) = await OutputCollector.CollectAsync(
+        var (output, elapsed, _) = await OutputCollector.CollectAsync(
             new QueuedSubscription(), quiesceMs: 5, maxResponseMs: 4_000, CancellationToken.None);
 
         // Quiesce ends the collect; the budget is only the ceiling it never reaches.
@@ -86,7 +139,7 @@ public sealed class OutputCollectorTests
         var subscription = new QueuedSubscription(
             new FanoutOutputEvent("snapshot", "older"), new FanoutOutputEvent("snapshot", "newest"));
 
-        var (output, _) = await OutputCollector.CollectAsync(
+        var (output, _, _) = await OutputCollector.CollectAsync(
             subscription, quiesceMs: 1, maxResponseMs: 5_000, CancellationToken.None);
 
         Assert.Equal("newest", output);
@@ -98,7 +151,7 @@ public sealed class OutputCollectorTests
         var subscription = new QueuedSubscription(
             new FanoutOutputEvent("snapshot", "screen"), new FanoutOutputEvent("term", "delta"));
 
-        var (output, _) = await OutputCollector.CollectAsync(
+        var (output, _, _) = await OutputCollector.CollectAsync(
             subscription, quiesceMs: 1, maxResponseMs: 5_000, CancellationToken.None);
 
         Assert.Equal("delta", output);
@@ -112,7 +165,7 @@ public sealed class OutputCollectorTests
         var subscription = new QueuedSubscription(new FanoutOutputEvent("term", "partial"), null);
         var clock = Stopwatch.StartNew();
 
-        var (output, _) = await OutputCollector.CollectAsync(
+        var (output, _, _) = await OutputCollector.CollectAsync(
             subscription, quiesceMs: 4_000, maxResponseMs: 8_000, CancellationToken.None);
 
         Assert.Equal("partial", output);
@@ -122,7 +175,7 @@ public sealed class OutputCollectorTests
     [Fact]
     public async Task Reports_Nothing_For_A_Subscription_That_Never_Yields()
     {
-        var (output, _) = await OutputCollector.CollectAsync(
+        var (output, _, _) = await OutputCollector.CollectAsync(
             EmptyFanoutOutputSubscription.Instance, quiesceMs: 1, maxResponseMs: 5_000, CancellationToken.None);
 
         Assert.Equal("", output);

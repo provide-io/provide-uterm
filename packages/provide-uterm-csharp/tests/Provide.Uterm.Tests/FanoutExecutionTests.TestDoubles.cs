@@ -214,6 +214,8 @@ public sealed partial class FanoutExecutionTests
             _disposeCounts = disposeCounts;
         }
 
+        public int Pending => 0;
+
         public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct) =>
             ValueTask.FromResult<FanoutOutputEvent?>(null);
 
@@ -259,6 +261,8 @@ public sealed partial class FanoutExecutionTests
         // OperationBudget deadline, which sets IsCancellationRequested rather than
         // relying on truncated elapsed-millisecond arithmetic. That is the invariant
         // this hub exists to exercise, and it holds whichever way the timers round.
+        public int Pending => 0;
+
         public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
         {
             await Task.Delay(_delayMs, CancellationToken.None);
@@ -306,6 +310,8 @@ public sealed partial class FanoutExecutionTests
 
     private sealed class CancelDuringCollectionSubscription(TaskCompletionSource started) : IFanoutOutputSubscription
     {
+        public int Pending => 0;
+
         public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
         {
             started.TrySetResult();
@@ -341,6 +347,8 @@ public sealed partial class FanoutExecutionTests
         TaskCompletionSource dispose,
         Action onDispose) : IFanoutOutputSubscription
     {
+        public int Pending => 0;
+
         public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
         {
             if (mode == "expired_before_dispose") await Task.Delay(30, ct);
@@ -384,6 +392,8 @@ public sealed partial class FanoutExecutionTests
 
     private sealed class ReadFailureSubscription : IFanoutOutputSubscription
     {
+        public int Pending => 0;
+
         public ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct) =>
             ValueTask.FromException<FanoutOutputEvent?>(new IOException("output failed"));
 
@@ -404,6 +414,8 @@ public sealed partial class FanoutExecutionTests
         }
 
         public void Enqueue(FanoutOutputEvent item) => _events.Writer.TryWrite(item);
+
+        public int Pending => _events.Reader.Count;
 
         public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
         {
