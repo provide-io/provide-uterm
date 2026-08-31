@@ -242,9 +242,40 @@ class TestChangedOnlySupportFiles:
         changed = ["mutation_equivalents.toml"]
         assert gate._changed_mutation_support_paths(changed) == ["mutation_equivalents.toml"]
 
-    def test_mutation_config_change_is_support_change(self) -> None:
+    def test_mutation_config_change_is_support_change(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A real [tool.mutmut] edit still makes the question perimeter-wide."""
+        monkeypatch.setattr(gate, "_mutmut_config_changed", lambda *_a, **_k: True)
         changed = ["pyproject.toml"]
         assert gate._changed_mutation_support_paths(changed) == ["pyproject.toml"]
+
+    def test_dependency_only_pyproject_change_is_not_a_support_change(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A dependency bump shares the file but not the meaning.
+
+        Every dependency of this project is declared in the same pyproject as
+        [tool.mutmut]. Matching the whole file made a Dependabot floor bump
+        dispatch the 37-leg perimeter run; only a change mutmut can actually
+        read should do that.
+        """
+        monkeypatch.setattr(gate, "_mutmut_config_changed", lambda *_a, **_k: False)
+        assert gate._changed_mutation_support_paths(["pyproject.toml"]) == []
+
+    def test_unreadable_history_is_treated_as_a_config_change(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Fail safe: when git cannot show the base, assume the config moved."""
+        monkeypatch.setattr(gate, "_git_show", lambda *_a, **_k: None)
+        assert gate._mutmut_config_changed("HEAD", False) is True
+
+    def test_identical_tables_are_not_a_config_change(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Comment and formatting edits parse to the same table, so they do not count."""
+        before = '[tool.mutmut]\nsource_paths = ["a.py"]\n'
+        after = '# a new explanatory note\n[tool.mutmut]\nsource_paths = [ "a.py" ]\n'
+        monkeypatch.setattr(gate, "_git_show", lambda *_a, **_k: before)
+        monkeypatch.setattr(gate, "_read_text_or_none", lambda *_a, **_k: after)
+        assert gate._mutmut_config_changed("HEAD", False) is False
+
+    def test_differing_tables_are_a_config_change(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(gate, "_git_show", lambda *_a, **_k: '[tool.mutmut]\nsource_paths = ["a.py"]\n')
+        monkeypatch.setattr(gate, "_read_text_or_none", lambda *_a, **_k: '[tool.mutmut]\nsource_paths = ["b.py"]\n')
+        assert gate._mutmut_config_changed("HEAD", False) is True
 
     def test_bound_mutation_test_change_is_support_change(self) -> None:
         changed = ["packages/provide-uterm/tests/test_control_channel_patterns.py"]
@@ -401,7 +432,7 @@ class TestSupportFileChangeDefersToTheFullWorkflow:
 
         monkeypatch.setattr(gate, "_changed_python_paths", lambda *_a, **_k: [])
         monkeypatch.setattr(gate, "_changed_paths", lambda *_a, **_k: list(support))
-        monkeypatch.setattr(gate, "_changed_mutation_support_paths", lambda _p: list(support))
+        monkeypatch.setattr(gate, "_changed_mutation_support_paths", lambda _p, *_a, **_k: list(support))
         monkeypatch.setattr(gate, "run_mutation_gate", _fake_run)
         monkeypatch.setattr(sys, "argv", ["run_mutation_gate.py", "--changed-only", "--base-ref", "HEAD~1"])
         return gate.main(), ran
@@ -445,7 +476,9 @@ class TestSupportFileChangeDefersToTheFullWorkflow:
 
         monkeypatch.setattr(gate, "_changed_python_paths", lambda *_a, **_k: ["src/provide/uterm/control_channel.py"])
         monkeypatch.setattr(gate, "_changed_paths", lambda *_a, **_k: ["scripts/run_mutation_gate.py"])
-        monkeypatch.setattr(gate, "_changed_mutation_support_paths", lambda _p: ["scripts/run_mutation_gate.py"])
+        monkeypatch.setattr(
+            gate, "_changed_mutation_support_paths", lambda _p, *_a, **_k: ["scripts/run_mutation_gate.py"]
+        )
         monkeypatch.setattr(gate, "run_mutation_gate", _fake_run)
         monkeypatch.setattr(sys, "argv", ["run_mutation_gate.py", "--changed-only", "--base-ref", "HEAD~1"])
 
