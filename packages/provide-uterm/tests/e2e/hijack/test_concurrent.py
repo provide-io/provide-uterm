@@ -22,7 +22,7 @@ import httpx2
 import pytest
 from provide.uterm.client import connect_async_ws
 
-from .._live_server import live_server_with_bus  # noqa: TID252
+from .._live_server import live_server_with_bus, wait_for_subscribers  # noqa: TID252
 
 ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
 
@@ -64,7 +64,7 @@ async def test_hijack_acquired_event_in_long_poll(live_server: Any) -> None:
                 params={"timeout_ms": 5000, "max_events": 1, "event_types": "hijack_acquired"},
             )
         )
-        await asyncio.sleep(0.1)
+        await wait_for_subscribers(hub, "h1", 1)
 
         r = await http.post("/worker/h1/hijack/acquire", json={"owner": "e2e-test", "lease_s": 60})
         assert r.status_code == 200, f"acquire failed: {r.text}"
@@ -107,7 +107,7 @@ async def test_hijack_released_event_in_long_poll(live_server: Any) -> None:
                 params={"timeout_ms": 5000, "max_events": 1, "event_types": "hijack_released"},
             )
         )
-        await asyncio.sleep(0.1)
+        await wait_for_subscribers(hub, "h1", 1)
 
         # Release
         r2 = await http.post(f"/worker/h1/hijack/{hijack_id}/release")
@@ -140,8 +140,12 @@ async def test_worker_disconnect_terminates_long_poll(live_server: Any) -> None:
                     params={"timeout_ms": 8000},
                 )
             )
-            await asyncio.sleep(0.1)
-            # Worker disconnects (context exit)
+            await wait_for_subscribers(hub, "h1", 1)
+            # Worker disconnects (context exit). Waiting for the registration
+            # is what makes this a test of sentinel delivery rather than a race
+            # against it: close_worker() POPS the subscriber list, so a poll
+            # that has not registered yet is never sent the sentinel and runs
+            # to its own 8s timeout -- past the 5s wait_for below.
 
         response = await asyncio.wait_for(poll_task, timeout=5.0)
 
