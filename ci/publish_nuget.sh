@@ -5,12 +5,16 @@
 # Pack the C# port and push it to nuget.org.
 #
 # Packing always runs, so a release proves the package still builds even when it
-# cannot be pushed. Pushing needs NUGET_API_KEY, which only exists once someone
-# has configured it; until then this reports the skip into the run summary
-# rather than failing the release or, worse, passing quietly. That is the same
-# shape as the cosign notice in scripts/release_governance_check.sh -- and the
-# lesson of provide-uterm-annotation, which sat three versions behind because
-# nothing said out loud that it was not being published.
+# cannot be pushed.
+#
+# NUGET_API_KEY is not a stored secret: it is the short-lived key the NuGet/login
+# action mints by exchanging the workflow's OIDC token, the same trusted
+# publishing model the PyPI jobs use. It is empty until the publishing policy
+# exists on nuget.org, and this reports that skip into the run summary rather
+# than failing the release or, worse, passing quietly. Same shape as the cosign
+# notice in scripts/release_governance_check.sh -- and the lesson of
+# provide-uterm-annotation, which sat three versions behind because nothing said
+# out loud that it was not being published.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -35,8 +39,9 @@ fi
 if [ -z "${NUGET_API_KEY:-}" ]; then
   summary "### NuGet: packed ${version}, not pushed"
   summary ""
-  summary "\`NUGET_API_KEY\` is not configured, so \`Provide.Uterm.${version}\` was built and"
-  summary "verified but not published. Configure the secret to enable pushing."
+  summary "Trusted publishing is not yet configured, so \`Provide.Uterm.${version}\` was"
+  summary "built and verified but not pushed. Create a trusted publishing policy on"
+  summary "nuget.org for provide.io / provide-io/provide-uterm / release.yml to enable it."
   exit 0
 fi
 
