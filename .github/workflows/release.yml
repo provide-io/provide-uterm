@@ -385,6 +385,34 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: ci/publish_nuget.sh
 
+  # ── Go: publish by tagging ───────────────────────────────────────────
+  # Go has no upload step -- a module is published by pushing a tag the proxy can
+  # resolve, and for a module in a subdirectory that tag must be prefixed with
+  # the module path. The release tag alone therefore publishes nothing, which is
+  # why the Go port had never been consumable by version while its siblings
+  # shipped to PyPI and NuGet. Same dispatch retry route as the NuGet job, and
+  # like it, needs only `build` so it cannot hold up signing.
+  go-module-tag:
+    name: Go module tag
+    needs: [build]
+    if: >-
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v'))
+      || (github.event_name == 'workflow_dispatch' && inputs.dry-run != true)
+    runs-on: ubuntu-latest
+    permissions:
+      # Pushing a tag is a write to the repository; nothing else here needs it.
+      contents: write
+    steps:
+      # The tag is created at this checkout's HEAD, which on a release event is
+      # the released commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Tag packages/provide-uterm-go/v<VERSION>, then warm the module proxy.
+      - name: Tag the Go module
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: ci/tag_go_module.sh
+
   # ── Sigstore signing + GitHub Release upload ─────────────────────────
   sign-and-release:
     name: Sign & upload to GitHub Release
