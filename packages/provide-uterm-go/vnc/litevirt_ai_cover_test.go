@@ -379,3 +379,29 @@ func TestRunHandshakeSendErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestRunHandshakeFailurePublishesErrToWaitReady(t *testing.T) {
+	// A handshake that fails before ServerInit never reaches markReady(nil),
+	// so RunHandshakeAndLoop's own markReady call is the only thing that
+	// unblocks a waiter -- and it must hand them the reason, not nil.
+	c := newAIClientFromStream([]byte("XXX 003.008\n"))
+	runErr := c.RunHandshakeAndLoop()
+	if runErr == nil {
+		t.Fatal("expected unsupported version error")
+	}
+	// Bounded, not context.Background(): if the markReady call regresses away,
+	// ready is never closed and an unbounded wait hangs the package until Go's
+	// panic timeout instead of failing here.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	werr := c.WaitReady(ctx)
+	if werr == nil {
+		t.Fatal("WaitReady returned nil after a failed handshake")
+	}
+	if errors.Is(werr, context.DeadlineExceeded) {
+		t.Fatal("WaitReady blocked: the handshake failure was never published")
+	}
+	if werr != runErr {
+		t.Fatalf("WaitReady error %v is not the handshake error %v", werr, runErr)
+	}
+}

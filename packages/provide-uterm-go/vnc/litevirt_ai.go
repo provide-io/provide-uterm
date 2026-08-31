@@ -117,10 +117,16 @@ func (r *grpcReader) Read(p []byte) (n int, err error) {
 }
 
 func (c *LitevirtAIClient) RunHandshakeAndLoop() error {
+	// runHandshakeAndLoop returns only on failure: its success path calls
+	// markReady(nil) once the framebuffer is sized and then enters an
+	// unbounded message loop, so there is no nil return to guard against.
+	// staticcheck knows this (SA4023) and reported the old `if err != nil`
+	// as always true. markReady is sync.Once-guarded, so publishing the
+	// error unconditionally is a no-op on a session that already handshook
+	// and is the honest reading either way: whenever the loop stops, that
+	// outcome is what a waiter should see.
 	err := c.runHandshakeAndLoop()
-	if err != nil {
-		c.markReady(err)
-	}
+	c.markReady(err)
 	return err
 }
 
