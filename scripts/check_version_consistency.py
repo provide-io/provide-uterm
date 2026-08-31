@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Keep intra-workspace dependency floors pinned to the version being shipped.
+"""Keep every hand-written version reference agreeing with VERSION.
 
 Every published package derives its own version from its ``VERSION`` file
 (``dynamic = ["version"]`` + ``[tool.setuptools.dynamic]``), so a package can
@@ -18,8 +18,14 @@ Dependabot noticed one at a time (PRs #83/#84 raised two of nineteen to
 treadmill rather than a fix: the floors are derivable from VERSION, so deriving
 them is what stops the drift.
 
+The workspace root is the other hand-written copy. It declares
+``version = "0.5.5"`` under ``[project]`` and has no ``[build-system]``, so
+unlike the published packages it cannot derive that from VERSION -- and unlike
+them, nothing publishes it either, so a drift there would never surface as a
+bad artifact. It would just sit in the file disagreeing with the release.
+
 Run with no arguments to report drift (this is what the quality gate does);
-``--fix`` rewrites the floors in place. Stdlib only.
+``--fix`` rewrites the drifted references in place. Stdlib only.
 """
 
 from __future__ import annotations
@@ -55,6 +61,31 @@ def floor_pattern(names: list[str]) -> re.Pattern[str]:
     return re.compile(rf"(?P<name>{alternation})(?P<extras>\[[^\]]*\])?>=(?P<floor>\d+(?:\.\d+)*)")
 
 
+def root_version_drift(pyproject: Path, version: str, *, fix: bool) -> list[str]:
+    """Report (and optionally repin) the workspace root's own literal version.
+
+    ``[project]`` is the first table in the file, so the first top-level
+    ``version = "..."`` line is its own -- anchoring on that rather than on the
+    value keeps this from rewriting a version literal belonging to some
+    ``[tool.*]`` table further down.
+    """
+    text = pyproject.read_text(encoding="utf-8")
+    declared = tomllib.loads(text).get("project", {}).get("version")
+    if declared is None or declared == version:
+        return []
+
+    if fix:
+        pyproject.write_text(
+            re.sub(rf'^version = "{re.escape(declared)}"$', f'version = "{version}"', text, count=1, flags=re.M),
+            encoding="utf-8",
+        )
+    line_no = next(
+        (i for i, line in enumerate(text.splitlines(), start=1) if line == f'version = "{declared}"'),
+        0,
+    )
+    return [f'{pyproject.relative_to(REPO_ROOT)}:{line_no}: [project] version = "{declared}" — expected {version}']
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fix", action="store_true", help="rewrite drifted floors in place")
@@ -67,9 +98,11 @@ def main() -> int:
         return 2
 
     pattern = floor_pattern(list(members))
-    scanned = [REPO_ROOT / "pyproject.toml", *sorted(members.values())]
+    root_pyproject = REPO_ROOT / "pyproject.toml"
+    scanned = [root_pyproject, *sorted(members.values())]
 
     drifted: list[str] = []
+    drifted += root_version_drift(root_pyproject, version, fix=args.fix)
     for pyproject in scanned:
         original = pyproject.read_text(encoding="utf-8")
         for line_no, line in enumerate(original.splitlines(), start=1):
@@ -84,17 +117,17 @@ def main() -> int:
                 pyproject.write_text(updated, encoding="utf-8")
 
     if not drifted:
-        print(f"version floors: all intra-workspace floors pinned to {version}")
+        print(f"version consistency: every version reference agrees with VERSION ({version})")
         return 0
 
     if args.fix:
-        print(f"version floors: repinned {len(drifted)} floor(s) to {version}")
+        print(f"version consistency: repinned {len(drifted)} reference(s) to {version}")
         return 0
 
-    print(f"version floors: {len(drifted)} floor(s) drifted from VERSION ({version}):")
+    print(f"version consistency: {len(drifted)} reference(s) drifted from VERSION ({version}):")
     for item in drifted:
         print(f"  {item}")
-    print("\nRun `uv run python scripts/check_version_floors.py --fix` to repin.")
+    print("\nRun `uv run python scripts/check_version_consistency.py --fix` to repin.")
     return 1
 
 
