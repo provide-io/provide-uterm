@@ -5,3 +5,4 @@ coverage.html
 /uterm-manager
 /bin/
 coverage.raw
+/.golangci-cache/
