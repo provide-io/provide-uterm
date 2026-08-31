@@ -103,6 +103,8 @@ public sealed partial class UtermServer
                 _unsubscribe = unsubscribe;
             }
 
+            public int Pending => _subscription.Channel.Reader.Count;
+
             public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken ct)
             {
                 var item = await _subscription.Channel.Reader.ReadAsync(ct).ConfigureAwait(false);

@@ -441,11 +441,11 @@ public sealed class FanoutSecurityScenarioTests
     }
 
     private sealed class ScenarioHub(
-        IEnumerable<string> accepted, IReadOnlyDictionary<string, string> output, bool hangReads) : IFanoutHub
+        IEnumerable<string> accepted, IReadOnlyDictionary<string, string> output, bool continuousOutput) : IFanoutHub
     {
         private readonly HashSet<string> _accepted = accepted.ToHashSet();
         private readonly IReadOnlyDictionary<string, string> _output = output;
-        private readonly bool _hangReads = hangReads;
+        private readonly bool _continuousOutput = continuousOutput;
         private readonly ConcurrentDictionary<string, ScenarioSubscription> _subscriptions = new();
         public IReadOnlySet<string> ConnectedMembers => _accepted;
         public List<string> SendAttempts { get; } = [];
@@ -458,9 +458,14 @@ public sealed class FanoutSecurityScenarioTests
             lock (SendAttempts) SendAttempts.Add(workerId);
             if (!_accepted.Contains(workerId)) return Task.FromResult(false);
             lock (Delivered) Delivered.Add(workerId);
-            if (_hangReads)
-                return new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously).Task;
-            _subscriptions[workerId].Enqueue(new FanoutOutputEvent("term", _output.GetValueOrDefault(workerId, "ok")));
+            var subscription = _subscriptions[workerId];
+            subscription.Enqueue(new FanoutOutputEvent("term", _output.GetValueOrDefault(workerId, "ok")));
+            // The member the fixture says never stops. Previously the send
+            // itself was left hanging instead, which reached the same
+            // observation by never returning from dispatch -- so the collector,
+            // the response budget and the truncation rule this scenario is
+            // about were never run at all.
+            if (_continuousOutput) subscription.NeverFallQuiet();
             return Task.FromResult(true);
         }
 
@@ -478,9 +483,22 @@ public sealed class FanoutSecurityScenarioTests
     private sealed class ScenarioSubscription : IFanoutOutputSubscription
     {
         private readonly Channel<FanoutOutputEvent?> _events = Channel.CreateUnbounded<FanoutOutputEvent?>();
+        private volatile bool _neverFallQuiet;
         public void Enqueue(FanoutOutputEvent item) => _events.Writer.TryWrite(item);
-        public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken cancellationToken) =>
-            await _events.Reader.ReadAsync(cancellationToken);
+
+        /// <summary>Keep producing output for as long as anything reads it.</summary>
+        public void NeverFallQuiet() => _neverFallQuiet = true;
+
+        // Topped up on the way past rather than by a racing producer thread:
+        // the fixture means "there is always more to come", and a background
+        // writer would only sometimes manage to keep the queue non-empty.
+        public int Pending => _neverFallQuiet ? Math.Max(1, _events.Reader.Count) : _events.Reader.Count;
+
+        public async ValueTask<FanoutOutputEvent?> ReadAsync(CancellationToken cancellationToken)
+        {
+            if (_neverFallQuiet) _events.Writer.TryWrite(new FanoutOutputEvent("term", "."));
+            return await _events.Reader.ReadAsync(cancellationToken);
+        }
         public ValueTask DisposeAsync()
         {
             _events.Writer.TryComplete();
