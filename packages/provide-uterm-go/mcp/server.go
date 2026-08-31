@@ -12,15 +12,17 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	uterm "github.com/provide-io/provide-uterm/packages/provide-uterm-go"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/client"
 )
 
-// serverName / serverVersion identify the MCP server to clients, matching the
-// Python FastMCP("uterm") name.
-const (
-	serverName    = "uterm"
-	serverVersion = "0.1.0"
-)
+// serverName identifies the MCP server to clients, matching the Python
+// FastMCP("uterm") name. The version comes from the module's VERSION file: it
+// was pinned at "0.1.0" here, five minor versions behind what the same binary
+// reported everywhere else.
+const serverName = "uterm"
+
+var serverVersion = uterm.Version
 
 // UtermClient is the subset of the ported REST client the MCP tools call. The
 // concrete *client.HijackClient satisfies it; tests inject a fake to assert the

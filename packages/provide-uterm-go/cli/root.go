@@ -18,11 +18,15 @@ import (
 	"io"
 
 	"github.com/spf13/cobra"
+
+	uterm "github.com/provide-io/provide-uterm/packages/provide-uterm-go"
 )
 
-// Version is the reported binary version. Override at build time with
-// -ldflags "-X .../cli.Version=x.y.z". It mirrors the server.New default.
-var Version = "0.0.0-dev"
+// Version is the reported binary version. It defaults to the VERSION file at
+// the module root rather than a literal, so it cannot fall behind a release the
+// way "0.0.0-dev" did; override at build time with
+// -ldflags "-X .../cli.Version=x.y.z".
+var Version = uterm.Version
 
 // NewRootCmd assembles the full `uterm` command tree. Commands are added in
 // the same order the Python argparse parser registers them, and command
