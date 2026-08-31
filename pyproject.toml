@@ -45,7 +45,7 @@ dev = [
     "ruff>=0.16.5",
     "ty>=0.0.75",
     "uv>=0.12.7",
-    "uvicorn>=0.47.0",
+    "uvicorn>=0.52.4",
     "vulture>=2.16",
     "websockets>=16.0",
     # The Cloudflare package declares this in its own dev EXTRA, but CI syncs
