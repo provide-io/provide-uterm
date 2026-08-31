@@ -14,6 +14,7 @@ import subprocess  # nosec
 import sys
 import tomllib
 from pathlib import Path
+from typing import Any
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
@@ -212,12 +213,77 @@ def _looks_like_test_path(value: str) -> bool:
 FULL_PERIMETER_REQUIRED_MARKER = "MUTATION_FULL_PERIMETER_REQUIRED"
 
 
-def _changed_mutation_support_paths(changed_paths: list[str]) -> list[str]:
+def _git_show(spec: str) -> str | None:
+    """``git show <spec>``, or None when git cannot produce it."""
+    result = subprocess.run(["git", "show", spec], capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def _mutmut_table(text: str | None) -> dict[str, Any] | None:
+    """The ``[tool.mutmut]`` table parsed out of a pyproject, or None if unreadable."""
+    if text is None:
+        return None
+    try:
+        return dict(tomllib.loads(text).get("tool", {}).get("mutmut", {}))
+    except Exception:
+        return None
+
+
+def _mutmut_config_changed(base_ref: str, staged_only: bool) -> bool:
+    """Whether this diff actually touches ``[tool.mutmut]``.
+
+    ``pyproject.toml`` is a mutation support file because ``[tool.mutmut]``
+    lives in it -- but it is also where every dependency of this project is
+    declared. Matching the whole file made those indistinguishable, so a
+    Dependabot floor bump forced the same perimeter-wide decision as editing
+    ``source_paths``, and dispatched the 37-leg run to answer it. Six such PRs
+    merged on 2026-08-31 and each one paid that cost.
+
+    Comparing the PARSED table rather than the file text is what makes this
+    safe to narrow: a change is a config change when the values mutmut reads
+    differ, so reformatting or editing the per-file obstacle notes (548 lines
+    of them, and the reason this table is worth documenting) correctly counts
+    as no change, while any real edit still trips it.
+
+    Fails safe. If git cannot produce either side -- shallow clone, unborn
+    branch, unreadable TOML -- this answers True and the perimeter-wide
+    treatment stands, because a gate that under-reports a config change is the
+    failure that matters.
+    """
+    base_rev = "HEAD" if staged_only else base_ref
+    before = _mutmut_table(_git_show(f"{base_rev}:pyproject.toml"))
+    # Staged-only compares the INDEX; otherwise the working tree is what runs.
+    after = _mutmut_table(
+        _git_show(":pyproject.toml") if staged_only else _read_text_or_none(REPOSITORY_ROOT / "pyproject.toml")
+    )
+    if before is None or after is None:
+        return True
+    return before != after
+
+
+def _read_text_or_none(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _changed_mutation_support_paths(
+    changed_paths: list[str],
+    base_ref: str = "HEAD",
+    staged_only: bool = False,
+) -> list[str]:
     support_files = set(MUTATION_SUPPORT_FILES)
     configured_tests = tuple(path.rstrip("/") for path in _configured_mutation_tests())
     support: list[str] = []
     for path in changed_paths:
         if path in support_files:
+            # Every dependency declaration shares this file with the mutmut
+            # table; only the latter makes the question perimeter-wide.
+            if path == "pyproject.toml" and not _mutmut_config_changed(base_ref, staged_only):
+                continue
             support.append(path)
             continue
         if any(path == test_path or path.startswith(test_path + "/") for test_path in configured_tests):
@@ -554,7 +620,9 @@ def main() -> int:
         # some unrelated source file rode along in the same commit says nothing
         # about that. Caught on 491a4c67, which changed this very file plus
         # control_channel.py and dispatched nothing.
-        changed_support_paths = _changed_mutation_support_paths(_changed_paths(args.base_ref, args.staged_only))
+        changed_support_paths = _changed_mutation_support_paths(
+            _changed_paths(args.base_ref, args.staged_only), args.base_ref, args.staged_only
+        )
         if changed_support_paths:
             # With source changes present, the scoped run below is still worth
             # doing -- it is the fast answer for the file in hand -- so print the
