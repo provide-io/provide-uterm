@@ -76,11 +76,65 @@ public sealed class SessionWorkerAttachParityTests
             $$"""{"session_id": "{{id}}", "display_name": "{{id}}", "connector_type": "shell"}""")))
             .EnsureSuccessStatusCode();
 
-    private static async Task<ClientWebSocket> AttachWorker(int port, string id)
+    /// <summary>
+    /// Attach a worker socket and wait for the server to have registered it.
+    ///
+    /// ConnectAsync returns when the CLIENT sees the 101, but the handler sends
+    /// that from AcceptWebSocketAsync and only afterwards calls
+    /// RegisterWorkerAsync — which is what sets the WorkerWs that
+    /// <c>connected</c> is read from (UtermServer.EnrichStatus). Returning on
+    /// the 101 alone therefore hands back a socket the server has not finished
+    /// accepting, and the next status read races the registration: an
+    /// intermittent <c>connected == false</c>, seen on Windows CI. This is the
+    /// attach-side counterpart of CloseWorker's wait — both make what the tests
+    /// assert next a reading of the decision rather than a race against it.
+    ///
+    /// The poll cannot see a REPLACEMENT, because a session being replaced on
+    /// is already connected via the socket being displaced. WaitDisplaced is
+    /// what covers that case.
+    /// </summary>
+    private static async Task<ClientWebSocket> AttachWorker(HttpClient http, int port, string id)
     {
         var ws = new ClientWebSocket();
         await ws.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/worker/{id}/term"), CancellationToken.None);
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (!(await Status(http, id)).GetProperty("connected").GetBoolean())
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                ws.Dispose();
+                Assert.Fail($"server never registered the worker socket for session {id}");
+            }
+
+            await Task.Delay(10);
+        }
+
         return ws;
+    }
+
+    /// <summary>
+    /// Wait for a worker socket to observe its own displacement.
+    ///
+    /// RegisterWorkerAsync notifies the predecessor when the lease must resume
+    /// and then aborts it unconditionally in its finally block
+    /// (Hub/Connection.cs), so either arriving proves the successor's
+    /// registration has finished — the one thing AttachWorker's status poll
+    /// cannot establish for a second attach to the same session.
+    /// </summary>
+    private static async Task WaitDisplaced(ClientWebSocket predecessor)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var drain = new byte[256];
+        try
+        {
+            await predecessor.ReceiveAsync(drain, deadline.Token);
+        }
+        catch (WebSocketException)
+        {
+            // Aborted rather than notified — the same signal, arriving as a
+            // broken stream.
+        }
     }
 
     /// <summary>
@@ -138,7 +192,7 @@ public sealed class SessionWorkerAttachParityTests
         {
             await CreateSession(http, "idle-open");
 
-            using var worker = await AttachWorker(port, "idle-open");
+            using var worker = await AttachWorker(http, port, "idle-open");
 
             var status = await Status(http, "idle-open");
             // Attaching is reported — the session has a worker now.
@@ -175,8 +229,9 @@ public sealed class SessionWorkerAttachParityTests
         using (http)
         {
             await CreateSession(http, "twice");
-            var displaced = await AttachWorker(port, "twice");
-            using var live = await AttachWorker(port, "twice");
+            var displaced = await AttachWorker(http, port, "twice");
+            using var live = await AttachWorker(http, port, "twice");
+            await WaitDisplaced(displaced);
             (await http.PostAsync("/worker/twice/input_mode", Json("""{"input_mode": "hijack"}""")))
                 .EnsureSuccessStatusCode();
             var acquire = await http.PostAsync(
@@ -210,7 +265,7 @@ public sealed class SessionWorkerAttachParityTests
         using (http)
         {
             await CreateSession(http, "solo");
-            var worker = await AttachWorker(port, "solo");
+            var worker = await AttachWorker(http, port, "solo");
             Assert.True((await Status(http, "solo")).GetProperty("connected").GetBoolean());
 
             await CloseWorker(worker);
