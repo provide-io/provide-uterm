@@ -48,6 +48,12 @@ class OutputCapture:
         self._subscription: Any = None
         self._closed = False
         self._max_output_bytes = max(1, int(max_output_bytes))
+        #: True when the last ``collect`` ended on ``max_ms`` rather than on
+        #: quiet. Read by the controller, which reports such a member as not
+        #: ok: a response cut off at the budget is not a complete one, and
+        #: returning it as ok makes truncation indistinguishable from a member
+        #: that simply finished quickly.
+        self.deadline_exceeded = False
 
     @property
     def queued_bytes(self) -> int:
@@ -79,6 +85,7 @@ class OutputCapture:
         started_at: float | None = None,
     ) -> tuple[str, int]:
         """Consume output from the already-open subscription."""
+        self.deadline_exceeded = False
         if self._subscription is None:
             return ("", 0)
 
@@ -92,12 +99,18 @@ class OutputCapture:
             elapsed = time.monotonic() - start
             remaining = max_s - elapsed
             if remaining <= 0:
+                self.deadline_exceeded = True
                 break
             try:
                 event: dict[str, Any] | None = await asyncio.wait_for(
                     self._subscription.queue.get(), timeout=min(remaining, quiesce_s)
                 )
             except TimeoutError:
+                # The wait was bounded by whichever is smaller. When that was
+                # ``remaining``, this timeout IS the budget running out, not the
+                # member falling quiet -- the two are only distinguishable here,
+                # because both leave the loop the same way.
+                self.deadline_exceeded = remaining <= quiesce_s
                 break
             if event is None:
                 break

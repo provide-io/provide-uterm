@@ -154,12 +154,34 @@ async def _build(
         worker.send_text = AsyncMock()
         await hub.register_worker(worker_id, worker)
 
+    continuous = bool(workers.get("continuous_output", False))
+    budget_s = input_data.get("max_response_ms", DEFAULT_MAX_RESPONSE_MS) / 1000.0
+
+    async def _never_falls_quiet(worker_id: str) -> None:
+        """Emit output the way ``tail -f`` does, so the collect can only end on its budget.
+
+        ``quiesce_ms`` is 1 here, so a member that pauses even briefly ends the
+        collect as quiesced rather than cut short. Yielding with ``sleep(0)``
+        keeps the subscription queue stocked between the collector's gets,
+        which is what makes the deadline -- not the quiet -- decide.
+
+        Self-limiting rather than cancelled by the caller: it outlives the
+        budget by a wide margin and then stops on its own, so no scenario can
+        leak a spinning task into the ones that run after it.
+        """
+        stop_at = time.monotonic() + (budget_s * 5) + 0.05
+        while time.monotonic() < stop_at:
+            await hub.append_event(worker_id, "term", {"data": "."})
+            await asyncio.sleep(0)
+
     async def send_worker(worker_id: str, message: dict[str, Any], *, source: Any = None) -> bool:
         del message, source
         if worker_id not in accepted:
             return False
         delivered.append(worker_id)
         await hub.append_event(worker_id, "term", {"data": immediate.get(worker_id, "ok")})
+        if continuous:
+            asyncio.get_running_loop().create_task(_never_falls_quiet(worker_id))
         return True
 
     async def broadcast(worker_id: str, message: dict[str, Any]) -> None:
