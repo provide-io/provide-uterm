@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
-import type { OutputCapture } from "./collector.ts";
+import { openOutputCapture, type OutputCapture } from "./collector.ts";
 import { type ApprovalIdentity, FanOutController, type FanOutControllerHub, type SendOptions } from "./controller.ts";
 import { type FanOutResult, fanOutGroup, InMemoryFanOutStore } from "./models.ts";
 import { createFanoutRoutes, type FanoutRoutesController } from "./routes.ts";
@@ -111,11 +111,13 @@ class ScenarioHub implements FanOutControllerHub {
   readonly approvals: Record<string, unknown>[] = [];
   private readonly accepted: Set<string>;
   private readonly immediate: Record<string, string>;
+  private readonly continuous: boolean;
   #nextApprovalRevision = 0;
 
-  constructor(accepted: Set<string>, immediate: Record<string, string>) {
+  constructor(accepted: Set<string>, immediate: Record<string, string>, continuous: boolean) {
     this.accepted = accepted;
     this.immediate = immediate;
+    this.continuous = continuous;
   }
 
   async sendWorker(workerId: string): Promise<boolean> {
@@ -139,13 +141,44 @@ class ScenarioHub implements FanOutControllerHub {
     return { id, revision };
   }
 
+  /**
+   * A capture over the real collector, driven by a real clock.
+   *
+   * A stub that returned the buffer and a made-up elapsed time could not
+   * express the one behavior `total_response_deadline` is about, because the
+   * budget was never consulted. Here the member either says its piece and
+   * falls quiet, or -- when the fixture asks for continuous output -- never
+   * stops, and the collect can then only end at `max_response_ms` with more
+   * still to come.
+   */
   async openOutputCapture(workerId: string): Promise<OutputCapture> {
     const buffer: string[] = [];
     this.buffers.set(workerId, buffer);
-    return {
-      collect: async () => ({ output: buffer.join(""), elapsedMs: 1 }),
-      close: async () => {},
-    };
+    const continuous = this.continuous;
+    const capture = await openOutputCapture({
+      subscribe: async () => ({
+        async next(): Promise<Record<string, unknown> | undefined> {
+          const text = buffer.shift();
+          if (text !== undefined) {
+            return { type: "term", data: { data: text } };
+          }
+          if (!continuous) {
+            return undefined;
+          }
+          // Yield to the event loop rather than spinning: the budget is spent
+          // in real time, and a microtask loop would starve everything else
+          // running in the same process for its whole duration.
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          return { type: "term", data: { data: "still going" } };
+        },
+        pending: () => (buffer.length > 0 || continuous ? 1 : 0),
+        close: async () => {},
+      }),
+    });
+    if (capture === undefined) {
+      throw new Error("a capture that subscribes is never undefined");
+    }
+    return capture;
   }
 }
 
@@ -207,7 +240,11 @@ async function buildController(input: ScenarioInput): Promise<{ controller: FanO
   // prove that admission still follows the server's answer.
   const readable = new Set(input.visibility.controller_readable_members ?? input.visibility.readable_members);
   for (const revoked of input.visibility.revoke_before_send) readable.delete(revoked);
-  const hub = new ScenarioHub(new Set(input.workers.accepted_members), input.workers.immediate_output);
+  const hub = new ScenarioHub(
+    new Set(input.workers.accepted_members),
+    input.workers.immediate_output,
+    input.workers.continuous_output === true,
+  );
   const policy = input.policy.action;
   const controller = new FanOutController({
     hub,

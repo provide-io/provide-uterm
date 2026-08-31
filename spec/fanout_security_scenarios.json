@@ -1464,14 +1464,8 @@
           "expected": {}
         },
         "typescript": {
-          "status": "unserved",
-          "expected": {
-            "status_code": 0,
-            "error": "unserved",
-            "delivered_workers": [],
-            "observer_notifications": [],
-            "failed_members": []
-          }
+          "status": "component_execute",
+          "expected": {}
         }
       }
     }
