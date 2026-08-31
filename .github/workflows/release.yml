@@ -325,7 +325,19 @@ jobs:
   nuget-csharp:
     name: NuGet · Provide.Uterm
     needs: [build]
-    if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
+    # Releases publish; a dispatch with dry-run unchecked republishes.
+    #
+    # The retry path exists because a release event runs the workflow at the
+    # TAG's ref, so a fix to this job cannot be applied to a release that has
+    # already been cut -- re-running the failed job just replays the broken
+    # file. Without a dispatch route the only way to retry a failed push is to
+    # cut another version, which is how 0.5.5 shipped with Provide.Uterm
+    # unpublished. On dispatch the version comes from the VERSION file and
+    # RELEASE_TAG is empty, so the tag/VERSION guard in the script is skipped;
+    # the OIDC policy still gates every push either way.
+    if: >-
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v'))
+      || (github.event_name == 'workflow_dispatch' && inputs.dry-run != true)
     runs-on: ubuntu-latest
     # Load-bearing, not decoration: the environment name is part of the OIDC
     # subject claim, and the nuget.org policy "release-provide-uterm" pins it to
@@ -358,7 +370,13 @@ jobs:
         id: nuget-login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841  # v1.2.0
         with:
-          user: provide.io
+          # The policy CREATOR, not the package owner. These differ here:
+          # the policy is owned by the provide.io organization but was created
+          # by this account, and the token endpoint matches on the creator.
+          # Getting it wrong returns HTTP 401 "No matching trust policy owned by
+          # user 'provide.io' was found", which reads like the policy is missing
+          # rather than like the username is the wrong one of two valid names.
+          user: livingstaccato
 
       # Pack, check the tag matches packages/provide-uterm-csharp/VERSION, push.
       - name: Pack and publish to NuGet
