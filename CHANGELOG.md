@@ -4,6 +4,55 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.5] — 2026-08-30
+
+The Go and C# ports learn what version they are, and the C# port is published to
+NuGet for the first time.
+
+### Fixed
+
+- **Two ports had no version at all.** The release consistency check walks
+  `packages/*/VERSION`, and neither port had that file, so neither was compared
+  against anything while the six Python packages went 0.5.0 to 0.5.4. C# carried
+  a literal `<Version>0.0.0-dev</Version>`; Go carried `"0.0.0-dev"` twice — in
+  `cli.Version` and the server default — plus an MCP `serverVersion` stranded at
+  `"0.1.0"`, five minor versions behind what the same binary reported elsewhere.
+  `uterm version` printed `0.0.0-dev` on a 0.5.4 build.
+
+  Both now read a `VERSION` file rather than repeating a literal: MSBuild reads
+  it directly, and Go embeds it from the module root, which is why the embedding
+  package lives there — `go:embed` cannot reach a parent directory. Adding the
+  files is what brings both ports under the consistency check for the first
+  time; verified by skewing one and watching the check fail by name.
+
+  This is the same shape as `provide-uterm-annotation` sitting at 0.5.1 through
+  two releases: not a mistake anyone made, a place no gate reached.
+
+### Release
+
+- **`Provide.Uterm` is published to NuGet.** Packaging metadata gains the
+  project and repository URLs — the old nuspec carried a bare commit SHA with no
+  URL, which tells a consumer nothing — plus tags and the readme `pack` warned
+  about. Symbols ship as a `.snupkg` with SourceLink and embedded untracked
+  sources, so a consumer can step into the package instead of guessing;
+  `ContinuousIntegrationBuild` is set only on CI, where the checkout path is
+  stable enough for a deterministic build. The four `cmd/` executables are
+  marked `IsPackable=false`, since a solution-wide pack was emitting a package
+  per CLI. Pack goes from `Provide.Uterm.0.0.0-dev.nupkg` carrying one DLL to
+  `Provide.Uterm.<version>.nupkg` plus symbols.
+- **Publishing is by trusted publishing, not a stored key.** `NuGet/login`
+  exchanges the workflow's OIDC token for a short-lived key, so there is no
+  long-lived credential to leak or rotate — the same model the PyPI jobs in the
+  same file already used. The job runs in the `nuget` environment because the
+  environment name is part of the OIDC subject claim and the `release-provide-
+  uterm` policy pins it; without it the token stops matching and the exchange
+  fails as a permissions error rather than as a mismatch. A login failure fails
+  the release on purpose: degrading it to "packed but not pushed" is exactly how
+  a package goes quietly unpublished for three versions. The job needs only
+  `build`, so it cannot hold up the PyPI or signing jobs, and it refuses to push
+  when the release tag and the `VERSION` file disagree — a feed does not forget
+  a mislabelled package.
+
 ## [0.5.4] — 2026-08-30
 
 A concurrency fix in the C# fan-out collector, the cross-port divergence it had
