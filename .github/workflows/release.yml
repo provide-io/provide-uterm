@@ -327,6 +327,12 @@ jobs:
     needs: [build]
     if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
+    # Load-bearing, not decoration: the environment name is part of the OIDC
+    # subject claim, and the nuget.org policy "release-provide-uterm" pins it to
+    # `nuget`. Drop this and the token no longer matches the policy, which the
+    # exchange reports as a permissions failure rather than as a mismatch.
+    # provide-telemetry's policy pins the same name.
+    environment: nuget
     permissions:
       id-token: write
     steps:
@@ -341,14 +347,15 @@ jobs:
 
       # Exchange this run's OIDC token for a short-lived nuget.org key.
       #
-      # continue-on-error because the trusted publishing policy has to be
-      # created on nuget.org before this can succeed, and until it is, the step
-      # fails the way PyPI's did with invalid-publisher. A release must not go
-      # red over a publisher that is not configured yet: the next step packs
-      # either way and says out loud that it did not push.
+      # Allowed to fail the job. The policy "release-provide-uterm" is active on
+      # nuget.org, so a failure here means the claim stopped matching it -- a
+      # renamed environment, a moved workflow file, a transferred repo -- and
+      # that is worth a red release. Degrading it to "packed but not pushed"
+      # would reproduce exactly how provide-uterm-annotation sat three versions
+      # behind: publishing quietly stopped and nothing said so. This job needs
+      # only `build`, so its failure cannot hold up PyPI or the signing jobs.
       - name: NuGet login (trusted publishing)
         id: nuget-login
-        continue-on-error: true
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841  # v1.2.0
         with:
           user: provide.io
