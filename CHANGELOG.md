@@ -4,6 +4,82 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.4] — 2026-08-30
+
+A concurrency fix in the C# fan-out collector, the cross-port divergence it had
+been hiding, and the removal of a CI workflow that had never once succeeded.
+
+### Fixed
+
+- **The fan-out quiesce window could discard output that had already
+  arrived.** `OutputCollector.CollectAsync` armed `CancelAfter(quiesceMs)`
+  before it called `ReadAsync`. A reader checks its cancellation token before
+  its buffer — `ChannelReader.ReadAsync` does exactly that — so once the window
+  expired the read threw even with output waiting, the collector took the
+  exception for silence, and the member's output came back empty while the item
+  stayed in the channel. The read now starts first and the window is armed only
+  if it did not complete synchronously: output already in hand has not been
+  quiet for any length of time, so no deadline outranks it.
+
+  The end-to-end flake does not reproduce on demand — 25/25 scenario runs and
+  2000/2000 targeted collects under a squeezed thread pool all passed, because
+  the losing window is microseconds wide. What is demonstrable is the primitive
+  and the ordering, so the fix removes the window rather than narrowing it.
+
+### Testing and CI
+
+- **The C# fan-out scenarios quiesce for 1ms, like the other three ports.**
+  The fixture is a differential-parity suite, so a number that differs between
+  ports has to earn it, and 25 did not: `97ae9ace` raised it to stabilize the
+  suite, which worked by widening the racing window 25× rather than closing it,
+  and spent a quarter of the then-100ms response budget doing so. Python and
+  TypeScript never needed it — a cooperative single-threaded loop cannot let a
+  timer beat a ready item — and Go arms its timer immediately before the
+  `select`, leaving a window narrower by orders of magnitude.
+- **`OutputCollector` has direct tests.** It was reached only through the
+  controller. The new ones pin the boundary between quiesced and cut short:
+  buffered output survives, silence ends the collect well inside the budget, a
+  read the budget cuts short still propagates cancellation, `term` wins over
+  `snapshot`, and the disconnect sentinel returns immediately.
+- **`mutation-csharp.yml` is gone, superseded by `csharp-mutation-gate`.** It
+  ran a bare `dotnet stryker` from the package root against a config with no
+  `mutate` glob, so it mutated the whole project with no budget, and it never
+  once finished: of its last 100 runs, 92 were cancelled at GitHub's
+  360-minute job limit, 5 failed, and none succeeded, back to 2026-08-15. Each
+  cancellation burned a six-hour runner for nothing, and because the
+  concurrency group is keyed on `run_id` for pushes they accumulated rather
+  than superseded — three were in flight at once. It would not have gated
+  anything even had it finished, with `break` left at the default 0.
+  `ci/stryker_gate.py` already does this properly, over a six-file perimeter
+  with a test-case filter and a budget. Its package-root `stryker-config.json`
+  goes with it; nothing else read it.
+- **The empty duplicate `dotnet-tools.json` is gone.** It carried
+  `"tools": {}` and was never consulted; `.config/dotnet-tools.json` is what
+  dotnet resolves, verified from both the package root and the test project.
+  Its `isRoot: true` would have stopped the upward walk had anything read it.
+
+### Documentation
+
+- **Corrected what `--no-cache-dir` buys in `install_from_testpypi.sh`.** The
+  comment called a retry loop around a cached negative answer "decorative",
+  claiming all sixty attempts would re-read the same stale index page. The very
+  next run without the flag ground through several minutes of attempts and then
+  succeeded, which falsified that: pip's index cache expires, so the retry loop
+  gets there on its own. The flag buys minutes per verify job, not correctness.
+  It stays the default anyway — a release should not spend its time waiting for
+  a cache entry to age out of a runner about to be destroyed, and a retry that
+  is really waiting on a local TTL reads like an index outage to whoever is
+  watching the log.
+
+### Build
+
+- **Locked dependencies upgraded** (#80). One package actually moved —
+  `hypothesis` 6.166.0 → 6.167.1; the rest of the 83-line lock diff is that
+  package's wheel-hash table and a reordering of the resolution markers. Worth
+  naming because the version is not inert: `@reproduce_failure` blobs are
+  stamped with the generating version, so a counterexample pasted from an older
+  CI log is read against the new one.
+
 ## [0.5.3] — 2026-08-30
 
 A release-pipeline release. Nothing in the runtime changed; everything here is

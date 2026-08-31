@@ -5,7 +5,7 @@
 
 [project]
 name = "provide-uterm-workspace"
-version = "0.5.3"
+version = "0.5.4"
 requires-python = ">=3.11"
 dependencies = [
     "provide-uterm[emulator,ssh]>=0.5.0",
