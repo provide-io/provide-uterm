@@ -469,3 +469,42 @@ class TestFanoutSendWsDispatch:
 
             # No crash; connection should still be open at this point.
             # (No message expected back for ignored fanout_send.)
+
+
+class TestSequentialResponseDeadline:
+    """_controller.py — a sequential member cut off by max_response_ms is not ok.
+
+    The parallel path is covered by the fan-out security contract
+    (``total_response_deadline``); this pins the same rule on the sequential
+    one, where a member that never falls quiet has to be reported rather than
+    returned as a complete response that happens to be short.
+    """
+
+    async def test_sequential_deadline_marks_member_failed(self) -> None:
+        hub = await _make_hub_with_workers("w1")
+        ctrl = FanOutController(hub)
+        group = _make_group(["w1"], mode="sequential")
+        await ctrl.create_group(group, principal="admin")
+
+        _orig_send = hub.send_worker
+
+        async def _send_then_never_quiet(wid: str, msg: dict) -> bool:  # type: ignore[type-arg]
+            result = await _orig_send(wid, msg)
+            asyncio.get_running_loop().create_task(_never_quiet(wid))
+            return result
+
+        async def _never_quiet(wid: str) -> None:
+            # Outlives the 20ms budget without ever leaving the queue empty, so
+            # the collect can only end on the deadline and not on quiet.
+            stop_at = time.monotonic() + 0.15
+            while time.monotonic() < stop_at:
+                await hub.append_event(wid, "term", {"data": "."})
+                await asyncio.sleep(0)
+
+        hub.send_worker = _send_then_never_quiet  # type: ignore[assignment]
+
+        result = await ctrl._send_sequential(group, "tail -f\n", 1, 20, principal="admin")
+
+        assert result.failed_sessions == ["w1"]
+        row = next(r for r in result.results if r.worker_id == "w1")
+        assert row.ok is False

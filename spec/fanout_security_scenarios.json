@@ -1452,14 +1452,8 @@
       },
       "backends": {
         "python": {
-          "status": "unserved",
-          "expected": {
-            "status_code": 0,
-            "error": "unserved",
-            "delivered_workers": [],
-            "observer_notifications": [],
-            "failed_members": []
-          }
+          "status": "execute",
+          "expected": {}
         },
         "go": {
           "status": "unserved",

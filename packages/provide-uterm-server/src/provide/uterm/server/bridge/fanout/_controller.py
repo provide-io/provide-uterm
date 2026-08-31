@@ -485,17 +485,25 @@ class FanOutController:
                     item = collected[index] if accepted is True else None
                 if isinstance(item, tuple):
                     delta, elapsed = item
+                    # A collect that ran out its budget returns like any other
+                    # -- it breaks the loop and hands back what it had. Reading
+                    # the flag is what keeps a truncated response from being
+                    # reported as a complete one.
+                    cut_short = bool(getattr(captures[index], "deadline_exceeded", False))
                     results.append(
                         SessionFanOutResult(
                             worker_id=worker_id,
-                            ok=True,
+                            ok=not cut_short,
                             output_delta=delta,
                             elapsed_ms=elapsed,
                             divergent=False,
                         )
                     )
-                    successful_outputs.append(delta)
-                    successful_indices.append(len(results) - 1)
+                    if cut_short:
+                        failed_sessions.append(worker_id)
+                    else:
+                        successful_outputs.append(delta)
+                        successful_indices.append(len(results) - 1)
                 else:
                     results.append(
                         SessionFanOutResult(
@@ -604,17 +612,21 @@ class FanOutController:
                     max_ms=max_response_ms,
                     started_at=started_at,
                 )
+                cut_short = bool(getattr(capture, "deadline_exceeded", False))
                 results.append(
                     SessionFanOutResult(
                         worker_id=wid,
-                        ok=True,
+                        ok=not cut_short,
                         output_delta=delta,
                         elapsed_ms=elapsed,
                         divergent=False,
                     )
                 )
-                successful_outputs.append(delta)
-                successful_indices.append(len(results) - 1)
+                if cut_short:
+                    failed_sessions.append(wid)
+                else:
+                    successful_outputs.append(delta)
+                    successful_indices.append(len(results) - 1)
 
                 if (
                     group.stop_on_first_error

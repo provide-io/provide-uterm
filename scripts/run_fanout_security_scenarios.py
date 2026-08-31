@@ -88,7 +88,13 @@ def semantic_status(scenario: dict[str, Any], backend: str) -> str:
     if backend == "typescript":
         return "unserved" if continuous_output else "component_execute"
     if backend == "python":
-        return "unserved" if continuous_output else "execute"
+        # continuous_output no longer excuses python. Its collector reports
+        # whether a collect ended on max_response_ms rather than on quiet, and
+        # its controller marks such a member not ok -- so a member that never
+        # falls quiet is now a result python can state, not one it has to sit
+        # out. go and typescript still return what they returned before,
+        # because they still return ok for a response cut off at the budget.
+        return "execute"
     if backend == "go":
         if continuous_output:
             return "unserved"
