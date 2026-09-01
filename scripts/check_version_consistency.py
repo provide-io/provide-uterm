@@ -51,6 +51,12 @@ from repo_paths import submodule_dirs
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+#: The TypeScript server's self-reported version. One declaration, one file, so
+#: it is named rather than searched for -- and a rename is reported rather than
+#: skipped, because a check that quietly stops looking is worse than no check.
+SERVER_VERSION_FILE = Path("packages/provide-uterm-ts/src/server/bootstrap.ts")
+SERVER_VERSION_PATTERN = re.compile(r'^(export const SERVER_VERSION = ")(?P<version>[^"]*)(";)$', re.M)
+
 
 def workspace_members(root: Path) -> dict[str, Path]:
     """Map each workspace package's distribution name to its pyproject."""
@@ -169,6 +175,38 @@ def npm_manifest_drift(root: Path, version: str, *, fix: bool) -> list[str]:
     return drifted
 
 
+def server_version_drift(root: Path, version: str, *, fix: bool) -> list[str]:
+    """Report (and optionally repin) the TypeScript server's advertised version.
+
+    It is what the server tells a client it is, so a stale literal misidentifies
+    a running process -- and unlike the packages, nothing derives it from a file
+    at build time.
+
+    An absent file or a renamed constant is reported, not skipped. Three
+    separate gates in this repo have silently excluded what they appeared to
+    cover, and every one of them looked green while doing it; a check anchored
+    on a single name has to say when the anchor moves.
+    """
+    path = root / SERVER_VERSION_FILE
+    if not path.is_file():
+        return [f"{SERVER_VERSION_FILE}: expected to declare SERVER_VERSION, but the file is missing"]
+
+    text = path.read_text(encoding="utf-8")
+    match = SERVER_VERSION_PATTERN.search(text)
+    if match is None:
+        return [f'{SERVER_VERSION_FILE}: no `export const SERVER_VERSION = "..."` — has it been renamed?']
+    if match["version"] == version:
+        return []
+
+    if fix:
+        path.write_text(
+            SERVER_VERSION_PATTERN.sub(rf"\g<1>{version}\g<3>", text, count=1),
+            encoding="utf-8",
+        )
+    line_no = text[: match.start()].count("\n") + 1
+    return [f'{SERVER_VERSION_FILE}:{line_no}: SERVER_VERSION = "{match["version"]}" — expected {version}']
+
+
 def root_version_drift(pyproject: Path, version: str, *, fix: bool) -> list[str]:
     """Report (and optionally repin) the workspace root's own literal version.
 
@@ -213,6 +251,7 @@ def main() -> int:
     drifted += root_version_drift(root_pyproject, version, fix=args.fix)
     drifted += version_file_drift(REPO_ROOT, version, fix=args.fix)
     drifted += npm_manifest_drift(REPO_ROOT, version, fix=args.fix)
+    drifted += server_version_drift(REPO_ROOT, version, fix=args.fix)
     for pyproject in scanned:
         original = pyproject.read_text(encoding="utf-8")
         for line_no, line in enumerate(original.splitlines(), start=1):
