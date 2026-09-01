@@ -17,6 +17,9 @@
 # The two pytest suites in the CI quality job are intentionally NOT run here:
 # run_all_tests.py already runs them with per-package 100% coverage. Run that
 # (and run_mutation_gate.py for perimeter files) alongside this for full parity.
+# The single exception is "contract-tests" below, which is not a package suite:
+# it is the in-process half of tests/conformance/, whose only CI home was the
+# three-language live-matrix job. See the comment at that step.
 set -uo pipefail
 
 # Always operate from the repository root so the relative paths below resolve
@@ -77,6 +80,21 @@ step "protocol-drift"     uv run python scripts/check_protocol_drift.py
 # live-matrix and conformance jobs.
 step "lifecycle-contract" uv run python scripts/run_session_lifecycle_security_scenarios.py --validate-only
 step "fanout-contract"    uv run python scripts/run_fanout_security_scenarios.py --validate-only
+# The tests OF those two validators, which assert on their behaviour and on
+# their error text. They live in tests/conformance/, outside the default pytest
+# testpaths, so in CI they ran only in live-matrix -- behind three cells that
+# each need the go, dotnet and node toolchains. Rewording a validator message
+# therefore went red twenty minutes later in a job that builds four languages,
+# on a change that touched no backend. This is the one pytest invocation the
+# script makes, and it earns the exception by being adjacent to the two steps
+# above and effectively free: 81 tests in ~0.5s.
+#
+# Excluded, and still covered by live-matrix and run_all_tests.py: live/, whose
+# tests boot real servers, and the two native_adapters tests, which spawn the
+# go/csharp/typescript adapters. Between them they are 60 of the directory's 70
+# seconds; what is left is pure in-process contract checking.
+step "contract-tests"     uv run pytest -q tests/conformance/ --ignore=tests/conformance/live \
+                            -m "not native_adapters" -o addopts=--import-mode=importlib
 step "package-artifacts"  uv run python scripts/verify_package_artifacts.py
 
 printf '\n=== quality-checks summary ===\n'
