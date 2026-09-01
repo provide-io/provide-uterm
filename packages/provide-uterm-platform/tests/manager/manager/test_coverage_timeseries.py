@@ -62,12 +62,22 @@ class TestTimeseriesManagerGaps:
         """Lines 169-170: interval sample write in loop."""
         mgr = _make_ts_manager(tmp_path, interval_s=1)
         task = asyncio.create_task(mgr.loop())
-        await asyncio.sleep(1.15)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        assert mgr.samples_count >= 2
-        rows = mgr.read_tail(10)
-        reasons = [r.get("reason") for r in rows]
-        assert "startup" in reasons
-        assert "interval" in reasons
+        try:
+            # Wait for the second sample rather than for a fixed 1.15s. The
+            # loop sleeps interval_s=1 (the constructor floors it there), so a
+            # flat 1.15s left the runner 150ms to deliver the interval write --
+            # `assert 1 >= 2` on manager-quality (3.14), run 33569290053. The
+            # deadline is generous because it is a failure bound, not a pace:
+            # a real regression still fails, just 10s later.
+            deadline = asyncio.get_running_loop().time() + 10.0
+            while mgr.samples_count < 2 and asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(0.05)
+            assert mgr.samples_count >= 2
+            rows = mgr.read_tail(10)
+            reasons = [r.get("reason") for r in rows]
+            assert "startup" in reasons
+            assert "interval" in reasons
+        finally:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
