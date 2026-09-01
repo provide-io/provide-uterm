@@ -118,6 +118,7 @@ find_corpora() {
 }
 
 stale=()
+unstable=()
 checked=0
 
 # Regeneration happens IN PLACE — a generator writes its corpus beside itself,
@@ -155,10 +156,41 @@ GOLDENS_REGEN_DIR="${GOLDENS_REGEN_DIR:-}"
 # How much of each diff to print inline. The full file is always saved.
 GOLDENS_DIFF_LINES="${GOLDENS_DIFF_LINES:-80}"
 
+# How many times to run each generator. Two by default, so every run compares
+# the generator with ITSELF as well as with the corpus.
+#
+# A corpus mismatch has two very different causes and they were indistinguishable
+# from one run: the reference changed and the recording is stale, or the
+# generator does not produce the same bytes twice. Only the first is fixed by
+# re-recording, and re-recording the second CEMENTS a bug -- the note above
+# records serverhijack_golden.json intermittently capturing a null body for the
+# `snapshot_before_hijack` probe, seen on 2026-08-09, 2026-08-10 and again on
+# 2026-09-01. Each time the question "is the corpus stale or is the generator
+# unstable?" had to be answered by hand, by regenerating over and over.
+#
+# The second pass answers it in the run that found it. It also roughly doubles
+# the chance of catching an intermittent generator at all, since a flake now has
+# two draws per corpus per run rather than one.
+#
+# Set to 1 for the old single-pass behaviour, or higher to soak a suspected
+# generator: GOLDENS_REPEAT=20 bash .ci/check_goldens.sh
+GOLDENS_REPEAT="${GOLDENS_REPEAT:-2}"
+
 # A corpus path flattened into a single filename, so copies from different
 # testdata directories cannot collide.
 _flatten_path() {
   printf '%s' "${1#./}" | tr '/' '_'
+}
+
+# Where rejected output is kept, created on first failure only so a passing run
+# leaves no stray directory behind. Called as a COMMAND rather than in `$(...)`:
+# a command substitution runs in a subshell, so the assignment would be lost and
+# every call would mint a fresh directory.
+_ensure_regen_dir() {
+  if [[ -z "$GOLDENS_REGEN_DIR" ]]; then
+    GOLDENS_REGEN_DIR="$(mktemp -d)"
+  fi
+  mkdir -p "$GOLDENS_REGEN_DIR"
 }
 
 _restore_corpora() {
@@ -212,15 +244,54 @@ while IFS= read -r generator; do
   after="$(shasum -a 256 "$corpus" | cut -d' ' -f1)"
   checked=$((checked + 1))
 
-  if [[ "$before" != "$after" ]]; then
+  # Keep pass 1's output: the later passes overwrite the file, and every message
+  # below is about what the generator produced the FIRST time.
+  first_output="$_restore_dir/pass1_$(_flatten_path "$corpus")"
+  cp "$corpus" "$first_output"
+
+  # Run it again from the committed baseline and compare the generator with
+  # itself. Restoring first is not strictly required -- a generator writes its
+  # corpus whole -- but it means every pass starts from the same bytes, so a
+  # generator that ever READ its own previous output cannot be what differs.
+  disagreed=0
+  differing_output=""
+  for (( pass = 2; pass <= GOLDENS_REPEAT; pass++ )); do
+    cp "$saved" "$corpus"
+    "${run[@]}" >/dev/null
+    if [[ "$(shasum -a 256 "$corpus" | cut -d' ' -f1)" != "$after" ]]; then
+      disagreed=1
+      differing_output="$_restore_dir/pass${pass}_$(_flatten_path "$corpus")"
+      cp "$corpus" "$differing_output"
+      break
+    fi
+  done
+  cp "$first_output" "$corpus"
+
+  if (( disagreed )); then
+    # The generator does not produce the same bytes twice, so the corpus cannot
+    # be re-recorded into agreement -- whatever is unstable would just be
+    # recorded in one of its states. Loud and separate from staleness for that
+    # reason: re-recording here hides a real defect.
+    echo "non-deterministic golden generator: $corpus"
+    echo "  two runs of ${run[*]} disagreed with each other."
+    echo "  Do NOT re-record this corpus. Find what makes the generator vary."
+
+    _ensure_regen_dir
+    flat="$(_flatten_path "$corpus")"
+    cp "$first_output" "$GOLDENS_REGEN_DIR/pass1_$flat"
+    cp "$differing_output" "$GOLDENS_REGEN_DIR/pass2_$flat"
+    echo "  the two outputs: $GOLDENS_REGEN_DIR/pass1_$flat"
+    echo "                   $GOLDENS_REGEN_DIR/pass2_$flat"
+    echo "  run 1 (-) vs run 2 (+), first ${GOLDENS_DIFF_LINES} lines:"
+    { diff -u -L "run1:$corpus" -L "run2:$corpus" "$first_output" "$differing_output" || true; } |
+      head -n "$GOLDENS_DIFF_LINES" | sed 's/^/    /' || true
+
+    unstable+=("$corpus")
+  elif [[ "$before" != "$after" ]]; then
     echo "stale golden corpus: $corpus"
     echo "  regenerate with: ${run[*]}"
 
-    # Created on first failure only, so a passing run leaves no stray directory.
-    if [[ -z "$GOLDENS_REGEN_DIR" ]]; then
-      GOLDENS_REGEN_DIR="$(mktemp -d)"
-    fi
-    mkdir -p "$GOLDENS_REGEN_DIR"
+    _ensure_regen_dir
     regenerated="$GOLDENS_REGEN_DIR/$(_flatten_path "$corpus")"
     cp "$corpus" "$regenerated"
     echo "  what the generator produced: $regenerated"
@@ -236,9 +307,16 @@ while IFS= read -r generator; do
   fi
 done < <(find_generators)
 
-if (( ${#stale[@]} > 0 )); then
+if (( ${#unstable[@]} > 0 || ${#stale[@]} > 0 )); then
   echo
-  echo "FAIL: ${#stale[@]} golden corpus file(s) do not match the CPython reference."
+  if (( ${#unstable[@]} > 0 )); then
+    echo "FAIL: ${#unstable[@]} golden generator(s) did not produce the same bytes twice."
+    echo "      That is a defect in the generator or in what it exercises, not a stale"
+    echo "      recording — re-recording would just capture one of its two answers."
+  fi
+  if (( ${#stale[@]} > 0 )); then
+    echo "FAIL: ${#stale[@]} golden corpus file(s) do not match the CPython reference."
+  fi
   if [[ -n "$GOLDENS_REGEN_DIR" ]]; then
     echo "      Rejected output kept in: $GOLDENS_REGEN_DIR"
     echo "      The working tree is unchanged — the committed corpora were restored."
@@ -246,7 +324,7 @@ if (( ${#stale[@]} > 0 )); then
   exit 1
 fi
 
-echo "OK: $checked golden corpus file(s) match the CPython reference."
+echo "OK: $checked golden corpus file(s) match the CPython reference, over ${GOLDENS_REPEAT} run(s) each."
 
 # Corpora with no generator cannot be re-derived, so nothing above can tell
 # whether they still describe the reference. Reported rather than failed: most
