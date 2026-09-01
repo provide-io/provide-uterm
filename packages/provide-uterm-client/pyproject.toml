@@ -12,7 +12,7 @@ description = "Client libraries, transports, and AI/MCP integration for provide-
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 dependencies = [
-    "provide-uterm>=0.5.5",
+    "provide-uterm>=0.5.6",
     # Base dependency, not an extra: `uterm-mcp` (below, [project.scripts]) is
     # an unconditional console script pointing at provide.uterm.ai, which
     # imports mcp at module scope. Gating mcp behind an extra would let

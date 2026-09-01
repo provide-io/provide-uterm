@@ -23,8 +23,8 @@ classifiers = [
 ]
 dependencies = [
   "pyjwt>=2.9",
-  "provide-uterm>=0.5.5",
-  "provide-uterm-server>=0.5.5",
+  "provide-uterm>=0.5.6",
+  "provide-uterm-server>=0.5.6",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +48,7 @@ dev = [
   # raised ModuleNotFoundError: No module named 'fastapi' the moment the
   # isolated env stopped receiving it transitively — the same failure mode the
   # starlette note below describes.
-  "provide-uterm-server[annotation,server]>=0.5.5",
+  "provide-uterm-server[annotation,server]>=0.5.6",
   # tests/conftest.py imports starlette.testclient directly, and TestClient
   # needs httpx2 at import time. Neither is reachable through the line above:
   # provide-uterm-server declares fastapi under its server/cli/tunnel extras,
