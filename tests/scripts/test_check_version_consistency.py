@@ -15,6 +15,7 @@ of the workspace while the npm-side one demanded equality.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -115,6 +116,103 @@ def test_fix_leaves_a_submodule_untouched(tmp_path: Path) -> None:
     _drift(tmp_path, fix=True)
 
     assert (tmp_path / "packages/provide-telemetry/VERSION").read_text(encoding="utf-8") == "9.9.9\n"
+
+
+def _npm(root: Path, workspaces: dict[str, str | None], locked: dict[str, str] | None = None) -> None:
+    """Write a root manifest, its workspace manifests, and a lock."""
+    (root / "package.json").write_text(
+        json.dumps({"name": "root", "workspaces": list(workspaces)}, indent=2) + "\n", encoding="utf-8"
+    )
+    for workspace, version in workspaces.items():
+        directory = root / workspace
+        directory.mkdir(parents=True, exist_ok=True)
+        body = {"name": workspace.rsplit("/", 1)[-1]}
+        if version is not None:
+            body["version"] = version
+        (directory / "package.json").write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+    if locked is not None:
+        packages = {workspace: {"version": version} for workspace, version in locked.items()}
+        (root / "package-lock.json").write_text(
+            json.dumps({"name": "root", "packages": packages}, indent=2) + "\n", encoding="utf-8"
+        )
+
+
+def _npm_drift(root: Path, version: str = "0.5.6", *, fix: bool = False) -> list[str]:
+    return check_version_consistency.npm_manifest_drift(root, version, fix=fix)
+
+
+def test_an_npm_workspace_behind_the_root_is_reported(tmp_path: Path) -> None:
+    """The half only npm-quality could see: vitest never runs in the static gate."""
+    _npm(tmp_path, {"packages/provide-uterm-ts": "0.5.5"})
+
+    drifted = _npm_drift(tmp_path)
+
+    assert len(drifted) == 1
+    assert "provide-uterm-ts/package.json" in drifted[0]
+
+
+def test_a_stale_lock_entry_is_reported_with_the_command_that_regenerates_it(tmp_path: Path) -> None:
+    _npm(tmp_path, {"packages/a": "0.5.6"}, locked={"packages/a": "0.5.4"})
+
+    drifted = _npm_drift(tmp_path)
+
+    assert len(drifted) == 1
+    assert "npm install --package-lock-only" in drifted[0]
+
+
+def test_a_workspace_without_a_version_is_not_a_version_reference(tmp_path: Path) -> None:
+    """A private package that declares none has nothing to disagree with."""
+    _npm(tmp_path, {"packages/private": None})
+
+    assert _npm_drift(tmp_path) == []
+
+
+def test_a_workspace_whose_manifest_is_absent_is_skipped(tmp_path: Path) -> None:
+    _npm(tmp_path, {"packages/a": "0.5.6"})
+    (tmp_path / "packages/a/package.json").unlink()
+
+    assert _npm_drift(tmp_path) == []
+
+
+def test_a_repository_with_no_npm_workspaces_is_silent(tmp_path: Path) -> None:
+    assert _npm_drift(tmp_path) == []
+
+
+def test_fix_repins_a_manifest_but_never_the_lock(tmp_path: Path) -> None:
+    """The lock is generated; hand-editing it is how it stops matching npm."""
+    _npm(tmp_path, {"packages/a": "0.5.5"}, locked={"packages/a": "0.5.5"})
+
+    _npm_drift(tmp_path, fix=True)
+
+    assert json.loads((tmp_path / "packages/a/package.json").read_text())["version"] == "0.5.6"
+    lock = json.loads((tmp_path / "package-lock.json").read_text())
+    assert lock["packages"]["packages/a"]["version"] == "0.5.5"
+
+
+def test_fix_repins_the_package_not_a_dependency_of_the_same_version(tmp_path: Path) -> None:
+    """A dependency can carry the same version string, so the substitution is anchored."""
+    directory = tmp_path / "packages/a"
+    directory.mkdir(parents=True)
+    (tmp_path / "package.json").write_text(
+        json.dumps({"name": "root", "workspaces": ["packages/a"]}, indent=2), encoding="utf-8"
+    )
+    (directory / "package.json").write_text(
+        '{\n  "name": "a",\n  "version": "0.5.5",\n  "dependencies": {\n    "left-pad": {\n'
+        '      "version": "0.5.5"\n    }\n  }\n}\n',
+        encoding="utf-8",
+    )
+
+    _npm_drift(tmp_path, fix=True)
+
+    written = (directory / "package.json").read_text(encoding="utf-8")
+    assert '  "version": "0.5.6"' in written
+    assert '      "version": "0.5.5"' in written
+
+
+def test_the_real_repository_agrees_with_its_npm_manifests() -> None:
+    version = (_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+
+    assert check_version_consistency.npm_manifest_drift(_ROOT, version, fix=False) == []
 
 
 def test_the_real_repository_agrees_with_its_own_version_file() -> None:
