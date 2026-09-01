@@ -48,8 +48,12 @@ step "spdx-headers"       uv run python scripts/check_spdx_headers.py
 step "event-literals"     uv run python scripts/check_event_literals.py
 step "bare-json-ws-sends" uv run python scripts/check_bare_json_ws_sends.py
 step "single-http-stack"  uv run python scripts/check_single_http_stack.py
-step "ruff-format"        uv run ruff format --check packages/*/src packages/*/tests scripts conformance/fuzz
-step "ruff-check"         uv run ruff check packages/*/src packages/*/tests scripts conformance/fuzz
+# `tests` is the repo-root suite (conformance + the tooling tests), which this
+# scope left out. CI runs no pre-commit, so those 27 files were linted by
+# nothing here -- and the gate reported PASS: ruff-format over an unformatted
+# file in exactly that directory, which is how the omission surfaced.
+step "ruff-format"        uv run ruff format --check packages/*/src packages/*/tests scripts tests conformance/fuzz
+step "ruff-check"         uv run ruff check packages/*/src packages/*/tests scripts tests conformance/fuzz
 step "mypy (strict)"      ci/typecheck.sh mypy
 # ty is informational: ci/typecheck.sh exits 0 for it, so it
 # surfaces warnings here without gating — mirroring CI exactly.

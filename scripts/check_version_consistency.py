@@ -27,6 +27,13 @@ unlike the published packages it cannot derive that from VERSION -- and unlike
 them, nothing publishes it either, so a drift there would never surface as a
 bad artifact. It would just sit in the file disagreeing with the release.
 
+The npm workspaces carry the same version in their own manifests, and their
+package-lock.json entries carry it again. Both are checked here for the reason
+the VERSION files are: they were enforced only by
+``packages/provide-uterm-ts/src/server/version-consistency.test.ts``, so a
+Python-side change that never runs vitest could leave them behind with this gate
+green.
+
 Run with no arguments to report drift (this is what the quality gate does);
 ``--fix`` rewrites the drifted references in place. Stdlib only.
 """
@@ -34,6 +41,7 @@ Run with no arguments to report drift (this is what the quality gate does);
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import tomllib
@@ -98,6 +106,69 @@ def version_file_drift(root: Path, version: str, *, fix: bool) -> list[str]:
     return drifted
 
 
+def npm_manifest_drift(root: Path, version: str, *, fix: bool) -> list[str]:
+    """Report (and optionally repin) each npm workspace's version and lock entry.
+
+    The npm side is the other half of the same rule the VERSION files carry, and
+    it was the half only ``npm-quality`` could see: a Python-side change that
+    never runs vitest could leave the three manifests behind and the static gate
+    would say every version reference agreed.
+
+    ``--fix`` repins the manifests, which are hand-maintained, and deliberately
+    does NOT touch package-lock.json. That file is generated, and rewriting an
+    entry by hand is how a lock stops matching what npm would produce -- the
+    drift is reported with the command that regenerates it instead. Repinning a
+    manifest makes the lock disagree anyway, so a fix run ends by asking for it.
+    """
+    manifest_path = root / "package.json"
+    if not manifest_path.is_file():
+        return []
+    workspaces = json.loads(manifest_path.read_text(encoding="utf-8")).get("workspaces") or []
+
+    lock_path = root / "package-lock.json"
+    locked: dict[str, dict[str, object]] = {}
+    if lock_path.is_file():
+        packages = json.loads(lock_path.read_text(encoding="utf-8")).get("packages")
+        if isinstance(packages, dict):
+            locked = packages
+
+    drifted: list[str] = []
+    for workspace in workspaces:
+        workspace_manifest = root / str(workspace) / "package.json"
+        if not workspace_manifest.is_file():
+            continue
+        text = workspace_manifest.read_text(encoding="utf-8")
+        declared = json.loads(text).get("version")
+        # A private package with no version is not a version reference at all.
+        if isinstance(declared, str) and declared != version:
+            rel = workspace_manifest.relative_to(root)
+            drifted.append(f'{rel}: "version": "{declared}" — expected {version}')
+            if fix:
+                # Anchored on the top-level two-space key rather than the first
+                # match: "version" also appears under dependencies, and a bare
+                # count=1 substitution would repin whichever came first.
+                workspace_manifest.write_text(
+                    re.sub(
+                        rf'^  "version": "{re.escape(declared)}"',
+                        f'  "version": "{version}"',
+                        text,
+                        count=1,
+                        flags=re.M,
+                    ),
+                    encoding="utf-8",
+                )
+
+        entry = locked.get(str(workspace))
+        if isinstance(entry, dict):
+            in_lock = entry.get("version")
+            if isinstance(in_lock, str) and in_lock != version:
+                drifted.append(
+                    f"package-lock.json: {workspace} is locked at {in_lock} — expected {version}"
+                    " (run `npm install --package-lock-only`)"
+                )
+    return drifted
+
+
 def root_version_drift(pyproject: Path, version: str, *, fix: bool) -> list[str]:
     """Report (and optionally repin) the workspace root's own literal version.
 
@@ -141,6 +212,7 @@ def main() -> int:
     drifted: list[str] = []
     drifted += root_version_drift(root_pyproject, version, fix=args.fix)
     drifted += version_file_drift(REPO_ROOT, version, fix=args.fix)
+    drifted += npm_manifest_drift(REPO_ROOT, version, fix=args.fix)
     for pyproject in scanned:
         original = pyproject.read_text(encoding="utf-8")
         for line_no, line in enumerate(original.splitlines(), start=1):
