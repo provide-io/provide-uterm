@@ -262,6 +262,7 @@ markers = [
     "e2e: end-to-end tests against a live server",
     "real_cf: tests requiring a real Cloudflare deployment",
     "go_interop: tests requiring a built Go uterm binary",
+    "native_adapters: tests that spawn the go/csharp/typescript scenario adapters",
     "docker: tests requiring a running Docker daemon",
     "requires_root: tests that must run as root/sudo",
     "requires_pam: tests requiring PAM library availability",

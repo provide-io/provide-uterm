@@ -105,6 +105,7 @@ def test_contract_contains_semantic_inputs_expectations_and_exact_status_matrix(
         }
 
 
+@pytest.mark.native_adapters
 def test_real_runner_executes_and_compares_native_observations() -> None:
     result = subprocess.run(
         [sys.executable, str(RUNNER_PATH), "--root", str(REPO_ROOT)],
@@ -323,6 +324,7 @@ def _mutated_contract(kind: str) -> tuple[dict[str, object], str]:
     return contract, scenario["id"]
 
 
+@pytest.mark.native_adapters
 def test_fixture_inputs_drive_every_backend_runtime_observations_and_comparator() -> None:
     runner = _runner()
     for backend in sorted(BACKENDS):
