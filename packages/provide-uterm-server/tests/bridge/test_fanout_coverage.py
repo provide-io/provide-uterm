@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from provide.uterm.client import connect_test_ws
-from provide.uterm.server.bridge.fanout._collector import OutputCollector
+from provide.uterm.server.bridge.fanout._collector import OutputCapture, OutputCollector
 from provide.uterm.server.bridge.fanout._controller import FanOutController
 from provide.uterm.server.bridge.fanout._models import FanOutGroup
 from provide.uterm.server.bridge.hub import EventBus, TermHub
@@ -471,13 +471,83 @@ class TestFanoutSendWsDispatch:
             # (No message expected back for ignored fanout_send.)
 
 
+class _NeverEmptyQueue:
+    """A subscription queue with output permanently waiting on it.
+
+    A real producer task cannot pin this down: the collect ends on whichever
+    of the quiesce window and the budget expires first, both are wall-clock,
+    and a producer that misses a 1ms window on a loaded runner ends the collect
+    through the timeout instead. That is not a hypothetical -- it is how the
+    first version of this test failed on one CI matrix cell. Here `get` never
+    waits, so the loop can only leave on the budget, with output still queued.
+    """
+
+    def __init__(self) -> None:
+        self.consumed = 0
+
+    async def get(self) -> dict[str, object]:
+        self.consumed += 1
+        return {"type": "term", "data": {"data": "."}}
+
+    def qsize(self) -> int:
+        return 1
+
+
+class _OneThenEmptyQueue:
+    """One event waiting, then silence for as long as anyone asks."""
+
+    def __init__(self) -> None:
+        self._sent = False
+
+    async def get(self) -> dict[str, object]:
+        if self._sent:
+            await asyncio.sleep(3600)
+        self._sent = True
+        return {"type": "term", "data": {"data": "done"}}
+
+    def qsize(self) -> int:
+        return 0
+
+
+def _capture_over(queue: object) -> OutputCapture:
+    """An OutputCapture reading from a hand-driven queue rather than a bus."""
+    capture = OutputCapture(MagicMock(), "w1")
+    capture._subscription = MagicMock(queue=queue)
+    return capture
+
+
+class TestCollectorReportsOutputStillQueued:
+    """_collector.py — truncation is read off what is LEFT, not off which exit fired.
+
+    The rule go's suite settled on, and the one C# and typescript carry.
+    """
+
+    async def test_a_stream_that_never_empties_is_reported_as_cut_off(self) -> None:
+        capture = _capture_over(_NeverEmptyQueue())
+
+        delta, _elapsed = await capture.collect(quiesce_ms=1, max_ms=20)
+
+        assert capture.deadline_exceeded is True
+        assert delta.startswith(".")
+
+    async def test_an_empty_queue_at_exit_is_not_cut_off(self) -> None:
+        # Same collect, one event then nothing: the member said its piece.
+        capture = _capture_over(_OneThenEmptyQueue())
+
+        delta, _elapsed = await capture.collect(quiesce_ms=1, max_ms=20)
+
+        assert capture.deadline_exceeded is False
+        assert delta == "done"
+
+
 class TestSequentialResponseDeadline:
     """_controller.py — a sequential member cut off by max_response_ms is not ok.
 
     The parallel path is covered by the fan-out security contract
     (``total_response_deadline``); this pins the same rule on the sequential
-    one, where a member that never falls quiet has to be reported rather than
-    returned as a complete response that happens to be short.
+    one. What the collector decided is stubbed rather than raced for: whether
+    it decides correctly is the collector's own test above, and driving a real
+    producer against a 20ms budget is what made this flake.
     """
 
     async def test_sequential_deadline_marks_member_failed(self) -> None:
@@ -486,28 +556,18 @@ class TestSequentialResponseDeadline:
         group = _make_group(["w1"], mode="sequential")
         await ctrl.create_group(group, principal="admin")
 
-        _orig_send = hub.send_worker
+        async def _cut_short(self: OutputCapture, **kwargs: object) -> tuple[str, int]:
+            self.deadline_exceeded = True
+            return ("first half of a very ", 20)
 
-        async def _send_then_never_quiet(wid: str, msg: dict) -> bool:  # type: ignore[type-arg]
-            result = await _orig_send(wid, msg)
-            asyncio.get_running_loop().create_task(_never_quiet(wid))
-            return result
-
-        async def _never_quiet(wid: str) -> None:
-            # Outlives the 20ms budget without ever leaving the queue empty, so
-            # the collect can only end on the deadline and not on quiet.
-            stop_at = time.monotonic() + 0.15
-            while time.monotonic() < stop_at:
-                await hub.append_event(wid, "term", {"data": "."})
-                await asyncio.sleep(0)
-
-        hub.send_worker = _send_then_never_quiet  # type: ignore[assignment]
-
-        result = await ctrl._send_sequential(group, "tail -f\n", 1, 20, principal="admin")
+        with patch.object(OutputCapture, "collect", _cut_short):
+            result = await ctrl._send_sequential(group, "tail -f\n", 1, 20, principal="admin")
 
         assert result.failed_sessions == ["w1"]
         row = next(r for r in result.results if r.worker_id == "w1")
         assert row.ok is False
+        # The partial output stays on the row: the caller is told what it got.
+        assert row.output_delta == "first half of a very "
 
 
 class TestQuiesceLongerThanBudget:
