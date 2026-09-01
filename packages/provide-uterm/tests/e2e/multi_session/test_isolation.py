@@ -20,6 +20,8 @@ from typing import Any
 
 from provide.uterm.client import connect_async_ws
 
+from tests.e2e._live_server import wait_for_subscribers
+
 from .conftest import (
     snapshot_msg,
     watch_events,
@@ -89,13 +91,27 @@ async def test_two_sessions_concurrent_long_polls(two_session_server: Any) -> No
         # Launch both long-polls simultaneously
         poll1 = asyncio.create_task(watch_events(base_url, "s1", timeout_ms=6000, max_events=1))
         poll2 = asyncio.create_task(watch_events(base_url, "s2", timeout_ms=6000, max_events=1))
-        await asyncio.sleep(0.5)
 
-        # Fire events in reverse order to make sure routing is correct
+        # Wait for the registrations, rather than guessing at how long they take.
+        # A long-poll subscribes from inside its request handler, so an event
+        # fired before that lands is missed and its caller returns zero events.
+        await wait_for_subscribers(hub, "s1", 1)
+        await wait_for_subscribers(hub, "s2", 1)
+
+        # Both events fired BEFORE either poll is awaited. Firing s2, awaiting
+        # poll2, then firing s1 left poll1's 6s window having to outlast poll2's
+        # entire round trip; on a loaded runner it did not, and poll1 came back
+        # empty -- `assert 0 == 1` on quality (3.11) in run 33563719610.
+        # Widening the window would only move the threshold, and the dependency
+        # between the two polls is what is actually wrong.
+        #
+        # Reverse order is kept, and the routing check is stronger for it: both
+        # events are in flight at once, so a misrouted s2 event has a live poll1
+        # to land in rather than one that has already returned.
         await w2.send_json(snapshot_msg("$ s2 concurrent", "s2"))
-        resp2 = await asyncio.wait_for(poll2, timeout=15.0)
-
         await w1.send_json(snapshot_msg("$ s1 concurrent", "s1"))
+
+        resp2 = await asyncio.wait_for(poll2, timeout=15.0)
         resp1 = await asyncio.wait_for(poll1, timeout=15.0)
 
     assert resp1.status_code == 200
