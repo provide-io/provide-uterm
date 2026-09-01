@@ -99,23 +99,15 @@ class OutputCapture:
             elapsed = time.monotonic() - start
             remaining = max_s - elapsed
             if remaining <= 0:
-                # Reached only by coming back around after consuming an event:
-                # output was still arriving when the budget ran out. That is
-                # the truncation worth reporting, and the one thing a caller
-                # cannot otherwise tell from a short but complete response.
-                self.deadline_exceeded = True
                 break
             try:
                 event: dict[str, Any] | None = await asyncio.wait_for(
                     self._subscription.queue.get(), timeout=min(remaining, quiesce_s)
                 )
             except TimeoutError:
-                # Quiet, or the cap cut a quiesce window short. Either way the
-                # member had stopped talking, so what was collected is what it
-                # had to say -- not a truncation. A group whose quiesce_ms is
-                # longer than its max_ms always lands here, and reporting every
-                # such member as cut off would fail that configuration
-                # wholesale. Go's collector pins exactly this case.
+                # Quiet, or the cap cut a quiesce window short. Which of the two
+                # it was cannot be told from here, and does not need to be: what
+                # is still queued at exit answers it.
                 break
             if event is None:
                 break
@@ -129,6 +121,18 @@ class OutputCapture:
                 screen = data.get("screen", "") if isinstance(data, dict) else ""
                 if isinstance(screen, str) and screen:
                     last_snapshot_screen = _newest_utf8_suffix(screen, self._max_output_bytes)
+
+        # Truncated means we stopped with more still queued -- the member had
+        # not finished talking. Deriving it from what is LEFT, rather than from
+        # WHICH exit fired, is the rule go's suite settled on and the one C# and
+        # typescript carry. Python kept the exit-based version a while longer
+        # and it flaked on a loaded runner exactly as predicted: the loop-top
+        # exit needs the LAST queue.get() to succeed, so a producer that misses
+        # its 1ms quiesce window ends the collect through the timeout with the
+        # truncation unrecorded. It also keeps a group whose quiesce_ms exceeds
+        # its max_ms correct, since a member that answered and went quiet leaves
+        # nothing pending.
+        self.deadline_exceeded = self._subscription.queue.qsize() > 0
 
         elapsed_ms = int((time.monotonic() - start) * 1000)
         return (term_output if term_output else last_snapshot_screen, elapsed_ms)

@@ -161,9 +161,16 @@ async def _build(
         """Emit output the way ``tail -f`` does, so the collect can only end on its budget.
 
         ``quiesce_ms`` is 1 here, so a member that pauses even briefly ends the
-        collect as quiesced rather than cut short. Yielding with ``sleep(0)``
-        keeps the subscription queue stocked between the collector's gets,
-        which is what makes the deadline -- not the quiet -- decide.
+        collect as quiesced rather than cut short.
+
+        A BATCH per turn, not one event. The collector consumes one event per
+        iteration and yields, so a producer that appends one and yields leaves
+        the queue oscillating between empty and one -- and truncation is read
+        off what is still queued at exit, so an exit landing on the empty half
+        reports a member that never stopped talking as complete. This is the
+        single-threaded analogue of the four producer goroutines go's harness
+        needs for the same reason. The subscription's byte cap bounds the
+        backlog, so a batch saturates the queue rather than growing it.
 
         Self-limiting rather than cancelled by the caller: it outlives the
         budget by a wide margin and then stops on its own, so no scenario can
@@ -171,7 +178,8 @@ async def _build(
         """
         stop_at = time.monotonic() + (budget_s * 5) + 0.05
         while time.monotonic() < stop_at:
-            await hub.append_event(worker_id, "term", {"data": "."})
+            for _ in range(32):
+                await hub.append_event(worker_id, "term", {"data": "."})
             await asyncio.sleep(0)
 
     async def send_worker(worker_id: str, message: dict[str, Any], *, source: Any = None) -> bool:
