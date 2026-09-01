@@ -137,7 +137,23 @@ jobs:
       # all failures (no fail-fast masking of later checks).
       # GOLDENS_REGEN_DIR: where the goldens check writes a rejected corpus, so
       # the upload step below can keep it. See .ci/check_goldens.sh.
+      #
+      # GOLDENS_OWNED_ELSEWHERE: the goldens are checked once, by the step
+      # below, rather than once per matrix cell. They are pinned to a single
+      # interpreter, so four cells produced four identical answers -- and the
+      # three non-reference cells each provisioned a second Python to do it.
       - run: bash ci/quality_checks.sh
+        env:
+          GOLDENS_REGEN_DIR: ${{ runner.temp }}/goldens-regen
+          GOLDENS_OWNED_ELSEWHERE: "1"
+      # The goldens, once, on the cell whose interpreter is already the
+      # reference one -- so this is also the only cell that does not pay to
+      # provision another. `!cancelled()` rather than a bare condition: the gate
+      # above deliberately runs every check before failing, and letting its
+      # failure skip this one would reintroduce exactly the masking it avoids.
+      - if: ${{ !cancelled() && matrix.python-version == '3.13' }}
+        name: Golden corpora (reference interpreter only)
+        run: bash .ci/check_goldens.sh
         env:
           GOLDENS_REGEN_DIR: ${{ runner.temp }}/goldens-regen
       # A stale-golden failure is only actionable if you can see what the

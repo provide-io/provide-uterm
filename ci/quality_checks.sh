@@ -69,7 +69,22 @@ step "cf-vendor-tree"     bash .ci/check_cf_vendor_tree.sh
 # stale corpus means that port's tests are asserting old behaviour. Covered only
 # the TypeScript testdata directory until the Go egress corpus was found to have
 # recorded an SSRF hole as expected behaviour, unguarded by anything.
-step "goldens"            bash .ci/check_goldens.sh
+# The goldens are pinned to ONE interpreter -- the script re-execs under the
+# reference version when it is not already running there -- so running them once
+# per matrix cell produces four identical answers for four times the cost, and
+# each non-reference cell also pays to provision a second interpreter first.
+#
+# In CI a dedicated step on the reference cell owns them, and this announces
+# that rather than passing silently. A skip that says nothing is what let three
+# corpora sit stale while `make quality-gate` was green; this one names who is
+# running the check instead, and tests/scripts/test_goldens_ownership.py fails
+# if that owner ever disappears from the workflow.
+if [[ -n "${GOLDENS_OWNED_ELSEWHERE:-}" ]]; then
+  printf '\n=== goldens ===\n'
+  printf '  DELEGATED: run once by the dedicated CI step on the reference interpreter\n'
+else
+  step "goldens"            bash .ci/check_goldens.sh
+fi
 # The cross-language fuzz corpus: reproducible from its committed seed, and
 # still matching what the CPython reference produces. Four ports replay it.
 step "fuzz-corpus"        bash ci/check_fuzz_corpus.sh
