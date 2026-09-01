@@ -39,6 +39,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+from repo_paths import submodule_dirs
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -64,49 +66,33 @@ def floor_pattern(names: list[str]) -> re.Pattern[str]:
     return re.compile(rf"(?P<name>{alternation})(?P<extras>\[[^\]]*\])?>=(?P<floor>\d+(?:\.\d+)*)")
 
 
-def numeric_version(text: str) -> tuple[int, ...] | None:
-    """Parse a dotted numeric version, or None when it is not one."""
-    parts = text.split(".")
-    if not text or not all(part.isdigit() for part in parts):
-        return None
-    return tuple(int(part) for part in parts)
-
-
 def version_file_drift(root: Path, version: str, *, fix: bool) -> list[str]:
     """Report (and optionally repin) each package's own VERSION file.
 
-    A Python package's VERSION *is* its published version -- setuptools reads
-    it for ``dynamic = ["version"]`` -- and release.yml publishes all six
-    together, so one that disagrees with the root ships a wheel under the wrong
-    number. Those are held equal.
+    A package's VERSION *is* its published version -- setuptools reads it for
+    ``dynamic = ["version"]``, ci/tag_go_module.sh and ci/publish_nuget.sh read
+    it for the tag and the NuGet package -- and release.yml publishes them
+    together, so one that disagrees with the root ships under the wrong number.
 
-    The Go and C# ports are not: both have a workflow_dispatch route that
-    publishes from their own VERSION with the release-tag guard skipped, which
-    is how a port cuts a release between workspace ones. So a port is allowed
-    to be AHEAD of the root and only reported when it lags -- a port behind the
-    root would be re-published at the root's version on the next release and
-    silently overwrite what it cut.
+    Equality, in both directions and for every package. That rule is not new
+    here: packages/provide-uterm-ts/src/server/version-consistency.test.ts has
+    enforced it, along with the npm manifests, the lock, SERVER_VERSION and the
+    CHANGELOG heading, for longer than this file has existed. This is the same
+    rule in the static gate, where a Python-side change that never runs vitest
+    can still hit it -- and where ``--fix`` can repin it.
+
+    Submodules are skipped: packages/provide-telemetry is released on its own
+    cadence and its VERSION is not ours to keep in step.
     """
     drifted: list[str] = []
-    expected = numeric_version(version)
+    foreign = submodule_dirs(root)
     for version_file in sorted(root.glob("packages/*/VERSION")):
-        rel = version_file.relative_to(root)
+        if version_file.parent.resolve() in foreign:
+            continue
         declared = version_file.read_text(encoding="utf-8").strip()
         if declared == version:
             continue
-
-        independent = not (version_file.parent / "pyproject.toml").is_file()
-        found = numeric_version(declared)
-        if found is None:
-            drifted.append(f'{rel}:1: "{declared}" — not a dotted numeric version')
-            continue
-        if independent and expected is not None and found > expected:
-            # A port that cut its own release. Deliberate, and the reason this
-            # check cannot simply demand equality everywhere.
-            continue
-
-        lagging = " (a port may cut ahead of the workspace, never lag)" if independent else ""
-        drifted.append(f"{rel}:1: {declared} — expected {version}{lagging}")
+        drifted.append(f"{version_file.relative_to(root)}:1: {declared} — expected {version}")
         if fix:
             version_file.write_text(f"{version}\n", encoding="utf-8")
     return drifted

@@ -4,6 +4,58 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.6] — 2026-09-01
+
+The fan-out response budget means the same thing in all four ports, and the Go
+module is consumable by version again.
+
+### Fixed
+
+- **A response cut off at `max_response_ms` was reported as a complete one.**
+  Every port returned `ok` for a member that was still producing output when the
+  budget expired, so a truncated transcript was indistinguishable from a member
+  that simply finished quickly. All four now report such a member in
+  `failed_members` and keep its partial output on the row, and it is left out of
+  the divergence vote — comparing a cut-off transcript against complete ones
+  flags the healthy members as the divergent ones.
+
+- **The rule itself was wrong twice before it was right.** Deriving truncation
+  from *which exit* the collect took fails any group whose quiesce window is
+  longer than its cap: those always end at the cap, so every member was reported
+  cut off even after answering and going quiet. It is derived from what is still
+  queued at exit instead. C# had the same defect in a third form — a throw
+  whenever the budget cut a read short, regardless of what had been collected —
+  now narrowed to when nothing was collected, which is the case its shared
+  `OperationBudget` actually needs it for.
+
+- **The C# scenario never ran the code it claimed to test.** Its harness made
+  `SendWorkerAsync` return a task that never completed, so the member failed for
+  never having been delivered to and the collector, the budget and the
+  truncation decision never executed. All four harnesses now drive it with real
+  continuous output.
+
+- **A data race in the Go `EventBus`.** `Subscription.dropped` was a plain `int`
+  incremented from `deliver`, which `Enqueue` calls after releasing the bus lock.
+  Unreachable while only one goroutine enqueued per worker; `-race` reports it
+  the moment that stops being true. Now `atomic.Int64`.
+
+- **`RunHandshakeAndLoop` carried an always-true error guard** that staticcheck
+  reported only intermittently, because golangci-lint's cache is content-keyed
+  and shared across checkouts.
+
+### Changed
+
+- **The static gate runs the contract validators' own tests.** They live in
+  `tests/conformance/`, outside the default pytest testpaths, so their only CI
+  home was the three-language `live-matrix` job — rewording a validator's error
+  message went red twenty minutes later on a change that touched no backend.
+
+- **`check_version_consistency.py` compares every `packages/*/VERSION` against
+  the root.** It read the root and then only inspected `pyproject.toml` files,
+  so a package VERSION could disagree with the release and the gate stayed
+  green. The npm-side check in `version-consistency.test.ts` already enforced
+  this; the static gate now enforces the same rule, where `--fix` can repin it.
+
 ## [0.5.5] — 2026-08-30
 
 The Go and C# ports learn what version they are, and the C# port is published to
