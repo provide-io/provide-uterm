@@ -6,8 +6,11 @@
 // It exists at the module root for one reason: go:embed can only reach files in
 // or below the embedding package's directory, and the VERSION file has to live
 // at packages/provide-uterm-go/VERSION so the release consistency check finds
-// it. That check walks packages/*/VERSION, and this port had no such file, so
-// nothing compared it to anything -- cli.Version and the server default sat at
+// it. That check (scripts/check_version_consistency.py) walks packages/*/VERSION
+// and compares each against the repository root's, allowing this port to sit
+// AHEAD of the workspace because it can cut its own release. It described that
+// walk before it performed one: this port had no such file, so nothing compared
+// it to anything -- cli.Version and the server default sat at
 // "0.0.0-dev" and the MCP server at "0.1.0" while the Python packages went to
 // 0.5.4. Reading the file is what keeps them from drifting again.
 package uterm
