@@ -6,13 +6,21 @@
 
 Usage::
 
-    from tests.e2e._live_server import live_server_with_bus
+    from ._live_server import live_server_with_bus  # noqa: TID252 from a subdir
 
     @pytest.fixture()
     async def live_server() -> Any:
         sessions = [{"session_id": "s1", "display_name": "Test", "connector_type": "shell", "auto_start": False}]
         async with live_server_with_bus(sessions) as (hub, base_url):
             yield hub, base_url
+
+The import must be RELATIVE. An absolute ``tests.e2e._live_server`` is the norm
+in provide-uterm-server, which pytest collects under its own rootdir, but it
+does not work here: the root run collects this package alongside
+provide-uterm-cloudflare, and whichever ``tests`` directory is collected first
+owns the name. Collect cloudflare first and the absolute form raises
+``ModuleNotFoundError: No module named 'tests'`` -- while a single-file run of
+the same test still passes, so it looks fine locally and fails the whole gate.
 """
 
 from __future__ import annotations
