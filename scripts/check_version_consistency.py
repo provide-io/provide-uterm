@@ -7,7 +7,10 @@
 
 Every published package derives its own version from its ``VERSION`` file
 (``dynamic = ["version"]`` + ``[tool.setuptools.dynamic]``), so a package can
-never disagree with the release about what it is. The floors those packages
+never disagree with its own file about what it is -- but that file could
+disagree with the ROOT, and until it was checked here nothing compared the two.
+A Python package whose VERSION lagged would have shipped a wheel under the wrong
+number with the gate green. The floors those packages
 declare on EACH OTHER are the exception: they are hand-written literals, and
 nothing re-reads them when the release bumps. They drifted to ``>=0.5.0`` while
 the workspace shipped ``0.5.5`` -- five releases with a floor that let pip
@@ -61,6 +64,54 @@ def floor_pattern(names: list[str]) -> re.Pattern[str]:
     return re.compile(rf"(?P<name>{alternation})(?P<extras>\[[^\]]*\])?>=(?P<floor>\d+(?:\.\d+)*)")
 
 
+def numeric_version(text: str) -> tuple[int, ...] | None:
+    """Parse a dotted numeric version, or None when it is not one."""
+    parts = text.split(".")
+    if not text or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
+
+
+def version_file_drift(root: Path, version: str, *, fix: bool) -> list[str]:
+    """Report (and optionally repin) each package's own VERSION file.
+
+    A Python package's VERSION *is* its published version -- setuptools reads
+    it for ``dynamic = ["version"]`` -- and release.yml publishes all six
+    together, so one that disagrees with the root ships a wheel under the wrong
+    number. Those are held equal.
+
+    The Go and C# ports are not: both have a workflow_dispatch route that
+    publishes from their own VERSION with the release-tag guard skipped, which
+    is how a port cuts a release between workspace ones. So a port is allowed
+    to be AHEAD of the root and only reported when it lags -- a port behind the
+    root would be re-published at the root's version on the next release and
+    silently overwrite what it cut.
+    """
+    drifted: list[str] = []
+    expected = numeric_version(version)
+    for version_file in sorted(root.glob("packages/*/VERSION")):
+        rel = version_file.relative_to(root)
+        declared = version_file.read_text(encoding="utf-8").strip()
+        if declared == version:
+            continue
+
+        independent = not (version_file.parent / "pyproject.toml").is_file()
+        found = numeric_version(declared)
+        if found is None:
+            drifted.append(f'{rel}:1: "{declared}" — not a dotted numeric version')
+            continue
+        if independent and expected is not None and found > expected:
+            # A port that cut its own release. Deliberate, and the reason this
+            # check cannot simply demand equality everywhere.
+            continue
+
+        lagging = " (a port may cut ahead of the workspace, never lag)" if independent else ""
+        drifted.append(f"{rel}:1: {declared} — expected {version}{lagging}")
+        if fix:
+            version_file.write_text(f"{version}\n", encoding="utf-8")
+    return drifted
+
+
 def root_version_drift(pyproject: Path, version: str, *, fix: bool) -> list[str]:
     """Report (and optionally repin) the workspace root's own literal version.
 
@@ -103,6 +154,7 @@ def main() -> int:
 
     drifted: list[str] = []
     drifted += root_version_drift(root_pyproject, version, fix=args.fix)
+    drifted += version_file_drift(REPO_ROOT, version, fix=args.fix)
     for pyproject in scanned:
         original = pyproject.read_text(encoding="utf-8")
         for line_no, line in enumerate(original.splitlines(), start=1):
