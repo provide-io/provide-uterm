@@ -450,20 +450,67 @@ def _start(host: str, port: int, listener: socket.socket, app: Any) -> Any:
 
 
 def _await_worker(client: httpx2.Client, token: str) -> None:
-    """Wait until the configured session's worker has attached to the hub.
+    """Wait until the session's worker has attached AND its snapshot has landed.
 
-    Without this the first acquire races the lifespan's own connect and the
-    corpus records "No worker connected for this session." — a true answer to
-    a question nobody asked.
+    Without the first condition the opening acquire races the lifespan's own
+    connect and the corpus records "No worker connected for this session." — a
+    true answer to a question nobody asked.
+
+    The second condition is not the same thing, which is the whole point.
+    ``SessionRuntime._bridge_session`` sets ``self._connected = True`` and only
+    THEN enqueues the initial snapshot, which still has to cross the outbound
+    queue, the worker WebSocket and the hub before ``update_last_snapshot``
+    stores it. ``GET /snapshot`` with the default ``wait_ms=0`` is a pure cache
+    read, so during that window it answers 200 with a JSON ``null`` — a
+    documented value (the route returns ``dict[str, Any] | None``), not a
+    malformed response.
+
+    Recording that window is what made this corpus non-deterministic: the
+    ``snapshot_before_hijack`` body is masked whole, so the only trace was
+    ``body_keys`` disappearing, and a red goldens check with no other symptom.
+    Seen 2026-08-09, 2026-08-10 and 2026-09-01. Waiting on ``connected`` alone
+    hid it only because the poll below sleeps 100ms; tightening that sleep to
+    zero reproduces the null body on 5 runs out of 8.
     """
     deadline = time.monotonic() + 30.0
     headers = _headers("token", token)
     while time.monotonic() < deadline:
         response = client.get(f"/api/sessions/{SESSION}", headers=headers)
         if response.status_code == 200 and response.json().get("connected") is True:
-            return
+            break
         time.sleep(0.1)
-    raise RuntimeError("the reference session's worker never connected")  # pragma: no cover
+    else:  # pragma: no cover - the reference always connects
+        raise RuntimeError("the reference session's worker never connected")
+    while time.monotonic() < deadline:
+        response = client.get(f"/api/sessions/{SESSION}/snapshot", headers=headers)
+        # A read-only cache probe: wait_ms defaults to 0, so this asks the
+        # worker for nothing and leaves no trace in what the probes record.
+        if response.status_code == 200 and response.json() is not None:
+            return
+        time.sleep(0.02)
+    raise RuntimeError("the reference session's first snapshot never reached the hub")  # pragma: no cover
+
+
+def _body_keys(probe_id: str, body: Any) -> list[str]:
+    """Return the body's key set, refusing to record a body that has none.
+
+    This used to be ``if probe.get("keys") and isinstance(body, dict)``, so a
+    body the reference had not filled in yet simply dropped ``body_keys`` from
+    the record. The corpus stayed valid JSON, the probe kept its status and its
+    masked body, and the only symptom was a goldens check going red with no
+    other trace -- three times before anyone could say why.
+
+    A probe that asks for its key set is asserting the body has one. If it does
+    not, the generator is recording a reference that was not ready, and the
+    right outcome is a loud failure rather than a corpus that is quietly
+    missing a field.
+    """
+    if not isinstance(body, dict):
+        raise RuntimeError(
+            f"probe {probe_id!r} asked for body_keys but the body was {body!r}. "
+            "The reference answered before it was ready -- see _await_worker."
+        )
+    return sorted(body)
 
 
 def main() -> None:
@@ -520,8 +567,8 @@ def main() -> None:
                 }
                 if probe.get("json") is not None:
                     record["json"] = probe["json"]
-                if probe.get("keys") and isinstance(body, dict):
-                    record["body_keys"] = sorted(body)
+                if probe.get("keys"):
+                    record["body_keys"] = _body_keys(str(probe["id"]), body)
                 records.append(record)
     finally:
         server.should_exit = True
