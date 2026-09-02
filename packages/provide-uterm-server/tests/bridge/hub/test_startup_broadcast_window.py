@@ -86,6 +86,61 @@ async def test_buffered_inspect_frames_keep_their_order() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_snapshot_from_the_window_is_delivered_on_activation() -> None:
+    """The screen a browser would otherwise never see.
+
+    Dropping snapshots assumed a newer one would follow. A terminal that emits
+    one burst and goes idle produces exactly one, and losing it leaves the
+    browser on the pre-burst screen its hello handed over -- the telnet banner
+    failure, where ECHO_BANNER never reached the screen buffer.
+    """
+    hub = await _hub_with_worker("w-snapshot")
+    browser = AsyncMock()
+    await hub.register_browser("w-snapshot", browser, "viewer", defer_broadcast=True)
+
+    await hub.broadcast("w-snapshot", {"type": "snapshot", "screen": "ECHO_BANNER", "ts": 1.0})
+    assert _decoded(browser) == [], "a browser mid-startup must not be written to yet"
+
+    await hub.activate_browser_broadcasts("w-snapshot", browser)
+
+    assert [frame["screen"] for frame in _decoded(browser)] == ["ECHO_BANNER"]
+
+
+@pytest.mark.asyncio
+async def test_only_the_newest_buffered_snapshot_survives() -> None:
+    """Absolute screen state, so the cap is not spent on screens nobody sees."""
+    hub = await _hub_with_worker("w-coalesce")
+    browser = AsyncMock()
+    await hub.register_browser("w-coalesce", browser, "viewer", defer_broadcast=True)
+
+    for index in range(5):
+        await hub.broadcast("w-coalesce", {"type": "snapshot", "screen": f"screen-{index}", "ts": float(index)})
+    await hub.activate_browser_broadcasts("w-coalesce", browser)
+
+    assert [frame["screen"] for frame in _decoded(browser)] == ["screen-4"]
+
+
+@pytest.mark.asyncio
+async def test_a_coalesced_snapshot_does_not_disturb_the_inspect_order() -> None:
+    """Inspect rows keep their order; the snapshot lands where it arrived."""
+    hub = await _hub_with_worker("w-mixed")
+    browser = AsyncMock()
+    await hub.register_browser("w-mixed", browser, "viewer", defer_broadcast=True)
+
+    await hub.broadcast("w-mixed", {**_HTTP_REQ, "id": "r0", "url": "/api/0"})
+    await hub.broadcast("w-mixed", {"type": "snapshot", "screen": "old", "ts": 1.0})
+    await hub.broadcast("w-mixed", {**_HTTP_REQ, "id": "r1", "url": "/api/1"})
+    await hub.broadcast("w-mixed", {"type": "snapshot", "screen": "new", "ts": 2.0})
+    await hub.activate_browser_broadcasts("w-mixed", browser)
+
+    assert [frame.get("url") or frame.get("screen") for frame in _decoded(browser)] == [
+        "/api/0",
+        "/api/1",
+        "new",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_terminal_output_from_the_window_is_not_replayed() -> None:
     """The hello's initial_snapshot already covers it; replaying prints twice."""
     hub = await _hub_with_worker("w-term")

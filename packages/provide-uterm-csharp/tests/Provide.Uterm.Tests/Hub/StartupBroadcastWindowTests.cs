@@ -79,6 +79,39 @@ public sealed class StartupBroadcastWindowTests
     }
 
     [Fact]
+    public async Task SnapshotFromTheWindowIsDeliveredOnActivation()
+    {
+        // Dropping snapshots assumed a newer one would follow. A terminal that
+        // emits one burst and goes idle produces exactly one, and losing it
+        // leaves the browser on the pre-burst screen its hello handed over.
+        var (hub, browser) = Pending();
+
+        await hub.Conn.BroadcastToBrowsersAsync(
+            WorkerId, new Dictionary<string, object?> { ["type"] = "snapshot", ["screen"] = "ECHO_BANNER" });
+        Assert.Empty(browser.Messages);
+
+        await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
+
+        Assert.Single(UrlsSeen(browser, "ECHO_BANNER"));
+    }
+
+    [Fact]
+    public async Task OnlyTheNewestBufferedSnapshotSurvives()
+    {
+        var (hub, browser) = Pending();
+
+        for (var index = 0; index < 5; index += 1)
+        {
+            await hub.Conn.BroadcastToBrowsersAsync(
+                WorkerId, new Dictionary<string, object?> { ["type"] = "snapshot", ["screen"] = $"screen-{index}" });
+        }
+        await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
+
+        Assert.Empty(UrlsSeen(browser, "screen-0", "screen-3"));
+        Assert.Single(UrlsSeen(browser, "screen-4"));
+    }
+
+    [Fact]
     public async Task TerminalOutputFromTheWindowIsNotReplayed()
     {
         // The hello's initial_snapshot already covers it; replaying prints twice.

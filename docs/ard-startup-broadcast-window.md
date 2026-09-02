@@ -220,3 +220,51 @@ flush pending), with the same eleven cases as the reference.
 Note `src/server/session-hub.ts` keeps both structures permanently empty: that
 facade accepts no browsers, so nothing there is ever deferred. The live
 mechanism is the one in `src/hub/`.
+
+## Amendment (2026-09-02b): `snapshot` was excluded on an assumption
+
+Both the original Decision and the first amendment kept dropping `snapshot`,
+on the reasoning that "a newer snapshot supersedes itself on the next one."
+That assumes there **is** a next one.
+
+A terminal that emits one burst and then goes idle produces exactly one
+snapshot. If it lands inside a browser's startup window it is dropped, and the
+browser keeps the pre-burst screen its hello handed over — not for a moment,
+but for the rest of the session, because nothing will change the screen again.
+
+### Evidence
+
+`quality (3.13)` failed on `test_telnet_screen_shows_received_data`:
+
+```
+AssertionError: browser never received a snapshot containing 'ECHO_BANNER';
+the mock echo server data did not reach the screen buffer
+```
+
+The mock telnet server sends its banner once. Not reproducible on demand —
+three full runs of the telnet e2e under eight CPU spinners were green in 3.5s
+against a 10s timeout. Injecting a 2s delay before
+`hub.activate_browser_broadcasts` reproduces it byte-identically, including the
+same `hosted_session_runtime_failed ... 1012` line CI logged; with this
+amendment applied, the same injection passes.
+
+That test had been patched once before for a different timing bug
+(`7056ebfc`, "stop a quiet slice ending the telnet snapshot wait"), which is
+worth noting: the earlier fix made the wait robust, and the failure that
+remained was the server dropping the frame, not the test giving up early.
+
+### Rule
+
+`snapshot` is now held, and **coalesced**: when a snapshot is buffered, any
+snapshot already queued for that browser is dropped first. A snapshot is
+absolute screen state rather than a delta, so only the newest is worth keeping
+— and a terminal busy through the whole window cannot spend the 256-frame cap
+on screens nobody will ever see. Inspect rows keep their arrival order around
+it, which is pinned.
+
+This also repairs the visible half of the `term` exclusion. Terminal bytes
+arriving inside the window are still dropped, but the snapshot that follows
+them now arrives, so the screen ends up correct without replaying output that
+would print twice.
+
+Applied to Python, Go, C# and TypeScript.
