@@ -112,6 +112,30 @@ describe("the broadcast window a connecting browser cannot see", () => {
     expect(seen(browser, "/api/0", "/api/1", "/api/2")).toEqual(["/api/0", "/api/1", "/api/2"]);
   });
 
+  it("delivers a snapshot from the window on activation", async () => {
+    // Dropping snapshots assumed a newer one would follow. A terminal that
+    // emits one burst and goes idle produces exactly one.
+    const { router, connections, browser } = await pending();
+
+    await router.broadcast(WORKER, { type: "snapshot", screen: "ECHO_BANNER", ts: 1 });
+    expect(browser.sent).toEqual([]);
+
+    await connections.activateBrowserBroadcasts(WORKER, browser);
+
+    expect(seen(browser, "ECHO_BANNER")).toEqual(["ECHO_BANNER"]);
+  });
+
+  it("keeps only the newest buffered snapshot", async () => {
+    const { router, connections, browser } = await pending();
+
+    for (const index of [0, 1, 2, 3, 4]) {
+      await router.broadcast(WORKER, { type: "snapshot", screen: `screen-${index}`, ts: index });
+    }
+    await connections.activateBrowserBroadcasts(WORKER, browser);
+
+    expect(seen(browser, "screen-0", "screen-3", "screen-4")).toEqual(["screen-4"]);
+  });
+
   it("does not replay terminal output from the window", async () => {
     // The hello's initial_snapshot already covers it; replaying prints twice.
     const { router, connections, browser } = await pending();

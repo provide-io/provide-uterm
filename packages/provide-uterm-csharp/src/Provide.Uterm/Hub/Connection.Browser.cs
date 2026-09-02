@@ -524,9 +524,16 @@ public sealed partial class ConnectionManager
     // sequence already carries the same information.
     //
     // A term chunk is covered by the initial_snapshot the hello hands over, so
-    // replaying it would print the screen twice; hijack_state is sent to the
-    // browser directly during startup; a newer snapshot supersedes itself on
-    // the next one. Those are correctly dropped.
+    // replaying it would print the screen twice, and hijack_state is sent to
+    // the browser directly during startup. Those are correctly dropped.
+    //
+    // snapshot was dropped on the reasoning that "a newer one supersedes it" -
+    // which assumes there IS a newer one. A terminal that emits one burst and
+    // then goes idle produces exactly one snapshot, and if it lands inside the
+    // window the browser keeps the pre-burst screen its hello handed over,
+    // forever. Snapshots are held, but COALESCED: absolute screen state, so
+    // only the newest is worth keeping and a busy terminal cannot fill the cap
+    // with them.
     //
     // Presence was on that list and should not have been. The startup sequence
     // does send the browser a presence_sync directly - but it is computed at
@@ -561,7 +568,8 @@ public sealed partial class ConnectionManager
         }
 
         return msg.TryGetValue("type", out var type) && type as string is
-            FrameTypeNames.PresenceSync or FrameTypeNames.PresenceLeave or FrameTypeNames.ControlTransfer;
+            FrameTypeNames.PresenceSync or FrameTypeNames.PresenceLeave or FrameTypeNames.ControlTransfer
+            or FrameTypeNames.Snapshot;
     }
 
     // Bounds what a browser that never finishes its startup sequence can
@@ -577,6 +585,19 @@ public sealed partial class ConnectionManager
         {
             queued = new List<Dictionary<string, object?>>();
             _hub.StartupPendingFrames[ws] = queued;
+        }
+
+        if (msg.TryGetValue("type", out var type) &&
+            string.Equals(type as string, FrameTypeNames.Snapshot, StringComparison.Ordinal))
+        {
+            // Absolute screen state: keep the newest and drop the one it
+            // replaces, so a terminal busy through the whole window cannot
+            // spend the cap on screens nobody will ever see.
+            queued.RemoveAll(frame =>
+                frame.TryGetValue("type", out var queuedType) &&
+                string.Equals(queuedType as string, FrameTypeNames.Snapshot, StringComparison.Ordinal));
+            queued.Add(msg);
+            return;
         }
 
         if (queued.Count >= StartupBufferMaxFrames)

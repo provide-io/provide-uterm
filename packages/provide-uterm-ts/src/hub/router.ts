@@ -40,6 +40,9 @@ export const BROADCAST_SEND_TIMEOUT_S = 5;
  */
 export const STARTUP_BUFFER_MAX_FRAMES = 256;
 
+/** The screen frame: held and coalesced rather than dropped. */
+const SNAPSHOT_FRAME_TYPE = "snapshot";
+
 /**
  * Whether `message` must be held for browsers still inside their startup window.
  *
@@ -48,8 +51,14 @@ export const STARTUP_BUFFER_MAX_FRAMES = 256;
  * difference is whether the startup sequence already carries the same thing.
  *
  * A `term` chunk is covered by the `initial_snapshot` the hello hands over, so
- * replaying it would print the screen twice; `hijack_state` is sent directly
- * during startup; a newer `snapshot` supersedes itself on the next one.
+ * replaying it would print the screen twice, and `hijack_state` is sent
+ * directly during startup. Those are correctly dropped.
+ *
+ * `snapshot` was dropped on the reasoning that "a newer one supersedes it" —
+ * which assumes there IS a newer one. A terminal that emits one burst and then
+ * goes idle produces exactly one, and losing it leaves the browser on the
+ * pre-burst screen forever. Snapshots are held but COALESCED: absolute screen
+ * state, so only the newest is worth keeping.
  *
  * The inspect channel has no such replay — its rows are appended without
  * dedupe, so a dropped `http_req` is missing for the life of the session. The
@@ -65,7 +74,12 @@ export function survivesStartupWindow(message: Record<string, unknown>): boolean
     return true;
   }
   const type = message.type;
-  return type === MSG_PRESENCE_SYNC || type === MSG_PRESENCE_LEAVE || type === MSG_CONTROL_TRANSFER;
+  return (
+    type === MSG_PRESENCE_SYNC ||
+    type === MSG_PRESENCE_LEAVE ||
+    type === MSG_CONTROL_TRANSFER ||
+    type === SNAPSHOT_FRAME_TYPE
+  );
 }
 
 /** A browser connection the router can write to. */
@@ -267,6 +281,15 @@ export class MessageRouter {
   /** Hold one frame for a browser still inside its startup window. */
   #bufferStartupFrame(ws: Connection, message: Record<string, unknown>): void {
     const queued = this.#hub.startupPendingFrames.get(ws) ?? [];
+    if (message.type === SNAPSHOT_FRAME_TYPE) {
+      // Absolute screen state: keep the newest and drop the one it replaces, so
+      // a terminal busy through the whole window cannot spend the cap on
+      // screens nobody will ever see.
+      const withoutSnapshots = queued.filter((frame) => frame.type !== SNAPSHOT_FRAME_TYPE);
+      withoutSnapshots.push(message);
+      this.#hub.startupPendingFrames.set(ws, withoutSnapshots);
+      return;
+    }
     if (queued.length >= STARTUP_BUFFER_MAX_FRAMES) {
       return;
     }

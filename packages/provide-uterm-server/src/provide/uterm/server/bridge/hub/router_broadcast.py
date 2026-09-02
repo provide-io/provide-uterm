@@ -54,6 +54,9 @@ logger = get_logger(__name__)
 #: out the buffer's cap.
 _DECKMUX_STATE_FRAME_TYPES = frozenset({MSG_PRESENCE_SYNC, MSG_PRESENCE_LEAVE, MSG_CONTROL_TRANSFER})
 
+#: The screen frame, held and coalesced rather than dropped — see below.
+_SNAPSHOT_FRAME_TYPE = "snapshot"
+
 
 # A browser inside its startup window is not yet in the broadcast set, so
 # whatever is broadcast meanwhile would be lost. That is deliberate for most
@@ -61,9 +64,18 @@ _DECKMUX_STATE_FRAME_TYPES = frozenset({MSG_PRESENCE_SYNC, MSG_PRESENCE_LEAVE, M
 # sequence already carries the same information.
 #
 # A ``term`` chunk is covered by the ``initial_snapshot`` the hello hands over,
-# so replaying it would print the screen twice; ``hijack_state`` is sent to the
-# browser directly during startup; a newer ``snapshot`` supersedes itself on the
-# next one. Those are correctly dropped.
+# so replaying it would print the screen twice, and ``hijack_state`` is sent to
+# the browser directly during startup. Those are correctly dropped.
+#
+# ``snapshot`` was dropped on the reasoning that "a newer one supersedes it" —
+# which assumes there IS a newer one. A terminal that emits one burst and then
+# goes idle produces exactly one snapshot, and if it lands inside the window the
+# browser keeps the pre-burst screen its hello handed over, forever. That is the
+# telnet banner failure: `browser never received a snapshot containing
+# 'ECHO_BANNER'`, reproduced byte-identically by delaying activation 2s.
+# Snapshots are held, but COALESCED — a snapshot is absolute screen state, so
+# only the newest is worth keeping and a busy terminal cannot fill the cap
+# with them.
 #
 # Presence was on that list and should not have been. The startup sequence does
 # send the browser a ``presence_sync`` directly — but it is computed at that
@@ -87,7 +99,9 @@ _DECKMUX_STATE_FRAME_TYPES = frozenset({MSG_PRESENCE_SYNC, MSG_PRESENCE_LEAVE, M
 # life of the session with nothing to reconcile it against.
 def _survives_startup_window(msg: dict[str, Any]) -> bool:
     """Whether *msg* must be held for browsers still in their startup window."""
-    return msg.get("_channel") == "http" or msg.get("type") in _DECKMUX_STATE_FRAME_TYPES
+    if msg.get("_channel") == "http":
+        return True
+    return msg.get("type") in _DECKMUX_STATE_FRAME_TYPES or msg.get("type") == _SNAPSHOT_FRAME_TYPE
 
 
 # A browser that never finishes its startup sequence must not be able to grow
@@ -106,6 +120,13 @@ def _buffer_for_startup_browsers(hub: Any, st: Any, msg: dict[str, Any], worker_
         if ws not in hub._startup_pending_browsers:
             continue
         queued = hub._startup_pending_frames.setdefault(ws, [])
+        if msg.get("type") == _SNAPSHOT_FRAME_TYPE:
+            # Absolute screen state: keep the newest and drop the one it
+            # replaces, so a terminal that is busy through the whole window
+            # cannot spend the cap on screens nobody will ever see.
+            queued[:] = [frame for frame in queued if frame.get("type") != _SNAPSHOT_FRAME_TYPE]
+            queued.append(msg)
+            continue
         if len(queued) >= _STARTUP_BUFFER_MAX_FRAMES:
             logger.warning(
                 "startup_frame_buffer_full",

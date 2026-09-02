@@ -17,6 +17,7 @@ package hub
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -75,6 +76,45 @@ func TestBufferedInspectFramesKeepTheirOrder(t *testing.T) {
 	want := []string{"/api/zero", "/api/one", "/api/two"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("buffered frames reordered: got %v want %v", got, want)
+	}
+}
+
+// TestSnapshotFromTheWindowIsDeliveredOnActivation: dropping snapshots assumed
+// a newer one would follow. A terminal that emits one burst and goes idle
+// produces exactly one, and losing it leaves the browser on the pre-burst
+// screen its hello handed over.
+func TestSnapshotFromTheWindowIsDeliveredOnActivation(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	ws := newBrowserWS("b")
+	_, _ = h.Conn.RegisterBrowser(bg(), "w1", ws, "viewer", true)
+
+	_ = h.Router.Broadcast(bg(), "w1", map[string]any{"type": "snapshot", "screen": "ECHO_BANNER", "ts": 1.0})
+	if got := len(ws.payloads()); got != 0 {
+		t.Fatalf("a browser mid-startup must not be written to yet, got %d payload(s)", got)
+	}
+
+	h.Conn.ActivateBrowserBroadcasts(bg(), "w1", ws)
+
+	if got := sentURLs(ws, "ECHO_BANNER"); len(got) != 1 {
+		t.Fatalf("buffered snapshot not delivered on activation, got %v", got)
+	}
+}
+
+// TestOnlyTheNewestBufferedSnapshotSurvives pins the coalescing.
+func TestOnlyTheNewestBufferedSnapshotSurvives(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	ws := newBrowserWS("b")
+	_, _ = h.Conn.RegisterBrowser(bg(), "w1", ws, "viewer", true)
+
+	for index := range 5 {
+		_ = h.Router.Broadcast(bg(), "w1", map[string]any{
+			"type": "snapshot", "screen": fmt.Sprintf("screen-%d", index), "ts": float64(index),
+		})
+	}
+	h.Conn.ActivateBrowserBroadcasts(bg(), "w1", ws)
+
+	if got := sentURLs(ws, "screen-0", "screen-3", "screen-4"); len(got) != 1 || got[0] != "screen-4" {
+		t.Fatalf("expected only the newest screen, got %v", got)
 	}
 }
 

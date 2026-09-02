@@ -55,9 +55,15 @@ func sendToBrowser(ctx context.Context, ws BrowserConn, payload string) error {
 // sequence already carries the same information.
 //
 // A term chunk is covered by the initial_snapshot the hello hands over, so
-// replaying it would print the screen twice; hijack_state is sent to the
-// browser directly during startup; a newer snapshot supersedes itself on the
-// next one. Those are correctly dropped.
+// replaying it would print the screen twice, and hijack_state is sent to the
+// browser directly during startup. Those are correctly dropped.
+//
+// snapshot was dropped on the reasoning that "a newer one supersedes it" —
+// which assumes there IS a newer one. A terminal that emits one burst and then
+// goes idle produces exactly one snapshot, and if it lands inside the window
+// the browser keeps the pre-burst screen its hello handed over, forever.
+// Snapshots are held, but COALESCED: absolute screen state, so only the newest
+// is worth keeping and a busy terminal cannot fill the cap with them.
 //
 // Presence was on that list and should not have been. The startup sequence
 // does send the browser a presence_sync directly — but it is computed at that
@@ -88,7 +94,7 @@ func survivesStartupWindow(msg map[string]any) bool {
 		return true
 	}
 	switch str(msg["type"]) {
-	case deckmux.MsgPresenceSync, deckmux.MsgPresenceLeave, deckmux.MsgControlTransfer:
+	case deckmux.MsgPresenceSync, deckmux.MsgPresenceLeave, deckmux.MsgControlTransfer, snapshotFrameType:
 		return true
 	default:
 		return false
@@ -101,10 +107,26 @@ func survivesStartupWindow(msg map[string]any) bool {
 // oldest loses its beginning AND renumbers everything the user already saw.
 const startupBufferMaxFrames = 256
 
+// snapshotFrameType is held and coalesced rather than dropped — see above.
+const snapshotFrameType = "snapshot"
+
 // bufferStartupFrame holds msg for a browser still inside its startup window.
 // Caller holds hub.lock.
 func (h *TermHub) bufferStartupFrame(ws BrowserConn, msg map[string]any, workerID string) {
 	queued := h.startupPendingFrames[ws]
+	if str(msg["type"]) == snapshotFrameType {
+		// Absolute screen state: keep the newest and drop the one it replaces,
+		// so a terminal busy through the whole window cannot spend the cap on
+		// screens nobody will ever see.
+		kept := queued[:0]
+		for _, frame := range queued {
+			if str(frame["type"]) != snapshotFrameType {
+				kept = append(kept, frame)
+			}
+		}
+		h.startupPendingFrames[ws] = append(kept, msg)
+		return
+	}
 	if len(queued) >= startupBufferMaxFrames {
 		h.logger.Warn("startup_frame_buffer_full", "worker_id", workerID, "cap", startupBufferMaxFrames)
 		return
