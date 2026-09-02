@@ -153,8 +153,8 @@ describe("the broadcast window a connecting browser cannot see", () => {
 
     await router.broadcast(WORKER, {
       type: "control_transfer",
-      from_user: "a",
-      to_user: "b",
+      from_user_id: "a",
+      to_user_id: "b",
       reason: "handover",
     });
     await connections.activateBrowserBroadcasts(WORKER, browser);

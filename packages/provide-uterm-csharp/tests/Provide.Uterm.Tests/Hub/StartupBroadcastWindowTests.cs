@@ -137,8 +137,8 @@ public sealed class StartupBroadcastWindowTests
         await hub.Conn.BroadcastToBrowsersAsync(WorkerId, new Dictionary<string, object?>
         {
             ["type"] = "control_transfer",
-            ["from_user"] = "a",
-            ["to_user"] = "b",
+            ["from_user_id"] = "a",
+            ["to_user_id"] = "b",
             ["reason"] = "handover",
         });
         await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
