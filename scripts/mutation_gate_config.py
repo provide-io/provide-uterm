@@ -103,6 +103,7 @@ BRIDGE_HUB_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
         "src/provide/uterm/server/bridge/hub/presence.py",
         "src/provide/uterm/server/bridge/hub/store.py",
         "src/provide/uterm/server/bridge/hub/polling_service.py",
+        "src/provide/uterm/server/bridge/hub/router_redaction.py",
         "src/provide/uterm/deckmux/_service.py",
         "src/provide/uterm/bridge/schemas.py",
         *BRIDGE_COORDINATOR_SOURCE_PATHS,
@@ -140,6 +141,12 @@ BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
     # (snapshot_req_undelivered) and polling_service.wait_for_snapshot
     # (snapshot_wait_timeout), so it is in scope for two of the source paths above.
     "packages/provide-uterm-server/tests/bridge/hub/test_snapshot_diagnostics_kill.py",
+    # router_redaction.py — the frame-field redaction helpers. Their unit suite
+    # was wired into NEITHER list, so a scoped run bound zero tests to all 106
+    # mutants and reported them "not checked" at score 0.00, which reads as a
+    # crash rather than as an unmeasured file.
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_redaction.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_redaction_kill.py",
 )
 
 
