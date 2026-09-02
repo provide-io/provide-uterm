@@ -221,7 +221,10 @@ async def test_legacy_event_clear_cannot_lose_terminal_frame_wakeup() -> None:
         await asyncio.sleep(0)
         legacy_event.proceed.set()
 
-        frame = await asyncio.wait_for(frame_waiter, timeout=0.2)
+        # A failure bound, not a latency assertion: the waiter itself tolerates
+        # 10s, so a 0.2s bound here failed a correct implementation whenever the
+        # runner stalled -- the test would report "lost wakeup" for a stall.
+        frame = await asyncio.wait_for(frame_waiter, timeout=10.0)
         assert frame is not None
         assert frame.transcript_delta == "ready"
     finally:
@@ -237,12 +240,17 @@ async def test_simultaneous_terminal_frame_waiters_are_all_notified() -> None:
     transport = _GatedReadTransport(b"all")
     session = _ConcreteSession(transport, receive_encoding="utf-8")
     await session.connect()
-    waiter_a = asyncio.create_task(session.wait_for_terminal_frame(since=0, timeout_ms=1000))
-    waiter_b = asyncio.create_task(session.wait_for_terminal_frame(since=0, timeout_ms=1000))
+    waiter_a = asyncio.create_task(session.wait_for_terminal_frame(since=0, timeout_ms=10_000))
+    waiter_b = asyncio.create_task(session.wait_for_terminal_frame(since=0, timeout_ms=10_000))
 
+    # The subject is that BOTH waiters are notified, not how fast. The bounds
+    # used to be 1000ms per waiter under a 0.2s gather, so the test gave up
+    # long before the code did -- TimeoutError on quality (3.13), run
+    # 33577039839. Waiters re-check the retained history on every pass, so a
+    # late-registering waiter still finds the frame; only the bound was wrong.
     await asyncio.sleep(0)
     transport.release.set()
-    frame_a, frame_b = await asyncio.wait_for(asyncio.gather(waiter_a, waiter_b), timeout=0.2)
+    frame_a, frame_b = await asyncio.wait_for(asyncio.gather(waiter_a, waiter_b), timeout=10.0)
     await session.close()
 
     assert frame_a is not None
@@ -260,9 +268,12 @@ async def test_close_wakes_terminal_frame_waiter_promptly() -> None:
     started = asyncio.get_running_loop().time()
     await session.close()
     with pytest.raises(transport_session_module.TerminalFrameDisconnectedError):
-        await asyncio.wait_for(waiter, timeout=0.2)
+        await asyncio.wait_for(waiter, timeout=10.0)
 
-    assert asyncio.get_running_loop().time() - started < 0.2
+    # The property is "woken by close, not by the 10s timeout", so the bound is
+    # expressed against that timeout rather than as a 0.2s guess a stalled
+    # runner could blow through while the code behaved correctly.
+    assert asyncio.get_running_loop().time() - started < 5.0
 
 
 async def test_close_wakes_all_terminal_frame_waiters_with_disconnect() -> None:
@@ -275,7 +286,7 @@ async def test_close_wakes_all_terminal_frame_waiters_with_disconnect() -> None:
 
     for waiter in waiters:
         with pytest.raises(transport_session_module.TerminalFrameDisconnectedError):
-            await asyncio.wait_for(waiter, timeout=0.2)
+            await asyncio.wait_for(waiter, timeout=10.0)
 
 
 async def test_close_returns_retained_frame_before_closed_outcome() -> None:
