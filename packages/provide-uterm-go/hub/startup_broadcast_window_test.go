@@ -92,6 +92,67 @@ func TestTerminalOutputFromTheWindowIsNotReplayed(t *testing.T) {
 	}
 }
 
+// TestPresenceSyncFromTheWindowIsDeliveredOnActivation pins the roster gap:
+// the startup sequence sends each browser its own presence_sync, but that sync
+// is computed at the browser's OWN join, so it cannot carry a user who arrives
+// while the browser is still starting up. Dropping it left the roster one user
+// short until some later presence event corrected it -- the failure behind
+// TestDeckPresenceBroadcastSecondBrowser.
+func TestPresenceSyncFromTheWindowIsDeliveredOnActivation(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	ws := newBrowserWS("b")
+	_, _ = h.Conn.RegisterBrowser(bg(), "w1", ws, "viewer", true)
+
+	_ = h.Router.Broadcast(bg(), "w1", map[string]any{
+		"type":   "presence_sync",
+		"users":  []any{map[string]any{"user_id": "a"}, map[string]any{"user_id": "b"}},
+		"config": map[string]any{},
+	})
+	if got := len(ws.payloads()); got != 0 {
+		t.Fatalf("a browser mid-startup must not be written to yet, got %d payload(s)", got)
+	}
+
+	h.Conn.ActivateBrowserBroadcasts(bg(), "w1", ws)
+
+	if got := sentURLs(ws, "presence_sync"); len(got) != 1 {
+		t.Fatalf("buffered presence_sync not delivered on activation, got %v", got)
+	}
+}
+
+// TestPresenceLeaveFromTheWindowIsDeliveredOnActivation: worse than a missed
+// sync, because a leave is a delta -- dropping it keeps a ghost user in the
+// list with nothing to reconcile it against.
+func TestPresenceLeaveFromTheWindowIsDeliveredOnActivation(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	ws := newBrowserWS("b")
+	_, _ = h.Conn.RegisterBrowser(bg(), "w1", ws, "viewer", true)
+
+	_ = h.Router.Broadcast(bg(), "w1", map[string]any{"type": "presence_leave", "user_id": "departed"})
+	h.Conn.ActivateBrowserBroadcasts(bg(), "w1", ws)
+
+	if got := sentURLs(ws, "departed"); len(got) != 1 {
+		t.Fatalf("buffered presence_leave not delivered on activation, got %v", got)
+	}
+}
+
+// TestPresenceUpdateFromTheWindowIsNotReplayed pins the deliberate exclusion:
+// transient per-user state that the next update supersedes, frequent enough to
+// crowd out the buffer's cap.
+func TestPresenceUpdateFromTheWindowIsNotReplayed(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	ws := newBrowserWS("b")
+	_, _ = h.Conn.RegisterBrowser(bg(), "w1", ws, "viewer", true)
+
+	_ = h.Router.Broadcast(bg(), "w1", map[string]any{
+		"type": "presence_update", "user_id": "a", "name": "A", "color": "#fff", "role": "viewer",
+	})
+	h.Conn.ActivateBrowserBroadcasts(bg(), "w1", ws)
+
+	if got := len(ws.payloads()); got != 0 {
+		t.Fatalf("presence_update must stay dropped, got %d payload(s)", got)
+	}
+}
+
 func TestActivatedBrowserReceivesInspectFramesDirectly(t *testing.T) {
 	h, _ := newTestHub(t, nil)
 	ws := newBrowserWS("b")

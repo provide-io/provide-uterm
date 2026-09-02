@@ -92,6 +92,61 @@ public sealed class StartupBroadcastWindowTests
     }
 
     [Fact]
+    public async Task PresenceSyncFromTheWindowIsDeliveredOnActivation()
+    {
+        // The startup sequence sends each browser its own presence_sync, but it
+        // is computed at that browser's OWN join, so it cannot carry a user who
+        // arrives while the browser is still starting up. Dropping it left the
+        // roster one user short until a later presence event corrected it.
+        var (hub, browser) = Pending();
+
+        await hub.Conn.BroadcastToBrowsersAsync(WorkerId, new Dictionary<string, object?>
+        {
+            ["type"] = "presence_sync",
+            ["users"] = new List<object?> { "a", "b" },
+            ["config"] = new Dictionary<string, object?>(),
+        });
+        Assert.Empty(browser.Messages);
+
+        await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
+
+        Assert.Single(UrlsSeen(browser, "presence_sync"));
+    }
+
+    [Fact]
+    public async Task PresenceLeaveFromTheWindowIsDeliveredOnActivation()
+    {
+        // Worse than a missed sync: a delta, so dropping it keeps a ghost user.
+        var (hub, browser) = Pending();
+
+        await hub.Conn.BroadcastToBrowsersAsync(
+            WorkerId, new Dictionary<string, object?> { ["type"] = "presence_leave", ["user_id"] = "departed" });
+        await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
+
+        Assert.Single(UrlsSeen(browser, "departed"));
+    }
+
+    [Fact]
+    public async Task PresenceUpdateFromTheWindowIsNotReplayed()
+    {
+        // Transient per-user state the next update supersedes; staying dropped
+        // is deliberate, not an oversight.
+        var (hub, browser) = Pending();
+
+        await hub.Conn.BroadcastToBrowsersAsync(WorkerId, new Dictionary<string, object?>
+        {
+            ["type"] = "presence_update",
+            ["user_id"] = "a",
+            ["name"] = "A",
+            ["color"] = "#fff",
+            ["role"] = "viewer",
+        });
+        await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
+
+        Assert.Empty(browser.Messages);
+    }
+
+    [Fact]
     public async Task ActivatedBrowserReceivesInspectFramesDirectly()
     {
         var (hub, browser) = Pending();

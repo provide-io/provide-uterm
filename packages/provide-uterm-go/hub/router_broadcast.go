@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/frames"
 )
 
@@ -54,16 +55,37 @@ func sendToBrowser(ctx context.Context, ws BrowserConn, payload string) error {
 // sequence already carries the same information.
 //
 // A term chunk is covered by the initial_snapshot the hello hands over, so
-// replaying it would print the screen twice; hijack_state and presence are
-// sent to the browser directly during startup; a newer snapshot supersedes
-// itself on the next one. All of those are correctly dropped.
+// replaying it would print the screen twice; hijack_state is sent to the
+// browser directly during startup; a newer snapshot supersedes itself on the
+// next one. Those are correctly dropped.
+//
+// Presence was on that list and should not have been. The startup sequence
+// does send the browser a presence_sync directly — but it is computed at that
+// browser's OWN join, so it cannot carry a user who arrives while the browser
+// is still starting up. Whoever joins inside that window is missing from the
+// roster until some later presence event happens to correct it, which is what
+// TestDeckPresenceBroadcastSecondBrowser caught. presence_leave is the same
+// story in reverse, and worse for being a delta — a dropped leave keeps a
+// ghost user in the list with nothing to reconcile it.
+//
+// presence_update is deliberately NOT held: it carries transient per-user
+// state (cursor, activity) that the next one supersedes, and it is frequent
+// enough to crowd out the buffer's cap.
 //
 // The inspect channel has no such replay. Its frames are append-only entries
 // in a list the browser builds from nothing, and the store appends without
 // dedupe, so one dropped http_req is a row missing for the life of the
 // session with nothing to reconcile it against.
 func survivesStartupWindow(msg map[string]any) bool {
-	return str(msg["_channel"]) == "http"
+	if str(msg["_channel"]) == "http" {
+		return true
+	}
+	switch str(msg["type"]) {
+	case deckmux.MsgPresenceSync, deckmux.MsgPresenceLeave:
+		return true
+	default:
+		return false
+	}
 }
 
 // startupBufferMaxFrames bounds what a browser that never finishes its startup

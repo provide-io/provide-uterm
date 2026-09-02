@@ -4,6 +4,7 @@
 //
 
 using Provide.Uterm.ControlChannel;
+using Provide.Uterm.Frames;
 
 namespace Provide.Uterm.Hub;
 
@@ -523,17 +524,38 @@ public sealed partial class ConnectionManager
     // sequence already carries the same information.
     //
     // A term chunk is covered by the initial_snapshot the hello hands over, so
-    // replaying it would print the screen twice; hijack_state and presence are
-    // sent to the browser directly during startup; a newer snapshot supersedes
-    // itself on the next one. All of those are correctly dropped.
+    // replaying it would print the screen twice; hijack_state is sent to the
+    // browser directly during startup; a newer snapshot supersedes itself on
+    // the next one. Those are correctly dropped.
+    //
+    // Presence was on that list and should not have been. The startup sequence
+    // does send the browser a presence_sync directly - but it is computed at
+    // that browser's OWN join, so it cannot carry a user who arrives while the
+    // browser is still starting up. Whoever joins inside that window is missing
+    // from the roster until some later presence event happens to correct it.
+    // presence_leave is the same story in reverse, and worse for being a delta:
+    // a dropped leave keeps a ghost user in the list with nothing to reconcile
+    // it against.
+    //
+    // presence_update is deliberately NOT held. It carries transient per-user
+    // state (cursor, activity) that the next one supersedes, and it is frequent
+    // enough to crowd out the buffer's cap.
     //
     // The inspect channel has no such replay. Its frames are append-only
     // entries in a list the browser builds from nothing, and the store appends
     // without dedupe, so one dropped http_req is a row missing for the life of
     // the session with nothing to reconcile it against.
-    private static bool SurvivesStartupWindow(Dictionary<string, object?> msg) =>
-        msg.TryGetValue("_channel", out var channel) &&
-        string.Equals(channel as string, "http", StringComparison.Ordinal);
+    private static bool SurvivesStartupWindow(Dictionary<string, object?> msg)
+    {
+        if (msg.TryGetValue("_channel", out var channel) &&
+            string.Equals(channel as string, "http", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return msg.TryGetValue("type", out var type) && type as string is
+            FrameTypeNames.PresenceSync or FrameTypeNames.PresenceLeave;
+    }
 
     // Bounds what a browser that never finishes its startup sequence can
     // accumulate. At the cap the queue refuses rather than evicting its oldest:
