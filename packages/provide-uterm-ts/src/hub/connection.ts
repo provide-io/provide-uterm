@@ -339,11 +339,11 @@ export class ConnectionManager {
         return;
       }
       this.#hub.startupPendingFrames.set(ws, []);
-      const sender = ws as { sendText?: (payload: string) => Promise<void> };
-      if (sender.sendText === undefined) {
-        this.#hub.startupPendingFrames.delete(ws);
-        return;
-      }
+      // Cast rather than guard: the router already treats `state.browsers` as
+      // sockets that can be written to, and one that cannot is a dead socket
+      // either way -- calling through lands in the catch below, which is the
+      // resting state such a connection should be left in.
+      const sender = ws as { sendText: (payload: string) => Promise<void> };
       for (const message of batch) {
         try {
           await sender.sendText(encodeBrowserFrame(message));
