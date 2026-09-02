@@ -169,9 +169,16 @@ def run_proof():
         page.keyboard.type("echo hello", delay=50)
         page.keyboard.press("Enter")
 
-        # Verify buffering
-        time.sleep(1.0)
-        assert any(buf for buf in captured_hub._hold_buffers.values() if "echo hello" in buf)
+        # Verify buffering. The keystrokes cross the browser, the WebSocket and
+        # the hold buffer before landing, so this polls for them the same way
+        # the pause check above does -- a flat 1.0s was a guess at that trip.
+        found_buffered = False
+        for _ in range(100):
+            if any(buf for buf in captured_hub._hold_buffers.values() if "echo hello" in buf):
+                found_buffered = True
+                break
+            time.sleep(0.1)
+        assert found_buffered, "Input should be buffered on server"
         print("Input BUFFERED on server")
 
         # 7. Resolve
