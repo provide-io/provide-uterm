@@ -32,7 +32,7 @@ import json
 from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger
-from provide.uterm.deckmux import MSG_PRESENCE_LEAVE, MSG_PRESENCE_SYNC
+from provide.uterm.deckmux import MSG_CONTROL_TRANSFER, MSG_PRESENCE_LEAVE, MSG_PRESENCE_SYNC
 from provide.uterm.server.bridge.frames import make_hijack_state_frame
 from provide.uterm.server.bridge.hub import snapshot_metrics
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
@@ -47,10 +47,12 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-#: Roster-changing DeckMux frames. A ``presence_update`` is deliberately NOT
-#: here: it carries transient per-user state (cursor, activity) that the next
-#: one supersedes, and it is frequent enough to crowd out the buffer's cap.
-_ROSTER_FRAME_TYPES = frozenset({MSG_PRESENCE_SYNC, MSG_PRESENCE_LEAVE})
+#: DeckMux frames carrying collaboration state a late browser cannot rebuild:
+#: who is in the session, and who is driving. A ``presence_update`` is
+#: deliberately NOT here — it carries transient per-user state (cursor,
+#: activity) that the next one supersedes, and it is frequent enough to crowd
+#: out the buffer's cap.
+_DECKMUX_STATE_FRAME_TYPES = frozenset({MSG_PRESENCE_SYNC, MSG_PRESENCE_LEAVE, MSG_CONTROL_TRANSFER})
 
 
 # A browser inside its startup window is not yet in the broadcast set, so
@@ -72,13 +74,20 @@ _ROSTER_FRAME_TYPES = frozenset({MSG_PRESENCE_SYNC, MSG_PRESENCE_LEAVE})
 # ``presence_leave`` is the same story in reverse, and worse for being a delta —
 # a dropped leave keeps a ghost user in the list with nothing to reconcile it.
 #
+# ``control_transfer`` fails the same test. The startup ``presence_sync`` stamps
+# ``is_owner`` per user, so it carries who is driving AS OF that browser's join;
+# a transfer during the window is a delta with nothing to restate it, and the
+# next one only arrives when someone next takes or drops control. Until then the
+# browser shows the wrong driver. ``hijack_state`` does not cover it — that is
+# the lease over the terminal, not DeckMux's collaborative control.
+#
 # The inspect channel has no such replay. Its frames are append-only entries in
 # a list the browser builds from nothing, and the store appends without dedupe
 # (stores/inspectStore.ts), so one dropped ``http_req`` is a row missing for the
 # life of the session with nothing to reconcile it against.
 def _survives_startup_window(msg: dict[str, Any]) -> bool:
     """Whether *msg* must be held for browsers still in their startup window."""
-    return msg.get("_channel") == "http" or msg.get("type") in _ROSTER_FRAME_TYPES
+    return msg.get("_channel") == "http" or msg.get("type") in _DECKMUX_STATE_FRAME_TYPES
 
 
 # A browser that never finishes its startup sequence must not be able to grow

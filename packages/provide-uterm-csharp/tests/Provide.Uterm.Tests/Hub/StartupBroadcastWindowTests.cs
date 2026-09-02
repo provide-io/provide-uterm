@@ -127,6 +127,26 @@ public sealed class StartupBroadcastWindowTests
     }
 
     [Fact]
+    public async Task ControlTransferFromTheWindowIsDeliveredOnActivation()
+    {
+        // Who is driving is a delta too. The startup presence_sync stamps
+        // is_owner as of this browser's join; nothing restates a handover that
+        // happens inside the window.
+        var (hub, browser) = Pending();
+
+        await hub.Conn.BroadcastToBrowsersAsync(WorkerId, new Dictionary<string, object?>
+        {
+            ["type"] = "control_transfer",
+            ["from_user"] = "a",
+            ["to_user"] = "b",
+            ["reason"] = "handover",
+        });
+        await hub.Conn.ActivateBrowserBroadcastsAsync(WorkerId, browser);
+
+        Assert.Single(UrlsSeen(browser, "control_transfer"));
+    }
+
+    [Fact]
     public async Task PresenceUpdateFromTheWindowIsNotReplayed()
     {
         // Transient per-user state the next update supersedes; staying dropped

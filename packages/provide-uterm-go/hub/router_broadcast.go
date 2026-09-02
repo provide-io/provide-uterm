@@ -68,6 +68,13 @@ func sendToBrowser(ctx context.Context, ws BrowserConn, payload string) error {
 // story in reverse, and worse for being a delta — a dropped leave keeps a
 // ghost user in the list with nothing to reconcile it.
 //
+// control_transfer fails the same test. The startup presence_sync stamps
+// is_owner per user, so it carries who is driving AS OF that browser's join; a
+// transfer during the window is a delta with nothing to restate it, and the
+// next one only arrives when someone next takes or drops control. hijack_state
+// does not cover it — that is the lease over the terminal, not DeckMux's
+// collaborative control.
+//
 // presence_update is deliberately NOT held: it carries transient per-user
 // state (cursor, activity) that the next one supersedes, and it is frequent
 // enough to crowd out the buffer's cap.
@@ -81,7 +88,7 @@ func survivesStartupWindow(msg map[string]any) bool {
 		return true
 	}
 	switch str(msg["type"]) {
-	case deckmux.MsgPresenceSync, deckmux.MsgPresenceLeave:
+	case deckmux.MsgPresenceSync, deckmux.MsgPresenceLeave, deckmux.MsgControlTransfer:
 		return true
 	default:
 		return false
