@@ -99,6 +99,61 @@ async def test_terminal_output_from_the_window_is_not_replayed() -> None:
 
 
 @pytest.mark.asyncio
+async def test_a_presence_sync_from_the_window_is_delivered_on_activation() -> None:
+    """A browser that joins while another is mid-handshake must still be seen.
+
+    The startup sequence sends each browser its own presence_sync, which is why
+    presence used to be dropped here -- but that sync is computed at the
+    browser's OWN join, so it cannot carry a user who arrives afterwards. The
+    roster stayed one user short until some later presence event corrected it.
+    """
+    hub = await _hub_with_worker("w-presence")
+    browser = AsyncMock()
+    await hub.register_browser("w-presence", browser, "viewer", defer_broadcast=True)
+
+    await hub.broadcast(
+        "w-presence", {"type": "presence_sync", "users": [{"user_id": "a"}, {"user_id": "b"}], "config": {}}
+    )
+    assert _decoded(browser) == [], "a browser mid-startup must not be written to yet"
+
+    await hub.activate_browser_broadcasts("w-presence", browser)
+
+    assert [len(frame["users"]) for frame in _decoded(browser)] == [2]
+
+
+@pytest.mark.asyncio
+async def test_a_presence_leave_from_the_window_is_delivered_on_activation() -> None:
+    """Worse than a missed sync: a delta, so a dropped leave leaves a ghost."""
+    hub = await _hub_with_worker("w-leave")
+    browser = AsyncMock()
+    await hub.register_browser("w-leave", browser, "viewer", defer_broadcast=True)
+
+    await hub.broadcast("w-leave", {"type": "presence_leave", "user_id": "departed"})
+    await hub.activate_browser_broadcasts("w-leave", browser)
+
+    assert [frame["user_id"] for frame in _decoded(browser)] == ["departed"]
+
+
+@pytest.mark.asyncio
+async def test_a_presence_update_from_the_window_is_not_replayed() -> None:
+    """Transient per-user state: the next one supersedes it, so it stays dropped.
+
+    Deliberate, not an oversight -- these are frequent enough to crowd out the
+    buffer's cap, and nothing is lost that the next update does not restate.
+    """
+    hub = await _hub_with_worker("w-update")
+    browser = AsyncMock()
+    await hub.register_browser("w-update", browser, "viewer", defer_broadcast=True)
+
+    await hub.broadcast(
+        "w-update", {"type": "presence_update", "user_id": "a", "name": "A", "color": "#fff", "role": "viewer"}
+    )
+    await hub.activate_browser_broadcasts("w-update", browser)
+
+    assert browser.send_text.call_args_list == []
+
+
+@pytest.mark.asyncio
 async def test_an_activated_browser_receives_inspect_frames_directly() -> None:
     """After activation the buffer is out of the path entirely."""
     hub = await _hub_with_worker("w-live")

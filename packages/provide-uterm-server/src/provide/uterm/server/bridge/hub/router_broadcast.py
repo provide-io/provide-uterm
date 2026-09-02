@@ -32,6 +32,7 @@ import json
 from typing import TYPE_CHECKING, Any, cast
 
 from provide.telemetry import get_logger
+from provide.uterm.deckmux import MSG_PRESENCE_LEAVE, MSG_PRESENCE_SYNC
 from provide.uterm.server.bridge.frames import make_hijack_state_frame
 from provide.uterm.server.bridge.hub import snapshot_metrics
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
@@ -46,15 +47,30 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+#: Roster-changing DeckMux frames. A ``presence_update`` is deliberately NOT
+#: here: it carries transient per-user state (cursor, activity) that the next
+#: one supersedes, and it is frequent enough to crowd out the buffer's cap.
+_ROSTER_FRAME_TYPES = frozenset({MSG_PRESENCE_SYNC, MSG_PRESENCE_LEAVE})
+
+
 # A browser inside its startup window is not yet in the broadcast set, so
 # whatever is broadcast meanwhile would be lost. That is deliberate for most
 # frames and wrong for some, and the difference is whether the startup
 # sequence already carries the same information.
 #
 # A ``term`` chunk is covered by the ``initial_snapshot`` the hello hands over,
-# so replaying it would print the screen twice; ``hijack_state`` and presence
-# are sent to the browser directly during startup; a newer ``snapshot``
-# supersedes itself on the next one. All of those are correctly dropped.
+# so replaying it would print the screen twice; ``hijack_state`` is sent to the
+# browser directly during startup; a newer ``snapshot`` supersedes itself on the
+# next one. Those are correctly dropped.
+#
+# Presence was on that list and should not have been. The startup sequence does
+# send the browser a ``presence_sync`` directly — but it is computed at that
+# browser's OWN join, so it cannot carry a user who arrives while the browser is
+# still starting up. Whoever joins inside that window is missing from the roster
+# until some later presence event happens to correct it. That is a real gap: a
+# browser that connects while another is mid-handshake stays invisible to it.
+# ``presence_leave`` is the same story in reverse, and worse for being a delta —
+# a dropped leave keeps a ghost user in the list with nothing to reconcile it.
 #
 # The inspect channel has no such replay. Its frames are append-only entries in
 # a list the browser builds from nothing, and the store appends without dedupe
@@ -62,7 +78,7 @@ logger = get_logger(__name__)
 # life of the session with nothing to reconcile it against.
 def _survives_startup_window(msg: dict[str, Any]) -> bool:
     """Whether *msg* must be held for browsers still in their startup window."""
-    return msg.get("_channel") == "http"
+    return msg.get("_channel") == "http" or msg.get("type") in _ROSTER_FRAME_TYPES
 
 
 # A browser that never finishes its startup sequence must not be able to grow

@@ -151,3 +151,57 @@ whose own timing would be the thing under test.
 - `multi-backend-playwright (csharp)` should stop flaking. If it does not, the
   remaining cause is not this: the row now survives the window by
   construction, and the per-port suites would have to be wrong together.
+
+## Amendment (2026-09-02): the roster is append-only too
+
+The original rule was "the http channel", on the reasoning that presence is
+"sent to the browser directly during startup". That reasoning does not hold,
+and this is the case the Decision above anticipated — a second thing the
+browser accumulates rather than replaces.
+
+The startup sequence does send each browser a `presence_sync`. But DeckMux
+computes it at **that browser's own join**, so it cannot carry a user who
+arrives while the browser is still starting up: `OnBrowserConnect` broadcasts
+the new roster through the same `hub.Broadcast` that skips pending sockets.
+A browser connecting while another is mid-handshake stays invisible to it
+until some later presence event happens to correct the list.
+
+`presence_leave` is the same story in reverse and worse for being a delta: a
+dropped leave keeps a ghost user in the roster with nothing to reconcile it
+against, exactly like the dropped inspect row.
+
+### Evidence
+
+`go-quality` failed on `TestDeckPresenceBroadcastSecondBrowser`, whose b1 uses
+its own `presence_sync` as proof of readiness — but `ws_browser.go` sends that
+sync *before* `ActivateBrowserBroadcasts`, so b1 can still be pending when b2
+joins:
+
+```
+--- FAIL: TestDeckPresenceBroadcastSecondBrowser (5.00s)
+    deck_test.go:65: timed out waiting for frame "presence_sync" matching predicate
+```
+
+Not reproducible on demand (40 filtered runs, 3 full `-race` passes under
+load). Injecting a 1.5s delay before `ActivateBrowserBroadcasts` reproduces it
+byte-identically, and with this amendment applied the same injection passes.
+
+Note the shape: the test read a frame that is sent *before* the state it was
+taken to prove — the same readiness confusion this ARD already records for the
+UI's "Connected" string.
+
+### Rule
+
+`presence_sync` and `presence_leave` now survive the window. `presence_update`
+does not: it carries transient per-user state (cursor, activity) that the next
+one supersedes, and it is frequent enough to crowd out the 256-frame cap.
+
+Applied to Python, Go and C#, each with three mirrored cases that go red on
+their own pre-fix rule (the two roster cases) and green on it (the
+`presence_update` exclusion, pinned so it is not later "fixed" by accident).
+
+TypeScript is unchanged: `src/hub/router.ts` has the `startupPendingBrowsers`
+skip set but no startup buffer at all, so it drops http frames too. That is a
+pre-existing parity gap in a reduced port, not a regression from this change,
+and closing it means building the buffering mechanism rather than editing a
+predicate.
