@@ -206,14 +206,22 @@ class TestWatchdogBranches:
         async def on_stuck() -> None:
             fired.append(True)
 
-        # stuck_timeout_s=9999 ensures we never fire while progress is fresh
-        bot.start_watchdog(stuck_timeout_s=9999, check_interval_s=0.01, on_stuck=on_stuck)
+        # stuck_timeout_s ensures we never fire while progress is fresh
+        stuck_timeout_s = 9999.0
+        bot.start_watchdog(stuck_timeout_s=stuck_timeout_s, check_interval_s=0.01, on_stuck=on_stuck)
 
         # `not fired` is also true when the watchdog never ran, so a blind sleep
         # could not tell "correctly quiet" from "asleep". Make the loop prove it
         # is alive: it must stay quiet while progress is fresh, and then fire
         # once progress goes stale. Only a running loop can do both.
-        bot._last_progress_mono = 0.0
+        #
+        # Staleness is expressed RELATIVE to now, not as 0.0. The watchdog
+        # computes `monotonic() - _last_progress_mono`, and monotonic() is time
+        # since boot -- so 0.0 means "as stale as this machine is old". That
+        # cleared a 9999s timeout on a developer box up for days and did not on
+        # a fresh CI runner, failing all four server-quality cells while passing
+        # locally. Subtracting from the current reading is uptime-independent.
+        bot._last_progress_mono = time.monotonic() - (stuck_timeout_s + 60.0)
         await _until(lambda: fired, what="the watchdog firing once progress went stale")
         assert len(fired) == 1
 
