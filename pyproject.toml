@@ -448,6 +448,12 @@ source_paths = [
     # fork-loop os.wait() — that suite is now removed from pytest selection (above).
     "src/provide/uterm/server/bridge/hub/lease.py",
     "src/provide/uterm/server/bridge/hub/router.py",
+    # router_redaction.py — the router service was split for the 777-LOC limit
+    #   and only the SHIM (router.py, above, a declared 0-mutant re-export) was
+    #   carried onto the perimeter, so the extracted siblings enforced nothing.
+    #   Closing that file by file; this one measured 106 mutants, 91 killed, and
+    #   is now at 100 via tests/bridge/hub/test_router_redaction_kill.py.
+    "src/provide/uterm/server/bridge/hub/router_redaction.py",
     # connection.py — ConnectionManager (register/deregister worker + browser,
     # disconnect, cleanup). Kill-suites wired in pytest selection below (the dedicated
     # test_connections_* suites + test_connection_kill_*.py behaviour-pinning
@@ -710,6 +716,11 @@ pytest_add_cli_args_test_selection = [
     # resolve_role_for_browser / prepare_policy_context / _map_roles surface.
     "packages/provide-uterm-server/tests/bridge/hub/test_store_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_store_policy_kill.py",
+    # router_redaction.py — the "" defaults (a missing content field must not
+    #   ship the string "None") and the _redact_value recursion cap, neither of
+    #   which the coverage suite can see. See the suite docstring.
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_redaction.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_redaction_kill.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
     # mutmut actually mutates — _clean_path and the _require_secure_url SSRF guard
     # (it skips every @model_validator/@field_validator/@classmethod by design).
