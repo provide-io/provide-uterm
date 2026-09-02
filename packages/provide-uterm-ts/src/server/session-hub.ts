@@ -146,6 +146,8 @@ export class SessionHub {
   readonly registry = new WorkerRegistry<WorkerTermState>();
   /** Browsers mid-handshake. Always empty: nothing here accepts a browser. */
   readonly startupPendingBrowsers = new Set<object>();
+  /** Their missed frames. Always empty for the same reason. */
+  readonly startupPendingFrames = new Map<object, Record<string, unknown>[]>();
   readonly store: StateStore;
   readonly lease: HijackLeaseManager;
   readonly router: MessageRouter;
@@ -204,6 +206,7 @@ export class SessionHub {
       hub: {
         registry: this.registry,
         startupPendingBrowsers: this.startupPendingBrowsers,
+        startupPendingFrames: this.startupPendingFrames,
         isHijacked: (state) => this.store.isHijacked(state),
         isDashboardHijackActive: (state) => this.store.isDashboardHijackActive(state),
         hasValidRestLease: (state) => this.store.hasValidRestLease(state),
@@ -259,6 +262,7 @@ export class SessionHub {
       hub: {
         registry: this.registry,
         startupPendingBrowsers: this.startupPendingBrowsers,
+        startupPendingFrames: this.startupPendingFrames,
         maxWorkers: SESSION_HUB_MAX_WORKERS,
         maxConnectionsPerPrincipal: SESSION_HUB_MAX_CONNECTIONS_PER_PRINCIPAL,
         isHijacked: (state) => this.store.isHijacked(state),

@@ -17,6 +17,7 @@
  */
 
 import { encodeControlFrame, encodeTerminalData } from "../control-channel/index.ts";
+import { MSG_CONTROL_TRANSFER, MSG_PRESENCE_LEAVE, MSG_PRESENCE_SYNC } from "../deckmux/protocol.ts";
 import { makeHijackStateFrame } from "../frames/index.ts";
 import { monoToWall } from "./frames.ts";
 import type { Connection, WorkerSocket, WorkerTermState } from "./models.ts";
@@ -30,6 +31,43 @@ import type { WorkerRegistry } from "./registry.ts";
  */
 export const BROADCAST_SEND_TIMEOUT_S = 5;
 
+/**
+ * How much one browser that never finishes its startup sequence may accumulate.
+ *
+ * At the cap the queue refuses rather than evicting its oldest: dropping the
+ * newest loses the tail of a session, dropping the oldest loses its beginning
+ * *and* renumbers everything the user already saw.
+ */
+export const STARTUP_BUFFER_MAX_FRAMES = 256;
+
+/**
+ * Whether `message` must be held for browsers still inside their startup window.
+ *
+ * A browser mid-handshake is not in the broadcast set, so whatever is broadcast
+ * meanwhile is lost. That is right for most frames and wrong for some, and the
+ * difference is whether the startup sequence already carries the same thing.
+ *
+ * A `term` chunk is covered by the `initial_snapshot` the hello hands over, so
+ * replaying it would print the screen twice; `hijack_state` is sent directly
+ * during startup; a newer `snapshot` supersedes itself on the next one.
+ *
+ * The inspect channel has no such replay — its rows are appended without
+ * dedupe, so a dropped `http_req` is missing for the life of the session. The
+ * DeckMux roster and control frames are the same: the startup `presence_sync`
+ * is computed at THIS browser's join, so it cannot carry a user who arrives, a
+ * user who leaves, or a handover that happens while it is still starting up.
+ *
+ * `presence_update` is deliberately excluded: transient per-user state the next
+ * one supersedes, frequent enough to crowd out the cap above.
+ */
+export function survivesStartupWindow(message: Record<string, unknown>): boolean {
+  if (message._channel === "http") {
+    return true;
+  }
+  const type = message.type;
+  return type === MSG_PRESENCE_SYNC || type === MSG_PRESENCE_LEAVE || type === MSG_CONTROL_TRANSFER;
+}
+
 /** A browser connection the router can write to. */
 interface BrowserSocket extends Connection {
   sendText(payload: string): Promise<void>;
@@ -41,6 +79,8 @@ export interface RouterHubCallbacks {
   registry: WorkerRegistry<WorkerTermState>;
   /** Browsers that have connected but not finished their handshake. */
   startupPendingBrowsers: Set<Connection>;
+  /** What each of those browsers has missed, in arrival order. */
+  startupPendingFrames: Map<Connection, Record<string, unknown>[]>;
   /** Whether any hijack is active on `state`. */
   isHijacked(state: WorkerTermState): boolean;
   /** Whether a dashboard hijack is active on `state`. */
@@ -159,10 +199,7 @@ export class MessageRouter {
       await predecessor;
       try {
         const currentState = this.#hub.registry.get(workerId);
-        if (
-          currentState !== state ||
-          !this.#isCurrentSnapshot(currentState, expectedWorker, expectedEventSeq)
-        ) {
+        if (currentState !== state || !this.#isCurrentSnapshot(currentState, expectedWorker, expectedEventSeq)) {
           return;
         }
         await this.#broadcastToState(workerId, message, state);
@@ -181,12 +218,15 @@ export class MessageRouter {
   }
 
   /** Send to one already-resolved worker state. */
-  async #broadcastToState(
-    workerId: string,
-    message: Record<string, unknown>,
-    state: WorkerTermState,
-  ): Promise<void> {
+  async #broadcastToState(workerId: string, message: Record<string, unknown>, state: WorkerTermState): Promise<void> {
     const recipients = this.#recipients(state);
+    if (survivesStartupWindow(message)) {
+      for (const ws of state.browsers.keys()) {
+        if (this.#hub.startupPendingBrowsers.has(ws)) {
+          this.#bufferStartupFrame(ws, message);
+        }
+      }
+    }
     const payload = encodeBrowserFrame(message);
 
     const dead = await this.#sendAll(recipients, () => payload);
@@ -222,6 +262,16 @@ export class MessageRouter {
     // A browser mid-handshake has not been told what session it is joining;
     // terminal output arriving first would render before the screen state.
     return [...state.browsers.keys()].filter((ws) => !this.#hub.startupPendingBrowsers.has(ws)) as BrowserSocket[];
+  }
+
+  /** Hold one frame for a browser still inside its startup window. */
+  #bufferStartupFrame(ws: Connection, message: Record<string, unknown>): void {
+    const queued = this.#hub.startupPendingFrames.get(ws) ?? [];
+    if (queued.length >= STARTUP_BUFFER_MAX_FRAMES) {
+      return;
+    }
+    queued.push(message);
+    this.#hub.startupPendingFrames.set(ws, queued);
   }
 
   /** Send to everyone concurrently, returning whoever failed. */

@@ -107,6 +107,7 @@ function socket(name: string, subjectId?: unknown) {
 class FakeHub implements ConnectionHubCallbacks {
   readonly registry = new WorkerRegistry<WorkerTermState>();
   readonly startupPendingBrowsers = new Set<Connection>();
+  readonly startupPendingFrames = new Map<Connection, Record<string, unknown>[]>();
   maxWorkers = 100;
   maxConnectionsPerPrincipal = 100;
 
