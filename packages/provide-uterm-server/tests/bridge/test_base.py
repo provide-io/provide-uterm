@@ -13,6 +13,26 @@ import time
 from provide.uterm.bridge.base import HijackableMixin
 
 
+async def _until(predicate: object, *, timeout_s: float = 10.0, what: str = "condition") -> None:
+    """Wait for *predicate* to hold, or fail saying what never happened.
+
+    The watchdog sleeps ``max(0.5, check_interval_s)`` at the TOP of its loop,
+    so every test below needs one full iteration before it has anything to
+    assert on. They each used to sleep 0.7s and hope. A loaded runner that has
+    not resumed the task by then does not fail loudly -- three of the four
+    assertions are also true after zero iterations, so the tests passed without
+    running the code they name.
+
+    The timeout is a failure bound, not a pace: a watchdog that stops iterating
+    still fails, just later.
+    """
+    deadline = asyncio.get_running_loop().time() + timeout_s
+    while not predicate():  # type: ignore[operator]
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError(f"{what} did not happen within {timeout_s}s")
+        await asyncio.sleep(0.01)
+
+
 class Bot(HijackableMixin):
     def __init__(self) -> None:
         super().__init__()
@@ -159,14 +179,19 @@ class TestWatchdogBranches:
 
         # Note: watchdog sleeps max(0.5, check_interval_s) so need > 0.5s
         bot.start_watchdog(stuck_timeout_s=0.01, check_interval_s=0.01)
-        await asyncio.sleep(0.7)
+        # STRICTLY greater, and waited for. `>=` after a fixed sleep held even
+        # when the loop had not run at all, so the hijacked branch could stop
+        # calling note_progress without this test noticing.
+        await _until(
+            lambda: bot._last_progress_mono > progress_before,
+            what="the hijacked branch calling note_progress",
+        )
         assert bot._watchdog_task is not None
         bot._watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await bot._watchdog_task
 
-        # note_progress should have been called (timer reset while hijacked)
-        assert bot._last_progress_mono >= progress_before
+        assert bot._last_progress_mono > progress_before
 
     async def test_watchdog_not_stuck_continues(self) -> None:
         """Watchdog does NOT fire on_stuck when progress was recently noted."""
@@ -181,15 +206,21 @@ class TestWatchdogBranches:
         async def on_stuck() -> None:
             fired.append(True)
 
-        # stuck_timeout_s=9999 ensures we never fire even after the 0.5s sleep
+        # stuck_timeout_s=9999 ensures we never fire while progress is fresh
         bot.start_watchdog(stuck_timeout_s=9999, check_interval_s=0.01, on_stuck=on_stuck)
-        await asyncio.sleep(0.7)
+
+        # `not fired` is also true when the watchdog never ran, so a blind sleep
+        # could not tell "correctly quiet" from "asleep". Make the loop prove it
+        # is alive: it must stay quiet while progress is fresh, and then fire
+        # once progress goes stale. Only a running loop can do both.
+        bot._last_progress_mono = 0.0
+        await _until(lambda: fired, what="the watchdog firing once progress went stale")
+        assert len(fired) == 1
+
         assert bot._watchdog_task is not None
         bot._watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await bot._watchdog_task
-
-        assert not fired
 
     async def test_watchdog_exception_in_loop_continues(self) -> None:
         """Exception inside watchdog loop body is swallowed and loop continues."""
@@ -208,12 +239,14 @@ class TestWatchdogBranches:
         bot._last_progress_mono = 0.0
         # Note: watchdog sleeps max(0.5, check_interval_s) so we need to wait > 0.5s
         bot.start_watchdog(stuck_timeout_s=0.001, check_interval_s=0.01, on_stuck=exploding_stuck)
-        await asyncio.sleep(0.7)
+        # The genuine flake of the four: with zero iterations this assertion is
+        # false, so a runner that had not resumed the task inside 0.7s failed a
+        # correct watchdog.
+        await _until(lambda: len(call_count) >= 1, what="the exploding on_stuck being called")
         assert bot._watchdog_task is not None
         bot._watchdog_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await bot._watchdog_task
-        # Callback was invoked at least once
         assert len(call_count) >= 1
 
 
@@ -330,7 +363,15 @@ class TestWatchdogTimingEdgeCases:
 
         # on_stuck=None (explicitly)
         bot.start_watchdog(stuck_timeout_s=0.05, check_interval_s=0.02, on_stuck=None)
-        await asyncio.sleep(0.3)
+        # This slept 0.3s, and the loop's first sleep is clamped to 0.5s -- so it
+        # cancelled the task BEFORE the branch it is named for ever ran, and
+        # asserted only that a task object existed. The branch reaching its end
+        # is observable: with on_stuck None the loop still calls note_progress,
+        # which moves _last_progress_mono off the 0.0 set above.
+        await _until(
+            lambda: bot._last_progress_mono > 0.0,
+            what="the stuck branch completing with on_stuck=None",
+        )
         assert bot._watchdog_task is not None
 
         bot._watchdog_task.cancel()
