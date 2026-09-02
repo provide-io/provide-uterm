@@ -281,7 +281,11 @@ def test_ws_relay_handles_text_empty_and_inject_messages() -> None:
         ws.send_bytes(bytes([1]))  # security type None
         ws.send_bytes(bytes([1]))  # ClientInit
         ws.send_bytes(bytes([4]) + bytes(7))  # KeyEvent → routed through inject gate
-        time.sleep(0.2)
+        # The relay pumps frames to the upstream writer on another thread, so
+        # this waits for the write rather than sleeping a fixed 0.2s past it.
+        deadline = time.monotonic() + 10.0
+        while b"RFB 003.008\n" not in bytes(up_w.buf) and time.monotonic() < deadline:
+            time.sleep(0.01)
     assert b"RFB 003.008\n" in bytes(up_w.buf)
 
 
