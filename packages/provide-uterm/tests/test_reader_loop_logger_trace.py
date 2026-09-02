@@ -80,7 +80,12 @@ async def test_the_reader_keeps_reading_after_the_first_chunk() -> None:
     session = _Session(transport, cols=80, rows=25)
     await session.connect()
     try:
-        await asyncio.sleep(0.2)
+        # Wait for the second read rather than sleeping 0.2s and hoping one
+        # happened. A starved runner that has not scheduled the loop yet is
+        # indistinguishable from the regression this test exists to catch.
+        deadline = asyncio.get_running_loop().time() + 10.0
+        while transport.receives <= 1 and asyncio.get_running_loop().time() < deadline:
+            await asyncio.sleep(0.01)
         assert transport.receives > 1, (
             f"reader stopped after {transport.receives} read(s) — it died inside the loop body instead of continuing"
         )

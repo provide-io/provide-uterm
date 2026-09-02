@@ -415,10 +415,13 @@ async def test_handle_input_animated_result():
     # Animation runs in background
     assert conn._animation_task is not None
 
-    # Wait for animation to finish (non-looping, 2 frames at 100fps)
+    # Wait for animation to finish (non-looping, 2 frames at 100fps). Await the
+    # task itself instead of sleeping 0.2s past its expected ~20ms: a loaded
+    # runner made `done()` a coin flip, and awaiting also surfaces an exception
+    # the task raised rather than reporting it as "not finished".
     import asyncio
 
-    await asyncio.sleep(0.2)
+    await asyncio.wait_for(conn._animation_task, timeout=10.0)
     assert conn._animation_task.done()
 
     # Pending frames should have animation output + prompt
