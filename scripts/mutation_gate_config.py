@@ -105,6 +105,7 @@ BRIDGE_HUB_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
         "src/provide/uterm/server/bridge/hub/polling_service.py",
         "src/provide/uterm/server/bridge/hub/router_redaction.py",
         "src/provide/uterm/server/bridge/hub/router_behavioral.py",
+        "src/provide/uterm/server/bridge/hub/approvals.py",
         "src/provide/uterm/deckmux/_service.py",
         "src/provide/uterm/bridge/schemas.py",
         *BRIDGE_COORDINATOR_SOURCE_PATHS,
@@ -159,6 +160,12 @@ BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
     "packages/provide-uterm-server/tests/bridge/hub/test_router.py",
     "packages/provide-uterm-server/tests/bridge/test_heuristics.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_behavioral_kill.py",
+    # approvals.py — the approval_store service. CLAUDE.md describes it as one of
+    #   the nine hub services on the perimeter; it was never in source_paths.
+    "packages/provide-uterm-server/tests/bridge/test_approvals.py",
+    "packages/provide-uterm-server/tests/bridge/test_approval_claim.py",
+    "packages/provide-uterm-server/tests/bridge/test_mem_pruning.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_approvals_kill.py",
 )
 
 
