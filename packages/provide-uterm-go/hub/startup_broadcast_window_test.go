@@ -135,6 +135,24 @@ func TestPresenceLeaveFromTheWindowIsDeliveredOnActivation(t *testing.T) {
 	}
 }
 
+// TestControlTransferFromTheWindowIsDeliveredOnActivation: who is driving is a
+// delta too. The startup presence_sync stamps is_owner as of this browser's
+// join, and nothing restates a handover that happens inside the window.
+func TestControlTransferFromTheWindowIsDeliveredOnActivation(t *testing.T) {
+	h, _ := newTestHub(t, nil)
+	ws := newBrowserWS("b")
+	_, _ = h.Conn.RegisterBrowser(bg(), "w1", ws, "viewer", true)
+
+	_ = h.Router.Broadcast(bg(), "w1", map[string]any{
+		"type": "control_transfer", "from_user": "a", "to_user": "b", "reason": "handover",
+	})
+	h.Conn.ActivateBrowserBroadcasts(bg(), "w1", ws)
+
+	if got := sentURLs(ws, "control_transfer"); len(got) != 1 {
+		t.Fatalf("buffered control_transfer not delivered on activation, got %v", got)
+	}
+}
+
 // TestPresenceUpdateFromTheWindowIsNotReplayed pins the deliberate exclusion:
 // transient per-user state that the next update supersedes, frequent enough to
 // crowd out the buffer's cap.

@@ -135,6 +135,28 @@ async def test_a_presence_leave_from_the_window_is_delivered_on_activation() -> 
 
 
 @pytest.mark.asyncio
+async def test_a_control_transfer_from_the_window_is_delivered_on_activation() -> None:
+    """Who is driving is a delta too, and nothing restates it.
+
+    The startup presence_sync stamps ``is_owner`` per user, so it carries the
+    driver as of this browser's join. A handover during the window is lost, and
+    the next control_transfer only comes when someone next takes or drops
+    control -- until then the browser shows the wrong driver.
+    """
+    hub = await _hub_with_worker("w-control")
+    browser = AsyncMock()
+    await hub.register_browser("w-control", browser, "viewer", defer_broadcast=True)
+
+    await hub.broadcast(
+        "w-control",
+        {"type": "control_transfer", "from_user": "a", "to_user": "b", "reason": "handover"},
+    )
+    await hub.activate_browser_broadcasts("w-control", browser)
+
+    assert [frame["to_user"] for frame in _decoded(browser)] == ["b"]
+
+
+@pytest.mark.asyncio
 async def test_a_presence_update_from_the_window_is_not_replayed() -> None:
     """Transient per-user state: the next one supersedes it, so it stays dropped.
 

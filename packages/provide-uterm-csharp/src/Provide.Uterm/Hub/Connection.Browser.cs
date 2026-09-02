@@ -537,6 +537,13 @@ public sealed partial class ConnectionManager
     // a dropped leave keeps a ghost user in the list with nothing to reconcile
     // it against.
     //
+    // control_transfer fails the same test. The startup presence_sync stamps
+    // is_owner per user, so it carries who is driving AS OF that browser's
+    // join; a transfer during the window is a delta with nothing to restate it,
+    // and the next one only arrives when someone next takes or drops control.
+    // hijack_state does not cover it - that is the lease over the terminal, not
+    // DeckMux's collaborative control.
+    //
     // presence_update is deliberately NOT held. It carries transient per-user
     // state (cursor, activity) that the next one supersedes, and it is frequent
     // enough to crowd out the buffer's cap.
@@ -554,7 +561,7 @@ public sealed partial class ConnectionManager
         }
 
         return msg.TryGetValue("type", out var type) && type as string is
-            FrameTypeNames.PresenceSync or FrameTypeNames.PresenceLeave;
+            FrameTypeNames.PresenceSync or FrameTypeNames.PresenceLeave or FrameTypeNames.ControlTransfer;
     }
 
     // Bounds what a browser that never finishes its startup sequence can

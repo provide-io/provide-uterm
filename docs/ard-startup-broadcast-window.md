@@ -192,12 +192,21 @@ UI's "Connected" string.
 
 ### Rule
 
-`presence_sync` and `presence_leave` now survive the window. `presence_update`
-does not: it carries transient per-user state (cursor, activity) that the next
-one supersedes, and it is frequent enough to crowd out the 256-frame cap.
+`presence_sync`, `presence_leave` and `control_transfer` now survive the
+window. `presence_update` does not: it carries transient per-user state
+(cursor, activity) that the next one supersedes, and it is frequent enough to
+crowd out the 256-frame cap.
 
-Applied to Python, Go and C#, each with three mirrored cases that go red on
-their own pre-fix rule (the two roster cases) and green on it (the
+`control_transfer` was checked rather than assumed. The startup `presence_sync`
+stamps `is_owner` per user, so it carries who is driving *as of that browser's
+join*; a handover inside the window is a delta with nothing to restate it, and
+the next transfer only comes when someone next takes or drops control. Until
+then the browser shows the wrong driver. `hijack_state` does not cover it —
+that is the lease over the terminal, not DeckMux's collaborative control. Those
+four are the complete set of frames DeckMux broadcasts through the hub.
+
+Applied to Python, Go and C#, each with four mirrored cases that go red on
+their own pre-fix rule (the three state-carrying frames) and green on it (the
 `presence_update` exclusion, pinned so it is not later "fixed" by accident).
 
 TypeScript is unchanged: `src/hub/router.ts` has the `startupPendingBrowsers`
