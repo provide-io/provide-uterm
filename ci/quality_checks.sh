@@ -114,6 +114,14 @@ step "fanout-contract"    uv run python scripts/run_fanout_security_scenarios.py
 # seconds; what is left is pure in-process contract checking.
 step "contract-tests"     uv run pytest -q tests/conformance/ --ignore=tests/conformance/live \
                             -m "not native_adapters" -o addopts=--import-mode=importlib
+# The repo's own tooling: max-LOC, SPDX, version consistency, protocol drift,
+# the goldens-ownership guard and the CI-parity runner all have tests, and
+# tests/scripts/ was reachable from run_all_tests.py and from nothing in CI --
+# and no CI job runs run_all_tests.py. So the suite that guards the gates was
+# itself ungated, which is how the goldens-ownership guard sat unexecuted from
+# the day it was written. --import-mode=importlib for the same reason
+# contract-tests uses it: these files are outside the root testpaths.
+step "script-tests"       uv run pytest -q tests/scripts/ -o addopts=--import-mode=importlib
 step "package-artifacts"  uv run python scripts/verify_package_artifacts.py
 
 printf '\n=== quality-checks summary ===\n'

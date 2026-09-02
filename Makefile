@@ -1,4 +1,4 @@
-.PHONY: quality quality-gate sync lint typecheck test test-native-capture frontend-test frontend-build benchmark-control-channel benchmark-control-channel-quick
+.PHONY: quality quality-gate ci-job ci-jobs sync lint typecheck test test-native-capture frontend-test frontend-build benchmark-control-channel benchmark-control-channel-quick
 
 PY_PACKAGES := \
 	packages/provide-uterm/src \
@@ -33,6 +33,19 @@ quality: lint typecheck frontend-test test
 # Run before pushing so CI-only failures surface locally, not on the runner.
 quality-gate:
 	bash ci/quality_checks.sh
+
+# Run exactly what a CI job runs, parsed out of .github/workflows/ci.yml rather
+# than restated here -- a restated command is one that drifts, and a local
+# command narrower than CI's passes where CI would not.
+#
+#   make ci-job JOB=quality PY=3.13
+#   make ci-job JOB=npm-quality ARGS=--with-setup
+#   make ci-jobs                        # list them
+ci-job:
+	uv run python scripts/ci_parity.py $(JOB) $(if $(PY),--python $(PY)) $(ARGS)
+
+ci-jobs:
+	@uv run python scripts/ci_parity.py --list
 
 # Provision the environment the whole suite needs.
 #
