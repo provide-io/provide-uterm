@@ -104,6 +104,7 @@ BRIDGE_HUB_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
         "src/provide/uterm/server/bridge/hub/store.py",
         "src/provide/uterm/server/bridge/hub/polling_service.py",
         "src/provide/uterm/server/bridge/hub/router_redaction.py",
+        "src/provide/uterm/server/bridge/hub/router_behavioral.py",
         "src/provide/uterm/deckmux/_service.py",
         "src/provide/uterm/bridge/schemas.py",
         *BRIDGE_COORDINATOR_SOURCE_PATHS,
@@ -147,6 +148,17 @@ BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
     # crash rather than as an unmeasured file.
     "packages/provide-uterm-server/tests/bridge/test_snapshot_redaction.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_redaction_kill.py",
+    # router_behavioral.py — keystroke ring buffers, the audit loop, and the
+    #   policy-gate deny path. The audit paths are also covered by
+    #   test_easy_coverage_gaps_part{2,4}.py, which are deliberately NOT wired:
+    #   part2 does `from tests.helpers import http_mock`, and that absolute
+    #   import resolves only under the server package's own rootdir, not from
+    #   the repo root the mutants tree runs in. mutmut's baseline run is -x, so
+    #   that one unrelated ModuleNotFoundError aborted all 112 mutants before a
+    #   single one was checked. A dedicated kill suite covers those paths here.
+    "packages/provide-uterm-server/tests/bridge/hub/test_router.py",
+    "packages/provide-uterm-server/tests/bridge/test_heuristics.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_behavioral_kill.py",
 )
 
 
