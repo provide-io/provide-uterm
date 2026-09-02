@@ -209,8 +209,14 @@ Applied to Python, Go and C#, each with four mirrored cases that go red on
 their own pre-fix rule (the three state-carrying frames) and green on it (the
 `presence_update` exclusion, pinned so it is not later "fixed" by accident).
 
-TypeScript is unchanged: `src/hub/router.ts` has the `startupPendingBrowsers`
-skip set but no startup buffer at all, so it drops http frames too. That is a
-pre-existing parity gap in a reduced port, not a regression from this change,
-and closing it means building the buffering mechanism rather than editing a
-predicate.
+TypeScript had the `startupPendingBrowsers` skip set and the activation call
+but no buffer behind them, so it dropped http frames as well as these. The
+mechanism is now ported: `startupPendingFrames` on both hub surfaces, buffering
+in `MessageRouter`, and a draining `activateBrowserBroadcasts` that is async for
+the same reason C#'s is — delivering a backlog is I/O. All three shared
+properties carry over (pending until drained, refuse at the cap, leave a failed
+flush pending), with the same eleven cases as the reference.
+
+Note `src/server/session-hub.ts` keeps both structures permanently empty: that
+facade accepts no browsers, so nothing there is ever deferred. The live
+mechanism is the one in `src/hub/`.

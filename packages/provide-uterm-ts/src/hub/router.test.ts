@@ -56,6 +56,7 @@ class FakeBrowser {
 class FakeHub implements RouterHubCallbacks {
   readonly registry = new WorkerRegistry<WorkerTermState>();
   readonly startupPendingBrowsers = new Set<Connection>();
+  readonly startupPendingFrames = new Map<Connection, Record<string, unknown>[]>();
   readonly removedDead: Array<Set<Connection>> = [];
   readonly calls: string[] = [];
   /** What removeDeadBrowsers reports back. */

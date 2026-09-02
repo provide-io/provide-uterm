@@ -17,6 +17,7 @@
 
 import { type BrowserRole, type Connection, type InputMode, type WorkerSocket, WorkerTermState } from "./models.ts";
 import type { WorkerRegistry } from "./registry.ts";
+import { encodeBrowserFrame } from "./router.ts";
 
 /** Raised when the hub is already holding as many workers as it will. */
 export class WorkerCapacityError extends Error {
@@ -46,6 +47,8 @@ export interface ConnectionHubCallbacks {
   registry: WorkerRegistry<WorkerTermState>;
   /** Browsers that have connected but not finished their handshake. */
   startupPendingBrowsers: Set<Connection>;
+  /** What each of those browsers has missed, in arrival order. */
+  startupPendingFrames: Map<Connection, Record<string, unknown>[]>;
   /** How many distinct workers the hub will hold. */
   maxWorkers: number;
   /** How many browsers one authenticated principal may hold. */
@@ -310,12 +313,46 @@ export class ConnectionManager {
     }
   }
 
-  /** Let broadcasts reach `ws` now that its startup frames have gone out. */
-  activateBrowserBroadcasts(workerId: string, ws: Connection): void {
-    const state = this.#hub.registry.get(workerId);
-    // The browser can disconnect between its startup frames and this call.
-    if (state?.browsers.has(ws)) {
-      this.#hub.startupPendingBrowsers.delete(ws);
+  /**
+   * Let broadcasts reach `ws` now that its startup frames have gone out,
+   * delivering whatever was broadcast while it was still starting up.
+   *
+   * The socket stays pending until its queue drains. Releasing it first and
+   * then flushing would let a frame broadcast mid-flush overtake the ones
+   * already waiting, which reorders the very list this exists to keep intact.
+   *
+   * A socket whose flush fails is left pending: pending means the broadcast
+   * path skips it, which is the right resting state for a connection that just
+   * failed a write, and the disconnect handler clears both.
+   */
+  async activateBrowserBroadcasts(workerId: string, ws: Connection): Promise<void> {
+    for (;;) {
+      const batch = this.#hub.startupPendingFrames.get(ws) ?? [];
+      if (batch.length === 0) {
+        this.#hub.startupPendingFrames.delete(ws);
+        const state = this.#hub.registry.get(workerId);
+        // The browser can disconnect between its startup frames and this call;
+        // one that did is left pending on purpose.
+        if (state?.browsers.has(ws) === true) {
+          this.#hub.startupPendingBrowsers.delete(ws);
+        }
+        return;
+      }
+      this.#hub.startupPendingFrames.set(ws, []);
+      const sender = ws as { sendText?: (payload: string) => Promise<void> };
+      if (sender.sendText === undefined) {
+        this.#hub.startupPendingFrames.delete(ws);
+        return;
+      }
+      for (const message of batch) {
+        try {
+          await sender.sendText(encodeBrowserFrame(message));
+        } catch {
+          // Left pending, backlog dropped: the socket just failed a write.
+          this.#hub.startupPendingFrames.delete(ws);
+          return;
+        }
+      }
     }
   }
 
@@ -345,6 +382,7 @@ export class ConnectionManager {
     }
     this.#releaseQuota(ws);
     this.#hub.startupPendingBrowsers.delete(ws);
+    this.#hub.startupPendingFrames.delete(ws);
     return { wasOwner, restStillActive, resumeWithoutOwner };
   }
 
