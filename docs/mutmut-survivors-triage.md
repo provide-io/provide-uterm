@@ -601,3 +601,64 @@ newly-red file was indistinguishable from the standing failure and went unread f
 five days. `9ce12f09` (later `c59cd4ac`) exists because of that: a red
 `mutation-full` run now names the failing paths rather than being one more red run.
 Do not read a red mutation job as the standing failure.
+
+## Wave 10 — the perimeter lists a shim where the router lives (2026-09-02)
+
+**Not yet worked. Measured and recorded so the number is not guessed at.**
+
+`source_paths` lists `bridge/hub/router.py`. That file is eleven lines:
+
+```python
+from provide.uterm.server.bridge.hub.router_impl import MessageRouter
+
+__all__ = ["MessageRouter"]
+```
+
+A re-export shim — the same shape this document and CLAUDE.md exclude
+elsewhere as a 0-mutant non-target (`manager/process.py`). The router was split
+for the 777-LOC limit and the documented rule for that ("the extracted sibling
+module is added to `source_paths` so its mutants stay enforced") was not
+applied, so the router service's real code has never been mutation-tested:
+
+| file | lines | in perimeter |
+|---|---|---|
+| `router.py` | 11 | yes — and it is the shim |
+| `router_impl.py` | 613 | no |
+| `router_broadcast.py` | 583 | no |
+| `router_behavioral.py` | 118 | no |
+| `router_redaction.py` | 88 | no |
+
+`approvals.py` (192 lines) is the `approval_store` service and is not listed
+either. So two of the nine refactor-#16 hub services that CLAUDE.md describes
+as being on the perimeter are, in practice, unenforced.
+
+### Measured cost
+
+One file, measured rather than estimated — `router_broadcast.py` added to
+`source_paths` and run through the gate, then reverted:
+
+```
+mutation gate failed: score=19.14 min_required=100.00
+stats={"total": 491, "killed": 94, "survived": 348, "not_checked": 0, "timeout": 0}
+```
+
+**348 survivors in one of the four unlisted router files**, behind tests whose
+line coverage is 100% — the same mechanism as Wave 9, where ~2600 mutants went
+live behind fully-covered tests. Extrapolating the remaining 1011 lines of
+router plus `approvals.py`, this is a Wave-sized program, not an edit.
+
+### Why it is filed rather than fixed
+
+Adding paths to `source_paths` is a mutation support-file change, which forces
+a full-perimeter run by design. Doing that before the survivors are killed puts
+the gate red and keeps it red for the duration — the exact state the 2026-08-12
+cron decision exists to avoid. The order has to be: kill first on a temporary
+widening, add the path last.
+
+### How it was found
+
+A `presence_sync` fix touched `router_broadcast.py` and the changed-only gate
+selected nothing, which is what prompted checking whether the file was on the
+perimeter at all. Worth generalising: **a perimeter entry that is a shim is
+indistinguishable from coverage in the path list.** Anything checking the list
+should compare each entry against where the code actually lives.
