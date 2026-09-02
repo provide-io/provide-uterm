@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -111,6 +112,22 @@ def test_not_cancelled_is_treated_as_reached() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _resolvable_context(job: dict[str, Any], temp: Path) -> dict[str, str]:
+    """The job's context with the git-derived keys guaranteed present.
+
+    ``github.event.before`` comes from ``HEAD~1``, which does not exist in a
+    depth-1 checkout -- and CI checks this repo out at depth 1. That absence is
+    a fact about the clone, not an expression form the runner cannot handle, so
+    filling it keeps this test measuring the thing it names. The runner itself
+    still refuses rather than substituting a blank; that refusal is pinned by
+    ``test_an_unknown_expression_is_an_error_not_a_blank``.
+    """
+    context = ci_parity._context_for(job, {}, temp)
+    context.setdefault("github.event.before", "0" * 40)
+    context.setdefault("github.ref_name", "main")
+    return context
+
+
 def test_every_job_in_the_workflow_resolves_on_its_first_matrix_cell() -> None:
     """The regression guard: a new expression form must not go unnoticed.
 
@@ -123,7 +140,7 @@ def test_every_job_in_the_workflow_resolves_on_its_first_matrix_cell() -> None:
 
     unresolved: list[str] = []
     for name, job in jobs.items():
-        context = ci_parity._context_for(job, {}, temp)
+        context = _resolvable_context(job, temp)
         for step in ci_parity._steps_for(job, context):
             if step["kind"] == "unevaluated" and "github.token" not in step["why"]:
                 unresolved.append(f"{name}: {step['name']} -- {step['why']}")
@@ -139,3 +156,19 @@ def test_the_quality_job_still_carries_the_commands_it_is_relied_on_for() -> Non
 
     assert any("ci/quality_checks.sh" in command for command in commands)
     assert any("run_pytest_gate.py" in command for command in commands)
+
+
+def test_a_shallow_clone_omits_the_git_key_rather_than_blanking_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CI checks out at depth 1, so ``HEAD~1`` is unavailable there.
+
+    A changed-only gate handed an empty ``--since`` reads it as "everything" or
+    "nothing" depending on the gate -- both wrong, and both silent. So the key
+    is left out and the step is reported instead of run.
+    """
+    monkeypatch.setattr(ci_parity, "_git", lambda *args: None)
+    job = {"steps": [{"name": "changed-only", "run": "gate --since ${{ github.event.before }}"}]}
+
+    context = ci_parity._context_for(job, {}, _ROOT / ".ci-parity-tmp")
+
+    assert "github.event.before" not in context
+    assert ci_parity._steps_for(job, context)[0]["kind"] == "unevaluated"
