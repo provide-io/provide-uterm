@@ -270,7 +270,18 @@ class TestResumeFlow:
 
 class TestResumeHijackReclaim:
     def test_startup_pending_browser_does_not_receive_broadcast_until_activated(self) -> None:
-        """Queued worker output must not overtake a browser's startup hello."""
+        """Queued worker output must not overtake a browser's startup hello.
+
+        Held, not dropped. This used to assert a single send, because the
+        snapshot broadcast inside the window was discarded and only the one
+        after it ever arrived. A terminal that emits one burst and goes idle
+        produces exactly one snapshot, so discarding it left the browser on the
+        screen its hello handed over for the rest of the session -- see the
+        second amendment in docs/ard-startup-broadcast-window.md.
+
+        What the test is named for is unchanged and still asserted: nothing
+        reaches the socket before activation.
+        """
         hub = TermHub()
         ws = MagicMock()
         ws.send_text = AsyncMock()
@@ -280,8 +291,12 @@ class TestResumeHijackReclaim:
         ws.send_text.assert_not_called()
 
         asyncio.run(hub.activate_browser_broadcasts(WID, ws))
-        asyncio.run(hub.broadcast(WID, {"type": "snapshot", "screen": "after-startup"}))
         ws.send_text.assert_awaited_once()
+
+        asyncio.run(hub.broadcast(WID, {"type": "snapshot", "screen": "after-startup"}))
+        assert ws.send_text.await_count == 2
+        sent = [call.args[0] for call in ws.send_text.await_args_list]
+        assert "early" in sent[0] and "after-startup" in sent[1], "the held screen must arrive first, then the live one"
 
     def test_resume_reclaims_hijack(self) -> None:
         """Acquire hijack → disconnect → resume → hijack reclaimed.
