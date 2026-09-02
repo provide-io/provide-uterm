@@ -144,7 +144,7 @@ func TestControlTransferFromTheWindowIsDeliveredOnActivation(t *testing.T) {
 	_, _ = h.Conn.RegisterBrowser(bg(), "w1", ws, "viewer", true)
 
 	_ = h.Router.Broadcast(bg(), "w1", map[string]any{
-		"type": "control_transfer", "from_user": "a", "to_user": "b", "reason": "handover",
+		"type": "control_transfer", "from_user_id": "a", "to_user_id": "b", "reason": "handover",
 	})
 	h.Conn.ActivateBrowserBroadcasts(bg(), "w1", ws)
 

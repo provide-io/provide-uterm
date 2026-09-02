@@ -158,6 +158,55 @@ describe("HijackHost", () => {
     expect(deckMux?.handleMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "dm_leave", user_id: "u2" }));
   });
 
+  it("applies a roster that arrives after the startup sync", () => {
+    // The server holds frames broadcast while a browser is still starting up
+    // and flushes them once it is activated, so a second presence_sync now
+    // lands moments after the browser's own. Its last user is whoever joined,
+    // NOT this browser -- reassigning myUserId from it would make the client
+    // believe it is someone else.
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    render(<HijackHost sessionId="s1" surface="operator" />);
+    const presence = instances[0]?.config?.onPresenceMessage;
+
+    presence?.({
+      type: "presence_sync",
+      config: {},
+      users: [{ user_id: "me", name: "Me", color: "#f00" }],
+    });
+    presence?.({
+      type: "presence_sync",
+      config: {},
+      users: [
+        { user_id: "me", name: "Me", color: "#f00" },
+        { user_id: "them", name: "Them", color: "#0f0" },
+      ],
+    });
+
+    // One DeckMux, not one per sync.
+    expect(deckMuxInstances).toHaveLength(1);
+    const deckMux = deckMuxInstances[0];
+    // Identity still taken from the browser's OWN sync.
+    expect(deckMux?.handleMessage).toHaveBeenCalledWith({ type: "dm_hello", user_id: "me" });
+    expect(deckMux?.handleMessage).not.toHaveBeenCalledWith({ type: "dm_hello", user_id: "them" });
+    // The user who joined during the window is in the roster.
+    expect(deckMux?.handleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "dm_join", user_id: "them" }),
+    );
+
+    // A buffered leave and handover apply against that roster, with the name
+    // and colour learned from the sync that arrived with them.
+    presence?.({ type: "control_transfer", to_user_id: "them", from_user_id: "me" });
+    presence?.({ type: "presence_leave", user_id: "me" });
+
+    expect(deckMux?.handleMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "dm_control_transfer", to_user_id: "them", to_name: "Them", to_color: "#0f0" }),
+    );
+    expect(deckMux?.handleMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "dm_leave", user_id: "me" }));
+  });
+
   it("forwards terminal scroll, control requests, and keepalive dimensions", () => {
     vi.useFakeTimers();
     render(<HijackHost sessionId="s1" />);

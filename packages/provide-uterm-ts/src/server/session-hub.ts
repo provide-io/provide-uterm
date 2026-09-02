@@ -144,10 +144,14 @@ function realSleep(seconds: number): Promise<void> {
 export class SessionHub {
   /** The worker table every service reads. */
   readonly registry = new WorkerRegistry<WorkerTermState>();
-  /** Browsers mid-handshake. Always empty: nothing here accepts a browser. */
-  readonly startupPendingBrowsers = new Set<object>();
-  /** Their missed frames. Always empty for the same reason. */
-  readonly startupPendingFrames = new Map<object, Record<string, unknown>[]>();
+  // The startup-window structures the router and connection manager require.
+  // Both stay empty here: this facade registers workers only, so no browser is
+  // ever deferred and nothing is ever buffered. Private, and shared between the
+  // two services rather than constructed per call site -- separate objects
+  // would behave identically today and diverge silently the moment this facade
+  // grows a browser handshake.
+  readonly #startupPendingBrowsers = new Set<object>();
+  readonly #startupPendingFrames = new Map<object, Record<string, unknown>[]>();
   readonly store: StateStore;
   readonly lease: HijackLeaseManager;
   readonly router: MessageRouter;
@@ -205,8 +209,8 @@ export class SessionHub {
     this.router = new MessageRouter({
       hub: {
         registry: this.registry,
-        startupPendingBrowsers: this.startupPendingBrowsers,
-        startupPendingFrames: this.startupPendingFrames,
+        startupPendingBrowsers: this.#startupPendingBrowsers,
+        startupPendingFrames: this.#startupPendingFrames,
         isHijacked: (state) => this.store.isHijacked(state),
         isDashboardHijackActive: (state) => this.store.isDashboardHijackActive(state),
         hasValidRestLease: (state) => this.store.hasValidRestLease(state),
@@ -261,8 +265,8 @@ export class SessionHub {
     this.connections = new ConnectionManager({
       hub: {
         registry: this.registry,
-        startupPendingBrowsers: this.startupPendingBrowsers,
-        startupPendingFrames: this.startupPendingFrames,
+        startupPendingBrowsers: this.#startupPendingBrowsers,
+        startupPendingFrames: this.#startupPendingFrames,
         maxWorkers: SESSION_HUB_MAX_WORKERS,
         maxConnectionsPerPrincipal: SESSION_HUB_MAX_CONNECTIONS_PER_PRINCIPAL,
         isHijacked: (state) => this.store.isHijacked(state),

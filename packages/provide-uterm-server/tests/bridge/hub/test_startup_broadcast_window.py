@@ -149,11 +149,11 @@ async def test_a_control_transfer_from_the_window_is_delivered_on_activation() -
 
     await hub.broadcast(
         "w-control",
-        {"type": "control_transfer", "from_user": "a", "to_user": "b", "reason": "handover"},
+        {"type": "control_transfer", "from_user_id": "a", "to_user_id": "b", "reason": "handover"},
     )
     await hub.activate_browser_broadcasts("w-control", browser)
 
-    assert [frame["to_user"] for frame in _decoded(browser)] == ["b"]
+    assert [frame["to_user_id"] for frame in _decoded(browser)] == ["b"]
 
 
 @pytest.mark.asyncio
