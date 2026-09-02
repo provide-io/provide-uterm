@@ -165,7 +165,7 @@ loop:
 	// producer stalled near the end. It also keeps a group whose quiesce is
 	// longer than its cap correct, since a member that answered and went
 	// quiet leaves nothing pending.
-	deadlineExceeded := len(sub.Queue) > 0
+	deadlineExceeded := sub.Pending() > 0
 
 	if hadTerm {
 		return termChunks.String(), elapsedMS, deadlineExceeded
