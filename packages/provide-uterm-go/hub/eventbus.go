@@ -29,10 +29,26 @@ type Subscription struct {
 	// producers for one worker increment this concurrently. A plain int is a
 	// data race there, which -race reports and which can lose counts.
 	dropped atomic.Int64
+
+	// The bus this subscription came from, for PendingOverride.
+	bus *EventBus
 }
 
 // Dropped returns the number of events dropped for this subscription.
 func (s *Subscription) Dropped() int { return int(s.dropped.Load()) }
+
+// Pending reports how many events are buffered here and not yet consumed.
+//
+// Reads through the bus so a harness can state that a producer never falls
+// quiet, rather than racing one -- see [EventBus.PendingOverride].
+func (s *Subscription) Pending() int {
+	if s.bus != nil && s.bus.PendingOverride != nil {
+		if n, ok := s.bus.PendingOverride(s.WorkerID); ok {
+			return n
+		}
+	}
+	return len(s.Queue)
+}
 
 // EventBus is the real-time event fanout layer. Port of
 // provide.uterm.server.bridge.hub.event_bus.EventBus.
@@ -52,6 +68,20 @@ type EventBus struct {
 	maxMatchInputChars      int
 	onMetric                func(name string, value int)
 	logger                  *slog.Logger
+
+	// PendingOverride, when set, answers [Subscription.Pending] for the workers
+	// it recognises; nil in production.
+	//
+	// It exists for the differential fan-out scenarios. They assert that a
+	// member is reported cut short when output is STILL QUEUED as the collect
+	// exits, and proving that by out-producing the collector is a scheduling
+	// race rather than a test: the harness measured 3 of 40 collects draining
+	// dry with one producer, and after being hardened to four it still reached
+	// CI as `total_response_deadline.failed_members=[] want=["w1"]`. Stating
+	// the depth directly tests the derivation itself, which is the actual
+	// contract. TypeScript and C# already express it this way in their
+	// harnesses; this is the seam Go lacked.
+	PendingOverride func(workerID string) (int, bool)
 
 	mu     sync.Mutex
 	subs   map[string][]*Subscription
@@ -235,6 +265,7 @@ func (b *EventBus) Watch(workerID string, eventTypes []string, pattern *string) 
 		Queue:      make(chan map[string]any, b.maxQueueDepth),
 		eventTypes: typeSet,
 		pattern:    compiled,
+		bus:        b,
 	}
 	b.mu.Lock()
 	b.subs[workerID] = append(b.subs[workerID], sub)
