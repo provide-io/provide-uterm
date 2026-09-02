@@ -454,6 +454,10 @@ source_paths = [
     #   Closing that file by file; this one measured 106 mutants, 91 killed, and
     #   is now at 100 via tests/bridge/hub/test_router_redaction_kill.py.
     "src/provide/uterm/server/bridge/hub/router_redaction.py",
+    # router_behavioral.py — keystroke ring + cps/jitter arithmetic + the audit
+    #   deny path. 112 mutants; the old assertions were `>= 0.0`, which every
+    #   arithmetic mutant satisfies. Bound by tests/bridge/hub/test_router_behavioral_kill.py.
+    "src/provide/uterm/server/bridge/hub/router_behavioral.py",
     # connection.py — ConnectionManager (register/deregister worker + browser,
     # disconnect, cleanup). Kill-suites wired in pytest selection below (the dedicated
     # test_connections_* suites + test_connection_kill_*.py behaviour-pinning
@@ -721,6 +725,12 @@ pytest_add_cli_args_test_selection = [
     #   which the coverage suite can see. See the suite docstring.
     "packages/provide-uterm-server/tests/bridge/test_snapshot_redaction.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_redaction_kill.py",
+    # router_behavioral.py — the ring bound, the cps/jitter arithmetic (the old
+    #   assertions were `>= 0.0`, true for every mutant of them), and the audit
+    #   deny path.
+    "packages/provide-uterm-server/tests/bridge/hub/test_router.py",
+    "packages/provide-uterm-server/tests/bridge/test_heuristics.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_behavioral_kill.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
     # mutmut actually mutates — _clean_path and the _require_secure_url SSRF guard
     # (it skips every @model_validator/@field_validator/@classmethod by design).
