@@ -148,3 +148,7 @@ packages/provide-uterm-ts/.stryker-tmp/
 # env.json fingerprint and its profile, so local runs are not history --
 # see docs/benchmarks/README.md for how to keep one deliberately.
 docs/benchmarks/results/
+
+# Scratch directory the CI-parity runner hands to steps that write into
+# ${{ runner.temp }} (scripts/ci_parity.py).
+/.ci-parity-tmp/
