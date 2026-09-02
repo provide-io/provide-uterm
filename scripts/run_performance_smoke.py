@@ -10,7 +10,6 @@ import argparse
 import os
 import time
 from dataclasses import dataclass
-from statistics import median
 from typing import TYPE_CHECKING
 
 from provide.uterm.ansi import normalize_colors
@@ -43,10 +42,23 @@ def run_benchmarks(iterations: int) -> PerfResult:
 
 
 def run_benchmarks_stable(iterations: int, runs: int) -> PerfResult:
+    """Best-of-*runs*, because benchmark noise only ever runs one way.
+
+    A contended runner makes an operation look slower; nothing makes it look
+    faster than it is. So the minimum across samples is the closest estimate of
+    the true per-op cost, and the same reason `timeit` documents min over mean.
+
+    This used to take the median, and the gate called it with the default of
+    one run -- a median of a single sample. That failed `quality (3.11)` on
+    `strip_ansi_ns 9668.52 > 6750.00` while the other three cells of the same
+    commit measured 2581, 1929 and 2691, and `normalize_colors` on the failing
+    cell was in line with its siblings. One sample, one busy runner, one red
+    gate on code nobody had touched.
+    """
     samples: list[PerfResult] = [run_benchmarks(iterations) for _ in range(max(1, runs))]
     return PerfResult(
-        normalize_colors_ns=float(median(sample.normalize_colors_ns for sample in samples)),
-        strip_ansi_ns=float(median(sample.strip_ansi_ns for sample in samples)),
+        normalize_colors_ns=min(sample.normalize_colors_ns for sample in samples),
+        strip_ansi_ns=min(sample.strip_ansi_ns for sample in samples),
     )
 
 
@@ -62,7 +74,9 @@ def evaluate_thresholds(result: PerfResult, max_normalize_ns: float, max_strip_n
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run terminal performance smoke benchmarks.")
     parser.add_argument("--iterations", type=int, default=250_000)
-    parser.add_argument("--runs", type=int, default=1)
+    # Several samples so one contended slice cannot decide the gate; the
+    # aggregate is the minimum, see run_benchmarks_stable.
+    parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--enforce", action="store_true", help="Fail if thresholds are exceeded.")
     parser.add_argument("--max-normalize-ns", type=float, default=6_000.0)
     parser.add_argument("--max-strip-ns", type=float, default=4_500.0)
