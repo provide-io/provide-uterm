@@ -487,6 +487,11 @@ source_paths = [
     #   equivalents (an unused forwarded `router` positional, and a `>`/`>=` cap
     #   whose boundary slice returns the string unchanged).
     "src/provide/uterm/server/bridge/hub/router_impl.py",
+    # app/factory_impl.py — the FastAPI application factory. `app/factory.py` was on
+    #   the perimeter as an 11-line re-export shim while these 610 lines were not;
+    #   found by tests/scripts/test_mutation_perimeter_shims.py. 545 mutants; cold it
+    #   killed 132. Bound by the five tests/server/test_factory_*_kill.py suites.
+    "src/provide/uterm/server/app/factory_impl.py",
     # connection.py — ConnectionManager (register/deregister worker + browser,
     # disconnect, cleanup). Kill-suites wired in pytest selection below (the dedicated
     # test_connections_* suites + test_connection_kill_*.py behaviour-pinning
@@ -777,6 +782,7 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/server/test_factory_browser_role_kill.py",
     "packages/provide-uterm-server/tests/server/test_factory_wiring_kill.py",
     "packages/provide-uterm-server/tests/server/test_factory_lifespan_kill.py",
+    "packages/provide-uterm-server/tests/server/test_factory_components_kill.py",
     # router_behavioral.py — the ring bound, the cps/jitter arithmetic (the old
     #   assertions were `>= 0.0`, true for every mutant of them), and the audit
     #   deny path.

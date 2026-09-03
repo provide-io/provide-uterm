@@ -1246,3 +1246,129 @@ body uses only its keyword arguments plus module-level imports -- so no input ca
 the difference. Same equivalence already documented on the callee side for \
 router_broadcast.broadcast_hijack_state __mutmut_19 / __mutmut_57; the parameter exists \
 because every function in that module takes the MessageRouter first."""
+
+# app/factory_impl.py -- typing.cast() type arguments. cast() returns its second
+# argument unchanged and never inspects the first at runtime, so mutating the
+# type string is a no-op that no input can observe. Same equivalence class
+# already documented for router_broadcast.send_hijack_state_to.
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_90"
+reason = '''cast() type argument -> None on resolve_ws_principal; cast is a runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_94"
+reason = '''cast() type argument -> "XXWebSocketXX" on resolve_ws_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_95"
+reason = '''cast() type argument -> "websocket" on resolve_ws_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_96"
+reason = '''cast() type argument -> "WEBSOCKET" on resolve_ws_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_101"
+reason = '''cast() type argument -> None on resolve_http_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_105"
+reason = '''cast() type argument -> "XXRequestXX" on resolve_http_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_106"
+reason = '''cast() type argument -> "request" on resolve_http_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_107"
+reason = '''cast() type argument -> "REQUEST" on resolve_http_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_110"
+reason = '''cast() type argument -> None on idp.resolve_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_114"
+reason = '''cast() type argument -> "XXRequest | WebSocketXX" on idp.resolve_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_115"
+reason = '''cast() type argument -> "request | websocket" on idp.resolve_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_116"
+reason = '''cast() type argument -> "REQUEST | WEBSOCKET" on idp.resolve_principal; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_359"
+reason = '''cast() type argument -> None on ControlPlaneResumeStore; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_363"
+reason = '''cast() type argument -> "XX_ControlPlaneResumeBackendXX" on ControlPlaneResumeStore; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_364"
+reason = '''cast() type argument -> "_controlplaneresumebackend" on ControlPlaneResumeStore; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_365"
+reason = '''cast() type argument -> "_CONTROLPLANERESUMEBACKEND" on ControlPlaneResumeStore; runtime no-op.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_14"
+reason = '''Unset-environment default: os.environ.get("UTERM_API_ONLY", "") -> "XXXX". The
+default is only used when the variable is unset, and neither "" nor "xxxx" is in
+{"1", "true", "yes"}, so the membership test is False either way.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_188"
+reason = '''Unreachable default: connection.scope.get("path", "") -> None. The default is
+only used for a scope that carries no "path", and NO default value starts with
+"/ws/worker/", so the guard is False either way. Covers the two siblings below.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_190"
+reason = '''The "path" default is dropped entirely, yielding None. Equivalent for the same
+reason as __mutmut_188.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_193"
+reason = '''The "path" default becomes "XXXX", which still does not start with
+"/ws/worker/". Equivalent for the same reason as __mutmut_188.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_205"
+reason = '''Guarded or-fallback: compare_digest(..., config.auth.worker_bearer_token or "")
+-> or "XXXX". This branch is reached only under `if config.auth.worker_bearer_token and
+...`, so the value is always truthy here and the `or` never yields its fallback. NOTE the
+sibling fallback on the TOKEN side is NOT equivalent -- a missing bearer would then match
+a short configured token, and the config accepts short tokens -- and it is killed by
+test_a_missing_bearer_never_matches_the_configured_worker_token.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_68"
+reason = '''Pre-declaration initial value: `registry: SessionRegistry | None = None` -> "".
+The name is declared here only so the closures defined above can reference it; it is
+reassigned to the real SessionRegistry before anything reads it, and no closure runs
+during construction. No input can observe the initial value.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_266"
+reason = '''Unreachable guard: `if registry is None: return True` -> `return False` inside
+_on_resume. The registry is always assigned before the first WebSocket connection, which
+is the only thing that can trigger a resume -- the source carries a `# pragma: no cover`
+on that branch for the same reason.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_436"
+reason = '''Constructor-absorbed default: FanOutController(store=InMemoryFanOutStore()) ->
+store=None. The controller does `store if store is not None else InMemoryFanOutStore()`,
+so passing None yields an equivalent fresh store of the same type. Nothing distinguishes
+the two, since the factory passes a newly constructed store either way.'''
+
+[[equivalent]]
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_443"
+reason = '''The `store=InMemoryFanOutStore()` argument is dropped entirely, which lands on
+the same constructor default as __mutmut_436. Equivalent for the same reason.'''

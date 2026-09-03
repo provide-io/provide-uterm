@@ -522,3 +522,142 @@ def test_the_configured_idp_is_given_the_actual_connection(monkeypatch: pytest.M
         assert client.get(_ENDPOINT).status_code == 200
 
     assert seen and seen[0] is not None
+
+
+# ---------------------------------------------------------------------------
+# The resolved principal has to be INSTALLED, not merely computed
+# ---------------------------------------------------------------------------
+#
+# Each of the ways in ends by writing the principal onto
+# ``connection.state.uterm_principal`` and returning. Dropping that write raises
+# nothing and refuses nobody -- the dependency still returns, the request still
+# succeeds. It is only observable further down, where something reads the
+# principal back and gets a DIFFERENT answer by re-resolving.
+#
+# So these connect with the conftest's dev token attached (an admin), and have
+# the short-circuit install a VIEWER. Installed, the browser is refused an
+# unregistered worker; dropped, the fallback re-resolves the dev-token admin and
+# the socket connects. Same request, opposite outcome.
+
+
+def _viewer(subject_id: str) -> Principal:
+    return Principal(subject_id=subject_id, roles=frozenset({"viewer"}), scopes=frozenset())
+
+
+def _first_frame(client: TestClient) -> dict[str, Any]:
+    """The first thing the browser socket is sent.
+
+    A refused viewer is ACCEPTED and then closed with 1008 (that refusal is a
+    ``WebSocketException`` inside the role resolver, not a pre-upgrade denial),
+    while an admin is registered and sent its startup frames. The two are
+    distinguishable on the first message alone.
+    """
+    with client.websocket_connect("/ws/browser/w1/term") as ws:
+        return dict(ws.receive())
+
+
+def test_a_share_principal_is_installed_on_the_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Computing it and dropping it silently restores the caller's own identity."""
+    monkeypatch.setattr(factory_impl, "resolve_tunnel_share_principal", lambda *a, **k: _viewer("shared"))
+    app = _app()
+
+    with TestClient(app) as client:
+        frame = _first_frame(client)
+
+    assert (frame["type"], frame["code"]) == ("websocket.close", 1008)
+
+
+def test_a_tunnel_worker_principal_is_installed_on_the_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(factory_impl, "resolve_tunnel_ws_worker_principal", lambda *a, **k: _viewer("tunnel-worker"))
+    app = _app()
+
+    with TestClient(app) as client:
+        frame = _first_frame(client)
+
+    assert (frame["type"], frame["code"]) == ("websocket.close", 1008)
+
+
+def test_the_resolved_principal_is_installed_for_a_websocket(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ordinary path: what was resolved is what the socket carries onward.
+
+    Dropping the write raises nothing -- the anonymous check still runs against
+    the local variable, so the request is not refused. It is only visible
+    downstream, where ``_resolve_browser_role`` finds no principal and resolves
+    the socket a SECOND time.
+
+    So the resolver answers differently on its second call. Kept, the browser is
+    the admin that was resolved first and connects; dropped, the re-resolution
+    returns a viewer and an unregistered worker refuses it.
+    """
+    calls: list[int] = []
+
+    async def _admin_then_viewer(_connection: Any, _auth: Any) -> Principal:
+        calls.append(1)
+        return _principal("admin") if len(calls) == 1 else _viewer("re-resolved")
+
+    monkeypatch.setattr(factory_impl, "resolve_ws_principal", _admin_then_viewer)
+    app = _app()
+
+    with TestClient(app) as client:
+        frame = _first_frame(client)
+
+    assert frame["type"] != "websocket.close", "the resolved admin was not carried onward"
+    assert len(calls) == 1, "the socket was resolved twice, so the first answer was discarded"
+
+
+def test_the_websocket_resolver_is_given_the_socket_it_is_resolving(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A resolver handed nothing reads no headers and recognises nobody."""
+    seen: list[Any] = []
+
+    async def _record(connection: Any, auth: Any) -> Principal:
+        seen.append(connection)
+        return _principal("admin") if connection is not None else _viewer("nobody")
+
+    monkeypatch.setattr(factory_impl, "resolve_ws_principal", _record)
+    app = _app()
+
+    with _anon(app) as client, client.websocket_connect("/ws/browser/w1/term"):
+        pass
+
+    assert seen and seen[0] is not None
+
+
+def test_the_tunnel_worker_resolver_is_given_this_servers_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """It reads tunnel token state out of the config; another one answers for
+    another server."""
+    seen: list[Any] = []
+
+    def _record(_connection: Any, *, config: Any) -> Principal | None:
+        seen.append(config)
+        return None
+
+    monkeypatch.setattr(factory_impl, "resolve_tunnel_ws_worker_principal", _record)
+    app = _app()
+
+    with _anon(app) as client, pytest.raises(WebSocketDenialResponse):
+        with client.websocket_connect("/ws/browser/w1/term"):
+            pass
+
+    assert seen and seen[0] is app.state.uterm_config
+
+
+def test_a_missing_bearer_never_matches_the_configured_worker_token() -> None:
+    """The ``or ""`` fallback must not become a value the comparison can match.
+
+    ``extract_bearer_token`` returns None when there is no header, so the
+    fallback is what gets compared. Any non-empty fallback is a token an
+    unauthenticated caller supplies for free — and the config accepts short
+    tokens, so this is reachable rather than theoretical. The comparison here
+    is the whole worker admission check.
+    """
+    app = _app(worker_token="XXXX")
+
+    with _anon(app) as client, pytest.raises(WebSocketDenialResponse):
+        with client.websocket_connect("/ws/worker/w1/term"):
+            pass

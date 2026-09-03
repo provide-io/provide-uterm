@@ -15,6 +15,27 @@ import os
 import sys
 from pathlib import Path
 
+# macOS aborts any process that calls into SystemConfiguration after fork()ing
+# without exec, and mutmut runs every mutant by forking and then calling
+# pytest.main() in-process. urllib's proxy discovery is such a call, and both
+# HTTP clients reach it: httpx2 via getproxies() when a client is constructed,
+# and websockets via proxy_bypass() when a client connects. The abort kills the
+# whole test process, which mutmut records as "segfault" -- a state that is not
+# in BAD_MUTANT_STATES, so the gate reports bad_total: 0 with an empty survivor
+# list and still fails on killed/total.
+#
+# Both entry points take the ENVIRONMENT path whenever getproxies_environment()
+# is non-empty, and never touch the framework. Setting a proxy variable plus a
+# blanket no_proxy therefore keeps the resolution pure-Python while meaning
+# "never proxy", which is what the test suite wants regardless.
+#
+# See docs/mutmut-survivors-triage.md (app/factory_impl.py).
+if sys.platform == "darwin":  # pragma: no cover - environment shaping, not behaviour
+    os.environ.setdefault("no_proxy", "*")
+    os.environ.setdefault("NO_PROXY", "*")
+    os.environ.setdefault("http_proxy", "")
+    os.environ.setdefault("HTTP_PROXY", "")
+
 if not os.environ.get("MUTANT_UNDER_TEST"):
     _ROOT = Path(__file__).resolve().parent
     _PACKAGE_SRCS = [
