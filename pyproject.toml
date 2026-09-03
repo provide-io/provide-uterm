@@ -463,6 +463,17 @@ source_paths = [
     #   105 mutants; the 16 survivors were the revision fence, the inclusive
     #   expiry boundary, and whether an async expiry subscriber is awaited at all.
     "src/provide/uterm/server/bridge/hub/approvals.py",
+    # router_broadcast.py — the browser fan-out and hub->worker send, the largest
+    #   of the extracted router siblings at 507 mutants and the last of them to
+    #   be carried onto the perimeter. Cold it killed 296; the 211 survivors were
+    #   the whole failure path (every log line, counter and socket removal is a
+    #   side effect no caller sees), the 0/1-vs-many send split, the startup
+    #   buffer's per-browser `continue`s, and the entire second pass of
+    #   broadcast_hijack_state, which no test reached. Bound by the six
+    #   tests/bridge/hub/test_router_broadcast_*_kill.py suites; 10 documented
+    #   equivalents (zip strictness, `cast` type strings, an unused `router`
+    #   parameter, and a `worker_id` that is unreachable under suppress_errors).
+    "src/provide/uterm/server/bridge/hub/router_broadcast.py",
     # connection.py — ConnectionManager (register/deregister worker + browser,
     # disconnect, cleanup). Kill-suites wired in pytest selection below (the dedicated
     # test_connections_* suites + test_connection_kill_*.py behaviour-pinning
@@ -730,6 +741,15 @@ pytest_add_cli_args_test_selection = [
     #   which the coverage suite can see. See the suite docstring.
     "packages/provide-uterm-server/tests/bridge/test_snapshot_redaction.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_redaction_kill.py",
+    # router_broadcast.py — fan-out, failure handling, startup buffer, hijack-state
+    # payload + its second pass, and the role-scoped policy resolution.
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_send_worker_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_fanout_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_failure_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_startup_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_hijack_payload_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_hijack_recovery_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_policy_kill.py",
     # router_behavioral.py — the ring bound, the cps/jitter arithmetic (the old
     #   assertions were `>= 0.0`, true for every mutant of them), and the audit
     #   deny path.
