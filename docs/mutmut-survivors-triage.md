@@ -776,3 +776,40 @@ inline, because closing it means driving `factory_impl.py` to `killed==100`
 first — adding the path before that only turns the advisory full-perimeter run
 red, which is the mistake the original Wave 10 entry made in the other
 direction.
+
+### `app/factory_impl.py` — killed out, blocked on a harness crash (2026-09-03)
+
+The second shim the guard found. Its kill-suites now exist and are wired:
+`tests/server/test_factory_{auth,browser_role,wiring,lifespan}_kill.py`, 104
+tests, taking the file from **132 killed of 545** to **415+ with `survived: 0`
+and `suspicious: 0`**. Every mutant that runs to completion is killed.
+
+**It is still not on the perimeter, because 130 of the 545 mutants crash the
+test process** — mutmut records them as `segfault`. Three things about that
+state are worth knowing before picking this up:
+
+- `segfault` is **not** in `BAD_MUTANT_STATES`, so the gate prints
+  `bad_total: 0` and an empty surviving-mutant list, and still fails: the score
+  is `killed / total` and the crashes are in the denominator. A run that looks
+  clean by every list the gate prints can sit at 76%.
+- It is **not parallelism**. The gate's attempt-2 retry runs
+  `--max-children 1` and produces the same count.
+- It needs the **full covering selection** to reproduce. Running the four kill
+  suites alone under individually selected mutants (via `MUTANT_UNDER_TEST` with
+  the generated module in place) gives clean exit 0/1 every time. Something in
+  the interaction with the other ~76 app-building suites is required.
+
+The count tracked the suites being added (0 → 95 → 128 → 130), which points at
+the new tests participating in it rather than at the mutants alone. The most
+specific suspect is a test that holds a `sys.modules[...] = None` override while
+`TestClient` runs its threaded portal, but that did not reproduce in isolation
+either.
+
+**Two measurement traps were hit here and are worth repeating.** First, this
+file is the documented bad class for `--paths`: it was not in `source_paths`,
+so `mutmut results` read back against the restored config and reported
+`total: 0` while the progress line showed 545 run. Several intermediate numbers
+in this investigation were bogus for that reason. Adding the path (temporarily)
+is what made the reads reliable — do that FIRST when measuring a file that is
+not yet on the perimeter. Second, an apparent 40–63 `suspicious` count
+disappeared entirely once the reads were fixed; it was never real.

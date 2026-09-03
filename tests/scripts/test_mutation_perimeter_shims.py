@@ -48,10 +48,22 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 #: guard found it on the commit that introduced the guard: the FastAPI
 #: application factory was split for the 777-LOC limit, the 11-line shim stayed
 #: on the perimeter and the 610 lines of ``factory_impl.py`` were never added.
-#: Closing it means driving that module to ``killed==100`` first, exactly as
-#: Wave 10 did for the four router siblings; adding the path before then only
-#: turns the advisory full-perimeter run red. Remove this entry with that work,
-#: not before.
+#:
+#: **The kill-suites for it now exist and leave zero survivors** — the four
+#: ``tests/server/test_factory_*_kill.py`` files, wired into
+#: ``pytest_add_cli_args_test_selection`` and taking the file from 132 killed of
+#: 545 to 415+ with ``survived: 0`` and ``suspicious: 0``. The path is still not
+#: on the perimeter for one reason: **130 of the 545 mutants crash the test
+#: process**, which mutmut records as ``segfault``. That state is not in
+#: ``BAD_MUTANT_STATES``, so the gate reports ``bad_total: 0`` and still fails,
+#: because the score is ``killed / total`` and the crashes sit in the
+#: denominator — 76%, with nothing actionable in the survivor list.
+#:
+#: The crash needs the full ~4000-test covering selection to reproduce; the four
+#: suites alone run clean under every mutant sampled. Until that is understood,
+#: adding the path would only turn the advisory full-perimeter run red, which is
+#: the mistake the original Wave 10 entry made in the other direction. Remove
+#: this entry when the crashes are resolved, not before.
 _KNOWN_UNENFORCED: frozenset[str] = frozenset({"provide.uterm.server.app.factory_impl"})
 
 #: A module is a re-export shim when its body is nothing but imports, ``__all__``,
