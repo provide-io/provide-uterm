@@ -777,39 +777,67 @@ first — adding the path before that only turns the advisory full-perimeter run
 red, which is the mistake the original Wave 10 entry made in the other
 direction.
 
-### `app/factory_impl.py` — killed out, blocked on a harness crash (2026-09-03)
+### `app/factory_impl.py` — the "segfault" was a macOS fork abort (2026-09-03)
 
-The second shim the guard found. Its kill-suites now exist and are wired:
-`tests/server/test_factory_{auth,browser_role,wiring,lifespan}_kill.py`, 104
-tests, taking the file from **132 killed of 545** to **415+ with `survived: 0`
-and `suspicious: 0`**. Every mutant that runs to completion is killed.
+Its kill-suites are `tests/server/test_factory_{auth,browser_role,wiring,lifespan}_kill.py`
+— 104 tests, taking the file from **132 killed of 545** to **415+ with
+`survived: 0`**. The blocker was 130 of 545 mutants reported as `segfault`.
 
-**It is still not on the perimeter, because 130 of the 545 mutants crash the
-test process** — mutmut records them as `segfault`. Three things about that
-state are worth knowing before picking this up:
+**Root cause, from a captured stack trace.** One of the new tests configured
+`governance.authz_webhook_url`, which makes `create_server_app` construct a real
+`WebhookAuthorizationProvider`, which builds an HTTP client (httpx2), whose proxy
+discovery reaches `urllib.request.getproxies_macosx_sysconf` and into the macOS
+SystemConfiguration framework:
 
-- `segfault` is **not** in `BAD_MUTANT_STATES`, so the gate prints
-  `bad_total: 0` and an empty surviving-mutant list, and still fails: the score
-  is `killed / total` and the crashes are in the denominator. A run that looks
-  clean by every list the gate prints can sit at 76%.
-- It is **not parallelism**. The gate's attempt-2 retry runs
-  `--max-children 1` and produces the same count.
-- It needs the **full covering selection** to reproduce. Running the four kill
-  suites alone under individually selected mutants (via `MUTANT_UNDER_TEST` with
-  the generated module in place) gives clean exit 0/1 every time. Something in
-  the interaction with the other ~76 app-building suites is required.
+```
+test_factory_wiring_kill.py  test_a_configured_authorization_webhook_becomes_the_provider
+  -> create_server_app (mutant)
+    -> WebhookAuthorizationProvider.__init__     authorization.py:215
+      -> _http.async_client() -> httpx2 Client.__init__ -> _get_proxy_map
+        -> urllib getproxies -> getproxies_macosx_sysconf
+          -> Fatal Python error: Aborted
+```
 
-The count tracked the suites being added (0 → 95 → 128 → 130), which points at
-the new tests participating in it rather than at the mutants alone. The most
-specific suspect is a test that holds a `sys.modules[...] = None` override while
-`TestClient` runs its threaded portal, but that did not reproduce in isolation
-either.
+macOS forbids that call in a process that has `fork()`ed without `exec`, and
+**that is exactly how mutmut runs every mutant** — it forks and then calls
+`pytest.main()` in-process (`PytestRunner.run_tests`). The fix is one line:
+stub `_http.async_client` in that test so no real client is built.
 
-**Two measurement traps were hit here and are worth repeating.** First, this
-file is the documented bad class for `--paths`: it was not in `source_paths`,
-so `mutmut results` read back against the restored config and reported
-`total: 0` while the progress line showed 545 run. Several intermediate numbers
-in this investigation were bogus for that reason. Adding the path (temporarily)
-is what made the reads reliable — do that FIRST when measuring a file that is
-not yet on the perimeter. Second, an apparent 40–63 `suspicious` count
-disappeared entirely once the reads were fixed; it was never real.
+**Why only ~24% of mutants, and why the count tracked the survivors.** mutmut
+passes `-x`. A mutant killed by an earlier test never reaches the offending
+test. Only mutants that survive everything else get there and abort — which is
+why the numbers moved as one block:
+
+| run | survivors | crashes | sum |
+|---|---|---|---|
+| before the batch that added the test | 125 | 0 | 125 |
+| after | 1 | 95 | 96 |
+| later | 0 | 128 | 128 |
+
+The would-be survivors were being converted into crashes.
+
+**Two gate behaviours this exposed, both worth knowing.**
+
+- `segfault` (exit `-9`/`-11`) and `suspicious` (any unmapped exit code,
+  including SIGABRT's `-6`) are **not** in `BAD_MUTANT_STATES`. So the gate
+  prints `bad_total: 0` **and an empty surviving-mutant list, and still fails** —
+  the score is `killed / total` and these sit in the denominator. A run that
+  looks clean by every list the gate prints reports 76%. Read the state
+  histogram, not the survivor list.
+- Ruling things out is cheap once you replicate the *shape*: a threaded parent
+  that forks and runs `pytest.main()` in-process, with the same selection. That
+  harness (`fork_full.py` in this investigation) reproduces the abort in ~35s
+  per mutant, against ~90 minutes for a gate run. It also disproved three
+  plausible theories quickly — `RLIMIT_CPU` exhaustion (mutmut sets a
+  `(est+1)*30` CPU budget, and a full run needs ~25 CPU-seconds), memory
+  (peak RSS 392 MB), and parallelism (12 concurrent children, zero aborts).
+
+**Still not on the perimeter.** After the fix, 44 sampled mutants run clean
+across sequential, 12-way parallel, and Python 3.11 harnesses, but a gate run
+still reported unmapped exit codes for some mutants that the probe cannot
+reproduce. The one remaining difference is that mutmut runs a coverage-derived
+*subset* of the selection rather than the whole thing. Given this repo already
+treats Linux CI as the reference for mutmut fork behaviour (see the
+`pty/connector.py` note in `mutation-full.yml`: its real-fork tests are skipped
+during mutation because they misbehave here), **the next step is to verify the
+leg on Linux rather than to keep chasing a macOS-local artifact.**

@@ -347,11 +347,20 @@ async def test_the_fanout_admin_check_defers_to_this_servers_authorization(
     assert await controller._is_global_admin(_principal("admin")) is True
 
 
-async def test_the_fanout_session_lookup_uses_this_servers_registry(
+async def test_the_fanout_session_lookup_asks_for_the_worker_it_was_given(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """The worker id has to survive the hop into the registry.
+
+    Asserting only that *a* session comes back cannot see the id being dropped
+    -- a stub returns the same object whatever it is asked for, and so does a
+    single-session registry. The argument is the assertion.
+    """
     session = MagicMock()
     app, _authz, _policy = _app_with(monkeypatch, can_read=True, session=session)
+    lookup = AsyncMock(return_value=session)
+    monkeypatch.setattr(app.state.uterm_registry, "get_definition", lookup)
     controller = app.state.uterm_hub.fan_out_controller
 
-    assert await controller._resolve_session("w1") is session
+    assert await controller._resolve_session("some-worker") is session
+    lookup.assert_awaited_once_with("some-worker")
