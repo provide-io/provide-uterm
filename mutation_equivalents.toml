@@ -1142,3 +1142,87 @@ reason = """\
 Scan-miss sentinel: `idx = buf_len if nxt < 0 else nxt` -> `if nxt < 1`. `nxt < 1` and \
 `nxt < 0` differ only on nxt == 0, which bytearray.find cannot return here -- see the \
 _drain__mutmut_24 entry above for why."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_send_worker__mutmut_53"
+reason = """\
+Codec-name case flip: the tunnel input path does data.encode("utf-8") -> encode("UTF-8"). \
+Python's codec registry lookup is case-insensitive (encodings.normalize_encoding lowercases \
+and strips punctuation before lookup), so both names resolve to the identical codec and emit \
+byte-identical output. No input, ASCII or otherwise, can distinguish them. Same equivalence \
+already documented for tunnel/token_hash x_hash_token__mutmut_9.\
+"""
+
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_123"
+reason = """\
+zip strictness: `zip(browsers_with_roles, results, strict=True)` -> `strict=None`. \
+`results` is constructed from `browsers_with_roles` on both arms -- one append per browser \
+in the sequential arm, one gather result per coroutine in the concurrent arm -- so the two \
+sequences cannot differ in length and the strict check never fires. `strict=None` is falsy \
+and therefore identical to `strict=False`, which the two entries below also cover."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_126"
+reason = """\
+zip strictness: the `strict=True` keyword is dropped entirely. Same equivalence as \
+__mutmut_123 -- the two sequences are built from each other and cannot differ in length, \
+so nothing distinguishes a strict zip from a lenient one here."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_127"
+reason = """\
+zip strictness: `strict=True` -> `strict=False`. Same equivalence as __mutmut_123."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_send_hijack_state_to__mutmut_16"
+reason = """\
+`typing.cast` type argument: `cast("dict[str, Any]", ...)` -> `cast(None, ...)`. `cast` \
+returns its second argument unchanged and never inspects the first at runtime, so no \
+input can distinguish the type strings. Covers the three sibling mutants below."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_send_hijack_state_to__mutmut_20"
+reason = """\
+`typing.cast` type argument: sentinel-wrapped to "XXdict[str, Any]XX". Runtime no-op -- \
+see __mutmut_16."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_send_hijack_state_to__mutmut_21"
+reason = """\
+`typing.cast` type argument: case-flipped to "dict[str, any]". Runtime no-op -- \
+see __mutmut_16."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_send_hijack_state_to__mutmut_22"
+reason = """\
+`typing.cast` type argument: case-flipped to "DICT[STR, ANY]". Runtime no-op -- \
+see __mutmut_16."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_19"
+reason = """\
+Unused parameter: the `router` positional handed to `send_hijack_state_to` is replaced by \
+None. `send_hijack_state_to` never dereferences it -- the body uses only its keyword \
+arguments plus module-level imports -- so no input can observe the difference. The \
+parameter is kept because every function in this module takes the MessageRouter first \
+(see the module docstring); narrowing one signature to win two mutants would break that \
+convention for callers in router_impl."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_57"
+reason = """\
+Unused parameter: the same `router` positional on the second-pass call. See __mutmut_19."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_59"
+reason = """\
+Dead argument under suppression: the second-pass call passes `worker_id=None`. \
+`send_hijack_state_to` reads worker_id in exactly one place -- the \
+`broadcast_hijack_state_send_failed` debug line -- and that line is guarded by \
+`if not suppress_errors`, which the second-pass call sets to True precisely so a socket \
+already reported as dead is not reported twice. The argument is therefore unreachable on \
+this call and no input can observe it. It is passed anyway so the call stays correct if \
+suppression is ever lifted; the suppression itself is pinned by \
+test_a_second_failure_on_the_way_out_is_not_reported_twice."""

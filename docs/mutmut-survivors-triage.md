@@ -662,3 +662,76 @@ selected nothing, which is what prompted checking whether the file was on the
 perimeter at all. Worth generalising: **a perimeter entry that is a shim is
 indistinguishable from coverage in the path list.** Anything checking the list
 should compare each entry against where the code actually lives.
+
+### Resolution (2026-09-02)
+
+Four of the five files are closed and on the perimeter at `killed==100`, each
+landed as its own green push rather than as one long red wave:
+
+| file | mutants | survived cold | equivalents | state |
+|---|---|---|---|---|
+| `router_redaction.py` | 106 | 15 | 0 | on the perimeter |
+| `router_behavioral.py` | 112 | 27 | 0 | on the perimeter |
+| `approvals.py` | 105 | 16 | 0 | on the perimeter |
+| `router_broadcast.py` | 507 | 211 | 10 | on the perimeter |
+| `router_impl.py` | ~976 | — | — | **still unlisted** |
+
+**"Filed rather than fixed" was the wrong call, and the reason is worth
+recording.** The premise above — that adding a path forces a red full-perimeter
+run for the duration of the wave — is not what the gate does. A support-file
+change prints `FULL_PERIMETER_REQUIRED_MARKER` and *returns 0*, dispatching the
+advisory `mutation-full.yml` separately. The unit of work is therefore one
+file, not one wave: measure it, kill its survivors, add its `source_paths`
+entry, push green. Nothing is ever red in between.
+
+**The 348/491 figure above was measured against the wrong test selection.** A
+cold re-measure of the same file gives 211 survivors of 507. Two distinct ways
+to get this wrong, both of which produce plausible-looking survivor counts:
+
+- `--paths` expects the `src/...` form that `source_paths` uses. Passing the
+  repo-relative `packages/...` path skips `scoped_test_selection` (it tests
+  `set(paths) <= BRIDGE_HUB_SOURCE_PATHS`) and silently falls back to the broad
+  `pyproject.toml` selection. That run reported 165 survivors where the scoped
+  selection reports 21 — the number CI would actually enforce.
+- A kill-suite added only to root `pyproject.toml` is *not* in the scoped
+  selection. `BRIDGE_HUB_MUTATION_TESTS` in `scripts/mutation_gate_config.py`
+  is the list a changed-only run consults; a suite missing from it contributes
+  nothing and its mutants return as phantom survivors.
+
+Always read the collected-item count: 556 items is the scoped selection, ~4300
+is the fallback.
+
+### What the 211 survivors in `router_broadcast.py` were
+
+Not scattered — four clusters, each invisible to the shape of test that already
+existed:
+
+- **The whole failure path** (~60). A failed browser send is not an error any
+  caller sees: `broadcast` returns `None` either way. Every log line, counter,
+  socket removal and hijack-state republish is a side effect, and none was
+  asserted. Compounded by telemetry filtering below INFO, so a `caplog`
+  assertion on the DEBUG line passes whether or not the line is emitted — these
+  are asserted against a `MagicMock` logger instead.
+- **`broadcast_hijack_state`'s second pass** (51). Reached only when a send
+  fails, which no test did. Five state re-reads and eight arguments, all
+  unasserted. Note the trap in pinning it: the obvious scenario is the dead
+  socket *being* the hijack owner, which produces a "nobody is driving" frame —
+  exactly what reading any of those five as `None` also produces. Eleven
+  mutants survived the first kill-suite for that reason; killing them needs a
+  lease that **outlives** the removal.
+- **The 0/1-vs-many split** (~10). `<= 1` sends sequentially, above it fans out
+  through `gather(return_exceptions=True)`. The only observable difference is
+  `BaseException` handling — the sequential arm catches `Exception` and lets a
+  cancellation propagate, `gather` captures it as a value — so the boundary is
+  pinned with a custom `BaseException` subclass (not `KeyboardInterrupt`, which
+  pytest treats as a request to abandon the session).
+- **The startup buffer's per-browser `continue`s** (~10). Three loop skips that
+  each hand control to the next browser; as `break` they abandon everything
+  behind the first. Indistinguishable from correct with one browser in the
+  session, which is how every existing test drove it.
+
+The 10 documented equivalents are `zip(..., strict=True)` where both sequences
+are built from each other (×3), `cast()`'s type argument, which is a runtime
+no-op (×4), an unused `router` parameter kept for the module's uniform
+signature convention (×2), and a `worker_id` that is unreachable because the
+call site sets `suppress_errors=True` (×1).

@@ -106,6 +106,7 @@ BRIDGE_HUB_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
         "src/provide/uterm/server/bridge/hub/router_redaction.py",
         "src/provide/uterm/server/bridge/hub/router_behavioral.py",
         "src/provide/uterm/server/bridge/hub/approvals.py",
+        "src/provide/uterm/server/bridge/hub/router_broadcast.py",
         "src/provide/uterm/deckmux/_service.py",
         "src/provide/uterm/bridge/schemas.py",
         *BRIDGE_COORDINATOR_SOURCE_PATHS,
@@ -166,6 +167,19 @@ BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
     "packages/provide-uterm-server/tests/bridge/test_approval_claim.py",
     "packages/provide-uterm-server/tests/bridge/test_mem_pruning.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_approvals_kill.py",
+    # router_broadcast.py — the startup window, egress fence, and browser fan-out.
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_send_worker_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_fanout_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_failure_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_startup_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_hijack_payload_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_hijack_recovery_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_policy_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_startup_broadcast_window.py",
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_egress_fence.py",
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_broadcast_trace.py",
+    "packages/provide-uterm-server/tests/bridge/test_browser_quota_leak_m5.py",
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_redaction.py",
 )
 
 

@@ -133,6 +133,30 @@ specifically to kill mutmut survivors. They share recurring techniques:
   the comparison or the digest is caught.
 - **Assert string/operator constants.** Mutating `"+"` → `"-"`, `and` → `or`,
   or a literal string is caught only if a test depends on the exact output.
+- **For log lines, assert the logger call — not `caplog`.** Telemetry filters
+  below INFO, so a DEBUG record never reaches the capture fixture and an
+  assertion built on it passes vacuously. `monkeypatch.setattr(mod, "logger",
+  MagicMock())` and assert the whole call; that also pins the format string,
+  which substring checks cannot. `in` and `pytest.raises(match=...)` (a regex
+  *search*) both still pass against mutmut's `"XXfooXX"` sentinel wrapping —
+  use equality, or `rf"(?<!\w){re.escape(phrase)}(?!\w)"` when the rendered
+  line carries surrounding telemetry fields.
+- **Side effects nobody returns still need assertions.** A function whose
+  failure path only logs, increments a counter and mutates state returns the
+  same value either way, so every one of those is unasserted by default. Mock
+  the counter and assert `add.assert_called_once_with(1, {...})`; assert the
+  state change, not just that the call did not raise.
+- **Truncation bounds need input longer than the bound.** `str(e)[:200]` →
+  `[:201]` is only observable with an error of at least 201 characters.
+- **`gather(return_exceptions=True)` vs a sequential `except Exception` differ
+  only on `BaseException`.** That is the discriminator for a "one item is
+  special-cased" branch. Use a custom `BaseException` subclass — pytest treats
+  a real `KeyboardInterrupt` as a request to abandon the session.
+- **A "cleared" state reads identically to a `None` read.** When re-reading
+  state after a removal, the natural scenario (the removed thing *was* the
+  state) produces exactly the frame that reading each field as `None` produces.
+  Pin the case where the state **survives** the removal, or the whole re-read
+  is unenforced.
 
 When adding a perimeter file, run the gate once, read the survivor list, and
 write one targeted assertion per survivor rather than broad "exercise" tests.
@@ -144,8 +168,19 @@ write one targeted assertion per survivor rather than broad "exercise" tests.
 1. Add the source path to `source_paths` (short `src/...` form for core,
    full `packages/.../src/...` form otherwise).
 2. Add its covering test suite(s) to `pytest_add_cli_args_test_selection`.
-3. Add the containing source + test tree(s) to `also_copy`.
-4. Run `uv run python scripts/run_mutation_gate.py` (or `--changed-only` while
-   iterating) and drive survivors to zero.
-5. Keep the inline comments in `[tool.mutmut]` accurate — they explain *why*
+3. **If the file belongs to a scoped group, add those suites to that group's
+   tuple in `scripts/mutation_gate_config.py` too** (`BRIDGE_HUB_MUTATION_TESTS`,
+   `PROCESS_MANAGER_MUTATION_TESTS`). `scoped_test_selection()` returns the
+   group tuple whenever the target set is a subset of the group's source paths,
+   and a changed-only run — which is what CI runs — then uses *only* that
+   tuple. A suite wired into `pyproject.toml` alone is silently dropped and its
+   mutants come back as phantom survivors. Check the collected-item count: a
+   few hundred items is the scoped selection, several thousand is the fallback.
+4. Add the containing source + test tree(s) to `also_copy`.
+5. Run `uv run python scripts/run_mutation_gate.py` (or `--changed-only` while
+   iterating) and drive survivors to zero. `--paths` takes the same form as
+   `source_paths`; passing a repo-relative `packages/...` path where the entry
+   is `src/...` misses `scoped_test_selection` and measures against the wrong
+   suite.
+6. Keep the inline comments in `[tool.mutmut]` accurate — they explain *why*
    each entry is on the perimeter.
