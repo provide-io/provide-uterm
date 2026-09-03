@@ -551,6 +551,7 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm/tests/test_control_channel_builders.py",
     "packages/provide-uterm/tests/test_control_channel_ordering.py",
     "packages/provide-uterm/tests/test_control_channel_patterns.py",
+    "packages/provide-uterm/tests/test_control_channel_patterns_kill.py",
     "packages/provide-uterm/tests/test_auth.py",
     "packages/provide-uterm/tests/test_auth_mutmut.py",
     # auth.py — full-perimeter-gate survivor (the authorized_keys utf-8 read);

@@ -23,10 +23,47 @@ here.  If you need compound-atomic sequences (check-then-act), add an
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
 
 _VALID_ACTIONS: frozenset[str] = frozenset({"cmd", "url", "key", "focus"})
+
+
+def _validate_action(action: str) -> None:
+    """Raise :class:`ValueError` unless *action* is one of :data:`_VALID_ACTIONS`.
+
+    Module level, not a method: ``LinkPattern`` is a decorated class, and mutmut
+    skips the entire body of one (``mutation/file_mutation.py``), so a rule kept
+    inside it is never mutation-tested. The wire format owns this rule anyway.
+    """
+    if action not in _VALID_ACTIONS:
+        raise ValueError(f"invalid action {action!r}; must be one of {sorted(_VALID_ACTIONS)}")
+
+
+def _frame_entry(pattern: LinkPattern) -> dict[str, Any]:
+    """Build the wire-format dict for *pattern*.
+
+    Only non-default / non-empty optional fields are included to keep frames
+    compact. ``class_`` is emitted as ``"class"``. Module level for the same
+    reason as :func:`_validate_action`.
+    """
+    entry: dict[str, Any] = {
+        "pattern": pattern.pattern,
+        "action": pattern.action,
+    }
+    if pattern.id is not None:
+        entry["id"] = pattern.id
+    if pattern.flags != "g":
+        entry["flags"] = pattern.flags
+    if pattern.group != 0:
+        entry["group"] = pattern.group
+    if pattern.payload:
+        entry["payload"] = pattern.payload
+    if pattern.hover:
+        entry["hover"] = pattern.hover
+    if pattern.class_:
+        entry["class"] = pattern.class_
+    return entry
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,35 +105,13 @@ class LinkPattern:
     class_: str = ""
 
     def __post_init__(self) -> None:
-        if self.action not in _VALID_ACTIONS:
-            raise ValueError(f"invalid action {self.action!r}; must be one of {sorted(_VALID_ACTIONS)}")
+        _validate_action(self.action)
 
     def to_frame_entry(self) -> dict[str, Any]:
-        """Serialise to the wire-format dict expected by ``xterm-server-links.js``.
-
-        Only non-default / non-empty optional fields are included to keep
-        frames compact.  ``class_`` is emitted as ``"class"``.
-        """
-        entry: dict[str, Any] = {
-            "pattern": self.pattern,
-            "action": self.action,
-        }
-        if self.id is not None:
-            entry["id"] = self.id
-        if self.flags != "g":
-            entry["flags"] = self.flags
-        if self.group != 0:
-            entry["group"] = self.group
-        if self.payload:
-            entry["payload"] = self.payload
-        if self.hover:
-            entry["hover"] = self.hover
-        if self.class_:
-            entry["class"] = self.class_
-        return entry
+        """Serialise to the wire-format dict expected by ``xterm-server-links.js``."""
+        return _frame_entry(self)
 
 
-@dataclass
 class LinkPatternRegistry:
     """Active pattern set for one owner (session, worker, etc.).
 
@@ -107,12 +122,18 @@ class LinkPatternRegistry:
 
     Patterns without an ``id`` (``id=None``) are appended and cannot be removed
     individually; use :meth:`clear` to reset the whole set.
+
+    Deliberately NOT a ``@dataclass``: it carried no constructor arguments (both
+    attributes are ``init=False``), so the decorator bought nothing, and mutmut
+    skips every method of a decorated class — which left all five methods here
+    unenforced while the perimeter entry still read as coverage.
     """
 
-    # Internal store: key → pattern.  For id-less patterns the key is a
-    # monotonically increasing sentinel so they never collide.
-    _patterns: dict[str | int, LinkPattern] = field(default_factory=dict, init=False, repr=False)
-    _counter: int = field(default=0, init=False, repr=False)
+    def __init__(self) -> None:
+        # Internal store: key → pattern.  For id-less patterns the key is a
+        # monotonically increasing sentinel so they never collide.
+        self._patterns: dict[str | int, LinkPattern] = {}
+        self._counter: int = 0
 
     def register(self, pattern: LinkPattern) -> None:
         """Add *pattern* to the active set.
