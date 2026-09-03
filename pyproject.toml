@@ -771,6 +771,12 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_reads_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_lifecycle_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_ownership_kill.py",
+    # app/factory_impl.py — the authentication dependency, the browser-role
+    # resolver, the hub/fan-out/webhook wiring, and the lifespan.
+    "packages/provide-uterm-server/tests/server/test_factory_auth_kill.py",
+    "packages/provide-uterm-server/tests/server/test_factory_browser_role_kill.py",
+    "packages/provide-uterm-server/tests/server/test_factory_wiring_kill.py",
+    "packages/provide-uterm-server/tests/server/test_factory_lifespan_kill.py",
     # router_behavioral.py — the ring bound, the cps/jitter arithmetic (the old
     #   assertions were `>= 0.0`, true for every mutant of them), and the audit
     #   deny path.
