@@ -474,6 +474,19 @@ source_paths = [
     #   equivalents (zip strictness, `cast` type strings, an unused `router`
     #   parameter, and a `worker_id` that is unreachable under suppress_errors).
     "src/provide/uterm/server/bridge/hub/router_broadcast.py",
+    # router_impl.py — MessageRouter itself, and the last of the four extracted
+    #   router siblings to reach the perimeter. 490 mutants; cold it killed 139.
+    #   Six methods (try_reclaim_hijack*, set_browser_role, get_worker_browser_role,
+    #   send_hijack_state_to, keystroke_timestamps) had NO covering test in the
+    #   selection at all and reported as "no tests" rather than as survivors —
+    #   a state that is easy to read past, because it is tallied separately from
+    #   a mutant that was exercised and lived, yet still drags killed/total down.
+    #   The rest were the event ring's write-time redaction, the snapshot commit
+    #   fence and its drop reasons, and the read accessors' deep copies. Bound by
+    #   the six tests/bridge/hub/test_router_impl_*_kill.py suites; 2 documented
+    #   equivalents (an unused forwarded `router` positional, and a `>`/`>=` cap
+    #   whose boundary slice returns the string unchanged).
+    "src/provide/uterm/server/bridge/hub/router_impl.py",
     # connection.py — ConnectionManager (register/deregister worker + browser,
     # disconnect, cleanup). Kill-suites wired in pytest selection below (the dedicated
     # test_connections_* suites + test_connection_kill_*.py behaviour-pinning
@@ -750,6 +763,14 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_hijack_payload_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_hijack_recovery_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_policy_kill.py",
+    # router_impl.py — the event ring's write path, the snapshot commit fence,
+    # the read accessors' copies + M5 read-path redaction, and the lifecycle helpers.
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_event_ring_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_commit_drop_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_commit_store_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_reads_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_lifecycle_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_ownership_kill.py",
     # router_behavioral.py — the ring bound, the cps/jitter arithmetic (the old
     #   assertions were `>= 0.0`, true for every mutant of them), and the audit
     #   deny path.

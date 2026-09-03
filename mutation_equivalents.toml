@@ -1226,3 +1226,23 @@ already reported as dead is not reported twice. The argument is therefore unreac
 this call and no input can observe it. It is passed anyway so the call stays correct if \
 suppression is ever lifted; the suppression itself is pinned by \
 test_a_second_failure_on_the_way_out_is_not_reported_twice."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_impl.xǁMessageRouterǁappend_event__mutmut_23"
+reason = """\
+Truncation boundary with a no-op slice: `if len(raw) > cap` -> `>=`. The two differ only \
+when len(raw) == cap exactly, and there the mutant's `raw[:cap]` returns the whole string \
+unchanged -- it rebuilds the payload dict with byte-identical content. Above the cap both \
+truncate identically; below it neither fires. No input can observe the difference. \
+Contrast the router_broadcast `str(result)[:200]` -> `[:201]` mutants, which ARE killable \
+because the slice bound itself moves rather than the comparison that guards it."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.hub.router_impl.xǁMessageRouterǁsend_hijack_state_to__mutmut_2"
+reason = """\
+Unused parameter: the `self` positional forwarded as the impl's `router` argument is \
+replaced by None. `router_broadcast.send_hijack_state_to` never dereferences it -- the \
+body uses only its keyword arguments plus module-level imports -- so no input can observe \
+the difference. Same equivalence already documented on the callee side for \
+router_broadcast.broadcast_hijack_state __mutmut_19 / __mutmut_57; the parameter exists \
+because every function in that module takes the MessageRouter first."""
