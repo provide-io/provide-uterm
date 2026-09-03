@@ -665,8 +665,8 @@ should compare each entry against where the code actually lives.
 
 ### Resolution (2026-09-02)
 
-Four of the five files are closed and on the perimeter at `killed==100`, each
-landed as its own green push rather than as one long red wave:
+All five files are closed and on the perimeter at `killed==100`, each landed as
+its own green push rather than as one long red wave:
 
 | file | mutants | survived cold | equivalents | state |
 |---|---|---|---|---|
@@ -674,7 +674,7 @@ landed as its own green push rather than as one long red wave:
 | `router_behavioral.py` | 112 | 27 | 0 | on the perimeter |
 | `approvals.py` | 105 | 16 | 0 | on the perimeter |
 | `router_broadcast.py` | 507 | 211 | 10 | on the perimeter |
-| `router_impl.py` | ~976 | — | — | **still unlisted** |
+| `router_impl.py` | 490 | 237 (+73 `no tests`) | 2 | on the perimeter |
 
 **"Filed rather than fixed" was the wrong call, and the reason is worth
 recording.** The premise above — that adding a path forces a red full-perimeter
@@ -735,3 +735,44 @@ are built from each other (×3), `cast()`'s type argument, which is a runtime
 no-op (×4), an unused `router` parameter kept for the module's uniform
 signature convention (×2), and a `worker_id` that is unreachable because the
 call site sets `suppress_errors=True` (×1).
+
+### `router_impl.py`, and the state that is not "survived"
+
+The last of the five measured 490 mutants and killed 139 cold. The interesting
+part is not the 237 survivors but the **73 reported as `no tests`** — mutants
+mutmut generated and then never ran, because no test in the selection covered
+the function at all:
+
+    try_reclaim_hijack        try_reclaim_hijack_status    set_browser_role
+    get_worker_browser_role   send_hijack_state_to         keystroke_timestamps
+
+`no tests` is not in `BAD_MUTANT_STATES`, so the gate's `bad_total` ignores it
+and the surviving-mutant list does not print it — but `score = killed / total`
+counts it in the denominator. A file can therefore sit at 79% with an
+actionable-looking list of 26 survivors while 73 mutants are missing from that
+list entirely. **Read the state histogram, not just the survivor list**, and
+when the two do not reconcile, `mutants/mutmut-stats.json` →
+`tests_by_mangled_function_name` names every function and the tests that cover
+it; a function absent from that map has none.
+
+`try_reclaim_hijack_status` being in that set is the one worth noting on its
+own: it is the only place a browser takes the terminal for itself, it decides
+under a fence with five conjuncts, and it had no test.
+
+### The rule is now enforced, and it found a second instance
+
+`tests/scripts/test_mutation_perimeter_shims.py` parses every `source_paths`
+entry, identifies the ones whose body is nothing but imports and `__all__`, and
+requires the modules they re-export from to be on the perimeter too. It carries
+a negative control that reconstructs the exact `router.py`-without-`router_impl.py`
+configuration, so the guard cannot quietly stop detecting shims and still pass.
+
+On the commit that introduced it, it failed — on a module nobody was looking
+at. `server/app/factory.py` is eleven lines re-exporting `create_server_app`
+from `factory_impl.py`; the shim is on the perimeter and the 610 lines are not.
+Same cause as the router: split for the 777-LOC limit, documented rule not
+applied. It is recorded as a named exemption in that test with the reasoning
+inline, because closing it means driving `factory_impl.py` to `killed==100`
+first — adding the path before that only turns the advisory full-perimeter run
+red, which is the mistake the original Wave 10 entry made in the other
+direction.
