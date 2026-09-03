@@ -37,7 +37,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from provide.uterm.server import create_server_app, default_server_config
+from provide.uterm.server import _http, create_server_app, default_server_config
 from provide.uterm.server.app import factory_impl
 
 #: Test-only value for the authz webhook's shared signing input.
@@ -505,13 +505,26 @@ def test_a_missing_annotation_extra_is_reported_as_an_actionable_error(
     assert str(failure.value) == ("annotation support not installed; pip install 'provide-uterm-server[annotation]'")
 
 
-def test_a_configured_authorization_webhook_becomes_the_provider() -> None:
+def test_a_configured_authorization_webhook_becomes_the_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Configuring a URL swaps the local provider for a webhook one, with that URL.
 
     Dropping the provider entirely leaves the service holding ``None``, which
     still constructs and still serves -- every authorization call then fails on
     a missing provider at request time rather than at startup.
+
+    The HTTP client factory is stubbed, and that is load-bearing rather than
+    tidiness. Building a real one calls the HTTP client's proxy discovery, which on macOS
+    reaches ``getproxies_macosx_sysconf`` and into SystemConfiguration --
+    illegal in a process that has ``fork()``ed without ``exec``, which is
+    exactly how mutmut runs each mutant. Unstubbed, this test aborts the whole
+    test process with SIGABRT, and because mutmut passes ``-x`` that happens
+    only for mutants no earlier test kills. The result is that every would-be
+    survivor is reported as a crash instead of a survivor -- 130 of 545, with
+    an empty survivor list to show for it.
     """
+    monkeypatch.setattr(_http, "async_client", lambda **_kwargs: MagicMock())
     config = default_server_config()
     config.governance.authz_webhook_url = "https://authz.example/decide"
     config.governance.authz_webhook_secret = _WEBHOOK_SHARED_VALUE
