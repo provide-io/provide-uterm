@@ -166,7 +166,10 @@ async def test_a_reader_who_is_refused_the_session_never_reaches_the_policy(
     with pytest.raises(WebSocketException) as refusal:
         await _resolver(app)(_ws(_principal("viewer")), _WORKER)
 
+    # Its own reason: this is a different refusal site from the ad-hoc guard,
+    # and the frontend shows the text it is given.
     assert refusal.value.code == status.WS_1008_POLICY_VIOLATION
+    assert refusal.value.reason == "insufficient privileges"
     assert policy.asked == [], "a refused caller was still handed to the policy"
 
 
@@ -260,14 +263,19 @@ async def test_a_custom_provider_that_recognises_nobody_yields_an_anonymous_view
 async def test_a_custom_provider_principal_is_the_one_used(monkeypatch: pytest.MonkeyPatch) -> None:
     """The other arm, so "always anonymous" cannot pass."""
 
+    seen: list[Any] = []
+
     class _RecognisesAnAdmin:
-        async def resolve_principal(self, _connection: Any) -> Principal | None:
-            return _principal("admin")
+        async def resolve_principal(self, connection: Any) -> Principal | None:
+            seen.append(connection)
+            return _principal("admin") if connection is not None else None
 
     monkeypatch.setattr(factory_impl, "build_identity_provider", lambda *a, **k: _RecognisesAnAdmin())
     app = _app()
+    ws = _ws(None)
 
-    assert await _resolver(app)(_ws(None), _WORKER) == "admin"
+    assert await _resolver(app)(ws, _WORKER) == "admin"
+    assert seen == [ws], "the provider must be asked about this socket, not about nothing"
 
 
 # ---------------------------------------------------------------------------

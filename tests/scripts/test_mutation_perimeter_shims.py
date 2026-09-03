@@ -39,35 +39,13 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 #: Known gaps: modules a perimeter shim re-exports from that are not themselves
-#: enforced yet. Listed rather than tolerated silently — the whole point of the
-#: check is that an unenforced module must not be invisible. Keyed by module
-#: name, not path, because the perimeter lists some entries through the root
-#: ``src/`` symlink tree and others by their real package path.
+#: enforced yet. Empty, and meant to stay that way -- an entry here is an
+#: unenforced module being tolerated, so it must carry the reason and the plan.
 #:
-#: ``app/factory.py`` is the same failure as ``bridge/hub/router.py``, and this
-#: guard found it on the commit that introduced the guard: the FastAPI
-#: application factory was split for the 777-LOC limit, the 11-line shim stayed
-#: on the perimeter and the 610 lines of ``factory_impl.py`` were never added.
-#:
-#: **The kill-suites for it now exist and leave zero survivors** — the four
-#: ``tests/server/test_factory_*_kill.py`` files, taking the file from 132
-#: killed of 545 to 415+ with ``survived: 0``.
-#:
-#: What blocked it was 130 mutants reported as ``segfault``. That was a macOS
-#: fork abort, root-caused and fixed: a test configured an authz webhook URL,
-#: which made the factory build a real HTTP client, whose proxy discovery calls
-#: into SystemConfiguration -- illegal in a ``fork()``ed child, which is exactly
-#: how mutmut runs each mutant. ``-x`` is why it only hit mutants no earlier
-#: test killed, so every would-be survivor became a crash. See
-#: ``docs/mutmut-survivors-triage.md``.
-#:
-#: The path is still off the perimeter because a gate run after the fix still
-#: reported unmapped exit codes for some mutants that a faithful local harness
-#: (threaded parent, fork, in-process pytest) cannot reproduce across 44
-#: samples. This repo already treats Linux CI as the reference for mutmut fork
-#: behaviour; verify the leg there before adding the path. Remove this entry
-#: with that work, not before.
-_KNOWN_UNENFORCED: frozenset[str] = frozenset({"provide.uterm.server.app.factory_impl"})
+#: It held ``app.factory_impl`` between 2026-09-02 and 2026-09-03: this guard
+#: found it on the commit that introduced the guard, and it was closed to
+#: ``killed==100`` the next day. See ``docs/mutmut-survivors-triage.md``.
+_KNOWN_UNENFORCED: frozenset[str] = frozenset()
 
 #: A module is a re-export shim when its body is nothing but imports, ``__all__``,
 #: docstrings and ``from __future__`` — i.e. it defines no behaviour of its own.
