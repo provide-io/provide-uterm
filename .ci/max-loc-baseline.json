@@ -6,7 +6,6 @@
     "An entry is a deferral, not an exemption: see docs/max-loc-debt.md."
   ],
   "allow_over_limit": {
-    "scripts/record_uterm_vnc_demo_video.py": 907,
     "packages/provide-uterm-csharp/src/Provide.Uterm/Vt/CharsetTables.cs": 1051,
     "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/CoverageTo95Tests.cs": 1196,
     "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/CoverageTo97Wave5Tests.cs": 783,
