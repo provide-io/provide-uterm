@@ -5,7 +5,7 @@
 
 // Command uterm-mcp runs the provide-uterm Model Context Protocol server over
 // stdio. It is the Go port of the Python "uterm-mcp" CLI
-// (provide.uterm.ai.cli) and exposes the same 21 tools, so an MCP client
+// (provide.uterm.ai.cli) and exposes the same 28 tools, so an MCP client
 // configuration is interchangeable between the two.
 //
 // Usage:

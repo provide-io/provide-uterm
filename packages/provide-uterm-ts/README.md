@@ -10,7 +10,7 @@ platform. Its completed libraries are wire-compatible with the Python
 reference and are held to 100% line, branch, and function coverage. The
 integrated Node server is **not** a served backend — the served server
 backends are Python (FastAPI), Go, C#, and Cloudflare. It runs on
-Node.js >= 22 and is built with TypeScript 7.
+Node.js >= 26 (`engines.node`) and is built with TypeScript 7.
 
 Label vocabulary (`served`, `unserved`, `unsupported`, `partial`, `N/A`):
 [`docs/parity-labels.md`](../../docs/parity-labels.md).
