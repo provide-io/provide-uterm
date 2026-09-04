@@ -171,8 +171,16 @@ def record_perspective(
     base_url: str,
     steps: list[BrowserStep],
     feature_dir: Path,
+    cookies: list[dict[str, str]] | None = None,
 ) -> Path | None:
-    """Record a single named browser perspective. Returns mp4 path or None."""
+    """Record a single named browser perspective. Returns mp4 path or None.
+
+    *cookies* authenticate a server running ``auth.mode = "header"``. A browser
+    WebSocket cannot carry custom headers, so a page that opens one — the human
+    VNC relay, for instance — is refused 401 on header auth unless the principal
+    arrives in a cookie. Without this the recording is of a "Connection lost"
+    panel, which is how it was found.
+    """
     from playwright.sync_api import sync_playwright
 
     shots_dir = feature_dir / "screenshots"
@@ -198,6 +206,8 @@ def record_perspective(
                 record_video_size={"width": 1280, "height": 720},
                 extra_http_headers=_dev_auth_headers_or_empty(),
             )
+            if cookies:
+                ctx.add_cookies(cookies)  # type: ignore[arg-type]
             _auth_cookies = _dev_auth_cookies_or_empty(base_url)
             if _auth_cookies:
                 ctx.add_cookies(_auth_cookies)  # type: ignore[arg-type]
@@ -278,9 +288,10 @@ def browser_record(
     base_url: str,
     steps: list[BrowserStep],
     feature_dir: Path,
+    cookies: list[dict[str, str]] | None = None,
 ) -> Path | None:
     """Record a browser session (single perspective, named 'browser')."""
-    return record_perspective("browser", base_url, steps, feature_dir)
+    return record_perspective("browser", base_url, steps, feature_dir, cookies)
 
 
 def browser_record_multi(
