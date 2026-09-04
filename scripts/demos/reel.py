@@ -36,6 +36,7 @@ DEMO_MODULES = [
 # Primary mp4 key in the record() return dict for each demo.
 # Used when no "highlight" key is present (e.g. cached runs from before this plan).
 _PRIMARY_KEY: dict[str, str] = {
+    "record_graphical": "console",
     "record_fleet": "grid",
     "record_fanout": "grid",
     "record_hijack": "operator_mp4",
@@ -45,7 +46,7 @@ _PRIMARY_KEY: dict[str, str] = {
 
 
 def record_reel(base_out: Path = BASE_OUT, *, force: bool = False) -> Path | None:
-    """Run all 14 demos (skipping cached), collect highlights, build super reel.
+    """Run all 17 demos (skipping cached), collect highlights, build super reel.
 
     Skips re-recording demos whose output already exists unless force=True.
     Returns path to demo/reel.mp4 or None on failure.
