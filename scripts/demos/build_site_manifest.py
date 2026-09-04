@@ -34,7 +34,7 @@ from scripts.demos.poster import extract_poster
 
 log = logging.getLogger(__name__)
 
-# The 15 demos that have ``record_<feature>.py`` modules. Sorted so the manifest
+# The 17 demos that have ``record_<feature>.py`` modules. Sorted so the manifest
 # emits a deterministic order. Adding a new demo means appending its feature id
 # here AND shipping a recorder module with the standard metadata constants.
 FEATURES: tuple[str, ...] = (
@@ -43,6 +43,8 @@ FEATURES: tuple[str, ...] = (
     "demo_grid",
     "fanout",
     "fleet",
+    "graphical",
+    "gui_agent",
     "hijack",
     "http_inspect",
     "mcp",
@@ -121,11 +123,15 @@ def _probe_artifacts(feature_dir: Path, primary_video: str = "browser_trim.mp4")
 
     screenshots_dir = feature_dir / "screenshots"
     if screenshots_dir.is_dir():
-        artifacts["screenshots"] = sorted(
+        # Only when it holds something. out_dir() creates the directory for
+        # every demo, so a cast-only feature was publishing an empty gallery.
+        shots = sorted(
             f"{relative}/screenshots/{shot.name}"
             for shot in screenshots_dir.iterdir()
             if shot.is_file() and shot.suffix.lower() in {".png", ".jpg", ".jpeg"}
         )
+        if shots:
+            artifacts["screenshots"] = shots
 
     return artifacts
 
