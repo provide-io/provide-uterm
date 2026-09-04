@@ -26,13 +26,17 @@
  * hub router. Mount these behind it.
  */
 
+import { assertConnectorTargetAllowed } from "../egress/index.ts";
 import {
   type GraphicalTarget,
   type GraphicalTargetScope,
   PROTOCOL_MEMORY,
+  PROTOCOL_RFB,
+  parseRfbEndpoint,
   scopeForTenant,
 } from "../graphical/index.ts";
 import { pyStr } from "../pycompat/index.ts";
+import { RfbGraphicalSession, type RfbStream } from "./rfb.ts";
 import { encodeRgbaPng, type GraphicalSession, MemoryGraphicalSession } from "./session.ts";
 
 /** The capability attaching a console needs. */
@@ -95,6 +99,10 @@ export interface GuiDeps {
   authz: { hasCapability(principal: unknown, capability: string): Promise<boolean> };
   targets: { get(scope: GraphicalTargetScope, targetId: string): GraphicalTarget | null };
   clock?: () => Clocks;
+  /** Refuse private/loopback rfb endpoints. Off by default, as the references have it. */
+  blockPrivateConnectorTargets?: boolean;
+  /** Inject a socket for tests; production dials for real. */
+  dialRfb?: (host: string, port: number) => RfbStream;
 }
 
 /** A request, as much of one as these handlers read. */
@@ -144,6 +152,19 @@ export function strField(body: Record<string, unknown>, key: string, fallback = 
 }
 
 /** Attach a graphical session to a worker. */
+/** The message from a thrown value, without assuming it is an Error. */
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Open an RFB console, honouring an injected dial when one is supplied. */
+async function connectRfb(host: string, port: number, deps: GuiDeps): Promise<GraphicalSession> {
+  const dial = deps.dialRfb;
+  return dial === undefined
+    ? await RfbGraphicalSession.connect(host, port)
+    : await RfbGraphicalSession.connect(host, port, { dial });
+}
+
 export async function guiAttach(deps: GuiDeps, request: GuiRequest, workerId: string): Promise<RouteResponse> {
   // First, so a refusal says nothing about which targets exist.
   if (!(await deps.authz.hasCapability(request.principal, CAP_GRAPHICAL_ATTACH))) {
@@ -170,14 +191,41 @@ export async function guiAttach(deps: GuiDeps, request: GuiRequest, workerId: st
   }
 
   const protocol = target.protocol.trim().toLowerCase();
-  if (protocol !== PROTOCOL_MEMORY) {
+  if (protocol !== PROTOCOL_MEMORY && protocol !== PROTOCOL_RFB) {
     return { status: 501, body: { error: `graphical protocol not supported: ${protocol}` } };
   }
 
-  // Floored at one pixel: a size the framebuffer would refuse can only come
-  // from a store written behind the registry's back, and refusing to serve is
-  // worse than serving something small.
-  const session = new MemoryGraphicalSession(Math.max(1, target.width), Math.max(1, target.height));
+  let session: GraphicalSession;
+  if (protocol === PROTOCOL_RFB) {
+    let host: string;
+    let port: number;
+    try {
+      [host, port] = parseRfbEndpoint(target.endpoint);
+    } catch (error) {
+      return { status: 403, body: { error: `invalid endpoint: ${errorText(error)}` } };
+    }
+    try {
+      // Connector-grade egress before the dial, as the references do: a tenant
+      // who can name a target must not be able to name 169.254.169.254.
+      // blockPrivate stays off by default because reaching an internal console
+      // is the point; cloud-metadata is refused either way.
+      await assertConnectorTargetAllowed(host, { blockPrivate: deps.blockPrivateConnectorTargets ?? false });
+    } catch (error) {
+      return { status: 403, body: { error: `invalid endpoint: ${errorText(error)}` } };
+    }
+    try {
+      session = await connectRfb(host, port, deps);
+    } catch (error) {
+      // The registry entry is valid and the console is not answering, which is
+      // a gateway failure rather than a bad request.
+      return { status: 502, body: { error: `rfb connect failed: ${errorText(error)}` } };
+    }
+  } else {
+    // Floored at one pixel: a size the framebuffer would refuse can only come
+    // from a store written behind the registry's back, and refusing to serve is
+    // worse than serving something small.
+    session = new MemoryGraphicalSession(Math.max(1, target.width), Math.max(1, target.height));
+  }
   let state = deps.hub.registry.get(workerId);
   if (state === undefined) {
     state = { graphicalSession: null };
