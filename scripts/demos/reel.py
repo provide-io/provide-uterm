@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Super reel: assemble all 14 feature highlights into a single video."""
+"""Super reel: assemble all 15 feature highlights into a single video."""
 
 from __future__ import annotations
 
