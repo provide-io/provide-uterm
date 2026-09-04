@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Orchestrator: run all 14 per-feature demo recordings and write INDEX.md.
+"""Orchestrator: run all 15 per-feature demo recordings and write INDEX.md.
 
 Usage:
     uv run python scripts/record_all_demos.py
@@ -54,6 +54,11 @@ FEATURES: list[tuple[str, str, str]] = [
         "scripts.demos.record_deckmux",
         "deckmux",
         "Multiple operator cursors join the same session, presence state is broadcast",
+    ),
+    (
+        "scripts.demos.record_demo_grid",
+        "demo_grid",
+        "9-terminal grid — ANSI render animations running simultaneously",
     ),
     (
         "scripts.demos.record_shell_render",
