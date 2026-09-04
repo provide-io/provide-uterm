@@ -239,6 +239,69 @@ class TestAttach:
         assert existing.input_mode == "open"
         assert isinstance(existing.graphical_session, MemoryGraphicalSession)
 
+    async def test_a_protocol_with_no_client_is_not_implemented(self) -> None:
+        """litevirt is a registrable protocol this server has no client for.
+
+        The registry accepts memory/rfb/litevirt (SUPPORTED_PROTOCOLS), so a
+        litevirt target can exist and be attached to; only Go speaks litevirt
+        today. 501 is the honest answer — the target is valid, the server is
+        the one that falls short — and it mirrors C#'s 501 for the same
+        protocol.
+        """
+        registry = _seeded_targets()
+        registry.add_static(
+            GraphicalTargetDefinition(
+                target_id="gt-lv", tenant_id="acme", protocol="litevirt", endpoint="127.0.0.1:5900"
+            )
+        )
+        ep = _endpoint(_hub(), ATTACH)
+        req = _FakeRequest(principal=_principal(), authz=_authz(), targets=registry, body={"target_id": "gt-lv"})
+        resp = await ep(req, WID)
+        assert _status(resp) == 501
+        assert _body(resp)["error"] == "graphical protocol not supported: litevirt"
+
+    async def test_attaching_again_closes_the_session_it_replaces(self) -> None:
+        """A replaced session must be closed, or its socket + reader thread leak.
+
+        MemoryGraphicalSession has nothing to release, but an RfbGraphicalSession
+        holds a TCP socket and a daemon reader thread; re-attaching a worker
+        without closing the old one leaks both for the life of the process.
+        """
+        closed: list[str] = []
+        existing = WorkerTermState()
+        existing.graphical_session = SimpleNamespace(close=lambda: closed.append("closed"))  # type: ignore[assignment]
+        hub = _hub(worker_state=existing)
+        ep = _endpoint(hub, ATTACH)
+        req = _FakeRequest(
+            principal=_principal(), authz=_authz(), targets=_seeded_targets(), body={"target_id": "gt-mem"}
+        )
+        resp = await ep(req, WID)
+        assert resp == {"ok": True, "target_id": "gt-mem"}
+        assert closed == ["closed"]
+        assert isinstance(existing.graphical_session, MemoryGraphicalSession)
+
+    async def test_a_replaced_session_that_cannot_close_still_attaches(self) -> None:
+        """Closing the old session is best-effort: the new attach still wins.
+
+        A dead console's close() raises (the socket is already gone). Failing
+        the attach on that would leave the worker holding the session that just
+        proved itself broken.
+        """
+
+        def _boom() -> None:
+            raise OSError("socket already gone")
+
+        existing = WorkerTermState()
+        existing.graphical_session = SimpleNamespace(close=_boom)  # type: ignore[assignment]
+        hub = _hub(worker_state=existing)
+        ep = _endpoint(hub, ATTACH)
+        req = _FakeRequest(
+            principal=_principal(), authz=_authz(), targets=_seeded_targets(), body={"target_id": "gt-mem"}
+        )
+        resp = await ep(req, WID)
+        assert resp == {"ok": True, "target_id": "gt-mem"}
+        assert isinstance(existing.graphical_session, MemoryGraphicalSession)
+
     async def test_bad_json_body_treated_as_missing_target(self) -> None:
         hub = _hub()
         ep = _endpoint(hub, ATTACH)
