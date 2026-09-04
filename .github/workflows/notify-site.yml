@@ -1,0 +1,43 @@
+name: "🌐 Notify Site"
+
+# uterm.io serves demo artifacts that live in this repo (demo/site-manifest.json
+# and the files it names). The site's own deploy runs on ITS pushes, so before
+# this workflow a demo change here reached production only by coincidence — the
+# deployed site was four months behind when that was noticed on 2026-09-03.
+#
+# Path-filtered to demo/** on purpose. That is exactly what the site syncs; a
+# rebuild on every docs or source commit would be a no-op deploy each time.
+#
+# Script policy: the dispatch lives in ci/notify_site_deploy.sh, not inline here.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "demo/**"
+  # Manual re-fire, for when the site needs to be rebuilt against current main
+  # without waiting for a demo change.
+  workflow_dispatch:
+
+# One notification at a time; a burst of demo commits should end in a single
+# site build against the newest one rather than a queue of superseded deploys.
+concurrency:
+  group: notify-site
+  cancel-in-progress: true
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # Needed only for ci/notify_site_deploy.sh itself.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Fire repository_dispatch at the site repo, pinned to this commit. Exits 0
+      # with a summary note when the cross-repo token is not configured yet.
+      - name: Notify site-uterm-io
+        env:
+          SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: bash ci/notify_site_deploy.sh
