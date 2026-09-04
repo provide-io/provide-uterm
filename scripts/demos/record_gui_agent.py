@@ -6,22 +6,18 @@
 
 Cast, not video, and that is the honest shape for this one.
 
-``gui/attach`` accepts exactly one protocol today. From ``rest_gui.py``::
+This runs against a ``memory`` target on purpose. ``MemoryGraphicalSession``'s
+``inject_pointer`` sets a single white pixel and its ``inject_key`` is a
+documented no-op, so there is nothing to film -- but every call is real, and the
+contract around them is the point: the registry a target comes from, the tenant
+scope that gates it, the lease every injection is charged against, and the
+refusals.
 
-    if protocol != PROTOCOL_MEMORY:
-        # RFB (VNC) client is deferred — see the sub-phase 3c scope note.
-        return JSONResponse({...}, status_code=501)
+``rfb`` targets attach for real now (``server/rfb_session.py``), so the demo also
+shows the one thing an rfb target still cannot do: reach a console that is not
+listening, which answers 502.
 
-The Go port asserts the same refusal (``TestGUIAttachWrongProtocol501``). So the
-seven ``gui_*`` tools are real, tested, and callable -- but the thing behind
-them is ``MemoryGraphicalSession``, whose ``inject_pointer`` sets a single white
-pixel and whose ``inject_key`` is a documented no-op. Filming that would produce
-a black rectangle and a claim the code cannot support. What is worth showing is
-the contract: the registry a target comes from, the tenant scope that gates it,
-the lease every injection is charged against, and the refusals.
-
-For a real desktop see the ``graphical`` demo, which records the human VNC relay
--- the path that does work end to end today.
+For a real desktop under a real lease see the ``graphical`` demo.
 """
 
 from __future__ import annotations
@@ -166,9 +162,9 @@ def run_terminal_demo() -> None:
                 client.post(f"/worker/{_WORKER}/gui/attach", json={"target_id": "gt-does-not-exist"}),
             )
 
-            # The headline refusal: an rfb target registers fine -- the registry
-            # accepts it, validates the endpoint, and stores it -- and attaching
-            # to it is 501, because the VNC client behind gui/attach is deferred.
+            # An rfb target now attaches for real. What it cannot do is reach a
+            # console that is not there: the registry entry is valid and the
+            # dial fails, which is 502 rather than 501 or 422.
             rfb = _show(
                 "POST /api/graphical-targets (protocol=rfb)",
                 client.post(
@@ -176,13 +172,13 @@ def run_terminal_demo() -> None:
                     json={
                         "display_name": "A Real Desktop",
                         "protocol": "rfb",
-                        "endpoint": "rfb://desktop.internal:5900",
+                        "endpoint": "rfb://127.0.0.1:1",
                     },
                 ),
             )
             rfb_id = rfb.get("target_id") if isinstance(rfb, dict) else None
             _show(
-                f"gui/attach (protocol=rfb, target={rfb_id})",
+                "gui/attach (protocol=rfb, unreachable console)",
                 client.post(f"/worker/{_WORKER}/gui/attach", json={"target_id": rfb_id}),
             )
 
@@ -192,7 +188,7 @@ def run_terminal_demo() -> None:
             )
             _show("gui_click after release", client.post(f"{base}/click", json={"x": 400, "y": 300, "button": "left"}))
 
-        ok("every tool answered; the memory framebuffer behind them is a stub until RFB lands")
+        ok("every tool answered, and an unreachable rfb console fails as a bad gateway, not a bad request")
     finally:
         stop_server(server)
 
