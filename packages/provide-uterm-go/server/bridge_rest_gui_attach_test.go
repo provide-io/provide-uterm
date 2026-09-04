@@ -8,6 +8,7 @@ package server
 import (
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -201,16 +202,54 @@ func TestGUIAttachCrossTenantDenied404(t *testing.T) {
 }
 
 func TestGUIAttachWrongProtocol501(t *testing.T) {
-	// rfb is a valid target protocol but this port ships no RFB session client.
+	// This port now speaks every protocol the registry will accept — memory,
+	// rfb and litevirt — so the 501 branch is no longer reachable by seeding a
+	// target. It stays as a guard against a store written behind the registry's
+	// validation, and is exercised by calling the dispatcher with such a value.
+	//
+	// rfb was this case until vnc.RFBClient landed.
+	ts := attachTestServer(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/worker/w1/gui/attach", nil)
+	unvalidated := &graphical.Definition{
+		TargetID: "gt-odd", TenantID: "acme", Protocol: "vmware",
+		Endpoint: strPtrLocal("127.0.0.1:5900"), Width: 64, Height: 48,
+	}
+	if _, _, _, ready := ts.srv.buildGraphicalSession(rec, req, unvalidated); ready {
+		t.Fatal("an unknown protocol must not produce a session")
+	}
+	if rec.Code != http.StatusNotImplemented {
+		t.Fatalf("unknown protocol = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGUIAttachRfbUnreachableConsole502(t *testing.T) {
+	// rfb attaches for real now; a console that is not listening is a gateway
+	// failure, not a bad request. Port 1 refuses instantly.
 	rfb := &graphical.Definition{
 		TargetID: "gt-rfb", TenantID: "acme", Protocol: graphical.ProtocolRfb,
-		Endpoint: strPtrLocal("127.0.0.1:5900"), Width: 64, Height: 48,
+		Endpoint: strPtrLocal("127.0.0.1:1"), Width: 64, Height: 48,
 	}
 	ts := attachTestServer(t, rfb)
 	ts.setupWorker(t, "w1")
 	rec := ts.do("POST", "/worker/w1/gui/attach", `{"target_id":"gt-rfb"}`, tenantHeaders("admin", "acme"))
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("rfb attach = %d %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("unreachable rfb attach = %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGUIAttachRfbCloudMetadataRefusedBeforeDial(t *testing.T) {
+	// The egress guard runs first, so a target cannot name the metadata service
+	// even with block_private_connector_targets off, which is the default.
+	rfb := &graphical.Definition{
+		TargetID: "gt-meta", TenantID: "acme", Protocol: graphical.ProtocolRfb,
+		Endpoint: strPtrLocal("169.254.169.254:5900"), Width: 64, Height: 48,
+	}
+	ts := attachTestServer(t, rfb)
+	ts.setupWorker(t, "w1")
+	rec := ts.do("POST", "/worker/w1/gui/attach", `{"target_id":"gt-meta"}`, tenantHeaders("admin", "acme"))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("metadata rfb attach = %d %s", rec.Code, rec.Body.String())
 	}
 }
 
