@@ -68,7 +68,7 @@ FEATURES: list[tuple[str, str, str]] = [
     (
         "scripts.demos.record_mcp",
         "mcp",
-        "21 MCP tools for AI agent integration: session management, hijack, fan-out, annotation",
+        "28 MCP tools for AI agent integration: session management, hijack, fan-out, annotation",
     ),
     (
         "scripts.demos.record_telnet",

@@ -16,6 +16,48 @@ LINK_RE = re.compile(r"\[[^\]]+\]\(([^)\s]+)\)")
 MUTATION_CMD_RE = re.compile(r"run_mutation_gate\.py\b")
 MIN_MUTATION_RE = re.compile(r"--min-mutation-score\s+100(?:\.0)?\b")
 
+#: File kinds that can carry a documented MCP tool count. Prose says it, and so
+#: do package docstrings and the Go command's header comment -- which is what
+#: the generated Go API reference publishes.
+TOOL_COUNT_SUFFIXES = frozenset({".md", ".py", ".go", ".ts", ".mjs"})
+
+#: Directory names never walked. Vendored trees, build output and caches make
+#: claims that are not this repo's to make, and `archive` holds documents whose
+#: numbers are a record of what was true when they were written -- updating
+#: those to today's count would destroy the thing they exist to preserve.
+TOOL_COUNT_PRUNE = frozenset(
+    {
+        ".git",
+        ".hypothesis",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        ".wrangler",
+        "__pycache__",
+        "archive",
+        "build",
+        "coverage",
+        "dist",
+        "htmlcov",
+        "mutants",
+        "node_modules",
+        "obj",
+        "python_modules",
+        "reports",
+        "site-packages",
+        "StrykerOutput",
+    }
+)
+
+#: "28 tools", "28 session control tools", "the same 28 tools". Up to two words
+#: may sit between the number and the noun so a qualified count still matches;
+#: beyond that the number is usually about something else on the line.
+TOOL_COUNT_RE = re.compile(r"\b(\d+)\s+(?:[a-z][\w-]*\s+){0,2}tools?\b", re.IGNORECASE)
+
+#: Only lines actually talking about MCP are this check's business.
+MCP_CONTEXT_RE = re.compile(r"mcp|model context protocol", re.IGNORECASE)
+
 
 def _iter_markdown_files(root: Path) -> list[Path]:
     files: list[Path] = []
@@ -162,6 +204,81 @@ def _claim_violations(path: Path, content: str) -> list[str]:
     return violations
 
 
+def _mcp_tool_counts(root: Path) -> tuple[int, dict[str, int]]:
+    """``(total, {module_stem: count})`` of ``@mcp.tool`` registrations."""
+    ai_dir = root / "packages/provide-uterm-client/src/provide/uterm/ai"
+    if not ai_dir.is_dir():
+        return 0, {}
+    total = sum(path.read_text(encoding="utf-8").count("@mcp.tool") for path in sorted(ai_dir.glob("*.py")))
+    per_module = {
+        path.stem: path.read_text(encoding="utf-8").count("@mcp.tool")
+        for path in sorted(ai_dir.glob("server_tools_*.py"))
+    }
+    return total, per_module
+
+
+def _files_that_may_claim(root: Path) -> list[Path]:
+    """Every file under *root* that could state a tool count, pruned trees aside."""
+    found: list[Path] = []
+    stack = [root]
+    while stack:
+        current = stack.pop()
+        for entry in sorted(current.iterdir()):
+            if entry.is_symlink():
+                continue
+            if entry.is_dir():
+                if entry.name not in TOOL_COUNT_PRUNE:
+                    stack.append(entry)
+            elif entry.suffix in TOOL_COUNT_SUFFIXES:
+                found.append(entry)
+    return found
+
+
+def _tool_count_violations(root: Path) -> list[str]:
+    """Every place that states an MCP tool count must state the real one.
+
+    Until 2026-09-03 this was checked in README.md alone. README.md was right --
+    and ``demo/mcp/README.md``, the ``ai/server_impl.py`` docstring, the Go
+    README twice, and ``cmd/uterm-mcp/main.go`` all still said 21, seven tools
+    behind. The one file under check stayed correct while every other file
+    making the same claim rotted, which is the shape of drift a single-file
+    check produces rather than prevents.
+
+    A line may quote the total or any one module's share of it: the docstring
+    and the roadmaps break the count down deliberately, and a breakdown that no
+    longer sums is itself drift worth catching.
+    """
+    total, per_module = _mcp_tool_counts(root)
+    if total == 0:
+        return []
+    allowed = {total, *per_module.values()}
+    breakdown = ", ".join(f"{stem.removeprefix('server_tools_')}={count}" for stem, count in sorted(per_module.items()))
+    this_file = Path(__file__).resolve()
+
+    violations: list[str] = []
+    for path in _files_that_may_claim(root):
+        if path.resolve() == this_file:
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if "mcp" not in content.lower():
+            continue
+        for line_no, line in enumerate(content.splitlines(), start=1):
+            if not MCP_CONTEXT_RE.search(line):
+                continue
+            for match in TOOL_COUNT_RE.finditer(line):
+                claimed = int(match.group(1))
+                if claimed in allowed:
+                    continue
+                violations.append(
+                    f"{path}:{line_no}: says {match.group(0)!r} but there are"
+                    f" {total} @mcp.tool registrations ({breakdown})"
+                )
+    return violations
+
+
 def _structural_claim_violations(root: Path) -> list[str]:
     """Cross-file structural checks: live code/config vs documented claims."""
     violations: list[str] = []
@@ -195,36 +312,10 @@ def _structural_claim_violations(root: Path) -> list[str]:
             violations.append(f"{pyproject}: addopts enables --cov but is missing --cov-fail-under=100")
 
     # --- 2. MCP tool count ---
-    # Count @mcp.tool decorators across the ai/ tool modules and compare to the
-    # README's claim. The tool handlers were split out of server_impl.py into
-    # cohesive server_tools_*.py registration modules, so the count is summed
-    # across the ai/ package rather than read from a single file.
-    ai_dir = root / "packages/provide-uterm-client/src/provide/uterm/ai"
+    # Checked repo-wide by _tool_count_violations, not here: the claim is made
+    # in six places and a check that reads one of them proved to be the reason
+    # the other five drifted.
     readme = root / "README.md"
-    if ai_dir.exists() and readme.exists():
-        actual_tool_count = sum(
-            path.read_text(encoding="utf-8").count("@mcp.tool") for path in sorted(ai_dir.glob("*.py"))
-        )
-        readme_text = readme.read_text(encoding="utf-8")
-        # Match numbers adjacent to "MCP" or "tools for AI agents" (e.g. "21 tools", "21 session")
-        mcp_count_match = re.search(
-            r"(\d+)\s+(?:tools?\s+for\s+AI\s+agents?|session\s+control\s+tools?)", readme_text
-        ) or re.search(r"AI\s+Tools?\s+\(MCP\)[^>]*?(\d+)\s+session", readme_text)
-        if mcp_count_match is None:
-            # Fallback: find any number immediately before or after "tools" near "MCP"
-            mcp_count_match = re.search(r"(\d+)\s+tools?\b.*?MCP|MCP.*?(\d+)\s+tools?\b", readme_text)
-        if mcp_count_match:
-            doc_count_str = next(g for g in mcp_count_match.groups() if g is not None)
-            doc_count = int(doc_count_str)
-            if doc_count != actual_tool_count:
-                for line_no, line in enumerate(readme_text.splitlines(), start=1):
-                    if doc_count_str in line and ("MCP" in line or "tools" in line.lower()):
-                        violations.append(
-                            f"{readme}:{line_no}: MCP tool count says {doc_count},"
-                            f" found {actual_tool_count} @mcp.tool decorators in"
-                            " packages/provide-uterm-client/src/provide/uterm/ai/"
-                        )
-                        break
 
     # --- 3. Package count ---
     # Count packages/ subdirectories and compare to CLAUDE.md's "N packages under packages/" claim.
@@ -337,6 +428,7 @@ def check_docs(root: Path) -> list[str]:
         violations.extend(_claim_violations(resolved_path, content))
         violations.extend(_architecture_diagram_violations(resolved_path, content))
     violations.extend(_structural_claim_violations(root))
+    violations.extend(_tool_count_violations(root))
     return sorted(violations)
 
 

@@ -29,7 +29,7 @@ uv run python -m scripts.demos.reel
 | [Telnet Connector](telnet/README.md) | Legacy telnet sessions with full terminal emulation | `telnet/` |
 | [Tunnel Sharing](tunnel/README.md) | Share sessions via bearer-token control/share URLs (no inbound port needed) | `tunnel/` |
 | [HTTP Inspection](http_inspect/README.md) | Intercept and inspect HTTP traffic in real time | `http_inspect/` |
-| [MCP Integration](mcp/README.md) | 21 AI agent tools via Model Context Protocol | `mcp/` |
+| [MCP Integration](mcp/README.md) | 28 AI agent tools via Model Context Protocol | `mcp/` |
 | [Session Hijack](hijack/README.md) | Viewer watches while operator takes exclusive control | `hijack/` |
 | [DeckMux Presence](deckmux/README.md) | Multiple operators share a session with live cursors | `deckmux/` |
 | [Fleet Management](fleet/README.md) | Workers self-register; broadcast deploy to the whole fleet | `fleet/` |
