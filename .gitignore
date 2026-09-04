@@ -93,6 +93,8 @@ demo/.recordings/
 demo/vnc-lab/server.toml
 demo/vnc-lab/server.log
 demo/vnc-lab/video-error.log
+demo/vnc-lab/lab-build.log
+demo/vnc-lab/storyboard/
 demo/vnc-lab/video-raw/
 demo/vnc-lab/recordings/
 # Nested "turtles" demo per-run scratch (record_uterm_vnc_nested_demo.py).
