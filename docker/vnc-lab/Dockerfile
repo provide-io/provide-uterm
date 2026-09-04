@@ -25,7 +25,10 @@
 #   GEOMETRY       Xvfb geometry (default: 1280x720x24)
 #   RFB_PORT       Plain (unencrypted) VNC listen port (default: 5900)
 #   RFB_SSL_PORT   TLS/VeNCrypt VNC listen port (default: 5901)
-#   VNC_PASSWORD   Optional shared password for both ports (empty = -nopw)
+#   VNC_PASSWORD   Optional shared password for both ports (empty = -nopw).
+#                  Deliberately NOT declared as ENV: an empty default bought
+#                  nothing (entrypoint.sh already does "${VNC_PASSWORD:-}")
+#                  and tripped the SecretsUsedInArgOrEnv image check.
 #
 
 FROM debian:bookworm-slim
@@ -35,7 +38,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GEOMETRY=1280x720x24 \
     RFB_PORT=5900 \
     RFB_SSL_PORT=5901 \
-    VNC_PASSWORD= \
     DISPLAY=:99 \
     HOME=/root
 
