@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-04T03:45:22Z",
+  "generated_at": "2026-09-04T17:03:05Z",
   "demos": [
     {
       "id": "annotation",
@@ -117,14 +117,20 @@
     },
     {
       "id": "gui_agent",
-      "title": "Graphical Tool Surface",
-      "subtitle": "What an agent may do to a desktop, and what it may not",
-      "description": "The seven graphical tools an agent drives: registry, tenant scope, hijack lease, and every refusal in between",
-      "duration_seconds": 0.0,
-      "highlight_start_s": 0.0,
-      "format": "cast",
+      "title": "Agent Drives a Desktop",
+      "subtitle": "The same lease that arbitrates a PTY arbitrates a screen",
+      "description": "An agent takes the graphical lease, screenshots a live desktop, clicks and types on it, then hands it back",
+      "duration_seconds": 12.0,
+      "highlight_start_s": 2.0,
+      "format": "mp4",
       "artifacts": {
-        "cast": "gui_agent/terminal.cast"
+        "video": "gui_agent/browser_trim.mp4",
+        "poster": "gui_agent/poster.png",
+        "cast": "gui_agent/terminal.cast",
+        "screenshots": [
+          "gui_agent/screenshots/01-console-attached.png",
+          "gui_agent/screenshots/02-after-agent-input.png"
+        ]
       }
     },
     {
