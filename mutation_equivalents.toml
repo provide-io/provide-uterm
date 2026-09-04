@@ -1372,3 +1372,42 @@ the two, since the factory passes a newly constructed store either way.'''
 mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_443"
 reason = '''The `store=InMemoryFanOutStore()` argument is dropped entirely, which lands on
 the same constructor default as __mutmut_436. Equivalent for the same reason.'''
+
+# ---------------------------------------------------------------------------
+# bridge/routes/rest_gui.py — 5 equivalents, measured 2026-09-04
+# ---------------------------------------------------------------------------
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest_gui.x__block_private__mutmut_20"
+reason = """getattr default False -> None. The result is wrapped in bool(), and
+bool(None) == bool(False) == False, so the mutated default is indistinguishable
+from the original through the function's only exit. The flag-present paths do
+not read the default at all."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest_gui.x__int_field__mutmut_4"
+reason = """body.get(key, default) -> body.get(key, None). When the key is
+absent the original binds raw=default (an int) and returns it via the
+isinstance(raw, int) branch; the mutant binds raw=None, falls past every
+isinstance branch, and returns the same default from the final statement. Both
+paths return default for every input, including a bool default (which the
+isinstance(raw, bool) guard also routes to default)."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest_gui.x__int_field__mutmut_6"
+reason = """body.get(key, default) -> body.get(key). Identical to mutmut_4:
+dict.get defaults to None when the second argument is omitted, so this is the
+same substitution and returns default on the same paths."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest_gui.x__str_field__mutmut_4"
+reason = """body.get(key, default) -> body.get(key, None). With the key absent
+the original binds raw=default (a str) and returns it via isinstance(raw, str);
+the mutant binds raw=None, fails that isinstance, and returns default from the
+else. Same value on every input."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest_gui.x__str_field__mutmut_6"
+reason = """body.get(key, default) -> body.get(key). Same substitution as
+mutmut_4, reached via the implicit None default of dict.get; the else branch
+returns default."""
