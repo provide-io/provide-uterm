@@ -103,6 +103,7 @@ BRIDGE_HUB_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
         "src/provide/uterm/server/bridge/hub/presence.py",
         "src/provide/uterm/server/bridge/hub/store.py",
         "src/provide/uterm/server/bridge/hub/polling_service.py",
+        "src/provide/uterm/server/bridge/routes/rest_gui.py",
         "src/provide/uterm/server/bridge/hub/router_redaction.py",
         "src/provide/uterm/server/bridge/hub/router_behavioral.py",
         "src/provide/uterm/server/bridge/hub/approvals.py",
@@ -127,6 +128,13 @@ BRIDGE_HUB_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
 # only, and a scoped polling_service.py run reported 48 survivors against the
 # full run's 16.
 BRIDGE_HUB_MUTATION_TESTS: Final[tuple[str, ...]] = (
+    # rest_gui.py — the /gui/ REST handlers. Without these a scoped run binds
+    # zero tests to every rest_gui mutant and reports them "not checked" at
+    # score 0.00, which reads as a crash rather than as an unmeasured file.
+    "packages/provide-uterm-server/tests/bridge/test_rest_gui.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_gui_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_gui_routes_integration.py",
+    "packages/provide-uterm-server/tests/server/test_gui_principal_bind.py",
     "packages/provide-uterm/tests/deckmux/test_presence.py",
     "packages/provide-uterm/tests/deckmux/test_hub_mixin.py",
     "packages/provide-uterm/tests/deckmux/test_transfer.py",

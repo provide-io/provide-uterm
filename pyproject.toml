@@ -508,6 +508,12 @@ source_paths = [
     "src/provide/uterm/server/bridge/hub/presence.py",
     "src/provide/uterm/server/bridge/hub/store.py",
     "src/provide/uterm/server/bridge/hub/polling_service.py",
+    # bridge/routes/rest_gui.py — the graphical REST surface. It carries the
+    # connector-grade egress guard (the check that stops a tenant naming
+    # 169.254.169.254 as a console) and the per-request lease/principal binding,
+    # yet sat off the perimeter while server/routes/ was fully enforced. Line
+    # coverage said 100% here and still hid an unreachable branch until 2026-09-04.
+    "src/provide/uterm/server/bridge/routes/rest_gui.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
     # Cross-language role/lease policy (spec/behavior.json).
