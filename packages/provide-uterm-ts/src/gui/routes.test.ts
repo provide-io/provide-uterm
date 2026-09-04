@@ -12,6 +12,7 @@ import {
   GUI_BUTTON_MASKS,
   GUI_KEY_SYMS,
   type GuiDeps,
+  type GuiRequest,
   type GuiWorkerState,
   guiAttach,
   guiClick,
@@ -359,13 +360,16 @@ describe("the gui routes", () => {
   });
 
   it("names a protocol it cannot speak as the store spelled it, in lower case", async () => {
-    const stored = makeGraphicalTarget({ targetId: "gt-odd", tenantId: "acme", protocol: " RFB " });
+    // litevirt, not rfb: this port speaks rfb now. litevirt is Go's console
+    // protocol and the one no other implementation wires, which is what makes
+    // it the stable subject for this case.
+    const stored = makeGraphicalTarget({ targetId: "gt-odd", tenantId: "acme", protocol: " LITEVIRT " });
     const { deps } = depsFor({} as Case);
     deps.targets = { get: () => stored };
     const request = { principal: { tenantId: "acme", subjectId: "u1" }, body: { target_id: "gt-odd" } };
     const answer = await guiAttach(deps, request, WORKER);
     expect(answer.status).toBe(501);
-    expect(answer.body).toEqual({ error: "graphical protocol not supported: rfb" });
+    expect(answer.body).toEqual({ error: "graphical protocol not supported: litevirt" });
   });
 
   it("keeps a worker's other state when it attaches a console", async () => {
@@ -513,5 +517,113 @@ describe("the gui routes", () => {
     expect([...png.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     expect(body.worker_id).toBe(WORKER);
     expect(body.hijack_id).toBe(HIJACK);
+  });
+});
+
+describe("attaching an rfb console", () => {
+  /** A duplex replaying a handshake, so no socket is involved. */
+  function scriptedStream(script: Buffer): {
+    on(event: string, listener: (...args: never[]) => void): unknown;
+    write(chunk: Uint8Array): unknown;
+    destroy(): unknown;
+    destroyed: boolean;
+  } {
+    let onData: ((chunk: Buffer) => void) | null = null;
+    let pending = script;
+    return {
+      destroyed: false,
+      on(event: string, listener: (...args: never[]) => void) {
+        if (event === "data") {
+          onData = listener as unknown as (chunk: Buffer) => void;
+          const script_ = pending;
+          pending = Buffer.alloc(0);
+          if (script_.length > 0) {
+            onData(script_);
+          }
+        }
+        return this;
+      },
+      write() {
+        return true;
+      },
+      destroy() {
+        this.destroyed = true;
+        return undefined;
+      },
+    };
+  }
+
+  function handshake(width: number, height: number): Buffer {
+    const serverInit = Buffer.alloc(24);
+    serverInit.writeUInt16BE(width, 0);
+    serverInit.writeUInt16BE(height, 2);
+    return Buffer.concat([
+      Buffer.from("RFB 003.008\n", "ascii"),
+      Buffer.from([1, 1]),
+      Buffer.from([0, 0, 0, 0]),
+      serverInit,
+    ]);
+  }
+
+  function rfbDeps(endpoint: string): { deps: GuiDeps; request: GuiRequest } {
+    const stored = makeGraphicalTarget({ targetId: "gt-rfb", tenantId: "acme", protocol: "rfb", endpoint });
+    const { deps } = depsFor({} as Case);
+    deps.targets = { get: () => stored };
+    return { deps, request: { principal: { tenantId: "acme", subjectId: "u1" }, body: { target_id: "gt-rfb" } } };
+  }
+
+  it("attaches a console that answers the handshake", async () => {
+    const { deps, request } = rfbDeps("127.0.0.1:5900");
+    deps.dialRfb = () => scriptedStream(handshake(8, 4)) as never;
+    const answer = await guiAttach(deps, request, WORKER);
+    expect(answer.status ?? 200).toBe(200);
+  });
+
+  it("answers 502 when the console is not listening", async () => {
+    const { deps, request } = rfbDeps("127.0.0.1:5900");
+    deps.dialRfb = () => scriptedStream(Buffer.from("HTTP/1.1 200", "ascii")) as never;
+    const answer = await guiAttach(deps, request, WORKER);
+    expect(answer.status).toBe(502);
+    expect(String((answer.body as { error: string }).error)).toContain("rfb connect failed:");
+  });
+
+  it("refuses an endpoint the registry cannot parse", async () => {
+    const { deps, request } = rfbDeps("");
+    const answer = await guiAttach(deps, request, WORKER);
+    expect(answer.status).toBe(403);
+    expect(String((answer.body as { error: string }).error)).toContain("invalid endpoint:");
+  });
+
+  it("refuses a cloud-metadata console before dialling it", async () => {
+    // The guard runs first, so a tenant naming 169.254.169.254 never reaches a
+    // dial. blockPrivate stays off; metadata is refused either way.
+    const { deps, request } = rfbDeps("169.254.169.254:5900");
+    let dialled = false;
+    deps.dialRfb = () => {
+      dialled = true;
+      return scriptedStream(handshake(8, 4)) as never;
+    };
+    const answer = await guiAttach(deps, request, WORKER);
+    expect(answer.status).toBe(403);
+    expect(dialled).toBe(false);
+  });
+
+  it("dials for real when the deployment injects nothing", async () => {
+    // Exercises the production path: no dialRfb, so it uses node:net. Port 1
+    // has no listener, so the answer is the gateway failure, not a hang.
+    const { deps, request } = rfbDeps("127.0.0.1:1");
+    const answer = await guiAttach(deps, request, WORKER);
+    expect(answer.status).toBe(502);
+  });
+
+  it("reports a thrown non-Error without assuming it has a message", async () => {
+    const { deps, request } = rfbDeps("127.0.0.1:5900");
+    deps.dialRfb = () => {
+      // Not everything thrown is an Error; the refusal still has to read.
+      throw "upstream said no";
+    };
+    const answer = await guiAttach(deps, request, WORKER);
+    expect(answer.status).toBe(502);
+    expect((answer.body as { error: string }).error).toBe("rfb connect failed: upstream said no");
   });
 });
