@@ -22,8 +22,8 @@ from typing import Any
 from .conftest import (
     connect_browser,
     drain_for_snapshot,
-    drain_for_snapshot_with_text,
     wait_for_session_connected,
+    wait_for_session_text,
 )
 
 # ---------------------------------------------------------------------------
@@ -53,15 +53,25 @@ async def test_telnet_screen_shows_received_data(live_telnet_server: Any) -> Non
     """Browser snapshot screen reflects the banner text sent by the mock echo server."""
     base_url, _srv = live_telnet_server
 
-    await wait_for_session_connected(base_url, "tel1")
+    # Gate on the banner being in the screen buffer, not merely on the socket
+    # being up: attaching between those two points makes this assertion depend
+    # on a later broadcast beating the drain deadline, which is what fails on a
+    # starved runner (2026-09-04, scheduled run 33869930074) while passing 25/25
+    # locally and under both forced orderings.
+    await wait_for_session_text(base_url, "tel1", "ECHO_BANNER")
     async with connect_browser(base_url, "tel1") as browser:
-        snap = await drain_for_snapshot_with_text(browser, "ECHO_BANNER", timeout=10.0)
+        # The FIRST snapshot, not "some snapshot within 10s". Once the banner is
+        # cached, the hello path serves it as the initial snapshot, so draining
+        # for content would pass even if that guarantee broke and a later
+        # broadcast carried it instead. Asserting on the first frame is what
+        # keeps this test honest about why it no longer races.
+        snap = await drain_for_snapshot(browser, timeout=10.0)
 
-    assert snap is not None, (
-        "browser never received a snapshot containing 'ECHO_BANNER'; "
-        "the mock echo server data did not reach the screen buffer"
+    assert snap is not None, "browser never received an initial snapshot from the telnet session"
+    assert "ECHO_BANNER" in snap.get("screen", ""), (
+        "the initial snapshot did not carry the banner the server had already cached; "
+        f"screen was {snap.get('screen', '')!r}"
     )
-    assert "ECHO_BANNER" in snap.get("screen", "")
 
 
 # ---------------------------------------------------------------------------

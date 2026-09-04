@@ -248,8 +248,11 @@ def ws_url(base_url: str, path: str) -> str:
 async def wait_for_session_connected(base_url: str, session_id: str, timeout: float = 15.0) -> None:
     """Poll the HTTP API until the session runtime reports connected=True.
 
-    Must be called before connecting a browser WS to ensure ``last_snapshot``
-    is populated — otherwise the browser may never receive an initial snapshot.
+    Proves the *transport* is up. It does NOT prove anything about screen
+    content: ``connected`` flips when the connector dials, which is before any
+    banner the peer writes has been read, parsed and cached. A test that asserts
+    on specific text must gate on :func:`wait_for_session_text` instead, or it
+    is really asserting that a later broadcast lands inside its drain timeout.
     """
     async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=5.0) as http:
         deadline = asyncio.get_running_loop().time() + timeout
@@ -259,6 +262,28 @@ async def wait_for_session_connected(base_url: str, session_id: str, timeout: fl
                 return
             await asyncio.sleep(0.1)
     raise AssertionError(f"session {session_id!r} did not become connected within {timeout}s")
+
+
+async def wait_for_session_text(base_url: str, session_id: str, text: str, timeout: float = 15.0) -> None:
+    """Poll ``/snapshot`` until *text* is in the session's screen buffer.
+
+    Removes the timing dependency from tests that assert on peer-sent text. A
+    browser attaching afterwards gets ``text`` in its *initial* snapshot (the
+    hello path serves the cached snapshot), so the assertion no longer rides on
+    a subsequent broadcast arriving before the drain deadline — the thing that
+    starves on a loaded runner while every ordering passes on an idle one.
+    """
+    async with httpx2.AsyncClient(base_url=base_url, headers=ADMIN_H, timeout=5.0) as http:
+        deadline = asyncio.get_running_loop().time() + timeout
+        while asyncio.get_running_loop().time() < deadline:
+            resp = await http.get(f"/api/sessions/{session_id}/snapshot")
+            if resp.status_code == 200:
+                # A session with no cached snapshot yet answers 200 + null.
+                snap = resp.json() or {}
+                if text in snap.get("screen", ""):
+                    return
+            await asyncio.sleep(0.1)
+    raise AssertionError(f"session {session_id!r} screen never contained {text!r} within {timeout}s")
 
 
 # Per-WS decoder/pending state — module-level so helpers can share state
