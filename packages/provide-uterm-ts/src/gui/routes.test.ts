@@ -93,13 +93,19 @@ class RecordingSession implements GraphicalSession {
   }
 }
 
-/** The three seeded targets the corpus was recorded against. */
+/** The seeded targets the corpus was recorded against. */
 function seededTargets(): InMemoryGraphicalTargetRegistry {
   const registry = new InMemoryGraphicalTargetRegistry();
   const [width, height] = golden.console;
   registry.addStatic(makeGraphicalTarget({ targetId: "gt-mem", tenantId: "acme", protocol: "memory", width, height }));
   registry.addStatic(
     makeGraphicalTarget({ targetId: "gt-rfb", tenantId: "acme", protocol: "rfb", endpoint: "1.2.3.4:5900" }),
+  );
+  // litevirt is the corpus's "a protocol this system does not speak" case. It
+  // used to be rfb, until the reference grew an RFB client; litevirt is Go's
+  // console protocol, which neither the reference nor this port implements.
+  registry.addStatic(
+    makeGraphicalTarget({ targetId: "gt-litevirt", tenantId: "acme", protocol: "litevirt", endpoint: "1.2.3.4:5900" }),
   );
   registry.addStatic(
     makeGraphicalTarget({ targetId: "gt-other", tenantId: "other", protocol: "memory", width: 2, height: 2 }),

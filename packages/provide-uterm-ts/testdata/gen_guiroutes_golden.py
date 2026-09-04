@@ -124,7 +124,14 @@ def _targets() -> InMemoryGraphicalTargetRegistry:
         )
     )
     registry.add_static(
-        GraphicalTargetDefinition(target_id="gt-rfb", tenant_id="acme", protocol="rfb", endpoint="1.2.3.4:5900")
+        # litevirt, not rfb: this case records "a protocol this system does not
+        # speak", and Python speaks rfb now (server/rfb_session.py). litevirt is
+        # Go's console protocol — neither the reference nor the TypeScript port
+        # implements it, so the case keeps meaning what its name says. Note the
+        # ports' gaps are deliberate mirrors: Go 501s rfb, C# 501s litevirt.
+        GraphicalTargetDefinition(
+            target_id="gt-litevirt", tenant_id="acme", protocol="litevirt", endpoint="1.2.3.4:5900"
+        )
     )
     registry.add_static(
         GraphicalTargetDefinition(target_id="gt-other", tenant_id="other", protocol="memory", width=2, height=2)
@@ -166,7 +173,7 @@ CASES: list[dict[str, Any]] = [
     {"name": "attaching with a blank tenant", "path": ATTACH, "tenant": "  ", "body": {"target_id": "gt-mem"}},
     {"name": "attaching to a target nobody has", "path": ATTACH, "body": {"target_id": "absent"}},
     {"name": "attaching to another tenant's target", "path": ATTACH, "body": {"target_id": "gt-other"}},
-    {"name": "attaching to a protocol nobody speaks yet", "path": ATTACH, "body": {"target_id": "gt-rfb"}},
+    {"name": "attaching to a protocol nobody speaks yet", "path": ATTACH, "body": {"target_id": "gt-litevirt"}},
     {"name": "attaching to a console", "path": ATTACH, "body": {"target_id": "gt-mem"}},
     {"name": "attaching with the name padded", "path": ATTACH, "body": {"target_id": "  gt-mem  "}},
     {
