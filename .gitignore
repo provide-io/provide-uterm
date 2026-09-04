@@ -78,6 +78,12 @@ demo/**/*.cast.stderr
 demo/**/*.mp4
 demo/**/*.webm
 demo/**/screenshots/
+# Orchestrator output. INDEX.md moved from demo/recordings/ to demo/ when the
+# recorder base path was corrected, and the .*-server.{toml,log} pairs are
+# per-demo scratch written next to the recordings they configure.
+demo/INDEX.md
+demo/.*-server.toml
+demo/.*-server.log
 # Repo-local scratch recordings from manual runs (dot-dir so it stays out of the
 # way in a `demo/` listing). Renamed from the old demo/recordings/.
 demo/.recordings/

@@ -24,77 +24,39 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-BASE_OUT = Path("demo/recordings")
+# Must match ``scripts.demos.output.BASE_OUT``: each recorder defaults to that
+# path, and build_site_manifest.py probes ``<BASE_OUT>/<feature>/`` to decide
+# which artifacts a demo has. This orchestrator passed its own value into
+# ``record()``, so a full run wrote every video to demo/recordings/<feature>/ --
+# a tree the manifest builder never looks at. The manifest then saw the old
+# demo/<feature>/ contents, found no mp4, and downgraded the demo to a cast.
+# Imported after the sys.path insert above rather than at the top of the file,
+# which is why this is not a top-level import; the pairing is pinned by
+# tests/scripts/test_demo_recorder_metadata.py.
+BASE_OUT = Path("demo")
 
 # (module_name, feature_key, description)
-FEATURES: list[tuple[str, str, str]] = [
-    (
-        "scripts.demos.record_fanout",
-        "fanout",
-        "Broadcast a command to 3 sessions simultaneously, show per-node output and divergence detection",
-    ),
-    (
-        "scripts.demos.record_annotation",
-        "annotation",
-        "Agent self-annotation and automatic detection of 20 security/lifecycle patterns",
-    ),
-    (
-        "scripts.demos.record_recording",
-        "recording",
-        "Enable session recording, produce terminal activity, download JSONL recording file",
-    ),
-    ("scripts.demos.record_pty", "pty", "Spawn a local PTY session, run commands, show resize and snapshot"),
-    ("scripts.demos.record_ssh", "ssh", "Connect a session to an SSH host, run commands, show live output"),
-    (
-        "scripts.demos.record_hijack",
-        "hijack",
-        "Viewer connects read-only, operator takes exclusive control, admin force-reclaims",
-    ),
-    (
-        "scripts.demos.record_deckmux",
-        "deckmux",
-        "Multiple operator cursors join the same session, presence state is broadcast",
-    ),
-    (
-        "scripts.demos.record_demo_grid",
-        "demo_grid",
-        "9-terminal grid — ANSI render animations running simultaneously",
-    ),
-    (
-        "scripts.demos.record_shell_render",
-        "shell_render",
-        "Send an image URL to the shell render command, get ANSI truecolor art back",
-    ),
-    (
-        "scripts.demos.record_replay",
-        "replay",
-        "Record 10 seconds of terminal activity then scrub through replay in the browser",
-    ),
-    (
-        "scripts.demos.record_mcp",
-        "mcp",
-        "28 MCP tools for AI agent integration: session management, hijack, fan-out, annotation",
-    ),
-    (
-        "scripts.demos.record_telnet",
-        "telnet",
-        "Connect a session to a local telnet server, show negotiation and live output",
-    ),
-    (
-        "scripts.demos.record_http_inspect",
-        "http_inspect",
-        "Proxy HTTP traffic through uterm inspect tunnel, inspect requests/responses in browser",
-    ),
-    (
-        "scripts.demos.record_tunnel",
-        "tunnel",
-        "Session served through local CF Worker (wrangler dev --local), showing the CF path",
-    ),
-    (
-        "scripts.demos.record_fleet",
-        "fleet",
-        "Spawn 3 fleet shell workers, register with the External Management Tier, broadcast a deploy command",
-    ),
+# (module_name, feature_key). The description is NOT repeated here: it is
+# ``DESCRIPTION`` on the recorder module, which build_site_manifest.py also
+# reads. Carrying a second copy meant INDEX.md kept printing that the tunnel
+# demo showed a Cloudflare Worker path long after record_tunnel.py said, in
+# its own docstring, that no external Worker is involved.
+FEATURES: list[tuple[str, str]] = [
+    ("scripts.demos.record_fanout", "fanout"),
+    ("scripts.demos.record_annotation", "annotation"),
+    ("scripts.demos.record_recording", "recording"),
+    ("scripts.demos.record_pty", "pty"),
+    ("scripts.demos.record_ssh", "ssh"),
+    ("scripts.demos.record_hijack", "hijack"),
+    ("scripts.demos.record_deckmux", "deckmux"),
+    ("scripts.demos.record_demo_grid", "demo_grid"),
+    ("scripts.demos.record_shell_render", "shell_render"),
+    ("scripts.demos.record_replay", "replay"),
+    ("scripts.demos.record_mcp", "mcp"),
+    ("scripts.demos.record_telnet", "telnet"),
+    ("scripts.demos.record_http_inspect", "http_inspect"),
+    ("scripts.demos.record_tunnel", "tunnel"),
+    ("scripts.demos.record_fleet", "fleet"),
 ]
 
 
@@ -149,14 +111,15 @@ def main() -> None:
     results: dict[str, dict[str, Path | None]] = {}
     descriptions: dict[str, str] = {}
 
-    for mod_name, feature, description in FEATURES:
+    for mod_name, feature in FEATURES:
         if filter_features and feature not in filter_features:
             continue
-        descriptions[feature] = description
-        print(f"\033[1;36m[{feature}]\033[0m {description}")
         t0 = time.monotonic()
         try:
             mod = importlib.import_module(mod_name)
+            description = getattr(mod, "DESCRIPTION", "")
+            descriptions[feature] = description
+            print(f"\033[1;36m[{feature}]\033[0m {description}")
             paths = mod.record(BASE_OUT)
             elapsed = time.monotonic() - t0
             results[feature] = paths

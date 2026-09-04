@@ -103,3 +103,34 @@ def test_the_orchestrator_records_exactly_what_the_manifest_publishes() -> None:
         f"recorded but not published: {sorted(orchestrated - published)} — "
         "add them to build_site_manifest.FEATURES or drop them from the orchestrator"
     )
+
+
+def _assigned_literal(path: Path, name: str) -> str:
+    """The string literal a module assigns to *name* at top level."""
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == name for t in node.targets):
+            call = node.value
+            # Both files write it as ``Path("...")``.
+            if isinstance(call, ast.Call) and call.args:
+                return call.args[0].value
+    raise AssertionError(f"{path} no longer assigns {name}")
+
+
+def test_the_orchestrator_records_where_the_manifest_looks() -> None:
+    """One output root, or the recording is invisible to the site.
+
+    Each recorder defaults to ``scripts.demos.output.BASE_OUT`` and
+    build_site_manifest probes ``<BASE_OUT>/<feature>/``. The orchestrator
+    passes its own value into ``record()``, so when the two disagreed a full
+    re-record wrote every video to demo/recordings/<feature>/ -- which the
+    manifest builder does not read. It then found no mp4 under the path it does
+    read and downgraded five demos to ``cast`` on the strength of the absence.
+    """
+    harness = _assigned_literal(DEMOS_DIR / "output.py", "BASE_OUT")
+    orchestrator = _assigned_literal(REPOSITORY_ROOT / "scripts/record_all_demos.py", "BASE_OUT")
+
+    assert orchestrator == harness, (
+        f"record_all_demos.py records into {orchestrator!r} but the recorders and "
+        f"build_site_manifest.py use {harness!r}; a full re-record would land where "
+        "nothing reads it"
+    )
