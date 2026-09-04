@@ -1,6 +1,6 @@
 # MCP Integration
 
-provide-uterm exposes 21 tools via the Model Context Protocol (MCP), the standard
+provide-uterm exposes 28 tools via the Model Context Protocol (MCP), the standard
 interface for AI agent tool use. An AI agent can create and manage sessions, acquire hijack
 leases, broadcast commands to fleets, annotate events, inspect recordings, and more — all
 through a single MCP server that any compatible agent can connect to.

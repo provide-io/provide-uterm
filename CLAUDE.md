@@ -88,7 +88,7 @@ docker compose -f docker/docker-compose.yml up
 | `provide-uterm-app` | App shell |
 | `provide-uterm-go` | Standalone Go port (module, own toolchain/CI — not part of the uv/npm workspaces) |
 | `provide-uterm-csharp` | Standalone C# port (.NET 10, own quality gate) |
-| `provide-uterm-ts` | TypeScript runtime port (Node >= 22, TS 7, npm workspace member) |
+| `provide-uterm-ts` | TypeScript runtime port (Node >= 26, TS 7, npm workspace member) |
 
 **Three-Layer Bridge System** (core architecture):
 1. **HijackableMixin** — Worker-side mixin for hijackability at checkpoints

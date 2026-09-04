@@ -5,11 +5,12 @@
 """MCP 2.0 SDK server exposing the full provide-uterm control plane.
 
 Factory function ``create_mcp_app()`` returns a ready-to-run
-:class:`~mcp.server.mcpserver.MCPServer` instance with 21 tools covering
-session management, hijack lifecycle, and worker control.
+:class:`~mcp.server.mcpserver.MCPServer` instance with 28 tools covering
+session management, hijack lifecycle, worker control, and the graphical
+console surface.
 
-The tool handlers themselves live in two cohesive sibling modules so no single
-file grows unbounded:
+The tool handlers themselves live in three cohesive sibling modules so no
+single file grows unbounded:
 
 * :mod:`provide.uterm.ai.server_tools_hijack` — hijack lifecycle + server/worker
   control (10 tools), and

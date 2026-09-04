@@ -63,7 +63,7 @@ Highlights:
 - server `gateway` (telnet/SSH listener) → `gateway`
 - server `tunnel` / `tunnel_invites` / `pam_tunnel` → `tunnel`; cli
   `tunnel.py` (share/tunnel/inspect client) → `tunnelclient`
-- client `ai` / `mcp_tools` → `mcp` (+ `cmd/uterm-mcp` binary, ~21 tools)
+- client `ai` / `mcp_tools` → `mcp` (+ `cmd/uterm-mcp` binary, 28 tools)
 - platform `manager` (agent-fleet External Management Tier) → `manager`
   (+ `cmd/uterm-manager` binary)
 - platform `pty` (+ `pam.py` / `pam_listener.py`) → `pty`
@@ -78,7 +78,7 @@ cd packages/provide-uterm-go
 make build-binaries                       # builds bin/{uterm,uterm-mcp,uterm-manager}
 ./bin/uterm --help                        # mirrors the Python `uterm` subcommand tree
 ./bin/uterm server --config server.toml   # runs the reference hosted server
-./bin/uterm-mcp --url http://localhost:8780   # MCP server over stdio, ~21 tools
+./bin/uterm-mcp --url http://localhost:8780   # MCP server over stdio, 28 tools
 ./bin/uterm-manager                       # standalone agent-fleet swarm manager
 make quality-gate                         # fmt-check/vet/lint/race/coverage over all packages
 ```
