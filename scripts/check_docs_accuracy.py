@@ -17,9 +17,10 @@ MUTATION_CMD_RE = re.compile(r"run_mutation_gate\.py\b")
 MIN_MUTATION_RE = re.compile(r"--min-mutation-score\s+100(?:\.0)?\b")
 
 #: File kinds that can carry a documented MCP tool count. Prose says it, and so
-#: do package docstrings and the Go command's header comment -- which is what
-#: the generated Go API reference publishes.
-TOOL_COUNT_SUFFIXES = frozenset({".md", ".py", ".go", ".ts", ".mjs"})
+#: do package docstrings, the Go command's header comment -- which is what the
+#: generated Go API reference publishes -- and ``demo/site-manifest.json``,
+#: whose descriptions are scaffolded into pages on uterm.io.
+TOOL_COUNT_SUFFIXES = frozenset({".md", ".py", ".go", ".ts", ".mjs", ".json"})
 
 #: Directory names never walked. Vendored trees, build output and caches make
 #: claims that are not this repo's to make, and `archive` holds documents whose
