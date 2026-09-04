@@ -1,6 +1,6 @@
 {
-  "demo_url": "http://host.docker.internal:55630/_terminal/terminal.html?worker_id=provide-shell&role=browser",
-  "vnc_page": "http://127.0.0.1:55630/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=80fef6d0-0697-4909-8ecf-264211148ee9&target_id=lab-vnc-plain",
+  "demo_url": "http://host.docker.internal:51848/_terminal/terminal.html?worker_id=provide-shell&role=browser",
+  "vnc_page": "http://127.0.0.1:51848/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=4d8889b2-71d7-4717-b91b-b6c1bb1d5c33&target_id=lab-vnc-plain",
   "status_state": "connected",
   "status_text": "Connected \u00b7 lab-vnc-plain",
   "dims": "1280\u00d7936 \u00b7 lab-vnc-plain",
