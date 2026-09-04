@@ -1,12 +1,20 @@
 {
-  "demo_url": "http://host.docker.internal:60216/_terminal/terminal.html?worker_id=provide-shell&role=browser",
-  "vnc_page": "http://127.0.0.1:60216/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=acfee07f-3f51-4b46-a601-9e9a5d3bfaf8&target_id=lab-vnc-plain",
+  "demo_url": "http://host.docker.internal:55630/_terminal/terminal.html?worker_id=provide-shell&role=browser",
+  "vnc_page": "http://127.0.0.1:55630/_terminal/vnc.html?worker_id=vnc-shell&hijack_id=80fef6d0-0697-4909-8ecf-264211148ee9&target_id=lab-vnc-plain",
   "status_state": "connected",
   "status_text": "Connected \u00b7 lab-vnc-plain",
-  "dims": "1280\u00d7720 \u00b7 lab-vnc-plain",
+  "dims": "1280\u00d7936 \u00b7 lab-vnc-plain",
   "canvas_w": 1280,
-  "canvas_h": 720,
+  "canvas_h": 936,
   "title": "provide-uterm \u00b7 VNC",
   "screen_pad": "0px",
-  "screen_radius": "0px 0px 17px 17px"
+  "screen_radius": "0px 0px 17px 17px",
+  "screen_box": [
+    1152,
+    843
+  ],
+  "canvas_box": [
+    1152,
+    842
+  ]
 }

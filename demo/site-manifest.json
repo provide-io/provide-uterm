@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-04T02:56:09Z",
+  "generated_at": "2026-09-04T03:28:30Z",
   "demos": [
     {
       "id": "annotation",
@@ -95,6 +95,35 @@
           "fleet/screenshots/grid-01-before.png",
           "fleet/screenshots/grid-02-after.png"
         ]
+      }
+    },
+    {
+      "id": "graphical",
+      "title": "Graphical Sessions",
+      "subtitle": "A remote desktop on the same control channel as a terminal",
+      "description": "A live X desktop relayed through uterm's VNC console, with the RFB input filter gating what the browser may inject",
+      "duration_seconds": 10.0,
+      "highlight_start_s": 2.0,
+      "format": "mp4",
+      "artifacts": {
+        "video": "graphical/console_trim.mp4",
+        "screenshots": [
+          "graphical/screenshots/uterm-vnc-console.png",
+          "graphical/screenshots/uterm-vnc-text-demos-desktop.png",
+          "graphical/screenshots/uterm-vnc-text-demos-full.png"
+        ]
+      }
+    },
+    {
+      "id": "gui_agent",
+      "title": "Graphical Tool Surface",
+      "subtitle": "What an agent may do to a desktop, and what it may not",
+      "description": "The seven graphical tools an agent drives: registry, tenant scope, hijack lease, and every refusal in between",
+      "duration_seconds": 0.0,
+      "highlight_start_s": 0.0,
+      "format": "cast",
+      "artifacts": {
+        "cast": "gui_agent/terminal.cast"
       }
     },
     {

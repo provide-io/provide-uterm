@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Orchestrator: run all 15 per-feature demo recordings and write INDEX.md.
+"""Orchestrator: run all 17 per-feature demo recordings and write INDEX.md.
 
 Usage:
     uv run python scripts/record_all_demos.py
@@ -49,6 +49,8 @@ FEATURES: list[tuple[str, str]] = [
     ("scripts.demos.record_ssh", "ssh"),
     ("scripts.demos.record_hijack", "hijack"),
     ("scripts.demos.record_deckmux", "deckmux"),
+    ("scripts.demos.record_graphical", "graphical"),
+    ("scripts.demos.record_gui_agent", "gui_agent"),
     ("scripts.demos.record_demo_grid", "demo_grid"),
     ("scripts.demos.record_shell_render", "shell_render"),
     ("scripts.demos.record_replay", "replay"),
