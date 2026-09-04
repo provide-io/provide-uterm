@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-24T08:05:16Z",
+  "generated_at": "2026-09-04T02:56:09Z",
   "demos": [
     {
       "id": "annotation",
@@ -37,8 +37,8 @@
           "deckmux/screenshots/act1-operator-investigating.png",
           "deckmux/screenshots/act2-full-team.png",
           "deckmux/screenshots/act3-investigation.png",
-          "deckmux/screenshots/act4-falcon_finn-fix.png",
           "deckmux/screenshots/act4-bear_brody-verified.png",
+          "deckmux/screenshots/act4-falcon_finn-fix.png",
           "deckmux/screenshots/act5-lynx_liam-left.png",
           "deckmux/screenshots/act5-resolved.png"
         ]
@@ -48,7 +48,7 @@
       "id": "demo_grid",
       "title": "Terminal Grid",
       "subtitle": "9 live terminals in a 3x3 grid",
-      "description": "9-terminal grid — ANSI render animations running simultaneously",
+      "description": "9-terminal grid \u2014 ANSI render animations running simultaneously",
       "duration_seconds": 8.0,
       "highlight_start_s": 2.0,
       "format": "mp4",

@@ -1,8 +1,10 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780939065,"command":".venv/bin/python3 scripts/demos/record_ssh.py --run-demo 2>demo/ssh/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
-[2.171, "o", "\r\n\u001b[1;35m════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mConnect a session to an SSH host, run commands, show live output\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → Starting inline SSH server on 127.0.0.1:50941...\u001b[0m\r\n\u001b[1;32m  ✓ SSH server ready\u001b[0m\r\n\u001b[1;36m  → Creating SSH session ssh-demo...\u001b[0m\r\n"]
-[0.010, "o", "    \u001b[2msession_id:\u001b[0m \u001b[1mssh-demo\u001b[0m\r\n    \u001b[2mconnector_type:\u001b[0m \u001b[1mssh\u001b[0m\r\n    \u001b[2mport:\u001b[0m \u001b[1m50941\u001b[0m\r\n\u001b[1;36m  → Waiting for session to connect...\u001b[0m\r\n"]
-[0.311, "o", "\u001b[1;32m  ✓ ssh-demo connected\u001b[0m\r\n"]
-[1.001, "o", "\u001b[1;36m  → Fetching SSH session snapshot...\u001b[0m\r\n"]
-[0.004, "o", "    \u001b[2mcols:\u001b[0m \u001b[1m80\u001b[0m\r\n    \u001b[2mrows:\u001b[0m \u001b[1m25\u001b[0m\r\n\u001b[1;36m  → Fetching session events...\u001b[0m\r\n"]
-[0.006, "o", "    \u001b[2mevent count:\u001b[0m \u001b[1m108\u001b[0m\r\n\u001b[1;32m  ✓ SSH session established via asyncssh inline server\u001b[0m\r\n"]
-[0.084, "x", "0"]
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1788489726,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_ssh.py --run-demo 2>demo/ssh/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+[2.258, "o", "\r\n\u001b[1;35m════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mConnect a session to an SSH host, run commands, show live output\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → Starting inline SSH server on 127.0.0.1:49447...\u001b[0m\r\n\u001b[1;32m  ✓ SSH server ready\u001b[0m\r\n\u001b[1;36m  → Creating SSH session ssh-demo...\u001b[0m\r\n"]
+[0.027, "o", "    \u001b[2msession_id:\u001b[0m \u001b[1mssh-demo\u001b[0m\r\n"]
+[0.000, "o", "    \u001b[2mconnector_type:\u001b[0m \u001b[1mssh\u001b[0m\r\n"]
+[0.000, "o", "    \u001b[2mport:\u001b[0m \u001b[1m49447\u001b[0m\r\n\u001b[1;36m  → Waiting for session to connect...\u001b[0m\r\n"]
+[0.306, "o", "\u001b[1;32m  ✓ ssh-demo connected\u001b[0m\r\n"]
+[1.002, "o", "\u001b[1;36m  → Fetching SSH session snapshot...\u001b[0m\r\n"]
+[0.002, "o", "    \u001b[2mcols:\u001b[0m \u001b[1m80\u001b[0m\r\n    \u001b[2mrows:\u001b[0m \u001b[1m25\u001b[0m\r\n\u001b[1;36m  → Fetching session events...\u001b[0m\r\n"]
+[0.002, "o", "    \u001b[2mevent count:\u001b[0m \u001b[1m7\u001b[0m\r\n\u001b[1;32m  ✓ SSH session established via asyncssh inline server\u001b[0m\r\n"]
+[0.095, "x", "0"]

@@ -1,6 +1,7 @@
-{"version":3,"term":{"cols":80,"rows":24},"timestamp":1780938409,"command":".venv/bin/python3 scripts/demos/record_pty.py --run-demo 2>demo/pty/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
-[2.105, "o", "\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mSpawn a local PTY session, run commands, show resize and snapshot\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → Fetching PTY session info...\u001b[0m\r\n"]
-[0.006, "o", "    \u001b[2msession_id:\u001b[0m \u001b[1mprovide-shell\u001b[0m\r\n    \u001b[2mconnector_type:\u001b[0m \u001b[1mshell\u001b[0m\r\n    \u001b[2mconnected:\u001b[0m \u001b[1mTrue\u001b[0m\r\n\u001b[1;36m  → Fetching terminal snapshot...\u001b[0m\r\n"]
-[0.002, "o", "    \u001b[2mcols:\u001b[0m \u001b[1m80\u001b[0m\r\n    \u001b[2mrows:\u001b[0m \u001b[1m25\u001b[0m\r\n    \u001b[2mcursor:\u001b[0m \u001b[1mx=6 y=12\u001b[0m\r\n\u001b[1;36m  → Fetching session metrics...\u001b[0m\r\n"]
+{"version":3,"term":{"cols":80,"rows":24},"timestamp":1788490364,"command":"/Volumes/data/pyv/provide-uterm/.venv/bin/python3 /Volumes/data/pyv/provide-uterm/scripts/demos/record_pty.py --run-demo 2>demo/pty/terminal.cast.stderr","env":{"SHELL":"/bin/zsh"}}
+[2.112, "o", "\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════\u001b[0m\r\n\u001b[1;35m  \u001b[1mSpawn a local PTY session, run commands, show resize and snapshot\u001b[0m\u001b[1;35m  \u001b[0m\r\n\u001b[1;35m═════════════════════════════════════════════════════════════════════\u001b[0m\r\n\r\n\u001b[1;36m  → Fetching PTY session info...\u001b[0m\r\n"]
+[0.024, "o", "    \u001b[2msession_id:\u001b[0m \u001b[1mprovide-shell\u001b[0m\r\n    \u001b[2mconnector_type:\u001b[0m \u001b[1mshell\u001b[0m\r\n    \u001b[2mconnected:\u001b[0m \u001b[1mTrue\u001b[0m\r\n\u001b[1;36m  → Fetching terminal snapshot...\u001b[0m\r\n"]
+[0.001, "o", "    \u001b[2mcols:\u001b[0m \u001b[1m80\u001b[0m\r\n    \u001b[2mrows:\u001b[0m \u001b[1m25\u001b[0m\r\n    \u001b[2mcursor:\u001b[0m \u001b[1mx=6 y=12\u001b[0m\r\n"]
+[0.000, "o", "\u001b[1;36m  → Fetching session metrics...\u001b[0m\r\n"]
 [0.002, "o", "\u001b[1;32m  ✓ PTY session live — cols/rows/cursor confirmed\u001b[0m\r\n"]
-[0.070, "x", "0"]
+[0.078, "x", "0"]
