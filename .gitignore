@@ -84,8 +84,12 @@ demo/**/screenshots/
 demo/INDEX.md
 demo/.*-server.toml
 demo/.*-server.log
-# Repo-local scratch recordings from manual runs (dot-dir so it stays out of the
-# way in a `demo/` listing). Renamed from the old demo/recordings/.
+# Repo-local scratch for manual runs that point a recorder somewhere other than
+# demo/. Kept because it costs nothing, but nothing writes here by default:
+# record_all_demos.py records into demo/, which is what build_site_manifest.py
+# reads. The old wording ("renamed from demo/recordings/") outlived the rename
+# and read as if the orchestrator still used a scratch dir — which is exactly
+# how its stale BASE_OUT went unnoticed.
 demo/.recordings/
 # Per-run scratch written by scripts/record_uterm_vnc_demo_video.py into the
 # evidence dir (demo/vnc-lab): auto-generated server config, logs, raw Playwright
