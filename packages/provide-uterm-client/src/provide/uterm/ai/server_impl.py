@@ -13,9 +13,11 @@ The tool handlers themselves live in three cohesive sibling modules so no
 single file grows unbounded:
 
 * :mod:`provide.uterm.ai.server_tools_hijack` — hijack lifecycle + server/worker
-  control (10 tools), and
+  control (10 tools),
 * :mod:`provide.uterm.ai.server_tools_session` — session management, real-time
-  event subscription, fan-out, and annotation (11 tools).
+  event subscription, fan-out, and annotation (11 tools), and
+* :mod:`provide.uterm.ai.server_tools_gui` — the graphical console surface:
+  screenshot, pointer, keyboard, and its own hijack pair (7 tools).
 
 The input-hardening validators and snapshot shaping live in
 :mod:`provide.uterm.ai.server_validators`; their public names

@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Demo: 21 MCP tools for AI agent integration: session management, hijack, fan-out, annotation."""
+"""Demo: 28 MCP tools for AI agent integration: session management, hijack, fan-out, annotation."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ from scripts.demos import (
 )
 
 FEATURE = "mcp"
-DESCRIPTION = "21 MCP tools for AI agent integration: session management, hijack, fan-out, annotation"
+DESCRIPTION = "28 MCP tools for AI agent integration: session management, hijack, fan-out, annotation"
 TITLE = "MCP Integration"
 SUBTITLE = "AI tools for terminal sessions"
 HIGHLIGHT_START_S: float = 3.0
@@ -97,7 +97,7 @@ async def run_terminal_demo() -> None:
         entries = r.json()
         ok(f"get_recording_entries(provide-shell) → {len(entries)} entries")
 
-    ok("21 MCP tools available — 5 demonstrated via HTTP API")
+    ok("28 MCP tools available — 5 demonstrated via HTTP API")
     stop_server(server)
 
 
