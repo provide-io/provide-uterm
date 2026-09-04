@@ -8,7 +8,7 @@ Each endpoint is invoked directly with a mocked hub + a minimal fake request,
 mirroring ``test_rest_lease_ownership``. Session-level authz is applied by the
 ``hub_authz`` dependency (tested separately); these tests cover the handler
 mechanics + branches: attach (capability / target_id / tenant scope / unknown
-target / rfb-501 / memory success), screenshot (no-session / no-graphical /
+target / rfb-unreachable / memory success), screenshot (no-session / no-graphical /
 PNG), and click/type/key/drag (no-session / no-graphical / injection).
 """
 
@@ -100,7 +100,7 @@ def _seeded_targets() -> InMemoryGraphicalTargetRegistry:
         GraphicalTargetDefinition(target_id="gt-mem", tenant_id="acme", protocol="memory", width=10, height=8)
     )
     reg.add_static(
-        GraphicalTargetDefinition(target_id="gt-rfb", tenant_id="acme", protocol="rfb", endpoint="1.2.3.4:5900")
+        GraphicalTargetDefinition(target_id="gt-rfb", tenant_id="acme", protocol="rfb", endpoint="127.0.0.1:1")
     )
     return reg
 
@@ -175,15 +175,42 @@ class TestAttach:
         assert _status(resp) == 404
         assert _body(resp)["error"] == "target not found"
 
-    async def test_rfb_not_supported_501(self) -> None:
+    async def test_rfb_console_that_is_not_listening_is_a_bad_gateway(self) -> None:
+        """rfb attaches for real now; an unreachable console is 502, not 501.
+
+        This asserted 501 "graphical protocol not supported: rfb" until the RFB
+        client landed. 501 now means what it says — a protocol this server has
+        no client for — and a registered target whose console is down is a
+        gateway failure, matching the C# canonical's "rfb connect failed".
+        """
         hub = _hub()
         ep = _endpoint(hub, ATTACH)
         req = _FakeRequest(
             principal=_principal(), authz=_authz(), targets=_seeded_targets(), body={"target_id": "gt-rfb"}
         )
         resp = await ep(req, WID)
-        assert _status(resp) == 501
-        assert _body(resp)["error"] == "graphical protocol not supported: rfb"
+        assert _status(resp) == 502
+        assert _body(resp)["error"].startswith("rfb connect failed:")
+
+    async def test_a_cloud_metadata_console_is_refused_before_the_dial(self) -> None:
+        """The egress guard runs first, so a target cannot name 169.254.169.254.
+
+        block_private_connector_targets is off by default — reaching an internal
+        console is the point — but cloud-metadata is blocked either way, which
+        is what stops a tenant turning a graphical target into a credential
+        read. Matches EgressGuard in UtermServer.Gui.cs.
+        """
+        registry = _seeded_targets()
+        registry.add_static(
+            GraphicalTargetDefinition(
+                target_id="gt-meta", tenant_id="acme", protocol="rfb", endpoint="169.254.169.254:5900"
+            )
+        )
+        ep = _endpoint(_hub(), ATTACH)
+        req = _FakeRequest(principal=_principal(), authz=_authz(), targets=registry, body={"target_id": "gt-meta"})
+        resp = await ep(req, WID)
+        assert _status(resp) == 403
+        assert _body(resp)["error"].startswith("invalid endpoint:")
 
     async def test_memory_success_creates_worker_state(self) -> None:
         hub = _hub()  # no worker state pre-registered

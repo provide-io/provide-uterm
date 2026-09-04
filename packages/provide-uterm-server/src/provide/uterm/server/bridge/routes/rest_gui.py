@@ -43,8 +43,9 @@ except ImportError as _e:  # pragma: no cover
 
 from provide.telemetry import get_logger
 from provide.uterm.server.bridge.models import WorkerTermState
-from provide.uterm.server.graphical_targets import PROTOCOL_MEMORY, scope_for_tenant
+from provide.uterm.server.graphical_targets import PROTOCOL_MEMORY, PROTOCOL_RFB, scope_for_tenant
 from provide.uterm.server.gui_session import GraphicalSession, MemoryGraphicalSession, encode_rgba_png
+from provide.uterm.server.vnc_upstream import dial_config_from_target
 
 if TYPE_CHECKING:
     from provide.uterm.server.authorization import AuthorizationService
@@ -106,6 +107,18 @@ def _str_field(body: dict[str, Any], key: str, default: str = "") -> str:
     return raw if isinstance(raw, str) else default
 
 
+def _block_private(request: Request) -> bool:
+    """Whether private/loopback RFB endpoints are refused for this deployment.
+
+    Default False: reaching an internal console is the product's purpose, and a
+    hosted deployment opts in. Cloud-metadata addresses are blocked by the guard
+    either way, so the default cannot expose credentials.
+    """
+    config = getattr(request.app.state, "uterm_config", None)
+    security = getattr(config, "security", None)
+    return bool(getattr(security, "block_private_connector_targets", False))
+
+
 def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
     """Attach the ``/gui/`` REST routes to *router*.
 
@@ -139,15 +152,49 @@ def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
             return JSONResponse({"error": "target not found"}, status_code=404)
 
         protocol = target.protocol.strip().lower()
-        if protocol != PROTOCOL_MEMORY:
-            # RFB (VNC) client is deferred — see the sub-phase 3c scope note.
+        session: GraphicalSession
+        if protocol == PROTOCOL_MEMORY:
+            session = MemoryGraphicalSession(max(1, target.width), max(1, target.height))
+        elif protocol == PROTOCOL_RFB:
+            from provide.uterm.server.egress import assert_connector_target_allowed
+            from provide.uterm.server.rfb_session import RfbGraphicalSession
+
+            dial = dial_config_from_target(target)
+            if dial is None:
+                return JSONResponse({"error": "invalid endpoint: target is not dialable"}, status_code=403)
+            try:
+                # Connector-grade egress, matching the C# canonical
+                # (UtermServer.Gui.cs): cloud-metadata is always blocked, and
+                # private/loopback follows block_private_connector_targets so an
+                # internal console stays reachable when the flag is off. Without
+                # this a tenant who can name a target can name 169.254.169.254.
+                await assert_connector_target_allowed(dial.host, block_private=_block_private(request))
+            except Exception as exc:
+                logger.info("gui_attach_egress_blocked target=%s host=%s", target.target_id, dial.host)
+                return JSONResponse({"error": f"invalid endpoint: {exc}"}, status_code=403)
+
+            try:
+                session = RfbGraphicalSession.connect(target)
+            except (ConnectionError, OSError) as exc:
+                # The registry entry is valid and the console is unreachable, so
+                # this is a bad gateway rather than a bad request.
+                logger.info("gui_attach_rfb_failed target=%s error=%s", target.target_id, exc)
+                return JSONResponse({"error": f"rfb connect failed: {exc}"}, status_code=502)
+        else:
             return JSONResponse({"error": f"graphical protocol not supported: {protocol}"}, status_code=501)
-        session: GraphicalSession = MemoryGraphicalSession(max(1, target.width), max(1, target.height))
 
         st = hub.registry.get(worker_id)
         if st is None:
             st = WorkerTermState()
             hub.registry.put(worker_id, st)
+        # Replacing a live session must not leak its socket and reader thread.
+        previous = getattr(st, "graphical_session", None)
+        closer = getattr(previous, "close", None)
+        if callable(closer) and previous is not session:
+            try:
+                closer()
+            except Exception:
+                logger.debug("gui_attach_previous_close_failed", exc_info=True)
         st.graphical_session = session
         logger.info("gui_attach_ok worker_id=%s target_id=%s protocol=%s", worker_id, target_id, protocol)
         return {"ok": True, "target_id": target_id}
