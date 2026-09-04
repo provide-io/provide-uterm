@@ -333,10 +333,18 @@ func (s *Server) handleGUIAttach(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "target_id": targetID})
 }
 
+// How long an rfb console has to answer before attach gives up.
+const rfbDialTimeout = 10 * time.Second
+
 // buildGraphicalSession dispatches on the target protocol, returning the live
-// session or writing the error response and returning ready=false. memory and
-// litevirt are wired; rfb is 501 (this Go port ships no RFB GraphicalSession
-// client — a documented gap mirroring C#'s 501 for litevirt).
+// session or writing the error response and returning ready=false. memory,
+// litevirt and rfb are wired; anything else is 501.
+//
+// rfb was 501 here until vnc.RFBClient landed, described then as "a documented
+// gap mirroring C#'s 501 for litevirt". That mirror held while the two ports
+// had one console protocol each; Python and TypeScript wire rfb now, which left
+// this the only served backend that could register an rfb target and never open
+// it. litevirt remains the protocol only this port speaks.
 func (s *Server) buildGraphicalSession(
 	w http.ResponseWriter, r *http.Request, target *graphical.Definition,
 ) (gui.GraphicalSession, io.Closer, context.CancelFunc, bool) {
@@ -346,8 +354,9 @@ func (s *Server) buildGraphicalSession(
 		return gui.NewMemoryGraphicalSession(target.Width, target.Height), nil, nil, true
 	case graphical.ProtocolLitevirt:
 		return s.buildLitevirtSession(w, r, target)
+	case graphical.ProtocolRfb:
+		return s.buildRfbSession(w, r, target)
 	default:
-		// rfb + anything else: unsupported in this port.
 		detailError(w, http.StatusNotImplemented, "graphical protocol not supported: "+protocol)
 		return nil, nil, nil, false
 	}
@@ -356,6 +365,43 @@ func (s *Server) buildGraphicalSession(
 // buildLitevirtSession dials the target's gRPC endpoint and starts the headless
 // AI VNC client, now driven entirely from the registry-backed target (endpoint +
 // config.vm_name) rather than from client-supplied request fields.
+// buildRfbSession dials an RFB console for a target, guarding egress first.
+func (s *Server) buildRfbSession(
+	w http.ResponseWriter, r *http.Request, target *graphical.Definition,
+) (gui.GraphicalSession, io.Closer, context.CancelFunc, bool) {
+	host, port, err := graphical.ParseRfbEndpoint(target.Endpoint)
+	if err != nil {
+		detailError(w, http.StatusForbidden, "invalid endpoint: "+err.Error())
+		return nil, nil, nil, false
+	}
+
+	// Connector-grade egress before the dial, as every other port does: a
+	// tenant who can name a target must not be able to name 169.254.169.254.
+	// block_private_connector_targets stays off by default, because reaching an
+	// internal console is the point; cloud-metadata is refused either way.
+	guard := s.egress
+	if guard == nil {
+		guard = NewEgressGuard(nil, nil)
+	}
+	blockPrivate := false
+	if s.cfg != nil {
+		blockPrivate = s.cfg.Security.BlockPrivateConnectorTargets
+	}
+	if err := guard.AssertConnectorTargetAllowed(r.Context(), host, blockPrivate); err != nil {
+		detailError(w, http.StatusForbidden, "invalid endpoint: "+err.Error())
+		return nil, nil, nil, false
+	}
+
+	client, err := vnc.DialRFB(host, port, rfbDialTimeout, nil)
+	if err != nil {
+		// The registry entry is valid and the console is not answering, so this
+		// is a gateway failure rather than a bad request.
+		detailError(w, http.StatusBadGateway, "rfb connect failed: "+err.Error())
+		return nil, nil, nil, false
+	}
+	return client, client, nil, true
+}
+
 func (s *Server) buildLitevirtSession(
 	w http.ResponseWriter, r *http.Request, target *graphical.Definition,
 ) (gui.GraphicalSession, io.Closer, context.CancelFunc, bool) {
