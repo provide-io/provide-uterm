@@ -157,6 +157,46 @@ wait_listener_log "${LOG_DIR}/x11vnc-ssl.log" "ssl" || exit 1
 
 echo "vnc-lab: RFB ready plain=:${RFB_PORT} ssl=:${RFB_SSL_PORT} (VeNCrypt+ANONTLS)"
 
+# LAB_XTERM=1 runs a terminal on the desktop instead of the browser.
+#
+# The default (Chromium on DEMO_URL) shows a console driven by the uterm worker,
+# so it renders the same whatever is typed at the X server — which makes it
+# useless for demonstrating injected input. Verified: x11vnc received the events
+# (its own counters showed 2 PointerEvents / 12 KeyEvents at exact byte counts)
+# and not one of 1,920,000 framebuffer bytes changed.
+#
+# An xterm echoes what is typed, so a screenshot before and after an injection
+# actually differ. Opt-in, because prove_vnc_lab.py, prove_uterm_vnc_console.py
+# and the `graphical` demo all record the browser desktop and must keep doing so.
+if [[ "${LAB_XTERM:-0}" == "1" ]]; then
+  echo "vnc-lab: LAB_XTERM=1 — running xterm instead of the browser"
+  {
+    echo "browser_nav_url=(none: LAB_XTERM=1)"
+    echo "browser_nav_started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "browser_binary=xterm"
+  } > "${NAV_LOG}"
+  # Large font and a full-window geometry so injected keystrokes are legible in
+  # a scaled-down recording rather than a few grey pixels.
+  xterm \
+    -geometry 100x30+0+0 \
+    -fa Monospace -fs 18 \
+    -bg black -fg green \
+    -title "uterm lab console" \
+    -e "bash --norc -i" \
+    >>"${LOG_DIR}/xterm.log" 2>&1 &
+  XTERM_PID=$!
+  echo "browser_pid=${XTERM_PID}" >> "${NAV_LOG}"
+  echo "browser_nav_status=launched" >> "${NAV_LOG}"
+  sleep 2
+  # Focus it, so injected KeyEvents land somewhere that echoes them.
+  if command -v wmctrl >/dev/null 2>&1; then
+    wmctrl -a "uterm lab console" || true
+  fi
+  echo "vnc-lab: xterm ready (pid ${XTERM_PID})"
+  wait "${XTERM_PID}"
+  exit 0
+fi
+
 # Record navigation intent + launch Chromium (graphical, not --headless).
 {
   echo "browser_nav_url=${DEMO_URL}"

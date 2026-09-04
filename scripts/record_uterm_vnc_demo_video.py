@@ -238,8 +238,13 @@ def start_lab_with_demo_url(
     demo_url: str,
     host_plain: int = LAB_HOST_PLAIN,
     host_tls: int = LAB_HOST_TLS,
+    xterm: bool = False,
 ) -> tuple[int, int]:
-    """Start lab container; Chromium opens *demo_url* (host uterm text console)."""
+    """Start lab container; Chromium opens *demo_url*, or an xterm if *xterm*.
+
+    The browser console renders the same whatever is typed at the X server, so
+    it cannot show injected input; an xterm echoes it. Only gui_agent wants it.
+    """
     vnc_lab._remove_container(name)
     result = subprocess.run(
         [
@@ -257,6 +262,8 @@ def start_lab_with_demo_url(
             f"{host_tls}:{vnc_lab.RFB_SSL_PORT}",
             "-e",
             f"DEMO_URL={demo_url}",
+            "-e",
+            f"LAB_XTERM={'1' if xterm else '0'}",
             # Match the lab desktop aspect to the console's remote-desktop panel
             # (~1152x843 at the 1440x900 recording viewport) so noVNC's
             # aspect-preserving scale fills the panel edge to edge — no black
