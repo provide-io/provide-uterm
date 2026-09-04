@@ -43,7 +43,7 @@ except ImportError as _e:  # pragma: no cover
 
 from provide.telemetry import get_logger
 from provide.uterm.server.bridge.models import WorkerTermState
-from provide.uterm.server.graphical_targets import PROTOCOL_MEMORY, PROTOCOL_RFB, scope_for_tenant
+from provide.uterm.server.graphical_targets import PROTOCOL_MEMORY, scope_for_tenant
 from provide.uterm.server.gui_session import GraphicalSession, MemoryGraphicalSession, encode_rgba_png
 from provide.uterm.server.vnc_upstream import dial_config_from_target
 
@@ -155,13 +155,15 @@ def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
         session: GraphicalSession
         if protocol == PROTOCOL_MEMORY:
             session = MemoryGraphicalSession(max(1, target.width), max(1, target.height))
-        elif protocol == PROTOCOL_RFB:
+        # dial_config_from_target returns None for every non-rfb protocol, so the
+        # walrus is the rfb test — and it narrows ``dial`` for the ``.host`` read
+        # below. Asking ``protocol == PROTOCOL_RFB`` first and then re-checking
+        # ``dial is None`` asks the same question twice and leaves the second
+        # answer unreachable.
+        elif (dial := dial_config_from_target(target)) is not None:
             from provide.uterm.server.egress import assert_connector_target_allowed
             from provide.uterm.server.rfb_session import RfbGraphicalSession
 
-            dial = dial_config_from_target(target)
-            if dial is None:
-                return JSONResponse({"error": "invalid endpoint: target is not dialable"}, status_code=403)
             try:
                 # Connector-grade egress, matching the C# canonical
                 # (UtermServer.Gui.cs): cloud-metadata is always blocked, and
