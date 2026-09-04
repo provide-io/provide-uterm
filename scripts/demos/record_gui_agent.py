@@ -2,202 +2,285 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Demo: the graphical tool surface an agent drives, and the rules it obeys.
+"""Demo: an agent drives a real desktop, and a human watches it happen.
 
-Cast, not video, and that is the honest shape for this one.
+This was a cast until 2026-09-04, because ``gui/attach`` answered 501 for
+``rfb`` and the only console the seven ``gui_*`` tools could reach was
+``MemoryGraphicalSession`` -- a framebuffer that paints one white pixel per
+click and ignores keys entirely. There was nothing to film.
+``server/rfb_session.py`` changed that, so this runs against the
+``uterm-test-vnc`` lab now.
 
-This runs against a ``memory`` target on purpose. ``MemoryGraphicalSession``'s
-``inject_pointer`` sets a single white pixel and its ``inject_key`` is a
-documented no-op, so there is nothing to film -- but every call is real, and the
-contract around them is the point: the registry a target comes from, the tenant
-scope that gates it, the lease every injection is charged against, and the
-refusals.
+Two views of one console, which is the point:
 
-``rfb`` targets attach for real now (``server/rfb_session.py``), so the demo also
-shows the one thing an rfb target still cannot do: reach a console that is not
-listening, which answers 502.
+* The **agent** works through REST -- ``gui/attach`` onto the lab's RFB target,
+  then screenshot, click, type, key, drag, screenshot, release. Pull-based, so
+  it does not depend on anything streaming smoothly.
+* The **browser** sits on the first-party ``vnc.html``, watching that same
+  desktop through the human VNC relay while those calls land.
 
-For a real desktop under a real lease see the ``graphical`` demo.
+The lease is what ties them together: the agent holds it, and the RFB input
+filter drops injected input from anyone who does not.
+
+Requires Docker. Without it this raises and the orchestrator records a [SKIP]
+rather than publishing a feature with no video.
 """
 
 from __future__ import annotations
 
+import base64
+import subprocess
 import time
 from typing import TYPE_CHECKING, Any
-
-import httpx2
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 from scripts.demos import (
     BASE_OUT,
+    BrowserStep,
     asciinema_record,
     banner,
+    browser_record,
     info,
     kv,
     ok,
     out_dir,
-    start_server,
-    stop_server,
+    trim_clip,
     warn,
 )
 
 FEATURE = "gui_agent"
 DESCRIPTION = (
-    "The seven graphical tools an agent drives: registry, tenant scope, hijack lease, and every refusal in between"
+    "An agent takes the graphical lease, screenshots a live desktop, clicks and types on it, then hands it back"
 )
-TITLE = "Graphical Tool Surface"
-SUBTITLE = "What an agent may do to a desktop, and what it may not"
-HIGHLIGHT_START_S: float = 0.0
-HIGHLIGHT_DURATION_S: float = 0.0
+TITLE = "Agent Drives a Desktop"
+SUBTITLE = "The same lease that arbitrates a PTY arbitrates a screen"
+HIGHLIGHT_START_S: float = 2.0
+HIGHLIGHT_DURATION_S: float = 12.0
 
-#: No browser video: a memory framebuffer has nothing to film. See the module
-#: docstring.
-SITE_FORMAT = "cast"
+#: Its own container and ports, so a demo run never tears down a lab somebody
+#: is using interactively.
+LAB_NAME = "uterm-demo-gui-agent"
+LAB_HOST_PLAIN = 25902
+LAB_HOST_TLS = 25903
 
-#: Header auth, because the graphical registry derives its scope from
-#: ``Principal.tenant_id`` and dev_token's stub principal carries no tenant.
-_TENANT = "demo-tenant"
-_HEADERS = {
-    "x-uterm-principal": "agent-ada",
-    "x-uterm-role": "admin",
-    "x-uterm-tenant": _TENANT,
-    "Content-Type": "application/json",
-}
-
-_WORKER = "provide-shell"
+#: Where the agent works: inside the lab's xterm, which echoes what it is
+#: sent, so the screenshot afterwards shows the effect rather than an inert
+#: buffer. The drag stays within the window so it selects visible text.
+_CLICK_XY = (300, 200)
+_TYPED_TEXT = "echo 'an agent typed this'"
+_DRAG = (60, 96, 420, 96)
 
 
-def _show(label: str, response: httpx2.Response) -> Any:
-    """Print a call and its status the way an MCP harness would."""
-    body: Any
+def _agent_call(name: str, detail: str = "") -> None:
+    """Print a tool call the way an MCP harness shows one."""
+    info(f"  -> {name}({detail})" if detail else f"  -> {name}()")
+
+
+def _screenshot_summary(payload: object) -> str:
+    """Describe a screenshot response without dumping the base64 blob.
+
+    The key is screenshot (rest_gui.py). An earlier version guessed at
+    png_base64/image and printed "no image in response" for every
+    successful capture.
+    """
+    if not isinstance(payload, dict):
+        return "unrecognised response"
+    raw = payload.get("screenshot") or ""
+    if not isinstance(raw, str) or not raw:
+        return "no image in response"
+    return f"{len(base64.b64decode(raw))} bytes of PNG"
+
+
+def _stand_up(vnc_demo: Any, prove: Any) -> tuple[str, Any, str]:
+    """Start the lab and a server that knows about it; return the held lease."""
+    info(f"Starting the {vnc_demo.vnc_lab.IMAGE_NAME} lab desktop...")
+    port = vnc_demo._free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    root = vnc_demo._repo_root()
+    config = root / "demo" / f".{FEATURE}-server.toml"
+
+    vnc_demo.write_demo_server_config(
+        config, host="0.0.0.0", port=port, plain_port=LAB_HOST_PLAIN, tls_port=LAB_HOST_TLS
+    )
+    demo_url = f"http://{vnc_demo._HOST_FROM_DOCKER}:{port}/_terminal/terminal.html?worker_id={prove.SERVER_SESSION}"
+    # xterm, not the browser console: the console renders the same whatever is
+    # typed at the X server, so it cannot show what the agent does. Measured —
+    # x11vnc received every event and zero of 1,920,000 framebuffer bytes moved.
+    vnc_demo.start_lab_with_demo_url(
+        name=LAB_NAME, demo_url=demo_url, host_plain=LAB_HOST_PLAIN, host_tls=LAB_HOST_TLS, xterm=True
+    )
+    kv("lab", f"{LAB_NAME} :{LAB_HOST_PLAIN} (plain)")
+
+    server = None
     try:
-        body = response.json()
-    except ValueError:
-        body = response.text
-    if response.status_code < 400:
-        ok(f"{label} → {response.status_code}")
-    else:
-        detail = body.get("error") or body.get("detail") if isinstance(body, dict) else body
-        warn(f"{label} → {response.status_code} {detail}")
-    return body
+        server = prove.start_server(root=root, config=config, log_path=root / "demo" / f".{FEATURE}-server.log")
+        # Readiness first: wait_worker_and_acquire polls for a worker and treats
+        # a refused connection as a hard error rather than "not up yet".
+        prove.wait_http(f"{base_url}/readyz", timeout=45.0)
+        hijack_id = prove.wait_worker_and_acquire(base_url)
+        kv("lease", hijack_id)
+
+        status, body = vnc_demo.http_json(
+            "POST",
+            f"{base_url}/worker/{prove.SERVER_SESSION}/gui/attach",
+            headers=prove.ADMIN_HEADERS,
+            body={"target_id": prove.TARGET_PLAIN},
+        )
+        if status != 200:
+            # A 501 here would mean the RFB client regressed to the memory-only
+            # state this demo was written around. Say so rather than film it.
+            raise RuntimeError(f"gui/attach {prove.TARGET_PLAIN} = {status} {body!r}")
+        kv("attached", f"{prove.TARGET_PLAIN} (rfb, status 200)")
+    except BaseException:
+        # This function started the lab and the server, so it owns tearing them
+        # down; the caller's finally only arms once it has returned.
+        _tear_down(prove, server)
+        raise
+    return base_url, server, hijack_id
+
+
+def _tear_down(prove: Any, server: Any) -> None:
+    """Stop the server and remove the lab container."""
+    if server is not None:
+        prove.stop_server(server)
+    subprocess.run(["docker", "rm", "-f", LAB_NAME], capture_output=True, check=False, timeout=30)
+
+
+def _drive_tools(vnc_demo: Any, prove: Any, base_url: str, hijack_id: str, *, narrate: bool) -> None:
+    """Run the agent's sequence against the attached console."""
+    lease = f"{base_url}/worker/{prove.SERVER_SESSION}/hijack/{hijack_id}/gui"
+
+    def call(method: str, path: str, body: dict[str, Any] | None = None) -> tuple[int, object]:
+        return vnc_demo.http_json(method, f"{lease}{path}", headers=prove.ADMIN_HEADERS, body=body)
+
+    def report(status: int, payload: object, label: str) -> None:
+        if not narrate:
+            return
+        if status == 200:
+            ok(f"{label} -> {_screenshot_summary(payload)}")
+        else:
+            warn(f"{label} refused -> {status}")
+
+    if narrate:
+        _agent_call("gui_screenshot", "before")
+    status, payload = call("GET", "/screenshot")
+    report(status, payload, "gui_screenshot")
+
+    x, y = _CLICK_XY
+    if narrate:
+        _agent_call("gui_click", f"x={x}, y={y}, button='left'")
+    call("POST", "/click", {"x": x, "y": y, "button": "left"})
+    time.sleep(0.6)
+
+    if narrate:
+        _agent_call("gui_type", f"text={_TYPED_TEXT!r}")
+    call("POST", "/type", {"text": _TYPED_TEXT})
+    # The terminal echoes as it receives, so give the repaint time to land in
+    # the recording rather than after it.
+    time.sleep(1.5)
+
+    if narrate:
+        _agent_call("gui_key", "key_name='Return'")
+    call("POST", "/key", {"key_name": "Return"})
+    time.sleep(1.5)
+
+    sx, sy, ex, ey = _DRAG
+    if narrate:
+        _agent_call("gui_drag", f"start=({sx},{sy}) end=({ex},{ey})")
+    call("POST", "/drag", {"start_x": sx, "start_y": sy, "end_x": ex, "end_y": ey})
+    time.sleep(0.8)
+
+    if narrate:
+        _agent_call("gui_screenshot", "after")
+    status, payload = call("GET", "/screenshot")
+    report(status, payload, "gui_screenshot")
 
 
 def run_terminal_demo() -> None:
-    """Register a target, take the lease, drive the seven tools, be refused."""
-    base_url, server = start_server(auth_mode="header")
-    time.sleep(1.5)
+    """Narrate the agent's sequence against the lab console."""
+    from scripts import prove_uterm_vnc_console as prove
+    from scripts import record_uterm_vnc_demo_video as vnc_demo
+
     banner(DESCRIPTION)
-
+    base_url, server, hijack_id = _stand_up(vnc_demo, prove)
     try:
-        with httpx2.Client(base_url=base_url, timeout=30.0, headers=_HEADERS) as client:
-            info("1. A target is a registry entry, not a connection string.")
-            body = _show(
-                "POST /api/graphical-targets",
-                client.post(
-                    "/api/graphical-targets",
-                    json={
-                        "display_name": "Demo Console",
-                        "protocol": "memory",
-                        "width": 800,
-                        "height": 600,
-                    },
-                ),
-            )
-            target_id = body.get("target_id") if isinstance(body, dict) else None
-            if isinstance(body, dict):
-                kv(
-                    "server-assigned id",
-                    f"{target_id} ({body.get('protocol')}) {body.get('width')}x{body.get('height')}",
-                )
-                kv("secrets in response", "none" if "password" not in body else "LEAKED")
+        info("The console is a real X desktop over RFB, not a stub framebuffer.")
+        _drive_tools(vnc_demo, prove, base_url, hijack_id, narrate=True)
 
-            info("2. The scope comes from the principal. A body cannot claim one.")
-            _show(
-                "POST /api/graphical-targets (tenant_id in body)",
-                client.post(
-                    "/api/graphical-targets",
-                    json={"protocol": "memory", "tenant_id": "someone-else"},
-                ),
-            )
-
-            info("3. Injection is charged against a hijack lease.")
-            # REST hijack is refused 409 while the session is in "open" input
-            # mode -- open means anyone may type, so there is no lease to take.
-            _show(
-                f"PATCH /api/sessions/{_WORKER} (input_mode=hijack)",
-                client.patch(f"/api/sessions/{_WORKER}", json={"input_mode": "hijack"}),
-            )
-            time.sleep(0.5)
-            lease = _show(
-                f"POST /worker/{_WORKER}/hijack/acquire",
-                client.post(f"/worker/{_WORKER}/hijack/acquire", json={"owner": "agent-ada", "lease_s": 120}),
-            )
-            hijack_id = lease.get("hijack_id") if isinstance(lease, dict) else None
-            kv("lease", hijack_id or "none")
-
-            _show(
-                f"POST /worker/{_WORKER}/gui/attach",
-                client.post(f"/worker/{_WORKER}/gui/attach", json={"target_id": target_id}),
-            )
-
-            info("4. The seven tools, in the order an agent uses them.")
-            base = f"/worker/{_WORKER}/hijack/{hijack_id}/gui"
-            _show("gui_screenshot", client.get(f"{base}/screenshot"))
-            _show("gui_click", client.post(f"{base}/click", json={"x": 400, "y": 300, "button": "left"}))
-            _show("gui_type", client.post(f"{base}/type", json={"text": "an agent typed this"}))
-            _show("gui_key", client.post(f"{base}/key", json={"key_name": "Return"}))
-            _show(
-                "gui_drag", client.post(f"{base}/drag", json={"start_x": 10, "start_y": 10, "end_x": 700, "end_y": 500})
-            )
-            _show("gui_screenshot", client.get(f"{base}/screenshot"))
-
-            info("5. The refusals are the contract.")
-            _show(
-                "gui_click (button='middle-ish')", client.post(f"{base}/click", json={"x": 1, "y": 1, "button": "nope"})
-            )
-            _show(
-                "gui/attach (unregistered target)",
-                client.post(f"/worker/{_WORKER}/gui/attach", json={"target_id": "gt-does-not-exist"}),
-            )
-
-            # An rfb target now attaches for real. What it cannot do is reach a
-            # console that is not there: the registry entry is valid and the
-            # dial fails, which is 502 rather than 501 or 422.
-            rfb = _show(
-                "POST /api/graphical-targets (protocol=rfb)",
-                client.post(
-                    "/api/graphical-targets",
-                    json={
-                        "display_name": "A Real Desktop",
-                        "protocol": "rfb",
-                        "endpoint": "rfb://127.0.0.1:1",
-                    },
-                ),
-            )
-            rfb_id = rfb.get("target_id") if isinstance(rfb, dict) else None
-            _show(
-                "gui/attach (protocol=rfb, unreachable console)",
-                client.post(f"/worker/{_WORKER}/gui/attach", json={"target_id": rfb_id}),
-            )
-
-            _show(
-                f"POST /worker/{_WORKER}/hijack/{hijack_id}/release",
-                client.post(f"/worker/{_WORKER}/hijack/{hijack_id}/release", json={}),
-            )
-            _show("gui_click after release", client.post(f"{base}/click", json={"x": 400, "y": 300, "button": "left"}))
-
-        ok("every tool answered, and an unreachable rfb console fails as a bad gateway, not a bad request")
+        _agent_call("gui_hijack_release")
+        vnc_demo.http_json(
+            "POST",
+            f"{base_url}/worker/{prove.SERVER_SESSION}/hijack/{hijack_id}/release",
+            headers=prove.ADMIN_HEADERS,
+            body={},
+        )
+        ok("lease released -- the desktop is arbitrable again")
+        info("Without the lease those injections are dropped: the RFB input filter")
+        info("gates KeyEvent / PointerEvent / ClientCutText and fails closed.")
     finally:
-        stop_server(server)
+        _tear_down(prove, server)
 
 
 def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
-    """Record the tool sequence as an asciinema cast. No video: see the docstring."""
+    """Record the narration as a cast and the desktop as video."""
     feat_dir = out_dir(FEATURE, base_out)
     cast_path = asciinema_record(__file__, feat_dir / "terminal.cast")
-    return {"cast": cast_path, "mp4": None}
+
+    from scripts import prove_uterm_vnc_console as prove
+    from scripts import record_uterm_vnc_demo_video as vnc_demo
+
+    base_url, server, hijack_id = _stand_up(vnc_demo, prove)
+    try:
+        console = (
+            f"/_terminal/vnc.html?worker_id={prove.SERVER_SESSION}&hijack_id={hijack_id}&target_id={prove.TARGET_PLAIN}"
+        )
+
+        def connect_console(page: Any) -> None:
+            """Press Connect if the page is waiting for it.
+
+            The button is disabled once a session is live, so clicking
+            unconditionally waits out Playwright's timeout on exactly the runs
+            where the connection already succeeded.
+            """
+            button = page.locator("#vnc-connect")
+            if button.is_enabled(timeout=5_000):
+                button.click(timeout=5_000)
+
+        steps: list[BrowserStep] = [
+            (console, 1.5, None),
+            (connect_console, 5.0, "01-console-attached.png"),
+            # The agent works while the browser is recording. That is the shot.
+            (lambda _page: _drive_tools(vnc_demo, prove, base_url, hijack_id, narrate=False), 2.0, None),
+            (None, 2.0, "02-after-agent-input.png"),
+        ]
+        # The relay socket is refused 401 without these: this server runs header
+        # auth, and a browser WebSocket cannot carry custom headers.
+        # The principal must be the one holding the lease. The relay refuses a
+        # viewer who does not own it -- "hijack lease not owned by caller" --
+        # which is this demo's own subject matter enforcing itself.
+        principal = [
+            {
+                "name": "uterm_principal",
+                "value": prove.ADMIN_HEADERS["x-uterm-principal"],
+                "domain": "127.0.0.1",
+                "path": "/",
+            },
+            {"name": "uterm_role", "value": prove.ADMIN_HEADERS["x-uterm-role"], "domain": "127.0.0.1", "path": "/"},
+            {
+                "name": "uterm_tenant",
+                "value": prove.ADMIN_HEADERS["x-uterm-tenant"],
+                "domain": "127.0.0.1",
+                "path": "/",
+            },
+        ]
+        mp4_path = browser_record(base_url, steps, feat_dir, cookies=principal)
+    finally:
+        _tear_down(prove, server)
+
+    highlight = trim_clip(mp4_path, HIGHLIGHT_START_S, HIGHLIGHT_DURATION_S) if mp4_path else None
+    return {"cast": cast_path, "mp4": mp4_path, "highlight": highlight}
 
 
 if __name__ == "__main__":
