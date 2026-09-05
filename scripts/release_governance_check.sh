@@ -5,20 +5,42 @@ OUT_DIR="${1:-artifacts/release-governance}"
 mkdir -p "${OUT_DIR}"
 
 echo "[1/4] dependency vulnerability scan"
-# Use an ephemeral tool env so local preinstalls are not required.
-# We intentionally do NOT pass --skip-editable: that was hiding the fact
-# that all workspace packages were being skipped, which made the report
-# look empty. pip-audit reports the editable + private workspace packages
-# as "Dependency not found on PyPI" (expected — they aren't published yet)
-# and still scans every transitive dep for CVEs.
-# pip-audit emits "No known vulnerabilities found" on stderr and the skip
-# table on stdout — capture both so the artifact tells the full story.
+# Audit the resolved lock, not whatever is importable at the time.
+#
+# This used to be `uv run --with pip-audit pip-audit --local`, which audits
+# the environment it is running in -- and `--with` puts pip-audit's own
+# dependency tree into exactly that environment. So a finding could name a
+# package that is here only to run the audit. The lock is the honest subject:
+# it is what this project resolves, it does not move when a scanner's
+# requirements do, and it is the same thing on a laptop and on a runner.
+#
+# Workspace members are left out. They are this project rather than something
+# it depends on, and they are not on PyPI for pip-audit to look up -- which is
+# why the old report was padded with "Dependency not found on PyPI" lines.
+# Their dependencies are still every bit as present: the export is the whole
+# resolved graph minus the members themselves.
+#
+# pip-audit writes "No known vulnerabilities found" to stderr and its table to
+# stdout, so both are captured -- the artifact is signed below and should tell
+# the full story.
 #
 # Ignored advisories (--ignore-vuln):
 # - PYSEC-2025-183 (pyjwt): disputed by upstream — "the key length is
 #   chosen by the application that uses the library". Library users
 #   pick the HMAC key length, so this isn't a pyjwt-side fix.
-uv run --with pip-audit pip-audit --desc --local \
+#
+# A full mktemp template rather than `-t <prefix>`: GNU mktemp requires the
+# trailing X's that BSD mktemp does not, so the short form runs on macOS and
+# fails on the runner.
+REQUIREMENTS="$(mktemp "${TMPDIR:-/tmp}/uterm-audit-requirements.XXXXXX")"
+trap 'rm -f "${REQUIREMENTS}"' EXIT
+uv export --no-emit-workspace --format requirements-txt > "${REQUIREMENTS}"
+
+# The export is fully pinned, so `--no-deps` is accurate; `--disable-pip` stops
+# pip-audit building a throwaway virtualenv to resolve with, which it does even
+# for a pinned file and which fails where ensurepip cannot run.
+uvx pip-audit --desc --no-deps --disable-pip \
+    --requirement "${REQUIREMENTS}" \
     --ignore-vuln PYSEC-2025-183 \
     > "${OUT_DIR}/pip-audit.txt" 2>&1
 
@@ -38,8 +60,15 @@ fi
 uv build
 
 echo "[3/4] SBOM generation"
-# Use an ephemeral tool env so local preinstalls are not required.
-uv run --with cyclonedx-bom cyclonedx-py environment --output-format json --output-file "${OUT_DIR}/sbom.json"
+# Name the interpreter to describe. `uv run --with cyclonedx-bom` used to leave
+# this implicit, which meant the SBOM described the ephemeral environment uv
+# had just built -- cyclonedx-bom and its 30-odd dependencies included, listed
+# as components of this project. `uvx` keeps the tool out of the environment,
+# and the positional argument says which environment to read.
+ENV_PYTHON="$(uv run --no-sync python -c 'import sys; print(sys.executable)')"
+uvx --from cyclonedx-bom cyclonedx-py environment \
+    --output-format json --output-file "${OUT_DIR}/sbom.json" \
+    "${ENV_PYTHON}"
 
 # Post-deploy manual steps (require a live server URL):
 #   uv run python scripts/rollback_drill.py --base-url <URL> --session-id <ID>

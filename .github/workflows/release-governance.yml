@@ -52,9 +52,6 @@ jobs:
       - name: Sync dependencies
         run: uv sync --frozen --group dev
 
-      - name: Install governance tools
-        run: uv pip install pip-audit cyclonedx-bom
-
       - name: Run release governance checks
         run: ./scripts/release_governance_check.sh artifacts/release-governance
 
