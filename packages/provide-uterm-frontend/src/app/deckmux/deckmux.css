@@ -110,10 +110,6 @@
     opacity 0.2s ease;
 }
 
-.dm-avatar-wrap:hover .dm-avatar {
-  filter: brightness(1.15);
-}
-
 .dm-avatar-initials {
   font-size: 11px;
   font-weight: 600;
@@ -161,6 +157,14 @@
     0 0 0 2px #eab308,
     0 0 6px 2px rgba(234, 179, 8, 0.4);
   animation: none;
+}
+
+/* Below the state modifiers above, whose selectors are one class less
+   specific: hover sets filter alone and they set animation and box-shadow,
+   so nothing here overrides them -- source order simply follows specificity
+   now, which is what noDescendingSpecificity asks for. */
+.dm-avatar-wrap:hover .dm-avatar {
+  filter: brightness(1.15);
 }
 
 /* Idle dimming */
