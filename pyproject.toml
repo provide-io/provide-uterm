@@ -47,7 +47,7 @@ dev = [
     "uv>=0.12.7",
     "uvicorn>=0.52.4",
     "vulture>=2.16",
-    "websockets>=16.0",
+    "websockets>=17.1",
     # The Cloudflare package declares this in its own dev EXTRA, but CI syncs
     # the workspace-root dev GROUP, which does not install member extras — so
     # the CF lifecycle scenario suite (part of the default root testpaths)
