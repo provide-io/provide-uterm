@@ -4,12 +4,37 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
-## [0.5.6] — 2026-09-01
+## [0.5.6] — 2026-09-10
 
-The fan-out response budget means the same thing in all four ports, and the Go
-module is consumable by version again.
+The fan-out response budget means the same thing in all four ports, the Go
+module is consumable by version again, a graphical desktop joins the agent
+fleet with a real RFB client in three of four ports, and the Python packages
+run cleanly on Windows for the first time.
+
+### Added
+
+- **A graphical target (VNC/RFB desktop) joins the agent fleet, with a client
+  in Go, TypeScript, and Python.** `gui/attach` now reaches a real screen —
+  click, type, and screenshot a nested desktop the same way the terminal
+  fleet is driven — and the demo set was re-recorded end-to-end so every
+  capture matches what the manifest actually serves.
 
 ### Fixed
+
+- **The `uterm` CLI, core recording, the SSH gateway, and the SQLite
+  control-plane URL parser were all broken on Windows** — most of it outright
+  crashes, some of it silent security gaps. An eager import of a POSIX-only
+  PTY-capture module at parser-construction time took down `uterm`, `uterm
+  server`, and even `uterm --help`; `os.O_NOFOLLOW`/`os.fchmod`, used
+  unconditionally, don't exist there, so recording/logging never worked at
+  all (now guarded, with a real if TOCTOU-imperfect `Path.is_symlink()`
+  fallback so the symlink check isn't just silently dropped); SSH host keys
+  broke on every restart past the first because Windows can't represent POSIX
+  mode `0o600`; and the sqlite URL resolver now handles drive letters, bare
+  drive roots, and the common 2-slash typo instead of crashing deep inside
+  `mkdir`. Found and fixed by actually running the suite on a Windows 11 box,
+  not by reasoning about it — the packages had only ever run on
+  `ubuntu-latest` in CI.
 
 - **A response cut off at `max_response_ms` was reported as a complete one.**
   Every port returned `ok` for a member that was still producing output when the
@@ -55,6 +80,21 @@ module is consumable by version again.
   so a package VERSION could disagree with the release and the gate stayed
   green. The npm-side check in `version-consistency.test.ts` already enforced
   this; the static gate now enforces the same rule, where `--fix` can repin it.
+
+- **The mutation-testing perimeter closed several files it had been
+  listing without actually enforcing.** `hub/router.py` was an 11-line
+  re-export shim while the router service's real code sat in four unlisted
+  sibling modules, and the approval store was absent outright; the graphical
+  REST surface (`routes/rest_gui.py`) and the VNC recorder were never
+  mutation-tested at all. All are now on the perimeter at `killed==100`, and
+  `tests/scripts/test_mutation_perimeter_shims.py` enforces going forward
+  that a perimeter entry naming a re-export shim also names the module doing
+  the real work.
+
+- **Release tooling derives intra-workspace dependency floors and the Go/NuGet
+  version from the root `VERSION` file** instead of repeating a literal —
+  the gap that let the Go and C# ports drift for five versions behind what
+  the Python packages actually shipped.
 
 ## [0.5.5] — 2026-08-30
 
