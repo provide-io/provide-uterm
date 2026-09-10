@@ -10,6 +10,7 @@ import sys
 
 import pytest
 
+import provide.uterm.file_io as file_io_mod
 from provide.uterm.file_io import secure_create, secure_open_append
 
 # Windows has no POSIX permission bits: st_mode is synthesized purely from the
@@ -79,6 +80,33 @@ def test_secure_create_succeeds_without_o_nofollow(monkeypatch, tmp_path) -> Non
     os.close(fd)
 
     assert path.exists()
+
+
+def test_secure_create_refuses_symlink_without_o_nofollow(monkeypatch, tmp_path) -> None:
+    """Windows-only pre-open symlink check: covers both the warn-once branch
+    and its already-warned skip, since neither is reachable alone — the
+    no-O_NOFOLLOW test above never targets a symlink, and the symlink test
+    above never removes O_NOFOLLOW (so real O_NOFOLLOW catches it first)."""
+    monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
+    monkeypatch.setattr(file_io_mod, "_warned_no_symlink_guard", False)
+
+    plain = tmp_path / "plain.txt"
+    fd = secure_create(plain)
+    os.close(fd)
+    assert file_io_mod._warned_no_symlink_guard is True
+
+    target = tmp_path / "target.txt"
+    target.write_text("target", encoding="utf-8")
+    link = tmp_path / "link.txt"
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"cannot create symlinks in this environment: {exc}")
+
+    # Already warned (set above) -- this call takes the 54->57 skip branch
+    # and then hits the symlink refusal at line 58.
+    with pytest.raises(OSError):
+        secure_create(link)
 
 
 def test_secure_create_succeeds_without_fchmod(monkeypatch, tmp_path) -> None:

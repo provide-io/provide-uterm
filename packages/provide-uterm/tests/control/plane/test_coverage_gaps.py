@@ -162,6 +162,11 @@ async def test_memory_commit_applies_key_deletion() -> None:
         (":memory:", ":memory:"),
         ("file::memory:", ":memory:"),
         ("sqlite://:memory:", ":memory:"),
+        # No netloc, path is the 3-slash memory spelling -- the only route
+        # into the trailing `if path in {"", "/:memory:", ":memory:"}` branch;
+        # the ":memory:" and "sqlite://:memory:" cases above both return
+        # earlier (top-level literal shortcut / netloc shortcut respectively).
+        ("sqlite:///:memory:", ":memory:"),
         ("/tmp/plain/path.db", "/tmp/plain/path.db"),
     ],
 )
