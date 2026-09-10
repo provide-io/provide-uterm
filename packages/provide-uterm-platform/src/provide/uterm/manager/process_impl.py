@@ -114,6 +114,16 @@ _WORKER_ENV_PASSTHROUGH = frozenset(
         "PYTHONPATH",
         "PYTHONHOME",
         "VIRTUAL_ENV",
+        # Windows: without these, spawned python.exe/node.exe children can fail
+        # unpredictably (winsock/CryptoAPI init and DLL/COM lookups depend on
+        # SYSTEMROOT; PATH alone is not sufficient).
+        "SYSTEMROOT",
+        "SYSTEMDRIVE",
+        "COMSPEC",
+        "WINDIR",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "USERPROFILE",
     }
 )
 

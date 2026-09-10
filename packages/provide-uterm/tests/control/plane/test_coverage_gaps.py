@@ -10,6 +10,7 @@ coverage source to include the whole ``control/`` subpackage.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -161,6 +162,11 @@ async def test_memory_commit_applies_key_deletion() -> None:
         (":memory:", ":memory:"),
         ("file::memory:", ":memory:"),
         ("sqlite://:memory:", ":memory:"),
+        # No netloc, path is the 3-slash memory spelling -- the only route
+        # into the trailing `if path in {"", "/:memory:", ":memory:"}` branch;
+        # the ":memory:" and "sqlite://:memory:" cases above both return
+        # earlier (top-level literal shortcut / netloc shortcut respectively).
+        ("sqlite:///:memory:", ":memory:"),
         ("/tmp/plain/path.db", "/tmp/plain/path.db"),
     ],
 )
@@ -170,7 +176,47 @@ def test_resolve_database_path_variants(url: str, expected: str) -> None:
 
 def test_resolve_database_path_absolute_sqlite_scheme(tmp_path: Path) -> None:
     target = tmp_path / "db.sqlite"
-    assert resolve_database_path(f"sqlite:///{target}") == f"/{target}"
+    expected = str(target) if sys.platform == "win32" else f"/{target}"
+    assert resolve_database_path(f"sqlite:///{target}") == expected
+
+
+def test_resolve_database_path_windows_drive_letter() -> None:
+    # Forward-slash sqlite URL form (the documented/conventional spelling),
+    # independent of tmp_path's platform-native separator formatting above.
+    assert resolve_database_path("sqlite:///C:/Users/tim/data.db") == "C:/Users/tim/data.db"
+
+
+def test_resolve_database_path_windows_bare_drive_root() -> None:
+    # No trailing segment after the drive letter ("sqlite:///C:", not
+    # "sqlite:///C:/...") -- the lookahead must still strip the spurious "/".
+    assert resolve_database_path("sqlite:///C:") == "C:"
+
+
+def test_resolve_database_path_two_slash_bare_drive_root() -> None:
+    # "sqlite://C:" (2 slashes, no trailing path) -- urlparse gives netloc="C:",
+    # path="" here, so the empty-path memory shortcut must not fire first.
+    assert resolve_database_path("sqlite://C:") == "C:"
+
+
+def test_resolve_database_path_two_slash_drive_letter_typo() -> None:
+    # "sqlite://C:/..." (missing the 3rd slash) puts the drive letter in
+    # netloc instead of path -- it's a mistyped drive-anchored path, not a
+    # real host, and must resolve the same as the 3-slash form.
+    assert resolve_database_path("sqlite://C:/Users/tim/data.db") == "C:/Users/tim/data.db"
+
+
+def test_resolve_database_path_real_netloc_rejected() -> None:
+    # A genuine host component isn't meaningful for a local sqlite file --
+    # reject with a clear error rather than silently produce a UNC-shaped
+    # path that would only fail later, confusingly, inside connect_sqlite's
+    # mkdir call.
+    with pytest.raises(SqliteConnectionError, match="unsupported host component"):
+        resolve_database_path("sqlite://host/data.db")
+
+
+def test_resolve_database_path_real_netloc_with_windows_drive_path_rejected() -> None:
+    with pytest.raises(SqliteConnectionError, match="unsupported host component"):
+        resolve_database_path("sqlite://host/C:/data.db")
 
 
 async def test_connect_sqlite_creates_parent_and_wal(tmp_path: Path) -> None:

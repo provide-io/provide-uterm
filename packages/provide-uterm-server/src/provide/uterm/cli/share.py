@@ -31,13 +31,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import argparse
 
+    from provide.uterm.tunnel.pty_capture import SpawnedPty, TtyProxy
+
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.tunnel.protocol import (
     CHANNEL_DATA,
     FLAG_EOF,
     encode_frame,
 )
-from provide.uterm.tunnel.pty_capture import SpawnedPty, TtyProxy, spawn_pty
 
 log = logging.getLogger(__name__)
 
@@ -168,6 +169,17 @@ async def _bridge_loop(
 
 def _cmd_share(args: argparse.Namespace) -> None:
     """Execute the ``uterm share`` subcommand."""
+    # Imported here (not at module scope) so `uterm` as a whole stays importable
+    # on platforms without a real PTY (Windows) — `share` itself is POSIX-only.
+    # Checked before creating any server-side resource so an unsupported
+    # platform fails cleanly with nothing to clean up, instead of allocating
+    # a live tunnel on the server and then abandoning it.
+    try:
+        from provide.uterm.tunnel.pty_capture import TtyProxy, spawn_pty
+    except ImportError as exc:
+        print(f"error: 'uterm share' requires POSIX PTY support, unavailable on this platform: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     server: str = args.server
     cmd: list[str] | None = args.cmd or None
     attach: bool = getattr(args, "attach", False)

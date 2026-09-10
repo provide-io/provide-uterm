@@ -109,7 +109,8 @@ if _mutants_src.exists():
         except Exception:  # pragma: no cover
             pass
 
-    os.register_at_fork(after_in_child=_noop_setproctitle_in_child)
+    if hasattr(os, "register_at_fork"):  # POSIX-only; no fork() on Windows
+        os.register_at_fork(after_in_child=_noop_setproctitle_in_child)
 
 
 # --- mutmut: keep application logging off stdout ---------------------------

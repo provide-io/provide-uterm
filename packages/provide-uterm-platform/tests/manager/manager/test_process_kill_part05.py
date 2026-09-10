@@ -232,6 +232,23 @@ class TestBuildWorkerEnv:
         assert "MY_SECRET_LEAK" not in env
         assert env.get("PATH") == "/usr/bin"
 
+    def test_windows_env_vars_pass_through(self, pm):
+        # Worker subprocesses spawned on Windows need these to initialize
+        # winsock/CryptoAPI/DLL lookups; PATH alone is not sufficient.
+        fake_env = {
+            "SYSTEMROOT": "C:\\Windows",
+            "SYSTEMDRIVE": "C:",
+            "COMSPEC": "C:\\Windows\\system32\\cmd.exe",
+            "WINDIR": "C:\\Windows",
+            "APPDATA": "C:\\Users\\me\\AppData\\Roaming",
+            "LOCALAPPDATA": "C:\\Users\\me\\AppData\\Local",
+            "USERPROFILE": "C:\\Users\\me",
+        }
+        with patched_environ(fake_env):
+            env = pm._build_worker_env("UTERM_", None, MagicMock(), {}, "agent_000")
+        for key, value in fake_env.items():
+            assert env.get(key) == value
+
     def test_name_style_value(self, pm):
         # mutmut_9: NAME_STYLE assigned ``None`` instead of the configured style.
         pm._spawn_name_style = "random"

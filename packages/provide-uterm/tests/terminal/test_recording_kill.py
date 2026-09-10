@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -31,7 +32,9 @@ from provide.uterm.recording import (
     _open_append_owner_only,
 )
 
-_OPEN_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW
+# O_NOFOLLOW has no Windows equivalent; secure_create() omits it there (see
+# file_io.py), so the exact-flags pin below only holds on platforms that have it.
+_OPEN_FLAGS = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
 
 
 # == _ensure_owner_only_dir ==================================================
@@ -56,6 +59,7 @@ def test_ensure_owner_only_dir_creates_and_retightens_0o700(monkeypatch: pytest.
 # == _open_append_owner_only =================================================
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="pins O_NOFOLLOW + fchmod, neither exists on Windows")
 def test_open_uses_nofollow_append_and_owner_only(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The fd is opened O_NOFOLLOW|O_CREAT|O_WRONLY|O_APPEND, mode 0o600, fchmod
     0o600, and wrapped for append in utf-8 — pinning every security-bearing arg.
@@ -79,11 +83,18 @@ def test_open_uses_nofollow_append_and_owner_only(monkeypatch: pytest.MonkeyPatc
 
 
 def test_open_refuses_symlink_target(tmp_path: Path) -> None:
-    """A symlink at the recording path is refused (O_NOFOLLOW → OSError)."""
+    """A symlink at the recording path is refused: O_NOFOLLOW on POSIX, a
+    pre-open is_symlink() check on Windows (see file_io.secure_create)."""
     real = tmp_path / "real.jsonl"
     real.write_text("", encoding="utf-8")
     link = tmp_path / "link.jsonl"
-    link.symlink_to(real)
+    try:
+        link.symlink_to(real)
+    except OSError as exc:
+        # Creating a symlink itself needs Developer Mode/admin on Windows;
+        # skip there rather than fail on an environment limitation unrelated
+        # to what this test actually verifies.
+        pytest.skip(f"cannot create symlinks in this environment: {exc}")
     with pytest.raises(OSError):
         _open_append_owner_only(link)
 

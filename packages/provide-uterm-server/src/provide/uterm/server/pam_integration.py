@@ -299,11 +299,13 @@ async def _create_capture_session(event: PamEvent, pam_cfg: PamConfig, registry:
         from pathlib import Path as _Path
 
         try:
-            resolved = str(_Path(ev.capture_socket).resolve())
-            trusted = str(_Path(base_dir).resolve())
-            # Ensure resolved path starts with the trusted directory prefix.
-            # Add os.sep to avoid /run/evil matching /run/uterm prefix falsely.
-            if not (resolved == trusted or resolved.startswith(trusted + "/")):
+            resolved = _Path(ev.capture_socket).resolve()
+            trusted = _Path(base_dir).resolve()
+            # is_relative_to is a proper path-segment containment check (true
+            # for an exact match too), unlike a string-prefix compare — which
+            # both false-matches /run/evil against /run/uterm and assumes "/"
+            # as the separator, breaking on Windows.
+            if not resolved.is_relative_to(trusted):
                 logger.warning(
                     "pam_capture_socket_confined socket=%r is outside trusted dir=%r — session NOT created",
                     ev.capture_socket,

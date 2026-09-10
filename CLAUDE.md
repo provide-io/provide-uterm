@@ -10,6 +10,16 @@ Key capabilities: session control (hijack leasing with viewer/operator/admin rol
 
 ## Build & Run Commands
 
+On Windows, the `make ...` commands below need GNU Make and a POSIX shell on
+PATH — neither ships natively. Git for Windows (commonly already installed)
+provides Git Bash; install `make` via `choco install make` or `winget install
+GnuWin32.Make` (this is exactly what `.github/workflows/ci.yml`'s
+`csharp-quality-windows` job does for CI). Most targets are one-line
+passthroughs to a `bash ci/*.sh` script named in their comment below (e.g.
+`make quality-gate` == `bash ci/quality_checks.sh`) — running that script
+directly from Git Bash works without `make` at all. `scripts/state.sh` (see
+"Reporting External State" below) is likewise a Git-Bash-only script.
+
 ```bash
 # Install dependencies (or just `make sync`).
 # --all-packages --all-extras is load-bearing, not belt-and-braces: plain
