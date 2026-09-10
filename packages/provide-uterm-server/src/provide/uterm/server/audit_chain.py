@@ -29,8 +29,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from provide.telemetry import get_logger
+from provide.uterm.file_io import try_fchmod
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
+
+logger = get_logger(__name__)
 
 # The prev_hash of the very first record in a chain (no predecessor). 64 hex
 # zeros so it is the same width as a real sha256 digest.
@@ -182,6 +187,8 @@ class AuditChain:
         self._mono = mono
         self._on_head = on_head
         self._lock = threading.Lock()
+        if not hasattr(os, "fchmod"):  # pragma: no cover - exercised only on Windows CI
+            logger.warning("audit_chain_0600_permission_unavailable_on_windows", path=self._path)
 
     @property
     def seq(self) -> int:
@@ -206,9 +213,9 @@ class AuditChain:
             # Enforce 0600 even if the file pre-existed with looser perms — an
             # audit log must never be world-readable. fchmod targets the open fd
             # (no TOCTOU on the path). Not available on Windows, which has no
-            # POSIX permission bits — best-effort no-op there.
-            if hasattr(os, "fchmod"):  # pragma: no branch — always true on POSIX CI
-                os.fchmod(fd, 0o600)
+            # POSIX permission bits — best-effort no-op there (warned about once
+            # in __init__).
+            try_fchmod(fd, 0o600)
             os.write(fd, line.encode("utf-8"))
             os.fsync(fd)
         finally:

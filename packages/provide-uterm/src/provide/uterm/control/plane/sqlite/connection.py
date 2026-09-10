@@ -13,8 +13,10 @@ import aiosqlite
 
 # sqlite:///C:/Users/... yields urlparse path "/C:/Users/..." — a leading "/"
 # before a Windows drive letter, which Path() treats as a literal (invalid)
-# folder segment rather than a drive-anchored path.
-_WINDOWS_DRIVE_PATH_RE = re.compile(r"^/[A-Za-z]:[/\\]")
+# folder segment rather than a drive-anchored path. The lookahead (rather than
+# consuming the separator) also matches a bare drive with no trailing segment
+# ("sqlite:///C:" -> path "/C:"), not just "/C:/...".
+_WINDOWS_DRIVE_PATH_RE = re.compile(r"^/[A-Za-z]:(?=[/\\]|$)")
 
 
 class SqliteConnectionError(RuntimeError):
@@ -30,12 +32,10 @@ def resolve_database_path(database_url: str) -> str:
         path = unquote(parsed.path or "")
         if path in {"", "/:memory:", ":memory:"}:
             return ":memory:"
-        # Defensive: urlparse always yields a leading "/" (or empty path,
-        # handled above) when netloc is set, so this branch is unreachable.
-        if parsed.netloc and not path.startswith("/"):  # pragma: no cover
-            return f"//{parsed.netloc}{path}"
         if _WINDOWS_DRIVE_PATH_RE.match(path):
-            return path[1:]
+            path = path[1:]
+        if parsed.netloc:
+            return f"//{parsed.netloc}{path}" if path.startswith("/") else f"//{parsed.netloc}/{path}"
         return path
     return database_url
 

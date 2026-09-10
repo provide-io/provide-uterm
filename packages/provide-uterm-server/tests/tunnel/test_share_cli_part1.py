@@ -24,6 +24,15 @@ from provide.uterm.cli.share import (
     _read_token,
 )
 
+#: tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and
+#: unimportable on Windows -- applied per-test rather than at class/module
+#: level because several tests in the same classes don't touch pty_capture
+#: and run fine on Windows.
+skip_no_pty_capture = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
+)
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -239,10 +248,7 @@ class TestCmdShare:
             return_value=resp or _TUNNEL_RESPONSE,
         )
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-    )
+    @skip_no_pty_capture
     def test_spawn_mode(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Happy path: spawn PTY, connect WS, print URLs."""
         mock_pty = MagicMock()
@@ -267,10 +273,7 @@ class TestCmdShare:
         assert _TUNNEL_RESPONSE["control_url"] in out
         assert "Ctrl+C" in out
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-    )
+    @skip_no_pty_capture
     def test_attach_mode(self, capsys: pytest.CaptureFixture[str]) -> None:
         """--attach uses TtyProxy instead of spawn_pty."""
         mock_tty = MagicMock()
@@ -290,10 +293,7 @@ class TestCmdShare:
         mock_tty.start.assert_called_once()
         mock_tty.close.assert_called_once()
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-    )
+    @skip_no_pty_capture
     def test_default_cmd_is_none(self) -> None:
         """When cmd is empty list, passes None to spawn_pty (uses $SHELL)."""
         mock_pty = MagicMock()
@@ -309,10 +309,7 @@ class TestCmdShare:
 
         mock_spawn.assert_called_once_with(None)
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-    )
+    @skip_no_pty_capture
     def test_keyboard_interrupt_clean_shutdown(self) -> None:
         """Ctrl+C during bridge loop → PTY closed cleanly."""
         mock_pty = MagicMock()
@@ -340,10 +337,7 @@ class TestCmdShare:
             args = _make_args()
             _cmd_share(args)
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-    )
+    @skip_no_pty_capture
     def test_display_name_passed_to_create(self) -> None:
         """--display-name is forwarded to _create_tunnel."""
         mock_pty = MagicMock()

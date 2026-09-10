@@ -98,10 +98,32 @@ class UnresolvedError(RuntimeError):
     """An expression or condition the tool refuses to guess at."""
 
 
+def _find_bash() -> str | None:
+    """Find a real (Git Bash) ``bash.exe`` on Windows, skipping the WSL stub.
+
+    ``%SystemRoot%\\System32\\bash.exe`` (and ``\\Sysnative\\bash.exe``) isn't a
+    shell -- it launches a registered WSL distro with translated cwd/env that
+    don't match this process's Windows paths, so it can't run the workflow's
+    bash steps the way Git Bash does. `shutil.which` returns only the first
+    PATH match, which is often that stub if System32 sorts before Git's bin
+    dir -- so walk PATH ourselves and skip it, falling back to `which` only if
+    nothing else is found.
+    """
+    system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    stub_dirs = {str(Path(system_root, "System32")).lower(), str(Path(system_root, "Sysnative")).lower()}
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if not directory or directory.rstrip("\\/").lower() in stub_dirs:
+            continue
+        candidate = Path(directory, "bash.exe")
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which("bash")
+
+
 #: Every ``run:`` step is bash (heredocs, &&, $GITHUB_ENV) parsed straight out
 #: of the workflow. `shell=True` dispatches through cmd.exe on Windows, which
 #: cannot parse that syntax -- so Windows needs bash named explicitly.
-_BASH = shutil.which("bash") if sys.platform == "win32" else None
+_BASH = _find_bash() if sys.platform == "win32" else None
 
 
 def _load_jobs() -> dict[str, Any]:

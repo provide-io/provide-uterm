@@ -17,6 +17,14 @@ from provide.uterm.cli.share import (
     _display_name,
 )
 
+#: tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and
+#: unimportable on Windows -- applied per-test since other tests in these
+#: classes don't touch pty_capture and run fine on Windows.
+skip_no_pty_capture = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
+)
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -151,10 +159,7 @@ class TestRunShare:
 
 
 class TestCmdShareRelativeEndpoint:
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-    )
+    @skip_no_pty_capture
     def test_relative_ws_endpoint_resolved(self) -> None:
         """Line 192-193: relative /tunnel/... resolved to full wss:// URL."""
         resp = {**_TUNNEL_RESPONSE, "ws_endpoint": "/tunnel/tun-abc123"}
@@ -214,10 +219,7 @@ class TestBridgeLoopExceptions:
 
 
 class TestCmdShareCleanup:
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-    )
+    @skip_no_pty_capture
     def test_pty_close_called_on_normal_exit(self) -> None:
         """Line 192-193: pty_source.close() called in finally."""
         mock_pty = MagicMock()

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import stat as stat_module
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -243,15 +244,20 @@ class TestHostKeyPermissions:
 
         real_stat = key_path.stat()
 
-        # Fake stat result where st_uid differs from current uid.
+        # Fake stat result isolating the ownership check: a deterministic
+        # regular-file 0o600 mode (not the host's real one, which on Windows
+        # can never actually read back as 0o600) so only st_uid differs.
         class _FakeStat:
-            st_mode = real_stat.st_mode
+            st_mode = stat_module.S_IFREG | 0o600
             st_uid = real_stat.st_uid + 1
             st_gid = real_stat.st_gid
 
-        # getuid() doesn't exist on Windows; force its presence so this test
-        # is deterministic regardless of the host OS running the suite.
+        # The ownership check only applies on POSIX (getuid() doesn't exist on
+        # Windows, which now returns before reaching it entirely); force both
+        # so this test is deterministic regardless of the host OS running the
+        # suite.
         with (
+            patch("provide.uterm.transports.ssh.os.name", "posix"),
             patch("provide.uterm.transports.ssh.os.getuid", return_value=real_stat.st_uid, create=True),
             patch("provide.uterm.transports.ssh.os.stat", return_value=_FakeStat),
         ):

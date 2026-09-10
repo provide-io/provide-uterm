@@ -12,10 +12,16 @@ import stat
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from provide.telemetry import get_logger
+
 from provide.uterm.ansi import DEFAULT_PALETTE
 
 if TYPE_CHECKING:
     from io import TextIOWrapper
+
+logger = get_logger(__name__)
+
+_warned_no_symlink_guard = False
 
 
 def _ensure_owner_only_dir(directory: Path, *, mode: int) -> None:
@@ -23,14 +29,26 @@ def _ensure_owner_only_dir(directory: Path, *, mode: int) -> None:
     directory.chmod(mode)
 
 
+def try_fchmod(fd: int, mode: int) -> None:
+    """Best-effort ``os.fchmod`` — a silent no-op where it doesn't exist (Windows)."""
+    if hasattr(os, "fchmod"):
+        os.fchmod(fd, mode)
+
+
 def secure_create(path: Path | str, *, mode: int = 0o600, dir_mode: int = 0o700) -> int:
     """Create/open *path* for append with owner-only permissions and no symlink following.
 
     ``O_NOFOLLOW`` and ``fchmod`` have no Windows equivalent (Windows lacks both
     symlink-following flags and POSIX permission bits on file descriptors), so
-    both are applied only when the platform's ``os`` module exposes them; on
-    Windows the symlink-refusal and owner-only-mode guarantees are unavailable.
+    both are applied only when the platform's ``os`` module exposes them. On
+    Windows this means the symlink-refusal and owner-only-mode guarantees are
+    UNAVAILABLE, not merely reduced — a warning is logged once per process so
+    the gap is visible at runtime rather than only in this docstring.
     """
+    global _warned_no_symlink_guard
+    if not hasattr(os, "O_NOFOLLOW") and not _warned_no_symlink_guard:
+        _warned_no_symlink_guard = True
+        logger.warning("secure_create_symlink_guard_unavailable_on_windows")
     target = Path(path)
     _ensure_owner_only_dir(target.parent, mode=dir_mode)
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
@@ -39,8 +57,7 @@ def secure_create(path: Path | str, *, mode: int = 0o600, dir_mode: int = 0o700)
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
             raise OSError(f"Refusing to open non-regular recording sink: {target}")
-        if hasattr(os, "fchmod"):
-            os.fchmod(fd, mode)
+        try_fchmod(fd, mode)
     except BaseException:
         os.close(fd)
         raise

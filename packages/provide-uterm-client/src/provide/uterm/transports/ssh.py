@@ -234,20 +234,24 @@ def _default_host_key_dir() -> Path:
 def _verify_key_permissions(key_path: Path) -> None:
     """Raise if *key_path* is not 0600 and owned by the current user.
 
-    POSIX mode bits don't exist on Windows — ``os.stat().st_mode`` there is
-    synthesized from the read-only attribute and can never read back as
-    0o600, so the mode check is skipped on Windows rather than rejecting
-    every host key after the one that created it.
+    POSIX mode bits and uid ownership don't exist on Windows — ``os.stat()``
+    there can never read back mode 0o600 and has no meaningful ``st_uid``, so
+    on Windows this performs NO enforcement at all (not merely a reduced
+    check) and only logs a warning instead of raising. A real Windows-native
+    substitute would need an ACL/SID check (e.g. via ``pywin32``), which this
+    package doesn't depend on — out of scope here.
     """
+    if os.name == "nt":  # pragma: no cover - exercised only on Windows CI
+        logger.warning("ssh_host_key_permission_check_unavailable_on_windows", path=str(key_path))
+        return
     st = key_path.stat()
-    if os.name != "nt":
-        mode = stat_module.S_IMODE(st.st_mode)
-        if mode != 0o600:
-            raise PermissionError(
-                f"refusing to load SSH host key with insecure mode {oct(mode)} (expected 0o600): {key_path}"
-            )
-    current_uid = os.getuid() if hasattr(os, "getuid") else None  # pragma: no cover - non-POSIX
-    if current_uid is not None and st.st_uid != current_uid:
+    mode = stat_module.S_IMODE(st.st_mode)
+    if mode != 0o600:
+        raise PermissionError(
+            f"refusing to load SSH host key with insecure mode {oct(mode)} (expected 0o600): {key_path}"
+        )
+    current_uid = os.getuid()
+    if st.st_uid != current_uid:
         raise PermissionError(
             f"refusing to load SSH host key owned by uid {st.st_uid} (current uid {current_uid}): {key_path}"
         )
