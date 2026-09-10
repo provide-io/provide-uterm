@@ -16,6 +16,8 @@ from provide.uterm.cli.share import (
     _display_name,
 )
 
+from .conftest import skip_no_pty_capture
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -150,13 +152,14 @@ class TestRunShare:
 
 
 class TestCmdShareRelativeEndpoint:
+    @skip_no_pty_capture
     def test_relative_ws_endpoint_resolved(self) -> None:
         """Line 192-193: relative /tunnel/... resolved to full wss:// URL."""
         resp = {**_TUNNEL_RESPONSE, "ws_endpoint": "/tunnel/tun-abc123"}
         mock_pty = MagicMock()
         with (
             patch("provide.uterm.cli.share._create_tunnel", return_value=resp),
-            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
+            patch("provide.uterm.tunnel.pty_capture.spawn_pty", return_value=mock_pty),
             patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro) as mock_run,
         ):
             _cmd_share(_make_args())
@@ -209,12 +212,13 @@ class TestBridgeLoopExceptions:
 
 
 class TestCmdShareCleanup:
+    @skip_no_pty_capture
     def test_pty_close_called_on_normal_exit(self) -> None:
         """Line 192-193: pty_source.close() called in finally."""
         mock_pty = MagicMock()
         with (
             patch("provide.uterm.cli.share._create_tunnel", return_value=_TUNNEL_RESPONSE),
-            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
+            patch("provide.uterm.tunnel.pty_capture.spawn_pty", return_value=mock_pty),
             patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro),
         ):
             _cmd_share(_make_args())

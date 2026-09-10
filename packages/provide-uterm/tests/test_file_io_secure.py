@@ -6,10 +6,18 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
 
 import pytest
 
+import provide.uterm.file_io as file_io_mod
 from provide.uterm.file_io import secure_create, secure_open_append
+
+# Windows has no POSIX permission bits: st_mode is synthesized purely from the
+# read-only attribute, so it never reads back as the exact 0o700/0o600 this
+# package requests. Exact-mode assertions are POSIX-only; Windows coverage
+# below checks the write succeeds instead.
+_EXACT_MODE_BITS_SUPPORTED = sys.platform != "win32"
 
 
 def test_secure_open_append_creates_owner_only_file_and_parent(tmp_path) -> None:
@@ -18,8 +26,9 @@ def test_secure_open_append_creates_owner_only_file_and_parent(tmp_path) -> None
     with secure_open_append(path) as handle:
         handle.write("one\n")
 
-    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if _EXACT_MODE_BITS_SUPPORTED:
+        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert path.read_text(encoding="utf-8") == "one\n"
 
 
@@ -39,16 +48,73 @@ def test_secure_create_returns_owner_only_fd(tmp_path) -> None:
     fd = secure_create(path)
     os.close(fd)
 
-    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if _EXACT_MODE_BITS_SUPPORTED:
+        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert path.exists()
 
 
 def test_secure_open_append_refuses_symlink(tmp_path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("target", encoding="utf-8")
     link = tmp_path / "link.txt"
-    link.symlink_to(target)
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        # Creating a symlink itself needs Developer Mode/admin on Windows;
+        # skip there rather than fail on an environment limitation unrelated
+        # to what this test actually verifies.
+        pytest.skip(f"cannot create symlinks in this environment: {exc}")
 
     with pytest.raises(OSError):
         with secure_open_append(link):
             pass
+
+
+def test_secure_create_succeeds_without_o_nofollow(monkeypatch, tmp_path) -> None:
+    """Platforms lacking O_NOFOLLOW (Windows) fall back to opening without it."""
+    monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
+    path = tmp_path / "no_nofollow" / "file.txt"
+
+    fd = secure_create(path)
+    os.close(fd)
+
+    assert path.exists()
+
+
+def test_secure_create_refuses_symlink_without_o_nofollow(monkeypatch, tmp_path) -> None:
+    """Windows-only pre-open symlink check: covers both the warn-once branch
+    and its already-warned skip, since neither is reachable alone — the
+    no-O_NOFOLLOW test above never targets a symlink, and the symlink test
+    above never removes O_NOFOLLOW (so real O_NOFOLLOW catches it first)."""
+    monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
+    monkeypatch.setattr(file_io_mod, "_warned_no_symlink_guard", False)
+
+    plain = tmp_path / "plain.txt"
+    fd = secure_create(plain)
+    os.close(fd)
+    assert file_io_mod._warned_no_symlink_guard is True
+
+    target = tmp_path / "target.txt"
+    target.write_text("target", encoding="utf-8")
+    link = tmp_path / "link.txt"
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"cannot create symlinks in this environment: {exc}")
+
+    # Already warned (set above) -- this call takes the 54->57 skip branch
+    # and then hits the symlink refusal at line 58.
+    with pytest.raises(OSError):
+        secure_create(link)
+
+
+def test_secure_create_succeeds_without_fchmod(monkeypatch, tmp_path) -> None:
+    """Platforms lacking fchmod (Windows) skip the post-open chmod instead of raising."""
+    monkeypatch.delattr(os, "fchmod", raising=False)
+    path = tmp_path / "no_fchmod" / "file.txt"
+
+    fd = secure_create(path)
+    os.close(fd)
+
+    assert path.exists()

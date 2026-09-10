@@ -52,8 +52,8 @@ from pathlib import Path
 from typing import Any
 
 from provide.uterm.cli import share as cli_share
-
 from provide.uterm.tunnel import protocol as tunnel_protocol
+from provide.uterm.tunnel import pty_capture
 
 OUT = Path(__file__).resolve().parent / "share_golden.json"
 
@@ -300,15 +300,18 @@ def _run_command(name: str, args: argparse.Namespace, tunnel_info: dict[str, Any
 
     real_create = cli_share._create_tunnel
     real_run = cli_share._run_share
-    real_spawn = cli_share.spawn_pty
-    real_proxy = cli_share.TtyProxy
+    real_spawn = pty_capture.spawn_pty
+    real_proxy = pty_capture.TtyProxy
     stdout, stderr = io.StringIO(), io.StringIO()
     exit_code: int | None = None
     try:
         cli_share._create_tunnel = fake_create  # type: ignore[assignment]
         cli_share._run_share = fake_run_share  # type: ignore[assignment]
-        cli_share.spawn_pty = lambda cmd: RecordingPty(log, f"spawned:{cmd}")  # type: ignore[assignment]
-        cli_share.TtyProxy = lambda: RecordingPty(log, "attached")  # type: ignore[assignment]
+        # _cmd_share imports spawn_pty/TtyProxy locally (deferred so the POSIX-only
+        # pty_capture module doesn't break the rest of the CLI on Windows), so the
+        # patch target is the pty_capture module itself, not cli_share's namespace.
+        pty_capture.spawn_pty = lambda cmd: RecordingPty(log, f"spawned:{cmd}")  # type: ignore[assignment]
+        pty_capture.TtyProxy = lambda: RecordingPty(log, "attached")  # type: ignore[assignment]
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             try:
                 cli_share._cmd_share(args)
@@ -317,8 +320,8 @@ def _run_command(name: str, args: argparse.Namespace, tunnel_info: dict[str, Any
     finally:
         cli_share._create_tunnel = real_create  # type: ignore[assignment]
         cli_share._run_share = real_run  # type: ignore[assignment]
-        cli_share.spawn_pty = real_spawn  # type: ignore[assignment]
-        cli_share.TtyProxy = real_proxy  # type: ignore[assignment]
+        pty_capture.spawn_pty = real_spawn  # type: ignore[assignment]
+        pty_capture.TtyProxy = real_proxy  # type: ignore[assignment]
 
     return {
         "name": name,

@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import sys
+
+if sys.platform == "win32":
+    raise ImportError(
+        "provide.uterm.pty requires POSIX pty/fcntl/termios/pwd/PAM support and is not available on Windows"
+    )
+
 from provide.uterm.pty._validate import (
     validate_command,
     validate_env,

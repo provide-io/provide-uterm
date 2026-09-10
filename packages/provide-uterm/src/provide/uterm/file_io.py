@@ -12,10 +12,16 @@ import stat
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from provide.telemetry import get_logger
+
 from provide.uterm.ansi import DEFAULT_PALETTE
 
 if TYPE_CHECKING:
     from io import TextIOWrapper
+
+logger = get_logger(__name__)
+
+_warned_no_symlink_guard = False
 
 
 def _ensure_owner_only_dir(directory: Path, *, mode: int) -> None:
@@ -23,16 +29,41 @@ def _ensure_owner_only_dir(directory: Path, *, mode: int) -> None:
     directory.chmod(mode)
 
 
+def try_fchmod(fd: int, mode: int) -> None:
+    """Best-effort ``os.fchmod`` — a silent no-op where it doesn't exist (Windows)."""
+    if hasattr(os, "fchmod"):
+        os.fchmod(fd, mode)
+
+
 def secure_create(path: Path | str, *, mode: int = 0o600, dir_mode: int = 0o700) -> int:
-    """Create/open *path* for append with owner-only permissions and no symlink following."""
+    """Create/open *path* for append with owner-only permissions and no symlink following.
+
+    ``O_NOFOLLOW`` and ``fchmod`` have no Windows equivalent (Windows lacks both
+    symlink-following flags and POSIX permission bits on file descriptors), so
+    both are applied only when the platform's ``os`` module exposes them. On
+    Windows the owner-only-mode guarantee is UNAVAILABLE, and the symlink
+    refusal below is a pre-open check rather than ``O_NOFOLLOW``'s atomic
+    kernel-level one — it closes the common case (a symlink planted before
+    this call) but not a race where one is swapped in between the check and
+    the open. A warning is logged once per process so the gap is visible at
+    runtime rather than only in this docstring.
+    """
+    global _warned_no_symlink_guard
     target = Path(path)
+    if not hasattr(os, "O_NOFOLLOW"):
+        if not _warned_no_symlink_guard:
+            _warned_no_symlink_guard = True
+            logger.warning("secure_create_symlink_guard_unavailable_on_windows")
+        if target.is_symlink():
+            raise OSError(f"Refusing to open symlink as a recording sink: {target}")
     _ensure_owner_only_dir(target.parent, mode=dir_mode)
-    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, mode)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(target, flags, mode)
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
             raise OSError(f"Refusing to open non-regular recording sink: {target}")
-        os.fchmod(fd, mode)
+        try_fchmod(fd, mode)
     except BaseException:
         os.close(fd)
         raise

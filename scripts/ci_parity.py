@@ -48,7 +48,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -62,7 +64,7 @@ _WORKFLOW = _ROOT / ".github/workflows/ci.yml"
 #: Expression fragments resolvable without a GitHub context. ``runner.temp``
 #: gets a real local directory because steps write artifacts into it.
 _STATIC_CONTEXT = {
-    "runner.os": {"Darwin": "macOS", "Linux": "Linux", "Windows": "Windows_NT"}.get(os.uname().sysname, "Linux"),
+    "runner.os": {"Darwin": "macOS", "Linux": "Linux", "Windows": "Windows_NT"}.get(platform.system(), "Linux"),
     "github.run_attempt": "1",
     "github.run_id": "0",
     "github.workflow": "CI",
@@ -94,6 +96,54 @@ _SETUP_MARKERS = ("npm ci", "uv sync", "playwright install", "npm run build:fron
 
 class UnresolvedError(RuntimeError):
     """An expression or condition the tool refuses to guess at."""
+
+
+def _find_bash() -> str | None:
+    """Find a real (Git Bash) ``bash.exe`` on Windows, skipping the WSL stub.
+
+    ``%SystemRoot%\\System32\\bash.exe`` (and ``\\Sysnative\\bash.exe``) isn't a
+    shell -- it launches a registered WSL distro with translated cwd/env that
+    don't match this process's Windows paths, so it can't run the workflow's
+    bash steps the way Git Bash does. `shutil.which` returns only the first
+    PATH match, which is often that stub if System32 sorts before Git's bin
+    dir -- so walk PATH ourselves first and skip it.
+
+    A standard Git for Windows install, though, doesn't put `bash.exe`'s own
+    directory on PATH at all -- only `Git\\cmd` (holding `git.exe`) is added by
+    default, so the PATH walk above finds nothing there. `git.exe` itself IS
+    reliably on PATH for anyone this tool is useful to, so fall back to
+    deriving bash's location from wherever git.exe actually lives. Its install
+    layout varies (`Git\\cmd\\git.exe`, or an arch-specific `Git\\<arch>\\bin\\
+    git.exe`), so walk up from it rather than assume one fixed depth, checking
+    `bin\\bash.exe` / `usr\\bin\\bash.exe` at each ancestor.
+    """
+    system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+    stub_dirs = {str(Path(system_root, "System32")).lower(), str(Path(system_root, "Sysnative")).lower()}
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if not directory or directory.rstrip("\\/").lower() in stub_dirs:
+            continue
+        candidate = Path(directory, "bash.exe")
+        if candidate.is_file():
+            return str(candidate)
+
+    git_exe = shutil.which("git")
+    if git_exe is None:
+        return None
+    ancestor = Path(git_exe).resolve().parent
+    for _ in range(4):
+        for candidate in (ancestor / "bin" / "bash.exe", ancestor / "usr" / "bin" / "bash.exe"):
+            if candidate.is_file():
+                return str(candidate)
+        if ancestor.parent == ancestor:
+            break
+        ancestor = ancestor.parent
+    return None
+
+
+#: Every ``run:`` step is bash (heredocs, &&, $GITHUB_ENV) parsed straight out
+#: of the workflow. `shell=True` dispatches through cmd.exe on Windows, which
+#: cannot parse that syntax -- so Windows needs bash named explicitly.
+_BASH = _find_bash() if sys.platform == "win32" else None
 
 
 def _load_jobs() -> dict[str, Any]:
@@ -240,6 +290,14 @@ def _run(job_name: str, args: argparse.Namespace) -> int:
     temp_dir = _ROOT / ".ci-parity-tmp"
     temp_dir.mkdir(exist_ok=True)
 
+    if not args.print_only and sys.platform == "win32" and _BASH is None:
+        raise SystemExit(
+            "ci-job execution reproduces the workflow's `run:` steps verbatim, which are bash "
+            "(&&, heredocs, $GITHUB_ENV) -- cmd.exe cannot parse them. No `bash` was found on PATH. "
+            "Install Git for Windows (provides Git Bash) and re-run from there, or pass --print to "
+            "see the commands without executing them."
+        )
+
     context = _context_for(job, selections, temp_dir)
     chosen = "  ".join(f"{key.split('.', 1)[1]}={value}" for key, value in context.items() if key.startswith("matrix."))
     print(f"== {job_name} =={('  ' + chosen) if chosen else ''}", flush=True)
@@ -270,9 +328,21 @@ def _run(job_name: str, args: argparse.Namespace) -> int:
         print(f"\n$ {command.strip()}", flush=True)
         if args.print_only:
             continue
-        completed = subprocess.run(  # noqa: S602 - the workflow's own shell commands, by design
-            command, shell=True, cwd=_ROOT, env={**base_env, **step["env"]}, check=False
-        )
+        run_env = {**base_env, **step["env"]}
+        if sys.platform == "win32":
+            # shell=True + executable=<path> does not quote a spaced path (e.g.
+            # "C:\Program Files\Git\...\bash.exe") when building the Windows
+            # command line, so invoke bash directly instead of through cmd.exe.
+            # mypy can't carry the `_BASH is None` guard's narrowing from
+            # earlier in this function across to this module-level global --
+            # reasserted here (guaranteed true: args.print_only is False past
+            # the `continue` above, and the guard already raised otherwise).
+            assert _BASH is not None
+            completed = subprocess.run([_BASH, "-c", command], cwd=_ROOT, env=run_env, check=False)
+        else:
+            completed = subprocess.run(  # noqa: S602 - the workflow's own shell commands, by design
+                command, shell=True, cwd=_ROOT, env=run_env, check=False
+            )
         if completed.returncode != 0:
             print(f"\nFAILED: {step['name']} (exit {completed.returncode})", file=sys.stderr)
             return completed.returncode
