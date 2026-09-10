@@ -193,6 +193,16 @@ def _cmd_share(args: argparse.Namespace) -> None:
         ws_base = server.rstrip("/").replace("http://", "ws://").replace("https://", "wss://")
         ws_endpoint = f"{ws_base}{ws_endpoint}"
 
+    # Imported here (not at module scope) so `uterm` as a whole stays importable
+    # on platforms without a real PTY (Windows) — `share` itself is POSIX-only.
+    # Checked before printing "Connected" so an unsupported platform fails
+    # cleanly here rather than claiming success and crashing mid-session.
+    try:
+        from provide.uterm.tunnel.pty_capture import TtyProxy, spawn_pty
+    except ImportError as exc:
+        print(f"error: 'uterm share' requires POSIX PTY support, unavailable on this platform: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     # 2. Print URLs
     print("Sharing terminal session...")
     print(f"  View:    {share_url}")
@@ -201,10 +211,6 @@ def _cmd_share(args: argparse.Namespace) -> None:
     print("Connected. Press Ctrl+C to stop sharing.")
 
     # 3. Spawn PTY or attach to TTY
-    # Imported here (not at module scope) so `uterm` as a whole stays importable
-    # on platforms without a real PTY (Windows) — `share` itself is POSIX-only.
-    from provide.uterm.tunnel.pty_capture import TtyProxy, spawn_pty
-
     if attach:
         pty_source: SpawnedPty | TtyProxy = TtyProxy()
         pty_source.start()  # type: ignore[union-attr]

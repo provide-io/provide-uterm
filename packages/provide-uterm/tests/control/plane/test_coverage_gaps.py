@@ -180,6 +180,31 @@ def test_resolve_database_path_windows_drive_letter() -> None:
     assert resolve_database_path("sqlite:///C:/Users/tim/data.db") == "C:/Users/tim/data.db"
 
 
+def test_resolve_database_path_windows_bare_drive_root() -> None:
+    # No trailing segment after the drive letter ("sqlite:///C:", not
+    # "sqlite:///C:/...") -- the lookahead must still strip the spurious "/".
+    assert resolve_database_path("sqlite:///C:") == "C:"
+
+
+def test_resolve_database_path_netloc_preserved() -> None:
+    # A real host component (3-slash-with-authority form) is preserved, not
+    # silently dropped.
+    assert resolve_database_path("sqlite://host/data.db") == "//host/data.db"
+
+
+def test_resolve_database_path_two_slash_drive_letter_typo() -> None:
+    # "sqlite://C:/..." (missing the 3rd slash) puts the drive letter in
+    # netloc instead of path -- it's a mistyped drive-anchored path, not a
+    # real host, and must resolve the same as the 3-slash form.
+    assert resolve_database_path("sqlite://C:/Users/tim/data.db") == "C:/Users/tim/data.db"
+
+
+def test_resolve_database_path_netloc_with_windows_drive_path() -> None:
+    # A real host with a Windows-drive-shaped path after it: the drive-letter
+    # slash-stripping and the netloc-preservation logic both apply.
+    assert resolve_database_path("sqlite://host/C:/data.db") == "//host/C:/data.db"
+
+
 async def test_connect_sqlite_creates_parent_and_wal(tmp_path: Path) -> None:
     db = tmp_path / "nested" / "dir" / "cp.db"
     conn = await connect_sqlite(str(db), wal=True)

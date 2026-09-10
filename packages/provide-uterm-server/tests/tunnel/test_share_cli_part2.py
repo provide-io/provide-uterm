@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,13 +16,7 @@ from provide.uterm.cli.share import (
     _display_name,
 )
 
-#: tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and
-#: unimportable on Windows -- applied per-test since other tests in these
-#: classes don't touch pty_capture and run fine on Windows.
-skip_no_pty_capture = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-)
+from .conftest import skip_no_pty_capture
 
 # ---------------------------------------------------------------------------
 # Fixtures

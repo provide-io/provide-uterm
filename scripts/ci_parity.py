@@ -50,7 +50,6 @@ import argparse
 import os
 import platform
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -106,8 +105,10 @@ def _find_bash() -> str | None:
     don't match this process's Windows paths, so it can't run the workflow's
     bash steps the way Git Bash does. `shutil.which` returns only the first
     PATH match, which is often that stub if System32 sorts before Git's bin
-    dir -- so walk PATH ourselves and skip it, falling back to `which` only if
-    nothing else is found.
+    dir -- so walk PATH ourselves and skip it. No `shutil.which` fallback: that
+    would just re-match the same stub this loop exists to avoid, silently
+    undoing the skip -- returning None here correctly triggers the "install
+    Git Bash" error instead of running the wrong bash.
     """
     system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
     stub_dirs = {str(Path(system_root, "System32")).lower(), str(Path(system_root, "Sysnative")).lower()}
@@ -117,7 +118,7 @@ def _find_bash() -> str | None:
         candidate = Path(directory, "bash.exe")
         if candidate.is_file():
             return str(candidate)
-    return shutil.which("bash")
+    return None
 
 
 #: Every ``run:`` step is bash (heredocs, &&, $GITHUB_ENV) parsed straight out

@@ -18,6 +18,12 @@ import aiosqlite
 # ("sqlite:///C:" -> path "/C:"), not just "/C:/...".
 _WINDOWS_DRIVE_PATH_RE = re.compile(r"^/[A-Za-z]:(?=[/\\]|$)")
 
+# sqlite://C:/Users/... (2 slashes, missing the 3rd) puts the drive letter in
+# netloc instead of path ("C:", "/Users/...") -- a malformed-but-common typo
+# of the 3-slash form, not a real host, so it's special-cased ahead of the
+# general netloc handling below.
+_DRIVE_LETTER_NETLOC_RE = re.compile(r"^[A-Za-z]:$")
+
 
 class SqliteConnectionError(RuntimeError):
     """Raised when a SQLite control-plane connection cannot be initialized."""
@@ -32,6 +38,8 @@ def resolve_database_path(database_url: str) -> str:
         path = unquote(parsed.path or "")
         if path in {"", "/:memory:", ":memory:"}:
             return ":memory:"
+        if _DRIVE_LETTER_NETLOC_RE.match(parsed.netloc):
+            return f"{parsed.netloc}{path}"
         if _WINDOWS_DRIVE_PATH_RE.match(path):
             path = path[1:]
         if parsed.netloc:

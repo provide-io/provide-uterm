@@ -24,14 +24,7 @@ from provide.uterm.cli.share import (
     _read_token,
 )
 
-#: tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and
-#: unimportable on Windows -- applied per-test rather than at class/module
-#: level because several tests in the same classes don't touch pty_capture
-#: and run fine on Windows.
-skip_no_pty_capture = pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
-)
+from .conftest import skip_no_pty_capture
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -247,6 +240,22 @@ class TestCmdShare:
             "provide.uterm.cli.share._create_tunnel",
             return_value=resp or _TUNNEL_RESPONSE,
         )
+
+    def test_pty_capture_unavailable_exits_cleanly_before_connected(
+        self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """On a platform without pty_capture (e.g. Windows), fail before printing 'Connected'."""
+        monkeypatch.setitem(sys.modules, "provide.uterm.tunnel.pty_capture", None)
+
+        with (
+            self._mock_create_tunnel(),
+            patch("provide.uterm.cli.share._read_token", return_value=None),
+            pytest.raises(SystemExit),
+        ):
+            _cmd_share(_make_args())
+
+        out = capsys.readouterr().out
+        assert "Connected" not in out
 
     @skip_no_pty_capture
     def test_spawn_mode(self, capsys: pytest.CaptureFixture[str]) -> None:
