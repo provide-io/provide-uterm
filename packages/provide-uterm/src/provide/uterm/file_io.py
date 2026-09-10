@@ -24,15 +24,23 @@ def _ensure_owner_only_dir(directory: Path, *, mode: int) -> None:
 
 
 def secure_create(path: Path | str, *, mode: int = 0o600, dir_mode: int = 0o700) -> int:
-    """Create/open *path* for append with owner-only permissions and no symlink following."""
+    """Create/open *path* for append with owner-only permissions and no symlink following.
+
+    ``O_NOFOLLOW`` and ``fchmod`` have no Windows equivalent (Windows lacks both
+    symlink-following flags and POSIX permission bits on file descriptors), so
+    both are applied only when the platform's ``os`` module exposes them; on
+    Windows the symlink-refusal and owner-only-mode guarantees are unavailable.
+    """
     target = Path(path)
     _ensure_owner_only_dir(target.parent, mode=dir_mode)
-    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, mode)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(target, flags, mode)
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
             raise OSError(f"Refusing to open non-regular recording sink: {target}")
-        os.fchmod(fd, mode)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, mode)
     except BaseException:
         os.close(fd)
         raise

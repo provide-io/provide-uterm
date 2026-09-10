@@ -48,7 +48,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -62,7 +64,7 @@ _WORKFLOW = _ROOT / ".github/workflows/ci.yml"
 #: Expression fragments resolvable without a GitHub context. ``runner.temp``
 #: gets a real local directory because steps write artifacts into it.
 _STATIC_CONTEXT = {
-    "runner.os": {"Darwin": "macOS", "Linux": "Linux", "Windows": "Windows_NT"}.get(os.uname().sysname, "Linux"),
+    "runner.os": {"Darwin": "macOS", "Linux": "Linux", "Windows": "Windows_NT"}.get(platform.system(), "Linux"),
     "github.run_attempt": "1",
     "github.run_id": "0",
     "github.workflow": "CI",
@@ -94,6 +96,12 @@ _SETUP_MARKERS = ("npm ci", "uv sync", "playwright install", "npm run build:fron
 
 class UnresolvedError(RuntimeError):
     """An expression or condition the tool refuses to guess at."""
+
+
+#: Every ``run:`` step is bash (heredocs, &&, $GITHUB_ENV) parsed straight out
+#: of the workflow. `shell=True` dispatches through cmd.exe on Windows, which
+#: cannot parse that syntax -- so Windows needs bash named explicitly.
+_BASH = shutil.which("bash") if sys.platform == "win32" else None
 
 
 def _load_jobs() -> dict[str, Any]:
@@ -240,6 +248,14 @@ def _run(job_name: str, args: argparse.Namespace) -> int:
     temp_dir = _ROOT / ".ci-parity-tmp"
     temp_dir.mkdir(exist_ok=True)
 
+    if not args.print_only and sys.platform == "win32" and _BASH is None:
+        raise SystemExit(
+            "ci-job execution reproduces the workflow's `run:` steps verbatim, which are bash "
+            "(&&, heredocs, $GITHUB_ENV) -- cmd.exe cannot parse them. No `bash` was found on PATH. "
+            "Install Git for Windows (provides Git Bash) and re-run from there, or pass --print to "
+            "see the commands without executing them."
+        )
+
     context = _context_for(job, selections, temp_dir)
     chosen = "  ".join(f"{key.split('.', 1)[1]}={value}" for key, value in context.items() if key.startswith("matrix."))
     print(f"== {job_name} =={('  ' + chosen) if chosen else ''}", flush=True)
@@ -270,9 +286,16 @@ def _run(job_name: str, args: argparse.Namespace) -> int:
         print(f"\n$ {command.strip()}", flush=True)
         if args.print_only:
             continue
-        completed = subprocess.run(  # noqa: S602 - the workflow's own shell commands, by design
-            command, shell=True, cwd=_ROOT, env={**base_env, **step["env"]}, check=False
-        )
+        run_env = {**base_env, **step["env"]}
+        if sys.platform == "win32":
+            # shell=True + executable=<path> does not quote a spaced path (e.g.
+            # "C:\Program Files\Git\...\bash.exe") when building the Windows
+            # command line, so invoke bash directly instead of through cmd.exe.
+            completed = subprocess.run([_BASH, "-c", command], cwd=_ROOT, env=run_env, check=False)
+        else:
+            completed = subprocess.run(  # noqa: S602 - the workflow's own shell commands, by design
+                command, shell=True, cwd=_ROOT, env=run_env, check=False
+            )
         if completed.returncode != 0:
             print(f"\nFAILED: {step['name']} (exit {completed.returncode})", file=sys.stderr)
             return completed.returncode

@@ -377,6 +377,7 @@ def main() -> int:
 
     table_summary = _print_result_table(results)
     if args.output_json:
+        Path(args.output_json).parent.mkdir(parents=True, exist_ok=True)
         Path(args.output_json).write_text(
             json.dumps(
                 {

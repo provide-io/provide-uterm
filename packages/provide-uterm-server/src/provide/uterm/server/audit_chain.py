@@ -205,8 +205,10 @@ class AuditChain:
         try:
             # Enforce 0600 even if the file pre-existed with looser perms — an
             # audit log must never be world-readable. fchmod targets the open fd
-            # (no TOCTOU on the path).
-            os.fchmod(fd, 0o600)
+            # (no TOCTOU on the path). Not available on Windows, which has no
+            # POSIX permission bits — best-effort no-op there.
+            if hasattr(os, "fchmod"):  # pragma: no branch — always true on POSIX CI
+                os.fchmod(fd, 0o600)
             os.write(fd, line.encode("utf-8"))
             os.fsync(fd)
         finally:

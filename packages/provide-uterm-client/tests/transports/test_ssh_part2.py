@@ -207,8 +207,29 @@ class TestHostKeyPermissions:
         key_path.write_bytes(existing.export_private_key())
         key_path.chmod(0o644)  # too permissive
 
-        with pytest.raises(PermissionError, match="insecure mode"):
+        # The mode check only applies on POSIX; force that branch so this test
+        # is deterministic regardless of the host OS running the suite.
+        with (
+            patch("provide.uterm.transports.ssh.os.name", "posix"),
+            pytest.raises(PermissionError, match="insecure mode"),
+        ):
             _get_or_create_host_key(tmp_path)
+
+    def test_windows_skips_mode_check(self, tmp_path) -> None:
+        """POSIX mode bits don't exist on Windows; the mode check must be skipped there."""
+        import asyncssh
+
+        from provide.uterm.transports.ssh import _get_or_create_host_key
+
+        existing = asyncssh.generate_private_key("ssh-ed25519")
+        key_path = tmp_path / "ssh_host_key"
+        key_path.write_bytes(existing.export_private_key())
+        key_path.chmod(0o644)  # would fail the POSIX mode check below
+
+        with patch("provide.uterm.transports.ssh.os.name", "nt"):
+            key = _get_or_create_host_key(tmp_path)
+
+        assert key is not None
 
     def test_rejects_foreign_owned_key(self, tmp_path) -> None:
         import asyncssh
@@ -228,7 +249,12 @@ class TestHostKeyPermissions:
             st_uid = real_stat.st_uid + 1
             st_gid = real_stat.st_gid
 
-        with patch("provide.uterm.transports.ssh.os.stat", return_value=_FakeStat):
+        # getuid() doesn't exist on Windows; force its presence so this test
+        # is deterministic regardless of the host OS running the suite.
+        with (
+            patch("provide.uterm.transports.ssh.os.getuid", return_value=real_stat.st_uid, create=True),
+            patch("provide.uterm.transports.ssh.os.stat", return_value=_FakeStat),
+        ):
             with pytest.raises(PermissionError, match="owned by uid"):
                 _get_or_create_host_key(tmp_path)
 

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -59,12 +60,14 @@ class TestAppend:
         assert records[1]["prev_hash"] == records[0]["record_hash"]
         assert records[2]["prev_hash"] == records[1]["record_hash"]
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits have no Windows equivalent")
     def test_file_mode_is_0600(self, tmp_path: Path) -> None:
         path = tmp_path / "audit.log"
         chain = _fixed_chain(path)
         chain.append("session.create")
         assert oct(path.stat().st_mode & 0o777) == "0o600"
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits have no Windows equivalent")
     def test_chmod_tightens_preexisting_loose_perms(self, tmp_path: Path) -> None:
         path = tmp_path / "audit.log"
         path.touch(mode=0o644)

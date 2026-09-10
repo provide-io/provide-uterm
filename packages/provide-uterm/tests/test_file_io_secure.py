@@ -6,10 +6,17 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
 
 import pytest
 
 from provide.uterm.file_io import secure_create, secure_open_append
+
+# Windows has no POSIX permission bits: st_mode is synthesized purely from the
+# read-only attribute, so it never reads back as the exact 0o700/0o600 this
+# package requests. Exact-mode assertions are POSIX-only; Windows coverage
+# below checks the write succeeds instead.
+_EXACT_MODE_BITS_SUPPORTED = sys.platform != "win32"
 
 
 def test_secure_open_append_creates_owner_only_file_and_parent(tmp_path) -> None:
@@ -18,8 +25,9 @@ def test_secure_open_append_creates_owner_only_file_and_parent(tmp_path) -> None
     with secure_open_append(path) as handle:
         handle.write("one\n")
 
-    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if _EXACT_MODE_BITS_SUPPORTED:
+        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert path.read_text(encoding="utf-8") == "one\n"
 
 
@@ -39,10 +47,16 @@ def test_secure_create_returns_owner_only_fd(tmp_path) -> None:
     fd = secure_create(path)
     os.close(fd)
 
-    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
-    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    if _EXACT_MODE_BITS_SUPPORTED:
+        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert path.exists()
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="O_NOFOLLOW has no Windows equivalent; secure_create cannot refuse symlinks there",
+)
 def test_secure_open_append_refuses_symlink(tmp_path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("target", encoding="utf-8")
@@ -52,3 +66,25 @@ def test_secure_open_append_refuses_symlink(tmp_path) -> None:
     with pytest.raises(OSError):
         with secure_open_append(link):
             pass
+
+
+def test_secure_create_succeeds_without_o_nofollow(monkeypatch, tmp_path) -> None:
+    """Platforms lacking O_NOFOLLOW (Windows) fall back to opening without it."""
+    monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
+    path = tmp_path / "no_nofollow" / "file.txt"
+
+    fd = secure_create(path)
+    os.close(fd)
+
+    assert path.exists()
+
+
+def test_secure_create_succeeds_without_fchmod(monkeypatch, tmp_path) -> None:
+    """Platforms lacking fchmod (Windows) skip the post-open chmod instead of raising."""
+    monkeypatch.delattr(os, "fchmod", raising=False)
+    path = tmp_path / "no_fchmod" / "file.txt"
+
+    fd = secure_create(path)
+    os.close(fd)
+
+    assert path.exists()

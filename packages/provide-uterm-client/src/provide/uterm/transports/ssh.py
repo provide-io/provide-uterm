@@ -232,13 +232,20 @@ def _default_host_key_dir() -> Path:
 
 
 def _verify_key_permissions(key_path: Path) -> None:
-    """Raise if *key_path* is not 0600 and owned by the current user."""
+    """Raise if *key_path* is not 0600 and owned by the current user.
+
+    POSIX mode bits don't exist on Windows — ``os.stat().st_mode`` there is
+    synthesized from the read-only attribute and can never read back as
+    0o600, so the mode check is skipped on Windows rather than rejecting
+    every host key after the one that created it.
+    """
     st = key_path.stat()
-    mode = stat_module.S_IMODE(st.st_mode)
-    if mode != 0o600:
-        raise PermissionError(
-            f"refusing to load SSH host key with insecure mode {oct(mode)} (expected 0o600): {key_path}"
-        )
+    if os.name != "nt":
+        mode = stat_module.S_IMODE(st.st_mode)
+        if mode != 0o600:
+            raise PermissionError(
+                f"refusing to load SSH host key with insecure mode {oct(mode)} (expected 0o600): {key_path}"
+            )
     current_uid = os.getuid() if hasattr(os, "getuid") else None  # pragma: no cover - non-POSIX
     if current_uid is not None and st.st_uid != current_uid:
         raise PermissionError(

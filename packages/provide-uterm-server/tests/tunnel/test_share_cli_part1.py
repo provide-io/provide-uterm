@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import urllib.error
 from io import BytesIO
 from pathlib import Path
@@ -238,6 +239,10 @@ class TestCmdShare:
             return_value=resp or _TUNNEL_RESPONSE,
         )
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
+    )
     def test_spawn_mode(self, capsys: pytest.CaptureFixture[str]) -> None:
         """Happy path: spawn PTY, connect WS, print URLs."""
         mock_pty = MagicMock()
@@ -245,7 +250,7 @@ class TestCmdShare:
 
         with (
             self._mock_create_tunnel(),
-            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty) as mock_spawn,
+            patch("provide.uterm.tunnel.pty_capture.spawn_pty", return_value=mock_pty) as mock_spawn,
             patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro) as mock_run,
             patch("provide.uterm.cli.share._read_token", return_value="tok"),
         ):
@@ -262,6 +267,10 @@ class TestCmdShare:
         assert _TUNNEL_RESPONSE["control_url"] in out
         assert "Ctrl+C" in out
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
+    )
     def test_attach_mode(self, capsys: pytest.CaptureFixture[str]) -> None:
         """--attach uses TtyProxy instead of spawn_pty."""
         mock_tty = MagicMock()
@@ -270,7 +279,7 @@ class TestCmdShare:
 
         with (
             self._mock_create_tunnel(),
-            patch("provide.uterm.cli.share.TtyProxy", return_value=mock_tty) as mock_cls,
+            patch("provide.uterm.tunnel.pty_capture.TtyProxy", return_value=mock_tty) as mock_cls,
             patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro),
             patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
@@ -281,13 +290,17 @@ class TestCmdShare:
         mock_tty.start.assert_called_once()
         mock_tty.close.assert_called_once()
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
+    )
     def test_default_cmd_is_none(self) -> None:
         """When cmd is empty list, passes None to spawn_pty (uses $SHELL)."""
         mock_pty = MagicMock()
 
         with (
             self._mock_create_tunnel(),
-            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty) as mock_spawn,
+            patch("provide.uterm.tunnel.pty_capture.spawn_pty", return_value=mock_pty) as mock_spawn,
             patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro),
             patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
@@ -296,13 +309,17 @@ class TestCmdShare:
 
         mock_spawn.assert_called_once_with(None)
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
+    )
     def test_keyboard_interrupt_clean_shutdown(self) -> None:
         """Ctrl+C during bridge loop → PTY closed cleanly."""
         mock_pty = MagicMock()
 
         with (
             self._mock_create_tunnel(),
-            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
+            patch("provide.uterm.tunnel.pty_capture.spawn_pty", return_value=mock_pty),
             patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro_then_interrupt),
             patch("provide.uterm.cli.share._read_token", return_value=None),
         ):
@@ -323,13 +340,17 @@ class TestCmdShare:
             args = _make_args()
             _cmd_share(args)
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="tunnel.pty_capture is POSIX-only (unguarded fcntl/pty/termios/tty) and unimportable on Windows",
+    )
     def test_display_name_passed_to_create(self) -> None:
         """--display-name is forwarded to _create_tunnel."""
         mock_pty = MagicMock()
 
         with (
             patch("provide.uterm.cli.share._create_tunnel", return_value=_TUNNEL_RESPONSE) as mock_ct,
-            patch("provide.uterm.cli.share.spawn_pty", return_value=mock_pty),
+            patch("provide.uterm.tunnel.pty_capture.spawn_pty", return_value=mock_pty),
             patch("provide.uterm.cli.share.asyncio.run", side_effect=_close_asyncio_run_coro),
             patch("provide.uterm.cli.share._read_token", return_value="t"),
         ):

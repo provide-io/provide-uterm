@@ -6,14 +6,14 @@
 
 Two complementary subcommands:
 
-``proxy``  (browser WS → telnet/SSH)
+``proxy``  (browser WS -> telnet/SSH)
     Accepts browser WebSocket connections and proxies to a remote BBS.
 
         uterm proxy bbs.example.com 23
         uterm proxy bbs.example.com 23 --port 9000 --path /ws/term
         uterm proxy bbs.example.com 22 --transport ssh
 
-``listen``  (telnet/SSH client → WebSocket server)
+``listen``  (telnet/SSH client -> WebSocket server)
     Accepts traditional telnet and/or SSH clients and proxies to a
     remote WebSocket terminal endpoint.
 
@@ -21,7 +21,7 @@ Two complementary subcommands:
         uterm listen wss://warp.provide.io/ws/terminal --port 2112 --ssh-port 2222
         uterm listen wss://warp.provide.io/ws/terminal --server-key /etc/host_key
 
-``share``  (PTY → tunnel WebSocket → shareable URL)
+``share``  (PTY -> tunnel WebSocket -> shareable URL)
     Shares a terminal session via a remote tunnel server.
 
         uterm share --server https://warp.provide.io
@@ -55,7 +55,7 @@ from provide.uterm.server.models import FITADDON_CDN_DEFAULT, FONTS_CDN_DEFAULT,
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent / "server" / "frontend"
 
 # ---------------------------------------------------------------------------
-# Subcommand: proxy  (WS server → outbound telnet/SSH)
+# Subcommand: proxy  (WS server -> outbound telnet/SSH)
 # ---------------------------------------------------------------------------
 
 
@@ -136,14 +136,14 @@ def _cmd_proxy(args: argparse.Namespace) -> None:
     if _FRONTEND_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR)), name="frontend")
 
-    print(f"uterm proxy  {args.transport}://{args.host}:{args.bbs_port}  →  ws://{args.bind}:{args.port}{args.path}")
+    print(f"uterm proxy  {args.transport}://{args.host}:{args.bbs_port}  ->  ws://{args.bind}:{args.port}{args.path}")
     print(f"  terminal   http://{args.bind}:{args.port}/")
 
     uvicorn.run(app, host=args.bind, port=args.port, log_level="warning")
 
 
 # ---------------------------------------------------------------------------
-# Subcommand: listen  (TCP/SSH server → outbound WebSocket)
+# Subcommand: listen  (TCP/SSH server -> outbound WebSocket)
 # ---------------------------------------------------------------------------
 
 
@@ -221,7 +221,7 @@ async def _run_listen(
         )
         srv = await gw.start(bind, telnet_port)
         servers.append(srv)
-        print(f"uterm listen  telnet://{bind}:{telnet_port}  →  {ws_url}")
+        print(f"uterm listen  telnet://{bind}:{telnet_port}  ->  {ws_url}")
 
     if ssh_port:
         try:
@@ -243,7 +243,7 @@ async def _run_listen(
             if authorized_keys:
                 mode = "required" if require_resolver else "optional"
                 suffix = f"   [pubkey: {authorized_keys} ({mode})]"
-            print(f"uterm listen  ssh://{bind}:{ssh_port}     →  {ws_url}{suffix}")
+            print(f"uterm listen  ssh://{bind}:{ssh_port}     ->  {ws_url}{suffix}")
         except ImportError as exc:
             print(f"warning: SSH gateway disabled — {exc}", file=sys.stderr)
 
@@ -277,7 +277,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # ---- proxy subcommand ----
     proxy_p = sub.add_parser(
         "proxy",
-        help="browser WS → remote telnet/SSH (start a WS server)",
+        help="browser WS -> remote telnet/SSH (start a WS server)",
         description=("Accept browser WebSocket connections and proxy them to a remote telnet/SSH host."),
     )
     proxy_p.add_argument("host", metavar="HOST", help="remote BBS hostname or IP")
@@ -313,7 +313,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # ---- listen subcommand ----
     listen_p = sub.add_parser(
         "listen",
-        help="telnet/SSH client → remote WS server (start a TCP/SSH listener)",
+        help="telnet/SSH client -> remote WS server (start a TCP/SSH listener)",
         description=(
             "Accept traditional telnet and/or SSH clients and proxy them to a remote WebSocket terminal server."
         ),

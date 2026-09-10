@@ -10,10 +10,10 @@ coverage source to include the whole ``control/`` subpackage.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
-
 from provide.uterm.control.plane import ControlPlaneConfig, bootstrap_control_plane
 from provide.uterm.control.plane.approval.types import ApprovalRecord
 from provide.uterm.control.plane.lease.types import LeaseRecord
@@ -170,7 +170,14 @@ def test_resolve_database_path_variants(url: str, expected: str) -> None:
 
 def test_resolve_database_path_absolute_sqlite_scheme(tmp_path: Path) -> None:
     target = tmp_path / "db.sqlite"
-    assert resolve_database_path(f"sqlite:///{target}") == f"/{target}"
+    expected = str(target) if sys.platform == "win32" else f"/{target}"
+    assert resolve_database_path(f"sqlite:///{target}") == expected
+
+
+def test_resolve_database_path_windows_drive_letter() -> None:
+    # Forward-slash sqlite URL form (the documented/conventional spelling),
+    # independent of tmp_path's platform-native separator formatting above.
+    assert resolve_database_path("sqlite:///C:/Users/tim/data.db") == "C:/Users/tim/data.db"
 
 
 async def test_connect_sqlite_creates_parent_and_wal(tmp_path: Path) -> None:

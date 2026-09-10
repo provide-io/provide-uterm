@@ -31,13 +31,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import argparse
 
+    from provide.uterm.tunnel.pty_capture import SpawnedPty, TtyProxy
+
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.tunnel.protocol import (
     CHANNEL_DATA,
     FLAG_EOF,
     encode_frame,
 )
-from provide.uterm.tunnel.pty_capture import SpawnedPty, TtyProxy, spawn_pty
 
 log = logging.getLogger(__name__)
 
@@ -200,6 +201,10 @@ def _cmd_share(args: argparse.Namespace) -> None:
     print("Connected. Press Ctrl+C to stop sharing.")
 
     # 3. Spawn PTY or attach to TTY
+    # Imported here (not at module scope) so `uterm` as a whole stays importable
+    # on platforms without a real PTY (Windows) — `share` itself is POSIX-only.
+    from provide.uterm.tunnel.pty_capture import TtyProxy, spawn_pty
+
     if attach:
         pty_source: SpawnedPty | TtyProxy = TtyProxy()
         pty_source.start()  # type: ignore[union-attr]

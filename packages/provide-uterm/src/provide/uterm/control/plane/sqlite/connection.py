@@ -4,11 +4,17 @@
 #
 from __future__ import annotations
 
+import re
 import sqlite3
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import aiosqlite
+
+# sqlite:///C:/Users/... yields urlparse path "/C:/Users/..." — a leading "/"
+# before a Windows drive letter, which Path() treats as a literal (invalid)
+# folder segment rather than a drive-anchored path.
+_WINDOWS_DRIVE_PATH_RE = re.compile(r"^/[A-Za-z]:[/\\]")
 
 
 class SqliteConnectionError(RuntimeError):
@@ -28,6 +34,8 @@ def resolve_database_path(database_url: str) -> str:
         # handled above) when netloc is set, so this branch is unreachable.
         if parsed.netloc and not path.startswith("/"):  # pragma: no cover
             return f"//{parsed.netloc}{path}"
+        if _WINDOWS_DRIVE_PATH_RE.match(path):
+            return path[1:]
         return path
     return database_url
 
