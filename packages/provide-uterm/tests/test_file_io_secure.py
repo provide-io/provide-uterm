@@ -53,15 +53,17 @@ def test_secure_create_returns_owner_only_fd(tmp_path) -> None:
     assert path.exists()
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="O_NOFOLLOW has no Windows equivalent; secure_create cannot refuse symlinks there",
-)
 def test_secure_open_append_refuses_symlink(tmp_path) -> None:
     target = tmp_path / "target.txt"
     target.write_text("target", encoding="utf-8")
     link = tmp_path / "link.txt"
-    link.symlink_to(target)
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        # Creating a symlink itself needs Developer Mode/admin on Windows;
+        # skip there rather than fail on an environment limitation unrelated
+        # to what this test actually verifies.
+        pytest.skip(f"cannot create symlinks in this environment: {exc}")
 
     with pytest.raises(OSError):
         with secure_open_append(link):

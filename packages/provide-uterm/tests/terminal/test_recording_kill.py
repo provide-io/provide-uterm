@@ -82,13 +82,19 @@ def test_open_uses_nofollow_append_and_owner_only(monkeypatch: pytest.MonkeyPatc
         f.close()
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="O_NOFOLLOW has no Windows equivalent")
 def test_open_refuses_symlink_target(tmp_path: Path) -> None:
-    """A symlink at the recording path is refused (O_NOFOLLOW → OSError)."""
+    """A symlink at the recording path is refused: O_NOFOLLOW on POSIX, a
+    pre-open is_symlink() check on Windows (see file_io.secure_create)."""
     real = tmp_path / "real.jsonl"
     real.write_text("", encoding="utf-8")
     link = tmp_path / "link.jsonl"
-    link.symlink_to(real)
+    try:
+        link.symlink_to(real)
+    except OSError as exc:
+        # Creating a symlink itself needs Developer Mode/admin on Windows;
+        # skip there rather than fail on an environment limitation unrelated
+        # to what this test actually verifies.
+        pytest.skip(f"cannot create symlinks in this environment: {exc}")
     with pytest.raises(OSError):
         _open_append_owner_only(link)
 

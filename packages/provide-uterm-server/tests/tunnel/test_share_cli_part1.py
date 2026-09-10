@@ -241,19 +241,20 @@ class TestCmdShare:
             return_value=resp or _TUNNEL_RESPONSE,
         )
 
-    def test_pty_capture_unavailable_exits_cleanly_before_connected(
+    def test_pty_capture_unavailable_exits_before_creating_tunnel(
         self, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """On a platform without pty_capture (e.g. Windows), fail before printing 'Connected'."""
+        """On a platform without pty_capture (e.g. Windows), fail before touching the server at all."""
         monkeypatch.setitem(sys.modules, "provide.uterm.tunnel.pty_capture", None)
 
         with (
-            self._mock_create_tunnel(),
+            self._mock_create_tunnel() as mock_create,
             patch("provide.uterm.cli.share._read_token", return_value=None),
             pytest.raises(SystemExit),
         ):
             _cmd_share(_make_args())
 
+        mock_create.assert_not_called()
         out = capsys.readouterr().out
         assert "Connected" not in out
 

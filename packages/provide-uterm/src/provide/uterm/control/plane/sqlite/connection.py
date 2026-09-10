@@ -36,14 +36,28 @@ def resolve_database_path(database_url: str) -> str:
     parsed = urlparse(database_url)
     if parsed.scheme in {"sqlite", "sqlite+aiosqlite"}:
         path = unquote(parsed.path or "")
-        if path in {"", "/:memory:", ":memory:"}:
+        # netloc handling comes first: an empty *path* alone doesn't mean
+        # ":memory:" when there's also a netloc to account for (e.g. the bare
+        # 2-slash drive root "sqlite://C:" has path="", not the memory form).
+        if parsed.netloc == ":memory:":
             return ":memory:"
         if _DRIVE_LETTER_NETLOC_RE.match(parsed.netloc):
             return f"{parsed.netloc}{path}"
+        if parsed.netloc:
+            # No other host component is meaningful for a local sqlite file
+            # (sqlite has no network/remote-host concept) -- error rather than
+            # guess how to combine it with a path. A prior attempt returned
+            # "//{netloc}{path}", which silently produced a UNC-shaped string
+            # that then crashed connect_sqlite's Path(...).mkdir() with
+            # WinError 53 instead of failing here with a clear reason.
+            raise SqliteConnectionError(
+                f"sqlite URL has an unsupported host component {parsed.netloc!r}: {database_url!r} "
+                "(use the 3-slash form, e.g. sqlite:///path/to/db)"
+            )
+        if path in {"", "/:memory:", ":memory:"}:
+            return ":memory:"
         if _WINDOWS_DRIVE_PATH_RE.match(path):
             path = path[1:]
-        if parsed.netloc:
-            return f"//{parsed.netloc}{path}" if path.startswith("/") else f"//{parsed.netloc}/{path}"
         return path
     return database_url
 

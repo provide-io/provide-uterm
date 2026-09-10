@@ -186,10 +186,10 @@ def test_resolve_database_path_windows_bare_drive_root() -> None:
     assert resolve_database_path("sqlite:///C:") == "C:"
 
 
-def test_resolve_database_path_netloc_preserved() -> None:
-    # A real host component (3-slash-with-authority form) is preserved, not
-    # silently dropped.
-    assert resolve_database_path("sqlite://host/data.db") == "//host/data.db"
+def test_resolve_database_path_two_slash_bare_drive_root() -> None:
+    # "sqlite://C:" (2 slashes, no trailing path) -- urlparse gives netloc="C:",
+    # path="" here, so the empty-path memory shortcut must not fire first.
+    assert resolve_database_path("sqlite://C:") == "C:"
 
 
 def test_resolve_database_path_two_slash_drive_letter_typo() -> None:
@@ -199,10 +199,18 @@ def test_resolve_database_path_two_slash_drive_letter_typo() -> None:
     assert resolve_database_path("sqlite://C:/Users/tim/data.db") == "C:/Users/tim/data.db"
 
 
-def test_resolve_database_path_netloc_with_windows_drive_path() -> None:
-    # A real host with a Windows-drive-shaped path after it: the drive-letter
-    # slash-stripping and the netloc-preservation logic both apply.
-    assert resolve_database_path("sqlite://host/C:/data.db") == "//host/C:/data.db"
+def test_resolve_database_path_real_netloc_rejected() -> None:
+    # A genuine host component isn't meaningful for a local sqlite file --
+    # reject with a clear error rather than silently produce a UNC-shaped
+    # path that would only fail later, confusingly, inside connect_sqlite's
+    # mkdir call.
+    with pytest.raises(SqliteConnectionError, match="unsupported host component"):
+        resolve_database_path("sqlite://host/data.db")
+
+
+def test_resolve_database_path_real_netloc_with_windows_drive_path_rejected() -> None:
+    with pytest.raises(SqliteConnectionError, match="unsupported host component"):
+        resolve_database_path("sqlite://host/C:/data.db")
 
 
 async def test_connect_sqlite_creates_parent_and_wal(tmp_path: Path) -> None:

@@ -41,15 +41,21 @@ def secure_create(path: Path | str, *, mode: int = 0o600, dir_mode: int = 0o700)
     ``O_NOFOLLOW`` and ``fchmod`` have no Windows equivalent (Windows lacks both
     symlink-following flags and POSIX permission bits on file descriptors), so
     both are applied only when the platform's ``os`` module exposes them. On
-    Windows this means the symlink-refusal and owner-only-mode guarantees are
-    UNAVAILABLE, not merely reduced — a warning is logged once per process so
-    the gap is visible at runtime rather than only in this docstring.
+    Windows the owner-only-mode guarantee is UNAVAILABLE, and the symlink
+    refusal below is a pre-open check rather than ``O_NOFOLLOW``'s atomic
+    kernel-level one — it closes the common case (a symlink planted before
+    this call) but not a race where one is swapped in between the check and
+    the open. A warning is logged once per process so the gap is visible at
+    runtime rather than only in this docstring.
     """
     global _warned_no_symlink_guard
-    if not hasattr(os, "O_NOFOLLOW") and not _warned_no_symlink_guard:
-        _warned_no_symlink_guard = True
-        logger.warning("secure_create_symlink_guard_unavailable_on_windows")
     target = Path(path)
+    if not hasattr(os, "O_NOFOLLOW"):
+        if not _warned_no_symlink_guard:
+            _warned_no_symlink_guard = True
+            logger.warning("secure_create_symlink_guard_unavailable_on_windows")
+        if target.is_symlink():
+            raise OSError(f"Refusing to open symlink as a recording sink: {target}")
     _ensure_owner_only_dir(target.parent, mode=dir_mode)
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(target, flags, mode)

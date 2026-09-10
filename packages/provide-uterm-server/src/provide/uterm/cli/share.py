@@ -169,6 +169,17 @@ async def _bridge_loop(
 
 def _cmd_share(args: argparse.Namespace) -> None:
     """Execute the ``uterm share`` subcommand."""
+    # Imported here (not at module scope) so `uterm` as a whole stays importable
+    # on platforms without a real PTY (Windows) — `share` itself is POSIX-only.
+    # Checked before creating any server-side resource so an unsupported
+    # platform fails cleanly with nothing to clean up, instead of allocating
+    # a live tunnel on the server and then abandoning it.
+    try:
+        from provide.uterm.tunnel.pty_capture import TtyProxy, spawn_pty
+    except ImportError as exc:
+        print(f"error: 'uterm share' requires POSIX PTY support, unavailable on this platform: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     server: str = args.server
     cmd: list[str] | None = args.cmd or None
     attach: bool = getattr(args, "attach", False)
@@ -192,16 +203,6 @@ def _cmd_share(args: argparse.Namespace) -> None:
     if ws_endpoint.startswith("/"):
         ws_base = server.rstrip("/").replace("http://", "ws://").replace("https://", "wss://")
         ws_endpoint = f"{ws_base}{ws_endpoint}"
-
-    # Imported here (not at module scope) so `uterm` as a whole stays importable
-    # on platforms without a real PTY (Windows) — `share` itself is POSIX-only.
-    # Checked before printing "Connected" so an unsupported platform fails
-    # cleanly here rather than claiming success and crashing mid-session.
-    try:
-        from provide.uterm.tunnel.pty_capture import TtyProxy, spawn_pty
-    except ImportError as exc:
-        print(f"error: 'uterm share' requires POSIX PTY support, unavailable on this platform: {exc}", file=sys.stderr)
-        sys.exit(1)
 
     # 2. Print URLs
     print("Sharing terminal session...")

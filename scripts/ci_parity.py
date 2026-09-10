@@ -50,6 +50,7 @@ import argparse
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -105,10 +106,16 @@ def _find_bash() -> str | None:
     don't match this process's Windows paths, so it can't run the workflow's
     bash steps the way Git Bash does. `shutil.which` returns only the first
     PATH match, which is often that stub if System32 sorts before Git's bin
-    dir -- so walk PATH ourselves and skip it. No `shutil.which` fallback: that
-    would just re-match the same stub this loop exists to avoid, silently
-    undoing the skip -- returning None here correctly triggers the "install
-    Git Bash" error instead of running the wrong bash.
+    dir -- so walk PATH ourselves first and skip it.
+
+    A standard Git for Windows install, though, doesn't put `bash.exe`'s own
+    directory on PATH at all -- only `Git\\cmd` (holding `git.exe`) is added by
+    default, so the PATH walk above finds nothing there. `git.exe` itself IS
+    reliably on PATH for anyone this tool is useful to, so fall back to
+    deriving bash's location from wherever git.exe actually lives. Its install
+    layout varies (`Git\\cmd\\git.exe`, or an arch-specific `Git\\<arch>\\bin\\
+    git.exe`), so walk up from it rather than assume one fixed depth, checking
+    `bin\\bash.exe` / `usr\\bin\\bash.exe` at each ancestor.
     """
     system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
     stub_dirs = {str(Path(system_root, "System32")).lower(), str(Path(system_root, "Sysnative")).lower()}
@@ -118,6 +125,18 @@ def _find_bash() -> str | None:
         candidate = Path(directory, "bash.exe")
         if candidate.is_file():
             return str(candidate)
+
+    git_exe = shutil.which("git")
+    if git_exe is None:
+        return None
+    ancestor = Path(git_exe).resolve().parent
+    for _ in range(4):
+        for candidate in (ancestor / "bin" / "bash.exe", ancestor / "usr" / "bin" / "bash.exe"):
+            if candidate.is_file():
+                return str(candidate)
+        if ancestor.parent == ancestor:
+            break
+        ancestor = ancestor.parent
     return None
 
 
@@ -314,6 +333,11 @@ def _run(job_name: str, args: argparse.Namespace) -> int:
             # shell=True + executable=<path> does not quote a spaced path (e.g.
             # "C:\Program Files\Git\...\bash.exe") when building the Windows
             # command line, so invoke bash directly instead of through cmd.exe.
+            # mypy can't carry the `_BASH is None` guard's narrowing from
+            # earlier in this function across to this module-level global --
+            # reasserted here (guaranteed true: args.print_only is False past
+            # the `continue` above, and the guard already raised otherwise).
+            assert _BASH is not None
             completed = subprocess.run([_BASH, "-c", command], cwd=_ROOT, env=run_env, check=False)
         else:
             completed = subprocess.run(  # noqa: S602 - the workflow's own shell commands, by design

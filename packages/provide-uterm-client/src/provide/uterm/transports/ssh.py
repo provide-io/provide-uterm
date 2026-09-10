@@ -250,7 +250,9 @@ def _verify_key_permissions(key_path: Path) -> None:
         raise PermissionError(
             f"refusing to load SSH host key with insecure mode {oct(mode)} (expected 0o600): {key_path}"
         )
-    current_uid = os.getuid()
+    # POSIX-only; mypy's Windows stub omits getuid regardless of the runtime
+    # os.name check above, since typeshed's platform split isn't flow-sensitive.
+    current_uid = os.getuid()  # type: ignore[attr-defined]
     if st.st_uid != current_uid:
         raise PermissionError(
             f"refusing to load SSH host key owned by uid {st.st_uid} (current uid {current_uid}): {key_path}"
