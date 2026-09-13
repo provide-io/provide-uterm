@@ -14,6 +14,8 @@ from provide.uterm.transports import reconnect
 
 
 class _FakeSession:
+    close_info = None
+
     def __init__(self, fail_send: bool = False) -> None:
         self.fail_send = fail_send
         self.closed = False

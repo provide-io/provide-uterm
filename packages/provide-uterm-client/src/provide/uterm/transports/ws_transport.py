@@ -20,10 +20,21 @@ except ImportError as _e:
     ) from _e
 
 from provide.telemetry import get_logger
+from provide.uterm.transport_close import CloseInitiator, TransportClose, TransportClosedError, close_from_exception
 
 from provide.uterm.transports.base import ConnectionTransport
 
 logger = get_logger(__name__)
+
+
+def _close_from_websockets(exc: ConnectionClosed) -> TransportClose:
+    """Attribute a websockets close to the side whose close frame came first."""
+    rcvd, sent = exc.rcvd, exc.sent
+    if rcvd is not None and (sent is None or exc.rcvd_then_sent):
+        return TransportClose(CloseInitiator.REMOTE, code=rcvd.code, reason=rcvd.reason, detail=str(exc))
+    if sent is not None:
+        return TransportClose(CloseInitiator.LOCAL, code=sent.code, reason=sent.reason, detail=str(exc))
+    return TransportClose(CloseInitiator.UNKNOWN, detail=str(exc))
 
 
 class WebSocketTransport(ConnectionTransport):
@@ -94,7 +105,7 @@ class WebSocketTransport(ConnectionTransport):
             await self._ws.send(data.decode("utf-8", errors="replace"))
         except ConnectionClosed as exc:
             await self.disconnect()
-            raise ConnectionError("Connection closed") from exc
+            raise TransportClosedError("Connection closed", _close_from_websockets(exc)) from exc
 
     async def receive(self, max_bytes: int, timeout_ms: int) -> bytes:
         """Receive bytes.
@@ -120,12 +131,12 @@ class WebSocketTransport(ConnectionTransport):
             return b""
         except ConnectionClosed as exc:
             await self.disconnect()
-            raise ConnectionError("Connection closed") from exc
+            raise TransportClosedError("Connection closed", _close_from_websockets(exc)) from exc
         except Exception as exc:
             # Narrow by design: CancelledError is a BaseException on 3.11+, so
             # it is NOT swallowed here and cancellation propagates correctly.
             await self.disconnect()
-            raise ConnectionError("WebSocket receive error") from exc
+            raise TransportClosedError("WebSocket receive error", close_from_exception(exc)) from exc
 
     def is_connected(self) -> bool:
         """Check if connection is active.

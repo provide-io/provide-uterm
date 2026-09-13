@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any, TypeAlias, TypeVar
 
 from provide.uterm.defaults import TerminalDefaults
+from provide.uterm.transport_close import TransportClose, TransportClosedError
 from provide.uterm.transport_session import TransportSession
 
 _WebsocketsConnectionClosed: type[BaseException] | None
@@ -77,6 +78,7 @@ class ReconnectingSession:
         self._connect = connect
         self._policy = policy
         self._on_reconnect = on_reconnect
+        self._last_close: TransportClose | None = None
 
     async def reconnect(self) -> None:
         """Rebuild the live session and run the reconnect hook."""
@@ -86,6 +88,11 @@ class ReconnectingSession:
     def session(self) -> TransportSession:
         """Expose the active transport session."""
         return self._session
+
+    @property
+    def last_close(self) -> TransportClose | None:
+        """How the most recently replaced session's connection ended, if it reported one."""
+        return self._last_close
 
     def is_connected(self) -> bool:
         return self._session.is_connected()
@@ -128,6 +135,8 @@ class ReconnectingSession:
             except Exception as exc:
                 if not self._is_retryable_error(exc):
                     raise
+                if isinstance(exc, TransportClosedError):
+                    self._last_close = exc.close
                 if retries >= self._policy.max_retries:
                     with contextlib.suppress(Exception):
                         await self._session.close()
@@ -136,6 +145,10 @@ class ReconnectingSession:
                 await self._reconnect(attempt=retries)
 
     async def _reconnect(self, *, attempt: int = 1) -> None:
+        # Read before closing: closing records this side's own close.
+        observed = self._session.close_info
+        if observed is not None:
+            self._last_close = observed
         try:
             await self._session.close()
         except Exception:

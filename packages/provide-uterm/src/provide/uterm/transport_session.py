@@ -36,6 +36,12 @@ from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
 from provide.uterm.terminal_frames import TerminalFrame, TerminalFrameDisconnectedError
+from provide.uterm.transport_close import (
+    CloseInitiator,
+    TransportClose,
+    TransportClosedError,
+    close_from_exception,
+)
 
 from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
 from provide.uterm.emulator import TerminalEmulator
@@ -184,12 +190,15 @@ class TransportSession:
     async def connect(self) -> None:
         """Open the transport connection and start the background reader."""
         await self._connect_transport()
+        self._close_info = None
         self._connected = True
         self._terminal_frame_closed = False
         self._read_task = asyncio.create_task(self._reader_loop())
 
     async def close(self) -> None:
         """Close the connection and stop the background reader."""
+        if self._close_info is None:
+            self._close_info = TransportClose(CloseInitiator.LOCAL, detail="closed by client")
         self._connected = False
         self._terminal_frame_closed = True
         self._notify_terminal_frame_waiters()
@@ -265,9 +274,21 @@ class TransportSession:
         except TimeoutError:
             return False
 
+    # Class-level so a session constructed without __init__ still answers.
+    _close_info: TransportClose | None = None
+
     def is_connected(self) -> bool:
         """Return ``True`` if the session is connected."""
         return self._connected
+
+    @property
+    def close_info(self) -> TransportClose | None:
+        """How the connection ended, or ``None`` while it has not.
+
+        Set by the reader from the transport's :class:`TransportClosedError`, or
+        by :meth:`close` when this side closes before the transport reports one.
+        """
+        return self._close_info
 
     def screen_change_seq(self) -> int:
         """Return a monotonic counter that increments on each screen update.
@@ -523,8 +544,12 @@ class TransportSession:
                         chunk_bytes=len(data),
                         bytes_total=self._bytes_total,
                     )
-        except (asyncio.CancelledError, ConnectionResetError, OSError, ConnectionError):
+        except asyncio.CancelledError:
             pass
+        except TransportClosedError as exc:
+            self._close_info = exc.close
+        except (ConnectionResetError, OSError, ConnectionError) as exc:
+            self._close_info = close_from_exception(exc)
         finally:
             self._connected = False
             self._terminal_frame_closed = True

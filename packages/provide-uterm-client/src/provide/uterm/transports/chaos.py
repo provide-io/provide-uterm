@@ -15,6 +15,8 @@ import contextlib
 import random
 from typing import Any
 
+from provide.uterm.transport_close import CloseInitiator, TransportClose, TransportClosedError
+
 from provide.uterm.transports.base import ConnectionTransport
 
 
@@ -66,7 +68,10 @@ class ChaosTransport(ConnectionTransport):
         if self._disconnect_n > 0 and (self._rx_count % self._disconnect_n) == 0:
             with contextlib.suppress(ConnectionError, OSError, RuntimeError):
                 await self._inner.disconnect()
-            raise ConnectionError(f"{self._label}: injected disconnect on receive #{self._rx_count}")
+            raise TransportClosedError(
+                f"{self._label}: injected disconnect on receive #{self._rx_count}",
+                TransportClose(CloseInitiator.UNKNOWN, reason="injected disconnect"),
+            )
 
         if self._timeout_n > 0 and (self._rx_count % self._timeout_n) == 0:
             await asyncio.sleep(max(0.0, float(timeout_ms)) / 1000.0)
