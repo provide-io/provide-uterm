@@ -46,7 +46,8 @@ class ConnectionTransport(ABC):
             data: Raw bytes to send.
 
         Raises:
-            ConnectionError: If not connected or send fails.
+            TransportClosedError: If the connection ended; carries who closed it.
+            ConnectionError: If not connected.
         """
 
     @abstractmethod
@@ -61,7 +62,8 @@ class ConnectionTransport(ABC):
             Bytes read from connection (may be empty on timeout).
 
         Raises:
-            ConnectionError: If not connected or connection lost.
+            TransportClosedError: If the connection ended; carries who closed it.
+            ConnectionError: If not connected.
         """
 
     @abstractmethod

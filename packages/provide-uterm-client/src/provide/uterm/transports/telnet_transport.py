@@ -11,6 +11,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 from provide.telemetry import get_logger
+from provide.uterm.transport_close import CloseInitiator, TransportClose, TransportClosedError, close_from_exception
 
 from provide.uterm.transports._telnet_const import (
     DO,
@@ -54,6 +55,12 @@ _DEFAULT_CONNECT_TIMEOUT_S: float = 30.0
 # otherwise grow _rx_buf without bound (memory-exhaustion DoS). 256 KiB is far
 # above any legitimate telnet subnegotiation.
 _MAX_RX_BUF_BYTES: int = 256 * 1024
+
+
+def _close_from_socket_error(exc: OSError) -> TransportClose:
+    """A peer reset is the remote end closing; a broken pipe cannot say who did."""
+    initiator = CloseInitiator.REMOTE if isinstance(exc, ConnectionResetError) else CloseInitiator.UNKNOWN
+    return close_from_exception(exc, initiator)
 
 
 class TelnetTransport(ConnectionTransport):
@@ -249,7 +256,7 @@ class TelnetTransport(ConnectionTransport):
             await self._writer.drain()
         except (ConnectionResetError, BrokenPipeError) as exc:
             await self.disconnect()
-            raise ConnectionError("Send failed") from exc
+            raise TransportClosedError("Send failed", _close_from_socket_error(exc)) from exc
 
     @staticmethod
     async def _read_bounded(reader: StreamReader, max_bytes: int, timeout: float) -> bytes:
@@ -295,22 +302,23 @@ class TelnetTransport(ConnectionTransport):
             return b""
         except (ConnectionResetError, BrokenPipeError) as exc:
             await self.disconnect()
-            raise ConnectionError("Connection lost") from exc
+            raise TransportClosedError("Connection lost", _close_from_socket_error(exc)) from exc
 
         if not chunk:
             payload, events = self._consume_rx_buffer(final=True)
             await self.disconnect()
             if payload:
                 return payload
-            raise ConnectionError("Connection closed by remote")
+            raise TransportClosedError("Connection closed by remote", TransportClose(CloseInitiator.REMOTE))
 
         self._rx_buf.extend(chunk)
         payload, events = self._consume_rx_buffer()
         if len(self._rx_buf) > _MAX_RX_BUF_BYTES:
             self._rx_buf.clear()
-            raise ConnectionError(
+            raise TransportClosedError(
                 f"telnet receive buffer exceeded {_MAX_RX_BUF_BYTES} bytes "
-                "(likely IAC SB without IAC SE) — closing connection"
+                "(likely IAC SB without IAC SE) — closing connection",
+                TransportClose(CloseInitiator.LOCAL, reason="receive buffer exceeded"),
             )
         for event_type, cmd, opt_or_payload in events:
             if event_type == "negotiate":
