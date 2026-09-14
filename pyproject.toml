@@ -12,7 +12,7 @@ dependencies = [
     "provide-uterm-annotation>=0.5.6",
     "provide-uterm-server[all]>=0.5.6",
     "provide-uterm-platform[all]>=0.5.6",
-    "provide-telemetry>=0.7",
+    "provide-telemetry>=0.10.1",
 ]
 
 [dependency-groups]
