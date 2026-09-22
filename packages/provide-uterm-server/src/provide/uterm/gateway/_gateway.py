@@ -370,7 +370,8 @@ async def _run_gateway_session(
         if not client_connected():
             break
 
-        if redirect_holder[0]:
+        # `pump` writes redirect_holder[0] through the shared list; ty does not see the aliasing.
+        if redirect_holder[0]:  # ty:ignore[redundant-condition]
             new = _apply_redirect(current, redirect_holder[0])
             if new is None:
                 logger.warning("gateway_redirect_rejected", target=redirect_holder[0])

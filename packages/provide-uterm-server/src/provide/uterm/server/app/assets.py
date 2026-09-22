@@ -7,14 +7,18 @@
 from __future__ import annotations
 
 import importlib.resources
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from importlib.resources.abc import Traversable
 
 
-def _has_vite_manifest(frontend_root: object) -> bool:
+def _has_vite_manifest(frontend_root: Traversable) -> bool:
     """True if a Vite app manifest is present (dot or package-data-safe path)."""
     # Prefer package-data-safe vite-manifest.json (setuptools omits .vite/).
-    if (frontend_root / "vite-manifest.json").is_file():  # type: ignore[operator]
+    if (frontend_root / "vite-manifest.json").is_file():
         return True
-    return bool((frontend_root / ".vite" / "manifest.json").is_file())  # type: ignore[operator]
+    return bool((frontend_root / ".vite" / "manifest.json").is_file())
 
 
 def _validate_frontend_assets() -> None:
