@@ -215,28 +215,6 @@ def main() -> int:
                     }"""
                 )
 
-            def term_has(text: str) -> bool:
-                # xterm renders into canvas/DOM — use accessibility text + buffer if exposed.
-                return page.evaluate(
-                    """(needle) => {
-                      const el = document.querySelector('uterm-session');
-                      if (!el) return false;
-                      const t = el.terminal || el._hijackState?.term;
-                      if (t && t.buffer && t.buffer.active) {
-                        const buf = t.buffer.active;
-                        let acc = '';
-                        for (let i = 0; i < buf.length; i++) {
-                          const line = buf.getLine(i);
-                          if (line) acc += line.translateToString(true) + '\\n';
-                        }
-                        if (acc.includes(needle)) return true;
-                      }
-                      // Fallback: page text
-                      return (document.body.innerText || '').includes(needle);
-                    }""",
-                    text,
-                )
-
             # --- 1. Open browser, wait for session UI + first snapshot ---
             page.goto(url, wait_until="domcontentloaded", timeout=60_000)
             for _ in range(40):

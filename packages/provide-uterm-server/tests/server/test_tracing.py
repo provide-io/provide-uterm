@@ -222,7 +222,7 @@ def test_ws_worker_disconnect_creates_span(app_client: TestClient) -> None:
 def test_ws_browser_connection_creates_span(app_client: TestClient) -> None:
     """Browser WS connection should produce uterm.ws.browser.connect span."""
     with _capturing_tracer() as ct, app_client.websocket_connect("/ws/browser/trace-ws-2/term") as ws:
-        _msg = ws.receive_text()  # hello frame
+        ws.receive_text()  # hello frame
     assert "uterm.ws.browser.connect" in ct.span_names()
     span = ct.spans_named("uterm.ws.browser.connect")[0]
     assert span.attributes.get("uterm.worker_id") == "trace-ws-2"

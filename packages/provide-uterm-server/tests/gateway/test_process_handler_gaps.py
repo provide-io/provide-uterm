@@ -109,27 +109,8 @@ class TestHandlerTokenResume:
         mock_ws_mod = MagicMock()
         mock_ws_mod.connect.return_value = _make_ws_context(ws_mock)
 
-        # Pre-populate the token_holder via the handler's closure.
-        # We inject by patching the handler to set token_holder[0] before WS.
-
-        # Capture the token_holder from the closure by running a quick pre-flight:
-        # we use a side-effect on websockets.connect to set the token in place.
-        token_injected = False
-
-        def _inject_token_on_connect(*args: Any, **kwargs: Any) -> MagicMock:
-            nonlocal token_injected
-            # We can't easily access token_holder from outside, so we patch
-            # the handler to inject a pre-populated holder.  Instead, we build
-            # a custom handler that starts with a populated token_holder.
-            return _make_ws_context(ws_mock)
-
-        # Build a new handler manually with a token already in the holder.
-        # We do this by calling _make_process_handler and then monkey-patching
-        # the returned coroutine's closure.  That's fragile, so instead we
-        # build the handler logic inline by calling the real one through a
-        # thin wrapper that captures the holder.
-
-        # Simpler approach: call the handler and have _ws_to_ssh inject a
+        # token_holder lives in the handler's closure, so rather than patch it
+        # we call the handler and have _ws_to_ssh inject a
         # session_token control frame into the ws message stream so that
         # token_holder gets populated on attempt=0, then at_eof returns False
         # after the first loop so attempt=1 sees a non-empty holder.

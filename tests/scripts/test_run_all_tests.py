@@ -136,7 +136,7 @@ def test_each_leg_is_announced_before_it_runs(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Every label appears as a heading, so a hung leg is identifiable live."""
-    _code, _calls = _drive(monkeypatch, [], set())
+    _drive(monkeypatch, [], set())
     out = capsys.readouterr().out
 
     for label, _uv_args, _pytest_args in sweep._PYTEST_SUITES:
