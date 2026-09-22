@@ -69,11 +69,8 @@ async def test_run_pam_integration_missing_pty_package_exits_gracefully() -> Non
 
 async def test_on_open_capture_mode_with_socket_creates_capture_session() -> None:
     """Capture mode + capture_socket → create pty_capture session."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(
@@ -100,11 +97,8 @@ async def test_on_open_capture_mode_with_socket_creates_capture_session() -> Non
 
 async def test_on_open_notify_mode_auto_session_creates_pty_session() -> None:
     """Notify mode + auto_session=True → create pty shell session."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="bob", tty="/dev/pts/7", pid=999)
@@ -124,11 +118,8 @@ async def test_on_open_notify_mode_auto_session_creates_pty_session() -> None:
 
 async def test_on_open_notify_mode_no_auto_session_skips_creation() -> None:
     """Notify mode + auto_session=False → do nothing."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="carol", tty="/dev/pts/0", pid=42)
@@ -143,11 +134,8 @@ async def test_on_open_notify_mode_no_auto_session_skips_creation() -> None:
 
 async def test_on_open_capture_mode_without_socket_falls_through_to_auto_session() -> None:
     """Capture mode but no capture_socket → fall through to auto_session if enabled."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(
@@ -171,11 +159,8 @@ async def test_on_open_capture_mode_without_socket_falls_through_to_auto_session
 
 async def test_on_open_custom_auto_session_command() -> None:
     """auto_session_command is forwarded to the session payload."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="eve", tty="/dev/pts/2", pid=7)
@@ -209,10 +194,8 @@ def _pam_registry(tmp_path: Path, sessions: list[SessionDefinition]) -> SessionR
 
 async def test_on_close_stops_existing_session(tmp_path: Path) -> None:
     """Close event calls stop() on the runtime if found."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
 
     ev = PamEvent(event="close", username="alice", tty="/dev/pts/3", pid=1234)
     runtime = MagicMock()
@@ -233,10 +216,8 @@ async def test_on_close_stops_existing_session(tmp_path: Path) -> None:
 
 async def test_on_close_removes_ephemeral_session_from_registry(tmp_path: Path) -> None:
     """A completed PAM login no longer contributes to the active-session count."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     session_id = "pam-alice-3"
@@ -260,10 +241,8 @@ async def test_on_close_removes_ephemeral_session_from_registry(tmp_path: Path) 
 
 async def test_on_close_no_session_does_not_raise(tmp_path: Path) -> None:
     """Close event for unknown session is silently ignored."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
 
     ev = PamEvent(event="close", username="ghost", tty="/dev/pts/99", pid=0)
     registry = _pam_registry(tmp_path, [])
@@ -275,10 +254,8 @@ async def test_on_close_no_session_does_not_raise(tmp_path: Path) -> None:
 
 async def test_on_close_runtime_stop_exception_is_swallowed(tmp_path: Path) -> None:
     """Errors from runtime.stop() should be caught and logged, not propagated."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
 
     ev = PamEvent(event="close", username="alice", tty="/dev/pts/3", pid=1234)
     runtime = MagicMock()
@@ -327,14 +304,11 @@ def test_pam_config_mode_capture() -> None:
 
 async def test_create_capture_session_inside_allowed_dir_creates_session() -> None:
     """capture_socket inside capture_socket_dir → session created."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     import tempfile
     from pathlib import Path
 
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
     from provide.uterm.server.pam_integration import _create_capture_session
 
@@ -363,11 +337,8 @@ async def test_create_capture_session_inside_allowed_dir_creates_session() -> No
 
 async def test_create_capture_session_outside_allowed_dir_rejected() -> None:
     """capture_socket outside capture_socket_dir → session NOT created, warning logged."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
     from provide.uterm.server.pam_integration import _create_capture_session
 
@@ -391,11 +362,8 @@ async def test_create_capture_session_outside_allowed_dir_rejected() -> None:
 
 async def test_create_capture_session_no_confinement_basis_creates_session() -> None:
     """No capture_socket_dir and no notify_socket → no confinement → session created."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
     from provide.uterm.server.pam_integration import _create_capture_session
 
@@ -419,14 +387,11 @@ async def test_create_capture_session_no_confinement_basis_creates_session() -> 
 
 async def test_create_capture_session_uses_notify_socket_dir_when_no_cap_dir() -> None:
     """No capture_socket_dir but notify_socket set → confinement derived from notify_socket's parent."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     import tempfile
     from pathlib import Path
 
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
     from provide.uterm.server.pam_integration import _create_capture_session
 
@@ -455,14 +420,11 @@ async def test_create_capture_session_uses_notify_socket_dir_when_no_cap_dir() -
 
 async def test_create_capture_session_notify_dir_rejects_outside() -> None:
     """notify_socket dir used as confinement basis; outside path rejected."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     import tempfile
     from pathlib import Path
 
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
     from provide.uterm.server.pam_integration import _create_capture_session
 
@@ -493,13 +455,10 @@ async def test_create_capture_session_notify_dir_rejects_outside() -> None:
 
 async def test_create_capture_session_path_resolution_error_rejects() -> None:
     """If Path.resolve() raises, the session is NOT created and a warning is logged."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from unittest.mock import patch
 
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
     from provide.uterm.server.pam_integration import _create_capture_session
 
