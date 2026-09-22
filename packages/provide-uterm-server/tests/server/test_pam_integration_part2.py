@@ -129,13 +129,10 @@ async def test_create_relay_tunnel_returns_none_on_error() -> None:
 
 async def test_on_open_forwards_to_cf_when_configured() -> None:
     """_on_open calls _forward_to_relay when relay_url + relay_token are set."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from unittest.mock import AsyncMock, MagicMock, patch
 
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="alice", tty="/dev/pts/0", pid=42)
@@ -165,13 +162,10 @@ async def test_on_open_forwards_to_cf_when_configured() -> None:
 
 async def test_on_close_forwards_to_cf_when_configured() -> None:
     """_on_close calls _forward_to_relay when relay_url + relay_token are set."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from unittest.mock import AsyncMock, MagicMock, patch
 
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="close", username="alice", tty="/dev/pts/0", pid=42)
@@ -201,10 +195,8 @@ async def test_on_close_forwards_to_cf_when_configured() -> None:
 
 
 def test_session_id_with_tty_uses_slug_only() -> None:
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
 
     ev = PamEvent(event="open", username="alice", tty="/dev/pts/3", pid=1234)
     assert _session_id(ev) == "pam-alice-3"
@@ -212,10 +204,8 @@ def test_session_id_with_tty_uses_slug_only() -> None:
 
 def test_session_id_empty_tty_includes_pid() -> None:
     """Empty TTY must include PID to prevent collision between concurrent sessions."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
 
     ev1 = PamEvent(event="open", username="alice", tty="", pid=100)
     ev2 = PamEvent(event="open", username="alice", tty="", pid=200)
@@ -226,10 +216,8 @@ def test_session_id_empty_tty_includes_pid() -> None:
 
 def test_session_id_open_and_close_match_with_same_pid() -> None:
     """Open and close events with same PID and empty TTY map to the same session_id."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
 
     ev_open = PamEvent(event="open", username="bob", tty="", pid=999)
     ev_close = PamEvent(event="close", username="bob", tty="", pid=999)
@@ -237,10 +225,8 @@ def test_session_id_open_and_close_match_with_same_pid() -> None:
 
 
 def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty() -> None:
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.pty.pam_listener import PamEvent
 
     first = PamEvent(
         event="open",
@@ -354,13 +340,10 @@ async def test_run_pam_integration_cancelled_cleanly() -> None:
 
 async def test_on_open_bridge_start_failure_cleans_up() -> None:
     """If PamTunnelBridge.start() raises, bridge.stop() is called for cleanup."""
-    try:
-        from provide.uterm.pty.pam_listener import PamEvent
-    except ImportError:
-        pytest.skip("provide-uterm-platform not installed")
-
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from unittest.mock import AsyncMock, MagicMock, patch
 
+    from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig
 
     ev = PamEvent(event="open", username="alice", tty="/dev/pts/0", pid=42)

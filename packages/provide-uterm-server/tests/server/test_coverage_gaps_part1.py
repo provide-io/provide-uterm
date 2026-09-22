@@ -111,11 +111,8 @@ class TestPamIntegrationGaps:
 
     async def test_handle_close_event_dispatch(self) -> None:
         """Line 132-133: handle() dispatches 'close' events to _on_close."""
-        try:
-            from provide.uterm.pty.pam_listener import PamEvent
-        except ImportError:
-            pytest.skip("provide-uterm-platform not installed")
-
+        pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+        from provide.uterm.pty.pam_listener import PamEvent
         from provide.uterm.server.models import PamConfig
         from provide.uterm.server.pam_integration import _on_close
 
@@ -129,11 +126,8 @@ class TestPamIntegrationGaps:
 
     async def test_on_open_bridge_start_success_stores_bridge(self) -> None:
         """Line 191: successful bridge.start() stores bridge in bridges dict."""
-        try:
-            from provide.uterm.pty.pam_listener import PamEvent
-        except ImportError:
-            pytest.skip("provide-uterm-platform not installed")
-
+        pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+        from provide.uterm.pty.pam_listener import PamEvent
         from provide.uterm.server.models import PamConfig
         from provide.uterm.server.pam_integration import _on_open
 
@@ -177,11 +171,8 @@ class TestPamIntegrationGaps:
 
     async def test_on_close_stops_bridge(self) -> None:
         """Lines 211-216: _on_close stops the bridge from the bridges dict."""
-        try:
-            from provide.uterm.pty.pam_listener import PamEvent
-        except ImportError:
-            pytest.skip("provide-uterm-platform not installed")
-
+        pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+        from provide.uterm.pty.pam_listener import PamEvent
         from provide.uterm.server.models import PamConfig
         from provide.uterm.server.pam_integration import _on_close
 
@@ -201,11 +192,8 @@ class TestPamIntegrationGaps:
 
     async def test_on_close_bridge_stop_exception_swallowed(self) -> None:
         """Lines 211-216: bridge.stop() exception is caught and logged."""
-        try:
-            from provide.uterm.pty.pam_listener import PamEvent
-        except ImportError:
-            pytest.skip("provide-uterm-platform not installed")
-
+        pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+        from provide.uterm.pty.pam_listener import PamEvent
         from provide.uterm.server.models import PamConfig
         from provide.uterm.server.pam_integration import _on_close
 
@@ -222,11 +210,8 @@ class TestPamIntegrationGaps:
 
     async def test_create_capture_session_none_socket_returns_early(self) -> None:
         """_create_capture_session returns early when capture_socket is None."""
-        try:
-            from provide.uterm.pty.pam_listener import PamEvent
-        except ImportError:
-            pytest.skip("provide-uterm-platform not installed")
-
+        pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+        from provide.uterm.pty.pam_listener import PamEvent
         from provide.uterm.server.models import PamConfig
         from provide.uterm.server.pam_integration import _create_capture_session
 
@@ -289,11 +274,8 @@ class TestPamIntegrationGaps:
 
     async def test_on_open_relay_connector_none_skips_bridge(self) -> None:
         """Line 187->exit: when _get_connector returns None, bridge is not created."""
-        try:
-            from provide.uterm.pty.pam_listener import PamEvent
-        except ImportError:
-            pytest.skip("provide-uterm-platform not installed")
-
+        pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+        from provide.uterm.pty.pam_listener import PamEvent
         from provide.uterm.server.models import PamConfig
         from provide.uterm.server.pam_integration import _on_open
 
@@ -327,11 +309,8 @@ class TestPamIntegrationGaps:
 
     async def test_on_close_runtime_stop_not_callable(self) -> None:
         """Line 230->232: when stop_fn is not callable, it's skipped."""
-        try:
-            from provide.uterm.pty.pam_listener import PamEvent
-        except ImportError:
-            pytest.skip("provide-uterm-platform not installed")
-
+        pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+        from provide.uterm.pty.pam_listener import PamEvent
         from provide.uterm.server.models import PamConfig
         from provide.uterm.server.pam_integration import _on_close
 
