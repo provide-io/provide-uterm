@@ -17,8 +17,19 @@
  * which would make a running server depend on a binary being installed.
  */
 
-import { generateKeyPairSync } from "node:crypto";
-import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
+import {
+  chmodSync,
+  closeSync,
+  fchmodSync,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { HOST_KEY_MODE, InsecureHostKeyError, verifyKeyPermissions } from "./ssh-policy.ts";
 
@@ -43,6 +54,57 @@ const PEM_FOOTER = "-----END OPENSSH PRIVATE KEY-----";
 
 /** How many base64 characters go on one line of the armour. */
 const PEM_LINE_LENGTH = 70;
+
+/**
+ * Read the key at `path`, checking the permissions of the file actually read.
+ *
+ * The file is opened once and both the check and the read go through that
+ * descriptor. Checking the path and then reading the path again would leave a
+ * window in which the file could be swapped for one that never passed the
+ * check.
+ *
+ * @throws {InsecureHostKeyError} When the file's mode or owner is wrong.
+ */
+function readVerifiedKey(path: string, currentUid: number | undefined): Buffer {
+  const fd = openSync(path, "r");
+  try {
+    const stat = fstatSync(fd);
+    // Checked before the file is read: the point is to notice that it is
+    // exposed, not to use it and mention the exposure afterwards.
+    verifyKeyPermissions(path, { mode: stat.mode & 0o777, uid: stat.uid }, currentUid);
+    return readFileSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Save `key` at `path` without ever writing through whatever is there now.
+ *
+ * The key goes into a fresh file created exclusively beside it — `wx` refuses
+ * to reuse or follow anything already at that name — which is made private
+ * before any key byte lands and is then renamed over `path`. Writing to `path`
+ * directly followed a symlink planted there and truncated its target, and
+ * created the file with only the umask between the key and other readers
+ * until the `chmod` that came after.
+ */
+function writeKeyAtomically(directory: string, path: string, key: string): void {
+  const temporary = join(directory, `.${HOST_KEY_FILENAME}.${randomBytes(8).toString("hex")}.tmp`);
+  const fd = openSync(temporary, "wx", HOST_KEY_MODE);
+  try {
+    try {
+      // The mode given to `openSync` is masked by the umask; this is not.
+      fchmodSync(fd, HOST_KEY_MODE);
+      writeFileSync(fd, key);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(temporary, path);
+  } catch (error) {
+    rmSync(temporary, { force: true });
+    throw error;
+  }
+}
 
 /** Length-prefix a field, as the SSH wire format does. */
 function sshString(value: Uint8Array | string): Buffer {
@@ -142,11 +204,7 @@ export function getOrCreateHostKey(directory: string, options: HostKeyStoreOptio
   const path = join(directory, HOST_KEY_FILENAME);
   let existing: Buffer | undefined;
   try {
-    const stat = statSync(path);
-    // Checked before the file is read: the point is to notice that it is
-    // exposed, not to use it and mention the exposure afterwards.
-    verifyKeyPermissions(path, { mode: stat.mode & 0o777, uid: stat.uid }, options.currentUid);
-    existing = readFileSync(path);
+    existing = readVerifiedKey(path, options.currentUid);
   } catch (error) {
     if (error instanceof InsecureHostKeyError) {
       throw error;
@@ -167,14 +225,7 @@ export function getOrCreateHostKey(directory: string, options: HostKeyStoreOptio
     // Tightened so the directory is private even if it already existed with
     // wider permissions.
     chmodSync(directory, HOST_KEY_DIR_MODE);
-    // Both, and neither is redundant. The mode passed to `writeFileSync`
-    // closes the window in which a newly created file would be readable
-    // before the `chmod` lands — but it applies only to a file being
-    // created, and is masked by the process umask. The `chmod` covers the
-    // rest. Under this test's umask, and with any pre-existing key already
-    // refused by the permission check above, neither alone is observable.
-    writeFileSync(path, key, { mode: HOST_KEY_MODE });
-    chmodSync(path, HOST_KEY_MODE);
+    writeKeyAtomically(directory, path, key);
   } catch (error) {
     // A server that cannot persist its key still starts, with a key that
     // lasts as long as the process — noisy for clients, but running.

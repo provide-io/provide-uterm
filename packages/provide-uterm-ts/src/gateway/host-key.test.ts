@@ -3,7 +3,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { utils as sshUtils } from "ssh2";
@@ -203,6 +214,47 @@ describe("the host key store", () => {
     const key = getOrCreateHostKey(join(blocker, "uterm"), { onRegenerate: (reason) => reasons.push(reason) });
     expect(sshUtils.parseKey(key)).not.toBeInstanceOf(Error);
     expect(reasons.some((reason) => reason.includes("could not save"))).toBe(true);
+  });
+
+  it("leaves nothing beside the key but the key", () => {
+    // The key is written to a temporary name and renamed into place; a
+    // leftover temporary would be a second copy of the private key.
+    const directory = keyDir("tidy");
+    getOrCreateHostKey(directory);
+    expect(readdirSync(directory)).toEqual([HOST_KEY_FILENAME]);
+  });
+
+  it.skipIf(process.platform === "win32")("never writes through a link planted at the key path", () => {
+    // Someone who can put a symlink where the key goes must not be able to
+    // aim the server's write at another file: the unreadable "key" is
+    // replaced, and the file the link pointed at is left exactly as it was.
+    const directory = keyDir("planted");
+    mkdirSync(directory, { recursive: true });
+    const victim = join(scratch, "planted-victim");
+    writeFileSync(victim, "precious", { mode: HOST_KEY_MODE });
+    symlinkSync(victim, join(directory, HOST_KEY_FILENAME));
+    const key = getOrCreateHostKey(directory);
+    expect(readFileSync(victim, "utf8")).toBe("precious");
+    expect(lstatSync(join(directory, HOST_KEY_FILENAME)).isFile()).toBe(true);
+    expect(readFileSync(join(directory, HOST_KEY_FILENAME), "utf8")).toBe(key);
+  });
+
+  it("removes its temporary file when the key cannot be moved into place", () => {
+    // A non-empty directory at the key path cannot be renamed over. Its mode
+    // passes the permission check, so the store gets as far as the rename.
+    const directory = keyDir("blocked");
+    const occupied = join(directory, HOST_KEY_FILENAME);
+    mkdirSync(join(occupied, "inside"), { recursive: true });
+    chmodSync(occupied, HOST_KEY_MODE);
+    const reasons: string[] = [];
+    try {
+      const key = getOrCreateHostKey(directory, { onRegenerate: (reason) => reasons.push(reason) });
+      expect(sshUtils.parseKey(key)).not.toBeInstanceOf(Error);
+    } finally {
+      chmodSync(occupied, HOST_KEY_DIR_MODE);
+    }
+    expect(reasons.some((reason) => reason.includes("could not save"))).toBe(true);
+    expect(readdirSync(directory)).toEqual([HOST_KEY_FILENAME]);
   });
 
   it("checks the owner when the platform has one", () => {
