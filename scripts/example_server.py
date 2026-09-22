@@ -36,12 +36,19 @@ from starlette.staticfiles import StaticFiles
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _example_session import (
     _DEFAULT_PORT,
+    _DEFAULT_WORKER_ID,
     DemoSessionState,
     _append_entry,
+    _apply_control,
+    _apply_input,
     _enqueue_worker_messages,
     _force_release_hijack_for_shared_mode,
     _get_or_create_session,
     _hub,
+    _make_analysis,
+    _make_snapshot,
+    _refresh_outbound,
+    _reset_all_sessions,
     _reset_session_state,
     _session_payload,
     _set_input_mode,
@@ -49,27 +56,19 @@ from _example_session import (
     _state_update_messages,
     _sync_hub_input_mode,
 )
-from _example_session import (
-    _DEFAULT_WORKER_ID as _DEFAULT_WORKER_ID,  # re-export for test access
-)
-from _example_session import (
-    _apply_control as _apply_control,  # re-export for test access
-)
-from _example_session import (
-    _apply_input as _apply_input,  # re-export for test access
-)
-from _example_session import (
-    _make_analysis as _make_analysis,  # re-export for test access
-)
-from _example_session import (
-    _make_snapshot as _make_snapshot,  # re-export for test access
-)
-from _example_session import (
-    _refresh_outbound as _refresh_outbound,  # re-export for test access
-)
-from _example_session import (
-    _reset_all_sessions as _reset_all_sessions,  # re-export for test access
-)
+
+# The session helpers are re-exported so the example-server tests can drive
+# them through this module.
+__all__ = [
+    "_DEFAULT_WORKER_ID",
+    "_apply_control",
+    "_apply_input",
+    "_make_analysis",
+    "_make_snapshot",
+    "_refresh_outbound",
+    "_reset_all_sessions",
+    "app",
+]
 
 logger = logging.getLogger(__name__)
 
