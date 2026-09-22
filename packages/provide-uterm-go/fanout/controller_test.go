@@ -72,8 +72,20 @@ func TestCreateGroupAndList(t *testing.T) {
 func TestCreateGroupEnforcesMaxSize(t *testing.T) {
 	ctrl := NewController(newFakeHub(nil), Config{MaxGroupSize: 2})
 	_, err := ctrl.CreateGroup(newGroup(t, []string{"w1", "w2", "w3"}, nil), "admin")
-	if err == nil || !strings.Contains(err.Error(), "exceeds max") {
-		t.Fatalf("want exceeds-max error, got %v", err)
+	var rejected *GroupRejectedError
+	if !errors.As(err, &rejected) || rejected.Error() != "Group size 3 exceeds max 2" {
+		t.Fatalf("want a GroupRejectedError naming the limit, got %v", err)
+	}
+}
+
+func TestCreateGroupPatternRefusalsAreCallerFacing(t *testing.T) {
+	ctrl := newCtrl(newFakeHub(nil))
+	for _, pattern := range []string{strings.Repeat("a", maxErrorPatternLen+1), "(unterminated"} {
+		_, err := ctrl.CreateGroup(newGroup(t, []string{"w1"}, func(g *Group) { g.ErrorPattern = pattern }), "admin")
+		var rejected *GroupRejectedError
+		if !errors.As(err, &rejected) {
+			t.Fatalf("pattern %.20q: want a GroupRejectedError, got %T %v", pattern, err, err)
+		}
 	}
 }
 

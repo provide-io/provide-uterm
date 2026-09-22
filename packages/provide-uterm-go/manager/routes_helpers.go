@@ -6,7 +6,6 @@
 package manager
 
 import (
-	"errors"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -191,9 +190,21 @@ func realpath(p string) string {
 	return abs
 }
 
+// configPathRejectedError is a spawn config_path the sandbox refuses, mirroring
+// ConfigPathRejectedError. Error() keeps the full detail (including the
+// sandbox's resolved location) for logs and the in-process MCP tool; public is
+// the part written for an HTTP caller, which names the rule broken but not
+// where the sandbox lives.
+type configPathRejectedError struct {
+	detail string
+	public string
+}
+
+func (e *configPathRejectedError) Error() string { return e.detail }
+
 // validateConfigPath validates configPath is a safe YAML file inside the spawn
 // sandbox, mirroring _validate_config_path. getenv is injectable for testing.
-func validateConfigPath(configPath, configDirEnv string, getenv func(string) string) (string, error) {
+func validateConfigPath(configPath, configDirEnv string, getenv func(string) string) (string, *configPathRejectedError) {
 	baseRaw := configDirEnv
 	if baseRaw == "" {
 		baseRaw = strings.TrimSpace(getenv(ConfigDirEnvVar))
@@ -202,16 +213,23 @@ func validateConfigPath(configPath, configDirEnv string, getenv func(string) str
 		baseRaw = managerConfigDir()
 	}
 	if baseRaw == "" {
-		return "", errors.New("config dir is not configured; refusing to spawn from an unrestricted path")
+		msg := "config dir is not configured; refusing to spawn from an unrestricted path"
+		return "", &configPathRejectedError{detail: msg, public: msg}
 	}
 	base := realpath(baseRaw)
 	resolved := realpath(configPath)
 	suffix := strings.ToLower(filepath.Ext(resolved))
 	if suffix != ".yaml" && suffix != ".yml" {
-		return "", errors.New("config_path must be a .yaml or .yml file: " + configPath)
+		return "", &configPathRejectedError{
+			detail: "config_path must be a .yaml or .yml file: " + configPath,
+			public: "config_path must be a .yaml or .yml file",
+		}
 	}
 	if !isRelativeTo(resolved, base) {
-		return "", errors.New("config_path is outside config dir (" + base + "): " + configPath)
+		return "", &configPathRejectedError{
+			detail: "config_path is outside config dir (" + base + "): " + configPath,
+			public: "config_path is outside the spawn config dir",
+		}
 	}
 	return resolved, nil
 }
