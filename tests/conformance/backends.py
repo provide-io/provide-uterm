@@ -59,7 +59,6 @@ class ConformanceBackend(Protocol):
         audience: str | None = None,
     ) -> AuthOutcome:
         """Decode/verify *token*; AuthOutcome(ok=False, ...) if rejected."""
-        ...
 
     def auth_config_rejects(
         self,
@@ -73,7 +72,6 @@ class ConformanceBackend(Protocol):
         Used to assert both backends reject dev/none modes and HMAC+asymmetric
         algorithm-confusion configs at construction time.
         """
-        ...
 
     # -- Hijack lease ---------------------------------------------------------
     def acquire_lease(self, worker_id: str, owner: str, ttl_s: int, *, now: float) -> bool: ...
@@ -85,7 +83,6 @@ class ConformanceBackend(Protocol):
     # -- Events ---------------------------------------------------------------
     async def append_event(self, worker_id: str, event_type: str, data: dict[str, Any]) -> int:
         """Append an event; return its assigned sequence number."""
-        ...
 
     async def list_events(self, worker_id: str) -> list[dict[str, Any]]: ...
 
