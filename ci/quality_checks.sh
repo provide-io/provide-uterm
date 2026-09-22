@@ -55,9 +55,8 @@ step "single-http-stack"  uv run python scripts/check_single_http_stack.py
 step "ruff-format"        uv run ruff format --check packages/*/src packages/*/tests scripts tests conformance/fuzz
 step "ruff-check"         uv run ruff check packages/*/src packages/*/tests scripts tests conformance/fuzz
 step "mypy (strict)"      ci/typecheck.sh mypy
-# ty is informational: ci/typecheck.sh exits 0 for it, so it
-# surfaces warnings here without gating — mirroring CI exactly.
-step "ty (informational)" ci/typecheck.sh ty
+# ty gates: ci/typecheck.sh exits non-zero on any ty diagnostic.
+step "ty"                 ci/typecheck.sh ty
 step "bandit"             uv run bandit -r packages/*/src/ -ll
 step "xenon"              uv run xenon --max-absolute D --max-modules D --max-average A packages/provide-uterm/src/
 step "vulture"            uv run vulture packages/provide-uterm/src/ packages/provide-uterm/tests/ --ignore-names "since,password,kw,exc_type,tb,interval_s,pubkey_blob,username"
