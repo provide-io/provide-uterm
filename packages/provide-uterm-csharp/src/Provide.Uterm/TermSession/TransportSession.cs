@@ -60,6 +60,10 @@ public sealed class TransportSession : IAsyncDisposable
     private readonly List<WatchFunc> _watchers = new();
     private readonly List<ControlFrameFunc> _controlWatchers = new();
     private bool _connected;
+    private TransportClose? _closeInfo;
+
+    /// <summary>What <see cref="CloseAsync"/> records when the transport reported no close.</summary>
+    public static readonly TransportClose ClosedByClient = new(CloseInitiator.Local, Detail: "closed by client");
     private int _changeSeq;
     private int _updateSeq;
     private CancellationTokenSource? _readerCts;
@@ -87,6 +91,21 @@ public sealed class TransportSession : IAsyncDisposable
     public bool IsConnected()
     {
         lock (_gate) return _connected && _transport.IsConnected();
+    }
+
+    /// <summary>
+    /// How the connection ended, or null while it has not. Set by the reader from the
+    /// transport's <see cref="TransportClosedException"/> (an untyped failure becomes an
+    /// unknown close carrying it as detail), or by <see cref="CloseAsync"/> when this
+    /// side closes before the transport reported anything. Reset by <see cref="ConnectAsync"/>.
+    /// Port of Python's <c>TransportSession.close_info</c>.
+    /// </summary>
+    public TransportClose? CloseInfo
+    {
+        get
+        {
+            lock (_gate) return _closeInfo;
+        }
     }
 
     public int ScreenChangeSeq()
@@ -124,6 +143,7 @@ public sealed class TransportSession : IAsyncDisposable
         await _connect(cancellationToken).ConfigureAwait(false);
         lock (_gate)
         {
+            _closeInfo = null;
             _connected = true;
             _readerCts = new CancellationTokenSource();
             _readerTask = Task.Run(() => ReaderLoopAsync(_readerCts.Token), CancellationToken.None);
@@ -139,6 +159,7 @@ public sealed class TransportSession : IAsyncDisposable
         Task? reader;
         lock (_gate)
         {
+            _closeInfo ??= ClosedByClient;
             _connected = false;
             cts = _readerCts;
             reader = _readerTask;
@@ -343,8 +364,15 @@ public sealed class TransportSession : IAsyncDisposable
                 {
                     break;
                 }
-                catch
+                catch (TransportClosedException ex)
                 {
+                    RecordClose(ex.Close);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    // An untyped failure still ended the connection; say what it was.
+                    RecordClose(TransportClose.FromException(ex));
                     break;
                 }
 
@@ -445,6 +473,11 @@ public sealed class TransportSession : IAsyncDisposable
             _updateTcs = NewTcs();
             oldUpdate.TrySetResult();
         }
+    }
+
+    private void RecordClose(TransportClose close)
+    {
+        lock (_gate) _closeInfo = close;
     }
 
     private static TaskCompletionSource NewTcs() =>

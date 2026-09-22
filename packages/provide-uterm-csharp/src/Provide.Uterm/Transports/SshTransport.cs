@@ -20,6 +20,9 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
     private ShellStream? _shell;
     private readonly object _lock = new();
 
+    // Set by DisconnectAsync so a read or write it interrupts reports our own close.
+    private volatile bool _localDisconnect;
+
     public Task ConnectAsync(string host, int port, ConnectOptions? options = null, CancellationToken cancellationToken = default)
     {
         options = (options ?? new ConnectOptions()).WithDefaults();
@@ -88,6 +91,7 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
         {
             _client = client;
             _shell = shell;
+            _localDisconnect = false;
         }
 
         return Task.CompletedTask;
@@ -97,6 +101,7 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
     {
         lock (_lock)
         {
+            _localDisconnect = _shell is not null;
             _shell?.Dispose();
             if (_client is { IsConnected: true })
             {
@@ -119,9 +124,31 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
             shell = _shell ?? throw TransportErrors.NotConnected;
         }
 
-        await shell.WriteAsync(data, cancellationToken);
-        await shell.FlushAsync(cancellationToken);
+        try
+        {
+            await shell.WriteAsync(data, cancellationToken);
+            await shell.FlushAsync(cancellationToken);
+        }
+        catch (Exception ex) when (IsSessionFailure(ex))
+        {
+            throw new TransportClosedException("send failed", CloseFromFailure(ex, _localDisconnect), ex);
+        }
     }
+
+    /// <summary>
+    /// SSH has no Python client counterpart, so it follows the rule proposed in issue
+    /// #102: the peer closing the channel or connection is remote (see
+    /// <see cref="ReceiveAsync"/>), our own <see cref="DisconnectAsync"/> is local, and
+    /// a transport or protocol error is unknown with the error as detail.
+    /// </summary>
+    internal static TransportClose CloseFromFailure(Exception ex, bool localDisconnect) =>
+        localDisconnect
+            ? TransportClose.FromException(ex, CloseInitiator.Local)
+            : TransportClose.FromException(ex);
+
+    /// <summary>A read or write failure that means the SSH session or channel is gone.</summary>
+    internal static bool IsSessionFailure(Exception ex) =>
+        ex is SshException or IOException or ObjectDisposedException && ex is not TransportClosedException;
 
     public async Task<byte[]> ReceiveAsync(int maxBytes, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
@@ -134,21 +161,34 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout);
         var buf = new byte[Math.Max(1, maxBytes)];
+        int n;
         try
         {
-            var n = await shell.ReadAsync(buf.AsMemory(0, buf.Length), cts.Token);
-            if (n == 0)
-            {
-                return Array.Empty<byte>();
-            }
-
-            return buf[..n];
+            n = await shell.ReadAsync(buf.AsMemory(0, buf.Length), cts.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return Array.Empty<byte>();
         }
+        catch (Exception ex) when (IsSessionFailure(ex))
+        {
+            throw new TransportClosedException("connection lost", CloseFromFailure(ex, _localDisconnect), ex);
+        }
+
+        if (n == 0)
+        {
+            // ShellStream reads 0 only once its channel has closed. Before this it
+            // returned an empty chunk, which a reader polling IsConnected() could spin on
+            // while the SSH session outlived the channel.
+            throw new TransportClosedException("connection closed by remote", EndOfStreamClose(_localDisconnect));
+        }
+
+        return buf[..n];
     }
+
+    /// <summary>The close a channel end-of-stream reports: ours after DisconnectAsync, else the peer's.</summary>
+    internal static TransportClose EndOfStreamClose(bool localDisconnect) =>
+        new(localDisconnect ? CloseInitiator.Local : CloseInitiator.Remote);
 
     public bool IsConnected()
     {
