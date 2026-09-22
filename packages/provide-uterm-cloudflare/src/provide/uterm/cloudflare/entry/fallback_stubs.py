@@ -42,8 +42,11 @@ try:
     )
 except ImportError:
     # Outside CF runtime (tests / local dev): stubs loaded below from cf_types.
+    # WorkerEntrypoint is deliberately left unbound here: Stage 2 always binds
+    # it, and a None placeholder only gave static analysis a None to follow
+    # into `class Default(WorkerEntrypoint)`. Response keeps its sentinel
+    # because the last-resort json_response stub checks it.
     Response = None
-    WorkerEntrypoint = None
 
 # ---------------------------------------------------------------------------
 # sys.path bootstrapping for the Pyodide flat-layout.  Wrangler may flatten
