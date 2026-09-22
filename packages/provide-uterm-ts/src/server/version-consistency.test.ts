@@ -88,8 +88,9 @@ describe("release version consistency", () => {
     // Matched by version with the date left open. Pinning the literal date
     // meant every bump edited this assertion, and an assertion edited to make
     // it pass is not one that checks anything.
+    const escapedVersion = expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     expect(readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8")).toMatch(
-      new RegExp(`^## \\[${expected.replace(/\./g, "\\.")}\\] — \\d{4}-\\d{2}-\\d{2}$`, "m"),
+      new RegExp(`^## \\[${escapedVersion}\\] — \\d{4}-\\d{2}-\\d{2}$`, "m"),
     );
   });
 
