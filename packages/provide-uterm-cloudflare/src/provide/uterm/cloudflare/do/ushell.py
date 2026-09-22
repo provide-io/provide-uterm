@@ -143,7 +143,9 @@ async def on_browser_connected(runtime: Any) -> None:
     try:
         from provide.uterm.cloudflare.state.registry import update_kv_session
     except ImportError:  # pragma: no cover - CF flat bundle path
-        from state.registry import update_kv_session  # type: ignore[import-not-found,no-redef]
+        from state.registry import (  # type: ignore[import-not-found,no-redef]  # ty:ignore[unresolved-import]
+            update_kv_session,
+        )
     await update_kv_session(
         runtime.env,
         runtime.worker_id,

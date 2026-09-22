@@ -17,8 +17,8 @@ _XTERM_CSS_INTEGRITY = (
 )
 # xterm.js 6.0.0 lib — integrity from jsdelivr when available; empty disables SRI.
 # Prefer crossorigin always so browsers apply CORS+SRI consistently.
-_XTERM_JS_INTEGRITY = ""
-_FITADDON_JS_INTEGRITY = ""
+_XTERM_JS_INTEGRITY: str = ""
+_FITADDON_JS_INTEGRITY: str = ""
 
 # SPA route patterns → (page_kind, needs_session_id, extra_scripts).
 _SPA_SESSION_RE = re.compile(r"^/app/(?P<kind>session|operator|replay|inspect)/(?P<sid>[a-zA-Z0-9_-]{1,64})$")
