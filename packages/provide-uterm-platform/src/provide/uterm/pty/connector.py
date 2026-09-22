@@ -256,6 +256,7 @@ class PTYConnector:
             try:
                 os.close(self._master_fd)
             except OSError:
+                # Best-effort close during teardown; an already-closed fd is fine.
                 pass
             self._master_fd = None
 
@@ -264,6 +265,7 @@ class PTYConnector:
             try:
                 os.kill(self._child_pid, signal.SIGHUP)
             except (ProcessLookupError, PermissionError):
+                # The child already exited (or is not ours to signal); the reaping below handles it.
                 pass
             # Close master fd first so the slave side receives HUP, then wait
             # with WNOHANG. If the child hasn't exited yet escalate to SIGKILL
@@ -287,10 +289,12 @@ class PTYConnector:
                 try:
                     os.kill(self._child_pid, signal.SIGKILL)
                 except (ProcessLookupError, PermissionError):
+                    # The child already exited (or is not ours to signal); waitpid below still reaps it.
                     pass
                 try:
                     os.waitpid(self._child_pid, 0)
                 except ChildProcessError:
+                    # Already reaped (e.g. by a SIGCHLD handler); there is nothing left to wait for.
                     pass
             self._child_pid = None
 

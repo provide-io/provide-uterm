@@ -56,6 +56,7 @@ def _register() -> None:
 
         register_connector("pty_capture", CaptureConnector)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
     except ImportError:
+        # The server package is optional; without it there is no connector registry to join.
         pass
 
 
@@ -176,6 +177,7 @@ class CaptureConnector:
         try:
             await self._stdin_writer.wait_closed()
         except OSError:
+            # The peer already went away; the writer is discarded below either way.
             pass
         self._stdin_writer = None
 
