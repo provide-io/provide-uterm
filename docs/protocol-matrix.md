@@ -186,6 +186,15 @@ then `" (<detail>)"` when there is a detail; a code of `0` is a code, not an
 absent one. Port gaps are skipped by name in each port's vector test: C# has no
 chaos transport and no telnet receive-buffer cap.
 
+Each port's reconnecting wrapper keeps the close that triggered its last
+reconnect, or the final attempt when the retries ran out: Python
+`ReconnectingSession.last_close`, TypeScript `lastClose`, Go
+`ReconnectingTransport.LastClose()` and C# `ReconnectingTransport.LastClose`.
+It is set from a retried failure that carried a typed close; the session-level
+wrappers (Python, TypeScript) also take the dropped session's own close info
+before closing it. An untyped drop leaves the previous value in place.
+`spec/uterm-api.yaml` requires `last_close` in Python, Go and C#.
+
 ## Tunnel protocol
 
 Binary multiplexed WebSocket framing for terminal sharing, TCP forwarding, and HTTP inspection.
