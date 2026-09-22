@@ -10,6 +10,7 @@ package termsession
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +61,7 @@ type TransportSession struct {
 
 	mu        sync.Mutex
 	connected bool
+	closeInfo *transports.TransportClose
 	changeSeq int
 	updateCh  chan struct{}
 	watchers  []WatchFunc
@@ -122,6 +124,7 @@ func (s *TransportSession) Connect(ctx context.Context) error {
 	}
 	readerCtx, cancel := context.WithCancel(context.Background())
 	s.mu.Lock()
+	s.closeInfo = nil
 	s.connected = true
 	s.readerStop = cancel
 	s.readerDone = make(chan struct{})
@@ -131,9 +134,14 @@ func (s *TransportSession) Connect(ctx context.Context) error {
 	return nil
 }
 
-// Close stops the background reader and closes the connection.
+// Close stops the background reader and closes the connection. When the
+// transport has not already reported how the connection ended, the close is
+// recorded as this side's own ("local", detail "closed by client").
 func (s *TransportSession) Close(ctx context.Context) error {
 	s.mu.Lock()
+	if s.closeInfo == nil {
+		s.closeInfo = &transports.TransportClose{Initiator: transports.CloseLocal, Detail: "closed by client"}
+	}
 	s.connected = false
 	stop, done := s.readerStop, s.readerDone
 	s.readerStop, s.readerDone = nil, nil
@@ -200,6 +208,30 @@ func (s *TransportSession) IsConnected() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.connected
+}
+
+// CloseInfo returns how the connection ended, or nil while it has not. It is
+// set by the reader from the transport's *transports.TransportClosedError (an
+// untyped error becomes an "unknown" close carrying the error as detail), or
+// by Close when this side closes before the transport reports one. Connect
+// resets it. Port of Python's TransportSession.close_info.
+func (s *TransportSession) CloseInfo() *transports.TransportClose {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closeInfo == nil {
+		return nil
+	}
+	tc := *s.closeInfo
+	return &tc
+}
+
+// closeFromReadError describes the error that ended the reader.
+func closeFromReadError(err error) transports.TransportClose {
+	var closedErr *transports.TransportClosedError
+	if errors.As(err, &closedErr) {
+		return closedErr.Close
+	}
+	return transports.CloseFromError(err, transports.CloseUnknown)
 }
 
 // ScreenChangeSeq returns a monotonic counter that increments on each screen
@@ -299,6 +331,12 @@ func (s *TransportSession) readerLoop(ctx context.Context, done chan<- struct{})
 		data, err := s.transport.Receive(ctx, 4096, 500*time.Millisecond)
 		if err != nil {
 			s.mu.Lock()
+			// A Receive error caused by Close (which flips connected first)
+			// is our own close, already recorded there.
+			if s.connected {
+				tc := closeFromReadError(err)
+				s.closeInfo = &tc
+			}
 			s.connected = false
 			s.mu.Unlock()
 			return
