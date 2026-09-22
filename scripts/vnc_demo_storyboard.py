@@ -55,6 +55,7 @@ exit 0
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
+        # Best effort: a missing or failing tool only means no preview frame.
         pass
 
 

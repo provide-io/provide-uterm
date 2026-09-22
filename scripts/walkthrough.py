@@ -130,6 +130,7 @@ async def _wait_healthy(c: HijackClient, *, timeout: float = 15.0) -> None:
             if ok and data.get("ready"):
                 return
         except httpx2.ConnectError:
+            # Server not accepting connections yet; retry after the sleep.
             pass
         await asyncio.sleep(0.3)
     raise TimeoutError("server did not become healthy")

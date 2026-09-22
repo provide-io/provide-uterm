@@ -123,12 +123,14 @@ def _start_echo_worker(base_url: str, tunnel_id: str, worker_token: str) -> thre
                     await ws.send(encode_frame(CHANNEL_DATA, line))
                     await asyncio.sleep(0.4)
         except Exception:
+            # Demo feeder is best effort; recording continues without it.
             pass
 
     def _target() -> None:
         try:
             asyncio.run(_run())
         except Exception:
+            # Demo feeder is best effort; recording continues without it.
             pass
 
     t = threading.Thread(target=_target, daemon=True, name="demo-tunnel-echo-worker")

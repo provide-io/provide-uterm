@@ -24,6 +24,7 @@ def wait_connected(base_url: str, session_id: str, timeout: float = 15.0) -> boo
             if r.status_code == 200 and r.json().get("connected"):
                 return True
         except Exception:
+            # Server not up yet; retry after the sleep.
             pass
         time.sleep(0.3)
     return False

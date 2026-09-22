@@ -56,6 +56,7 @@ def _decode_control(raw: str) -> list[dict]:
             if isinstance(obj, dict):
                 out.append(obj)
         except Exception:
+            # Skip lines that are not JSON; the transcript keeps the rest.
             pass
     return out
 

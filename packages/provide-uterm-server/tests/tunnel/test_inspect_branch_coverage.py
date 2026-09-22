@@ -69,6 +69,7 @@ class _TunnelWS:
                         with suppress(Exception):
                             self.frames.append(json.loads(frame.payload))
         except Exception:
+            # Any socket error ends the capture; frames holds what arrived.
             pass
 
     async def wait_ready(self) -> None:

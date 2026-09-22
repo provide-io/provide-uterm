@@ -80,6 +80,7 @@ async def _poll_until_status(
             if last_response.status_code == expected_status:
                 return last_response
         except Exception:
+            # Server not ready yet; retry until the deadline.
             pass
         await asyncio.sleep(0.05)
     return last_response

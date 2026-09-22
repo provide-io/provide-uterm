@@ -147,6 +147,7 @@ async def _start_tls_ws_server(cert_path: Path, key_path: Path) -> tuple[Any, in
                     with contextlib.suppress(Exception):
                         captured.append(decode_control_payload(msg))
         except websockets.ConnectionClosed:
+            # Worker socket closed: capture is complete.
             pass
 
     server_ctx = _server_ssl_context(cert_path, key_path)

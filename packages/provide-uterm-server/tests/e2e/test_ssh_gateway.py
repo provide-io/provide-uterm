@@ -75,6 +75,7 @@ async def _make_ssh_server(
                     t.cancel()
                 await asyncio.gather(*[*_done, *pending], return_exceptions=True)
         except Exception:
+            # Pump shutdown errors are irrelevant to the assertions that follow.
             pass
         finally:
             with contextlib.suppress(Exception):
@@ -288,6 +289,7 @@ class TestSshWsGatewayRealConnections:
                     try:
                         await asyncio.wait_for(proc.stdout.read(4096), timeout=5.0)
                     except asyncssh.ConnectionLost:
+                        # The server dropping the connection is the expected outcome here.
                         pass
             # Reaching here means no hang and no unclosed-task warning.
         finally:

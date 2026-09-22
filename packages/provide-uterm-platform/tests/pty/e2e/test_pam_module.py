@@ -135,6 +135,7 @@ async def test_pam_module_open_sends_event() -> None:
                 if session:
                     await _close_session(session)
             except PamError:
+                # The session may already be closed by the PAM stack; cleanup is best effort.
                 pass
             await listener.stop()
             if svc_path and svc_path.exists():
@@ -182,6 +183,7 @@ async def test_pam_module_close_sends_event() -> None:
                 try:
                     await _close_session(session)
                 except PamError:
+                    # The session may already be closed by the PAM stack; cleanup is best effort.
                     pass
             await listener.stop()
             if svc_path and svc_path.exists():
@@ -213,6 +215,7 @@ async def test_pam_module_unreachable_socket_does_not_fail_session() -> None:
             try:
                 await _close_session(session)
             except PamError:
+                # The session may already be closed by the PAM stack; cleanup is best effort.
                 pass
         if svc_path and svc_path.exists():
             svc_path.unlink()
@@ -250,6 +253,7 @@ async def test_pam_module_custom_socket_path_arg() -> None:
                 try:
                     await _close_session(session)
                 except PamError:
+                    # The session may already be closed by the PAM stack; cleanup is best effort.
                     pass
             await listener.stop()
             if svc_path and svc_path.exists():

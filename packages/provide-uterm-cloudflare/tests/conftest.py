@@ -246,6 +246,7 @@ class _PywranglerManager:
                     if resp.status == 200:
                         return True
             except (urllib.error.URLError, OSError):
+                # Health check failed; fall through and restart the server.
                 pass
         # Dead or unhealthy — restart
         return self.start()

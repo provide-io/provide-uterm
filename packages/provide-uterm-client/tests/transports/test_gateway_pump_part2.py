@@ -189,6 +189,7 @@ class TestPipeWsResume:
                     received.append(msg if isinstance(msg, str) else msg.decode())
                     first_message.set()
             except websockets.exceptions.ConnectionClosed:
+                # Client disconnect ends the capture; received holds what arrived.
                 pass
 
         srv = await websockets.serve(handler, "127.0.0.1", 0)

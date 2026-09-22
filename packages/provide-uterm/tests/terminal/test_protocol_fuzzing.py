@@ -38,6 +38,7 @@ def test_decoder_resilience_under_binary_chaos(chaos_data, inject_control):
     try:
         decoder.finish()
     except ControlFrameProtocolError:
+        # Truncated input is expected to be rejected; the fuzz only checks it does not crash.
         pass
 
 

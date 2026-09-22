@@ -64,6 +64,7 @@ def _wait_http(url: str, timeout: float = 20.0, token: str | None = None) -> Non
                 if resp.status < 500:
                     return
         except Exception:
+            # Server not up yet; retry after the sleep.
             pass
         time.sleep(0.2)
     raise RuntimeError(f"server not ready at {url} within {timeout}s")
@@ -146,6 +147,7 @@ def _pty_drain(master_fd: int, stop: threading.Event) -> None:
             if data:
                 os.write(devnull, data)
     except OSError:
+        # The pty closed; stop draining.
         pass
     finally:
         os.close(devnull)
@@ -179,6 +181,7 @@ def _stdin_listener(sock_path: str, master_fd_holder: list[int], stop: threading
                     with contextlib.suppress(OSError):
                         os.write(master_fd_holder[0], data)
         except OSError:
+            # The pty closed; stop relaying.
             pass
         finally:
             conn.close()
@@ -356,6 +359,7 @@ def main() -> None:
                 break
             time.sleep(1)
     except KeyboardInterrupt:
+        # Ctrl-C is the normal way to stop the demo server.
         pass
     finally:
         print("\nStopping...")
