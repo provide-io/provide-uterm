@@ -167,7 +167,8 @@ class HostedSessionRuntime:
     async def set_mode(self, mode: str) -> None:
         if mode not in {"hijack", "open"}:
             raise ValueError(f"invalid mode: {mode}")
-        typed_mode = cast("Literal['hijack', 'open']", mode)
+        # mypy does not narrow `str in {...}` to a Literal, so the cast stays for it.
+        typed_mode = cast("Literal['hijack', 'open']", mode)  # ty:ignore[redundant-cast]
         if self._connector is not None:
             await self._enqueue_messages(await self._connector.set_mode(typed_mode))
         self.definition.input_mode = typed_mode

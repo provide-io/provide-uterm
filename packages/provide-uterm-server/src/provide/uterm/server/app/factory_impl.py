@@ -12,7 +12,7 @@ import re
 import secrets
 import time
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketException, status
 from starlette.requests import HTTPConnection  # noqa: TC002
@@ -339,8 +339,8 @@ def create_server_app(
         class _DefaultTermHub(DeckMuxMixin, TermHub):
             """Reference server hub with DeckMux presence routing enabled."""
 
-            def __init__(self, **kwargs: object) -> None:
-                super().__init__(**kwargs)  # type: ignore[arg-type]
+            def __init__(self, **kwargs: Any) -> None:
+                super().__init__(**kwargs)
                 self._deckmux_init()
 
         _hub_class: type[TermHub] = _DefaultTermHub

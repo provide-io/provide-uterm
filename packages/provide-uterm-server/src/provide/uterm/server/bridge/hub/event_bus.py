@@ -105,7 +105,8 @@ class _Subscription:
         if tracked is not None:
             return int(tracked)
         total = 0
-        for item in self.queue._queue:  # type: ignore[attr-defined]
+        # asyncio.Queue._queue is a CPython private deque that typeshed does not declare.
+        for item in self.queue._queue:  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             total += _serialized_bytes(item)
         return total
 

@@ -107,7 +107,8 @@ def install_ws_denial_support(app: FastAPI) -> None:
     # Silenced with an ignore comment rather than typing.cast: cast discards its
     # first argument at runtime, so mutating that string is a no-op no test can
     # ever detect — an unkillable mutant for no benefit.
-    app.add_exception_handler(WebSocketAuthDenied, handle_ws_auth_denied)  # type: ignore[arg-type]
+    # Starlette types handlers as taking plain Exception although it dispatches by class.
+    app.add_exception_handler(WebSocketAuthDenied, handle_ws_auth_denied)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
     # The uvicorn logger is process-global while an app is not: a test suite
     # builds hundreds of apps, and adding a filter per app would stack hundreds
     # of them on one logger.

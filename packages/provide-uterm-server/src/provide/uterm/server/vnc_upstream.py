@@ -110,7 +110,8 @@ def dial_config_from_target(target: GraphicalTargetDefinition) -> RfbDialConfig 
     tls_insecure = _as_bool(cfg.get("tls_insecure"), default=False) or _as_bool(cfg.get("ssl_insecure"), default=False)
     timeout_raw = cfg.get("connect_timeout_s", DEFAULT_CONNECT_TIMEOUT_S)
     try:
-        timeout_s = float(timeout_raw)  # type: ignore[arg-type]
+        # Untyped config value: float() rejects bad types/values and the except below falls back.
+        timeout_s = float(timeout_raw)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
     except (TypeError, ValueError):
         timeout_s = DEFAULT_CONNECT_TIMEOUT_S
     if timeout_s <= 0:

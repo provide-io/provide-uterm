@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
+    import builtins
     from collections.abc import Callable
 
 # --- Constants (GraphicalTargetConstants) ----------------------------------
@@ -357,7 +358,7 @@ class InMemoryGraphicalTargetRegistry:
                 return runtime_target.clone()
             return None
 
-    def list(self, scope: GraphicalTargetScope) -> list[GraphicalTargetDefinition]:
+    def list(self, scope: GraphicalTargetScope) -> builtins.list[GraphicalTargetDefinition]:
         """Runtime + static merged (static wins), tenant-filtered, sorted by id."""
         with self._lock:
             self._ensure_open(scope)
