@@ -148,6 +148,17 @@ class TestAgentRegister:
         # pydantic may coerce or reject
         assert resp.status_code in (200, 422)
 
+    def test_register_with_an_invalid_field_reports_it_without_echoing(self, client):
+        """A 422 names the field and the rule, not the submitted value or the model."""
+        resp = client.post("/agent/bad/register", json={"started_at": "sentinel-value-123"})
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["error"] == "invalid agent status"
+        assert [(e["loc"], e["type"]) for e in body["detail"]] == [(["started_at"], "float_parsing")]
+        assert "sentinel-value-123" not in resp.text
+        assert "AgentStatus" not in resp.text
+        assert "errors.pydantic.dev" not in resp.text
+
     def test_register_rejected_at_max_agents(self, client, manager):
         """Auto-creating a new record must honor max_agents (PLAT-reg)."""
         manager.max_agents = 2

@@ -280,7 +280,16 @@ async def register_agent(
             }
         )
     except ValidationError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=422)
+        # Which fields failed and why, as structured data — not str(exc), which
+        # echoes the submitted values and names the (plugin-specific) status
+        # model class and the pydantic version's documentation URL.
+        return JSONResponse(
+            {
+                "error": "invalid agent status",
+                "detail": exc.errors(include_url=False, include_context=False, include_input=False),
+            },
+            status_code=422,
+        )
     manager.agents[agent_id] = merged
     return {"ok": True, "created": created}
 
