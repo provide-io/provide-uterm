@@ -9,10 +9,10 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Literal, cast
 
+import provide.uterm.transport_session as transport_session_module
 import pytest
 
 import provide.uterm as uterm
-from provide.uterm import transport_session as transport_session_module
 from provide.uterm.control_channel import encode_control_frame
 
 from .test_transport_session import _ConcreteSession, _FakeTransport

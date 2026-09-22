@@ -89,10 +89,9 @@ class TestWsToTcp:
             async def drain(self) -> None:
                 drained.append(True)
 
-        from asyncio import StreamWriter
         from typing import cast
 
-        await _ws_to_tcp(_async_iter(["world"]), cast("StreamWriter", MockWriter()), token_holder=[None])
+        await _ws_to_tcp(_async_iter(["world"]), cast("asyncio.StreamWriter", MockWriter()), token_holder=[None])
         assert written == [b"world"]
         assert drained
 
@@ -106,10 +105,9 @@ class TestWsToTcp:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
-        await _ws_to_tcp(_async_iter([b"\xff\xfe"]), cast("StreamWriter", MockWriter()), token_holder=[None])
+        await _ws_to_tcp(_async_iter([b"\xff\xfe"]), cast("asyncio.StreamWriter", MockWriter()), token_holder=[None])
         assert written == [b"\xff\xfe"]
 
 
@@ -153,9 +151,8 @@ class TestTelnetWsGateway:
             # before the banner and crowd the read window.
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}", iac_negotiate=False)
             tcp_srv = await gw.start("127.0.0.1", 0)
-            from asyncio import Server
 
-            assert isinstance(tcp_srv, Server)
+            assert isinstance(tcp_srv, asyncio.Server)
             assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
 
@@ -180,9 +177,8 @@ class TestTelnetWsGateway:
         try:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}", iac_negotiate=False)
             tcp_srv = await gw.start("127.0.0.1", 0)
-            from asyncio import Server
 
-            assert isinstance(tcp_srv, Server)
+            assert isinstance(tcp_srv, asyncio.Server)
             assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
 
@@ -209,9 +205,8 @@ class TestTelnetWsGateway:
         try:
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}")
             tcp_srv = await gw.start("127.0.0.1", 0)
-            from asyncio import Server
 
-            assert isinstance(tcp_srv, Server)
+            assert isinstance(tcp_srv, asyncio.Server)
             assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
 
@@ -265,13 +260,12 @@ class TestPipeWs:
                     pass
 
             # Should complete without hanging
-            from asyncio import StreamWriter
             from typing import cast
 
             await asyncio.wait_for(
                 _pipe_ws(
                     reader,
-                    cast("StreamWriter", MockWriter()),
+                    cast("asyncio.StreamWriter", MockWriter()),
                     f"ws://127.0.0.1:{ws_port}",
                     token_holder=[None],
                     advertise_redirect=False,  # isolate resume behavior from the capability hello

@@ -136,7 +136,7 @@ async def test_deliver_webhook_fetch_error_logged_not_raised() -> None:
 @pytest.mark.asyncio
 async def test_deliver_webhook_uses_module_level_fetch_when_no_fetch_arg(monkeypatch: pytest.MonkeyPatch) -> None:
     """When _fetch is None and _outbound_fetch is set, uses _outbound_fetch."""
-    import provide.uterm.cloudflare.do._webhooks as wh_mod
+    from provide.uterm.cloudflare.do import _webhooks as wh_mod
 
     calls: list[str] = []
 
@@ -151,7 +151,7 @@ async def test_deliver_webhook_uses_module_level_fetch_when_no_fetch_arg(monkeyp
 @pytest.mark.asyncio
 async def test_deliver_webhook_no_fetch_and_no_js_module(monkeypatch: pytest.MonkeyPatch) -> None:
     """When no fetch available and js is not importable, silently skips."""
-    import provide.uterm.cloudflare.do._webhooks as wh_mod
+    from provide.uterm.cloudflare.do import _webhooks as wh_mod
 
     monkeypatch.setattr(wh_mod, "_outbound_fetch", None)
     # No _fetch provided, no js module → should return without raising
