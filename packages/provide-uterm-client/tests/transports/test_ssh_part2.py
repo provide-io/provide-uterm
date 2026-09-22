@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import stat as stat_module
 from unittest.mock import MagicMock, patch
 
@@ -259,7 +260,7 @@ class TestHostKeyPermissions:
         with (
             patch("provide.uterm.transports.ssh.os.name", "posix"),
             patch("provide.uterm.transports.ssh.os.getuid", return_value=real_stat.st_uid, create=True),
-            patch("provide.uterm.transports.ssh.os.stat", return_value=_FakeStat),
+            patch("provide.uterm.transports.ssh.os.fstat", return_value=_FakeStat),
         ):
             with pytest.raises(PermissionError, match="owned by uid"):
                 _get_or_create_host_key(tmp_path)
@@ -305,7 +306,88 @@ class TestHostKeyPermissions:
     def test_save_failure_still_returns_generated_key(self, tmp_path) -> None:
         from provide.uterm.transports.ssh import _get_or_create_host_key
 
-        with patch("pathlib.Path.write_bytes", side_effect=OSError("readonly")):
+        with patch("provide.uterm.transports.ssh.tempfile.mkstemp", side_effect=OSError("readonly")):
             key = _get_or_create_host_key(tmp_path)
 
         assert key is not None
+
+    def test_saved_key_leaves_nothing_beside_it(self, tmp_path) -> None:
+        """The key is written under a temporary name and renamed into place; a
+        leftover temporary would be a second copy of the private key."""
+        from provide.uterm.transports.ssh import _get_or_create_host_key
+
+        _get_or_create_host_key(tmp_path)
+
+        assert [p.name for p in tmp_path.iterdir()] == ["ssh_host_key"]
+
+    @pytest.mark.skipif(not hasattr(os, "symlink") or os.name == "nt", reason="POSIX symlink semantics")
+    def test_never_writes_through_a_link_planted_at_the_key_path(self, tmp_path) -> None:
+        """A symlink at the key path must not aim the server's write at another file.
+
+        The unparseable "key" behind the link is replaced by a regular file and
+        the file the link pointed at is left exactly as it was — the old
+        ``write_bytes`` followed the link and truncated its target.
+        """
+        import asyncssh
+
+        from provide.uterm.transports.ssh import _get_or_create_host_key
+
+        key_dir = tmp_path / "keys"
+        key_dir.mkdir()
+        victim = tmp_path / "victim"
+        victim.write_bytes(b"precious")
+        victim.chmod(0o600)
+        (key_dir / "ssh_host_key").symlink_to(victim)
+
+        key = _get_or_create_host_key(key_dir)
+
+        assert victim.read_bytes() == b"precious"
+        assert not (key_dir / "ssh_host_key").is_symlink()
+        saved = asyncssh.import_private_key((key_dir / "ssh_host_key").read_bytes())
+        assert saved.public_data == key.public_data
+
+    def test_failed_rename_removes_the_temporary_file(self, tmp_path) -> None:
+        """A key that cannot be moved into place leaves no copy of itself behind."""
+        from provide.uterm.transports.ssh import _get_or_create_host_key
+
+        with patch("pathlib.Path.replace", side_effect=OSError("busy")):
+            key = _get_or_create_host_key(tmp_path)
+
+        assert key is not None
+        assert list(tmp_path.iterdir()) == []
+
+    def test_verify_without_a_stat_reads_the_path(self, tmp_path) -> None:
+        """Called with a path alone (as the TS port's golden generators do), the
+        check stats the path itself."""
+        from provide.uterm.transports.ssh import _verify_key_permissions
+
+        key_path = tmp_path / "ssh_host_key"
+        key_path.write_bytes(b"k")
+        key_path.chmod(0o644)
+        with (
+            patch("provide.uterm.transports.ssh.os.name", "posix"),
+            pytest.raises(PermissionError, match="insecure mode 0o644"),
+        ):
+            _verify_key_permissions(key_path)
+
+    def test_verified_facts_come_from_the_opened_file(self, tmp_path) -> None:
+        """The permission check reads the descriptor that is then read, not the path."""
+        import asyncssh
+
+        from provide.uterm.transports.ssh import _get_or_create_host_key
+
+        key_path = tmp_path / "ssh_host_key"
+        key_path.write_bytes(asyncssh.generate_private_key("ssh-ed25519").export_private_key())
+        key_path.chmod(0o600)
+
+        class _Exposed:
+            st_mode = stat_module.S_IFREG | 0o644
+            st_uid = 0
+
+        with (
+            patch("provide.uterm.transports.ssh.os.name", "posix"),
+            patch("provide.uterm.transports.ssh.os.fstat", return_value=_Exposed) as fstat,
+            pytest.raises(PermissionError, match="insecure mode"),
+        ):
+            _get_or_create_host_key(tmp_path)
+        fstat.assert_called_once()

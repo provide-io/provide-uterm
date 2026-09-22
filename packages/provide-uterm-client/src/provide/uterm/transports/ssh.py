@@ -21,6 +21,7 @@ import contextlib
 import ipaddress
 import os
 import stat as stat_module
+import tempfile
 from collections.abc import Callable, Coroutine
 from pathlib import Path
 from typing import Any
@@ -231,8 +232,12 @@ def _default_host_key_dir() -> Path:
     return home / ".uterm"
 
 
-def _verify_key_permissions(key_path: Path) -> None:
+def _verify_key_permissions(key_path: Path, st: os.stat_result | None = None) -> None:
     """Raise if *key_path* is not 0600 and owned by the current user.
+
+    *st*, when given, is the ``fstat`` of the file the caller has already
+    opened, so the facts checked are those of the file that will be read
+    rather than of whatever the path names a moment later.
 
     POSIX mode bits and uid ownership don't exist on Windows — ``os.stat()``
     there can never read back mode 0o600 and has no meaningful ``st_uid``, so
@@ -244,7 +249,8 @@ def _verify_key_permissions(key_path: Path) -> None:
     if os.name == "nt":  # pragma: no cover - exercised only on Windows CI
         logger.warning("ssh_host_key_permission_check_unavailable_on_windows", path=str(key_path))
         return
-    st = key_path.stat()
+    if st is None:
+        st = key_path.stat()
     mode = stat_module.S_IMODE(st.st_mode)
     if mode != 0o600:
         raise PermissionError(
@@ -257,6 +263,46 @@ def _verify_key_permissions(key_path: Path) -> None:
         )
 
 
+def _read_verified_host_key(key_path: Path) -> bytes | None:
+    """Return the bytes of *key_path* after checking the file actually read.
+
+    The file is opened once, and both the permission check (``fstat``) and the
+    read go through that descriptor. Checking the path and then reading the
+    path again leaves a window in which the file can be swapped for one that
+    never passed the check. ``None`` means there is no key yet.
+    """
+    try:
+        fd = os.open(key_path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "rb") as fh:
+        _verify_key_permissions(key_path, os.fstat(fh.fileno()))
+        return fh.read()
+
+
+def _write_host_key_atomically(data_dir: Path, key_path: Path, data: bytes) -> None:
+    """Save *data* at *key_path* without ever writing through what is there now.
+
+    ``mkstemp`` creates a fresh file exclusively (``O_EXCL``, mode 0600) beside
+    the key, which is then renamed over *key_path*. Writing to *key_path*
+    directly followed a symlink planted there and truncated its target, and
+    created the file at the umask's mode until the ``chmod`` that came after.
+    """
+    fd, name = tempfile.mkstemp(prefix=f".{key_path.name}.", suffix=".tmp", dir=data_dir)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        # mkstemp's 0600 passes through the umask, which could narrow it to a
+        # mode the loader then refuses; set it exactly, as the chmod here did.
+        temporary.chmod(0o600)
+        temporary.replace(key_path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            temporary.unlink()
+        raise
+
+
 def _get_or_create_host_key(data_dir: Path) -> asyncssh.SSHKey:
     """Load or generate an ed25519 SSH host key in *data_dir*.
 
@@ -265,10 +311,10 @@ def _get_or_create_host_key(data_dir: Path) -> asyncssh.SSHKey:
     is raised.
     """
     key_path = data_dir / "ssh_host_key"
-    if key_path.exists():
-        _verify_key_permissions(key_path)
+    existing = _read_verified_host_key(key_path)
+    if existing is not None:
         try:
-            return asyncssh.import_private_key(key_path.read_bytes())
+            return asyncssh.import_private_key(existing)
         except PermissionError:
             raise
         except Exception as exc:
@@ -280,8 +326,7 @@ def _get_or_create_host_key(data_dir: Path) -> asyncssh.SSHKey:
         # Tighten directory permissions to 0700 so the key directory is private.
         with contextlib.suppress(OSError):
             data_dir.chmod(0o700)
-        key_path.write_bytes(key.export_private_key())
-        key_path.chmod(0o600)
+        _write_host_key_atomically(data_dir, key_path, key.export_private_key())
         logger.info("generated new ssh host key path=%s", key_path)
     except Exception as exc:
         logger.error("failed to save ssh host key: %s", exc)
