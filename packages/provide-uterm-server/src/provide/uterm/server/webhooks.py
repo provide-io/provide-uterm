@@ -76,7 +76,6 @@ from provide.uterm.server.webhook_signing import (
 logger = get_logger(__name__)
 
 # Delivery retry settings
-_MAX_RETRIES = 3
 _RETRY_DELAYS = (0.5, 1.0, 2.0)
 _DELIVER_TIMEOUT_S = 5.0
 # Maximum consecutive SSRF-guard blocks tolerated before a webhook is
