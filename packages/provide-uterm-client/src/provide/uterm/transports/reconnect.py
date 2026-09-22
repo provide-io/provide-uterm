@@ -152,6 +152,7 @@ class ReconnectingSession:
         try:
             await self._session.close()
         except Exception:
+            # Best-effort close of the dead session before reconnecting; its failure is irrelevant.
             pass
 
         if self._policy.base_backoff_s > 0:
