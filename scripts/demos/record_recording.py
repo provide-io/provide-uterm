@@ -216,7 +216,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     steps: list[BrowserStep] = [
         # Show live operator view so the terminal is visible and WebSocket connects
         ("/app/operator/provide-shell", 0.5, None),
-        (lambda p: wait_for_terminal(p), 2.0, "01-session-active.png"),
+        (wait_for_terminal, 2.0, "01-session-active.png"),
         # Open replay viewer — shows step-by-step navigator
         ("/app/replay/provide-shell", 1.5, None),
         # Switch filter to snapshot-only (each entry has a full screen state)

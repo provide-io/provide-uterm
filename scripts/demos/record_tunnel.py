@@ -207,13 +207,13 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     perspectives: dict[str, list[BrowserStep]] = {
         "share": [
             (share_path, 0.5, None),  # navigate via share URL → viewer role
-            (lambda p: wait_for_terminal(p), 1.5, "share-01-viewer-initial.png"),
+            (wait_for_terminal, 1.5, "share-01-viewer-initial.png"),
             (None, 2.0, "share-02-worker-frames-visible.png"),
             (None, 2.0, "share-03-stream-progressing.png"),
         ],
         "control": [
             (control_path, 0.5, None),  # navigate via control URL → operator role
-            (lambda p: wait_for_terminal(p), 1.5, "control-01-operator-initial.png"),
+            (wait_for_terminal, 1.5, "control-01-operator-initial.png"),
             (None, 2.0, "control-02-worker-frames-visible.png"),
             (None, 2.0, "control-03-stream-progressing.png"),
         ],

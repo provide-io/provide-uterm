@@ -122,7 +122,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
         ("/app/replay/provide-shell", 3.0, "01-replay-player.png"),  # wait 3s for SPA to mount
         (None, 2.0, "02-replay-scrubbing.png"),  # same page, second screenshot
         ("/app/session/provide-shell", 0.5, None),
-        (lambda p: wait_for_terminal(p), 2.0, "03-live-session.png"),
+        (wait_for_terminal, 2.0, "03-live-session.png"),
     ]
     mp4_path = browser_record(base_url, steps, feat_dir)
     stop_server(server)
