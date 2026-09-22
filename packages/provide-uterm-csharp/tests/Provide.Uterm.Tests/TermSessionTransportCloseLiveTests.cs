@@ -82,15 +82,21 @@ public class TermSessionTransportCloseLiveTests
     [Fact]
     public async Task AServerThatDropsTheSocketIsAnUnknownClose()
     {
-        var (app, url) = await StartWsServer((ctx, _) =>
+        var (app, url) = await StartWsServer(async (ctx, ws) =>
         {
+            // Abort only once the client has sent a message, which it can do only after
+            // its handshake completed. Aborting straight after AcceptWebSocketAsync raced
+            // the 101 response out of Kestrel: under load the RST reached the client
+            // mid-handshake, so ConnectAsync failed ("Unable to connect to the remote
+            // server" / connection reset by peer) and the close path was never exercised.
+            try { await ws.ReceiveAsync(new byte[16], new CancellationTokenSource(Wait).Token); } catch { /* gone */ }
             ctx.Abort();
-            return Task.CompletedTask;
         });
         try
         {
             var transport = new WebSocketTransport();
             await ConnectWs(transport, url);
+            await transport.SendAsync("x"u8.ToArray());
             var err = await Assert.ThrowsAsync<TransportClosedException>(
                 () => transport.ReceiveAsync(1024, Wait));
             Assert.Equal(CloseInitiator.Unknown, err.Close.Initiator);

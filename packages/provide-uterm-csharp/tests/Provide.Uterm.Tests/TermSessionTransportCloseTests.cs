@@ -80,6 +80,25 @@ public class TermSessionTransportCloseTests
     }
 
     [Fact]
+    public void AWebSocketResetWithoutFramesIsUnknownNotRemote()
+    {
+        // Unlike telnet, a WebSocket attributes a close only by its close frames: a peer
+        // reset with none exchanged is unknown however the socket died (Python rule).
+        var reset = new SocketException((int)SocketError.ConnectionReset);
+        foreach (var ex in new Exception[]
+                 {
+                     new WebSocketException(WebSocketError.ConnectionClosedPrematurely, new IOException("read", reset)),
+                     new IOException("Unable to read data from the transport connection", reset),
+                 })
+        {
+            Assert.True(WebSocketTransport.IsSocketFailure(ex));
+            var close = WebSocketTransport.CloseFromFrames(null, null, null, ex);
+            Assert.Equal(CloseInitiator.Unknown, close.Initiator);
+            Assert.Null(close.Code);
+        }
+    }
+
+    [Fact]
     public void AWebSocketFailureIsAClosedConnectionOnlyWhenItLooksLikeOne()
     {
         var premature = new WebSocketException(WebSocketError.ConnectionClosedPrematurely);
