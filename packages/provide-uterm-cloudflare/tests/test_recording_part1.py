@@ -264,7 +264,6 @@ async def test_route_recording_download() -> None:
     body = getattr(resp, "body", "")
     lines = [line for line in body.strip().split("\n") if line]
     assert len(lines) == 3
-    import json
 
     for line in lines:
         entry = json.loads(line)

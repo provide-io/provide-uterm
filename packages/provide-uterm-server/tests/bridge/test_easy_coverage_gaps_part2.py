@@ -413,7 +413,6 @@ def test_messaging_get_heuristics_empty_returns_zeros() -> None:
 
 async def test_behavioral_audit_loop_swallows_errors(caplog: pytest.LogCaptureFixture) -> None:
     import asyncio as _asyncio
-    import logging
 
     from provide.uterm.server.bridge.hub import TermHub
 

@@ -254,7 +254,6 @@ class TestDeleteGroupForbidden:
         app.include_router(hub.create_router(extra_route_registrars=[register_fanout_routes]))
 
         # Create a group owned by "bob" (not "alice").
-        import asyncio
 
         group = FanOutGroup(
             group_id="gx",
@@ -309,8 +308,6 @@ class TestGrantAccessForbidden:
         app.add_middleware(_SetPrincipal)
         app.state.uterm_authz = MagicMock(is_admin=AsyncMock(return_value=True))
         app.include_router(hub.create_router(extra_route_registrars=[register_fanout_routes]))
-
-        import asyncio
 
         group = FanOutGroup(
             group_id="gy",

@@ -248,7 +248,6 @@ async def test_resolve_signing_key_no_kid_alg_mismatch_skips_key() -> None:
 
 def test_persist_lease_no_set_alarm_does_not_raise() -> None:
     """Line 377->exit: persist_lease with storage that has no setAlarm → skips alarm."""
-    import sqlite3
 
     from provide.uterm.cloudflare.bridge.hijack import HijackSession
     from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
@@ -280,7 +279,6 @@ def test_persist_lease_no_set_alarm_does_not_raise() -> None:
 
 async def test_alarm_worker_connected_no_set_alarm() -> None:
     """Line 491->exit: alarm() with worker_ws set but ctx.storage has no setAlarm."""
-    import sqlite3
 
     from provide.uterm.cloudflare.do.session_runtime import SessionRuntime
 
@@ -314,7 +312,6 @@ async def test_alarm_worker_connected_no_set_alarm() -> None:
 
 async def test_alarm_no_worker_active_hijack_no_set_alarm() -> None:
     """Line 494->exit: alarm() with worker_ws=None, hijack.session present, no setAlarm."""
-    import sqlite3
 
     from provide.uterm.cloudflare.bridge.hijack import HijackSession
     from provide.uterm.cloudflare.do.session_runtime import SessionRuntime

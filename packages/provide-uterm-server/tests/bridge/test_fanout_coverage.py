@@ -419,7 +419,6 @@ class TestFanoutSendWsDispatch:
         hub.fan_out_controller = ctrl  # type: ignore[attr-defined]
 
         # Create a group.
-        import asyncio
 
         group = _make_group(["w-missing"])
         # Browser WS resolves to principal="anonymous" (no auth state in test),

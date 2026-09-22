@@ -201,7 +201,6 @@ class TestAttachSessionCp437Decode:
 
     def test_watcher_decodes_cp437_box_drawing(self) -> None:
         """Box-drawing bytes (e.g. 0xC4 = ─) must survive the decode round-trip."""
-        import asyncio
         from unittest.mock import MagicMock
 
         from provide.uterm.server.bridge.worker_link import TermBridge

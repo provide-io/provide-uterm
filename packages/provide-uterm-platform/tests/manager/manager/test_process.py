@@ -141,7 +141,6 @@ class TestCancelSpawn:
 
     @pytest.mark.asyncio
     async def test_cancel_with_tasks(self, pm):
-        import asyncio
 
         async def noop():
             await asyncio.sleep(100)
