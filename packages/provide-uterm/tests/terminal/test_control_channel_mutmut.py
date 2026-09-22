@@ -109,7 +109,7 @@ class TestFeed:
         try:
             d.feed("toolong")
         except ControlFrameProtocolError:
-            pass
+            pass  # rejecting the oversized frame is expected; the reset below is under test
         # State must be cleared after overflow.
         assert d._buffer == ""
         assert d._buffer_parts == []
@@ -179,7 +179,7 @@ class TestFinish:
         try:
             d.finish()
         except ControlFrameProtocolError:
-            pass
+            pass  # rejecting the truncated frame is expected; the reset below is under test
         assert d._buffer == ""
         assert d._buffer_parts == []
 
@@ -288,7 +288,7 @@ class TestReportError:
             d.feed("\x10\x02not-hex-header:")  # bad header → protocol error
             d.finish()
         except ControlFrameProtocolError:
-            pass
+            pass  # the raise is expected; only the error-hook label below is under test
         # The label must be "control_channel_protocol_error" (exact string).
         assert "control_frame_protocol_error" in captured
 
