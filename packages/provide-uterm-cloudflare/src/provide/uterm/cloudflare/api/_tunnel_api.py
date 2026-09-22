@@ -368,7 +368,7 @@ async def consume_tunnel_invite(request: object, env: object, tunnel_id: str) ->
         payload = json.dumps({"invite": str(invite)})
         headers = {"X-Provide-Uterm-Internal": "worker-invite-redemption-v1", "content-type": "application/json"}
         try:
-            from js import Request  # type: ignore[import-not-found]
+            from js import Request  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
 
             internal_request = Request(url, {"method": "POST", "headers": headers, "body": payload})
         except ImportError:

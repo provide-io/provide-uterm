@@ -199,7 +199,7 @@ async def _delete(
     for sock in sockets:
         if sock is not None:
             with contextlib.suppress(Exception):
-                sock.close(1001, "session deleted")  # ty:ignore[unresolved-attribute]
+                sock.close(1001, "session deleted")
     ushell = getattr(runtime, "_ushell", None)
     if ushell is not None and bool(getattr(runtime, "_ushell_started", False)):
         with contextlib.suppress(Exception):
