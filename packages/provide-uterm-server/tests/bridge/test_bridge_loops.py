@@ -267,6 +267,7 @@ class TestRunLoop:
                     if len(received_frames) >= 1:
                         break
             except Exception:
+                # The socket closing ends the capture; the assertions check what arrived.
                 pass
 
         import websockets

@@ -223,9 +223,11 @@ def spawn_backend_server() -> Generator[BackendServer, None, None]:
         try:
             err_fh.close()
         except OSError:
+            # Teardown is best effort; a close failure must not mask the test result.
             pass
         for p in (config_path, token_path, err_path):
             try:
                 p.unlink(missing_ok=True)
             except OSError:
+                # Teardown is best effort; a leftover temp file must not mask the test result.
                 pass

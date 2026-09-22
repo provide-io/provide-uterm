@@ -240,6 +240,7 @@ async def _record_failures(patched: dict[str, Any]) -> dict[str, Any]:
     try:
         await transport.connect("h", 1)
     except ConnectionError:
+        # The fake transport refuses the connection by design; the golden records what follows.
         pass
     finally:
         patched["fail"] = None

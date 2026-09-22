@@ -76,6 +76,7 @@ async def _start_recording_ws_server() -> tuple[Any, int, list[dict[str, Any]]]:
                         frames.append(frame)
                         return  # one frame per connection is enough
         except Exception:
+            # Any worker-side failure just ends capture; the assertions check frames.
             pass
 
     srv = await websockets.serve(_handler, "127.0.0.1", 0)

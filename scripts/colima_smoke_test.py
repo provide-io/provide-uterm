@@ -207,6 +207,7 @@ def main() -> None:
                 if any(e["type"] == "session_stopped" for e in events):
                     break
             except (json.JSONDecodeError, OSError):
+                # Partial or unreadable log line; poll again.
                 pass
         time.sleep(0.2)
 

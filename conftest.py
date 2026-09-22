@@ -138,6 +138,7 @@ if Path(__file__).resolve().parent.name == "mutants" and (Path(__file__).resolve
         try:
             _orig_stream_emit(self, record)
         except (ValueError, OSError):
+            # A closed stream during teardown is harmless; drop the record.
             pass
 
     _logging.StreamHandler.emit = _mutmut_safe_emit  # type: ignore[method-assign]

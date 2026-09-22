@@ -126,6 +126,7 @@ async def _drain_until(ws, target_type: str, max_frames: int = 10) -> dict | Non
                 return frame
             continue
         except (json.JSONDecodeError, TypeError):
+            # Not a bare JSON frame; try the control-frame decoder below.
             pass
         for frame in _decode_control_frames(raw):
             if frame.get("type") == target_type:

@@ -311,4 +311,5 @@ class TestMalformedInput:
             result = decode_control(data)
             assert isinstance(result, dict)
         except TunnelProtocolError:
+            # Rejecting malformed input is a valid outcome; only crashes fail the stress test.
             pass

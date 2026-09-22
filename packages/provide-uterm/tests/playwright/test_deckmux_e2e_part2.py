@@ -337,6 +337,7 @@ class TestPresenceLeave:
                     page2.evaluate("window._ws && window._ws.close()")
                     page2.wait_for_timeout(200)
                 except Exception:
+                    # The page may already have dropped its socket; closing is best effort.
                     pass
                 page2.close()
                 ctx2.close()

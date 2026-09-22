@@ -80,6 +80,7 @@ def _wait_http(url: str, timeout: float = 20.0, token: str | None = None) -> Non
                 if resp.status < 500:
                     return
         except Exception:
+            # Server not up yet; retry after the sleep.
             pass
         time.sleep(0.2)
     _fail(f"server did not become ready at {url} within {timeout}s")

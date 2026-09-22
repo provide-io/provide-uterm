@@ -55,6 +55,7 @@ def parse_python(src_dir):
                     doc = ast.get_docstring(node) or ""
                     items.append({"name": node.name, "signature": f"class {node.name}", "doc": doc, "methods": methods})
         except Exception:
+            # Skip files that do not parse; the docs cover what does.
             pass
     return items
 

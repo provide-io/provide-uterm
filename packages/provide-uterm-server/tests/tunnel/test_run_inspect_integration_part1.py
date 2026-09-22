@@ -134,6 +134,7 @@ class TunnelWSServer:
                         # control messages etc — just skip
                         pass
         except websockets.exceptions.ConnectionClosed:
+            # The inspector closed the socket; the collected frames are complete.
             pass
 
     async def send_action(self, msg: dict[str, Any]) -> None:

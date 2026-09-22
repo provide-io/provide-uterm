@@ -91,6 +91,7 @@ def _serve_once(sock_path: str, timeout: float = 3.0, ready: threading.Event | N
                     break
                 chunks.append(d)
         except OSError:
+            # EOF on the pty raises OSError on Linux; that ends the read.
             pass
         finally:
             conn.close()

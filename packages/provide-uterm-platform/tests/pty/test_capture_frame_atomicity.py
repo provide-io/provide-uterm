@@ -150,6 +150,7 @@ def _serve_once(
                     break
                 chunks.append(d)
         except OSError:
+            # EOF on the pty raises OSError on Linux; that ends the read.
             pass
         finally:
             conn.close()

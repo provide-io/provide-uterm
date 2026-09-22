@@ -299,6 +299,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             for sid, hid in hijack_ids.items():
                 http.post(f"/worker/{sid}/hijack/{hid}/release")
     except Exception:
+        # Releasing the demo hijacks is best effort at teardown.
         pass
 
     img_server.shutdown()

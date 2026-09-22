@@ -74,6 +74,7 @@ def _open_fds() -> list[int]:
             os.fstat(fd)
             fds.append(fd)
         except OSError:
+            # Descriptor is not open; skip it.
             pass
     return fds
 
@@ -245,6 +246,7 @@ class TestResizeUnderLoad:
                     chunk = await asyncio.wait_for(sp.read(4096), timeout=0.5)
                     collected.extend(chunk)
                 except (TimeoutError, OSError):
+                    # No more output within the window; keep polling until the deadline.
                     pass
 
             assert len(collected) > 0

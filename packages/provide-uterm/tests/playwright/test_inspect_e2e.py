@@ -149,6 +149,7 @@ def _install_inspect_routes(page: Page) -> None:
                         if isinstance(alt, str):
                             path = (fe / alt.lstrip("/")).resolve()
                     except Exception:
+                        # Unparseable manifest: fall back to the default path checked below.
                         pass
             if not path.is_file():
                 # Fallback: first main-*.js / main-*.css under assets/

@@ -55,6 +55,7 @@ async def _capture_ws_frames() -> tuple[Any, int, list[dict[str, Any]]]:
                     with contextlib.suppress(Exception):
                         captured.append(decode_control_payload(msg))
         except websockets.ConnectionClosed:
+            # Worker socket closed: capture is complete.
             pass
 
     srv = await websockets.serve(_handler, "127.0.0.1", 0)

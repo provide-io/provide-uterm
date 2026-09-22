@@ -153,6 +153,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
                 # → hub records it as a "snapshot" event with the full screen content.
                 http.get(f"/worker/provide-shell/hijack/{hijack_id}/snapshot")
         except Exception:
+            # The snapshot request is best effort; the recording is already running.
             pass
 
     # Run a sequence that tells a story — each command is a step in a deployment session.
@@ -173,6 +174,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
                 http.post(f"/worker/provide-shell/hijack/{hijack_id}/release")
                 http.patch("/api/sessions/provide-shell", json={"input_mode": "open"})
         except Exception:
+            # Releasing the demo hijack is best effort at teardown.
             pass
 
     def _open_snapshot_filter(page: object) -> None:
