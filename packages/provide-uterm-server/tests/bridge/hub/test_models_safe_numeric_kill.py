@@ -10,11 +10,17 @@ so the helpers' mutants reported ``no tests`` once a ``models.py`` edit triggere
 changed-only gate. This self-contained suite (no async / subprocess / WebSocket —
 reaper-safe) pins every branch and boundary so each operator/condition/exception
 mutation flips an assertion, and is wired into ``[tool.mutmut].pytest_add_cli_args_test_selection``.
+
+mutmut 3.8 also mutates ternary conditions (``default if val is None else val`` ->
+``... (val is None) and False ...``, which feeds ``None`` itself into ``int()`` /
+``float()`` and falls back to the *uncoerced* default) and methods of decorated
+classes (``WorkerTermState.apply_lease`` on the ``@dataclass``); both are pinned here.
 """
 
 from __future__ import annotations
 
-from provide.uterm.server.bridge.models import _safe_float, _safe_int
+from provide.uterm.bridge.coordinator import HijackSession
+from provide.uterm.server.bridge.models import HijackLease, WorkerTermState, _safe_float, _safe_int
 
 
 class TestSafeInt:
@@ -27,6 +33,14 @@ class TestSafeInt:
 
     def test_none_coerces_default_not_val(self) -> None:
         assert _safe_int(None, 7) == 7
+
+    def test_none_default_is_itself_coerced(self) -> None:
+        # None -> int(default): a non-int default is truncated, not returned raw.
+        # Kills the ternary-condition `(val is None) and False` mutant, where
+        # int(None) raises TypeError and the raw 2.9 default leaks out.
+        result = _safe_int(None, 2.9)  # type: ignore[arg-type]
+        assert result == 2
+        assert type(result) is int
 
     def test_string_int_is_coerced(self) -> None:
         # Kills dropping the int(...) call (the str "12" != 12).
@@ -70,6 +84,14 @@ class TestSafeFloat:
     def test_none_coerces_default_not_val(self) -> None:
         assert _safe_float(None, 2.5) == 2.5
 
+    def test_none_default_is_itself_coerced(self) -> None:
+        # None -> float(default): an int default comes back as a float. Kills the
+        # ternary-condition `(val is None) and False` mutant, where float(None)
+        # raises TypeError and the raw int default is returned uncoerced.
+        result = _safe_float(None, 3)
+        assert result == 3.0
+        assert type(result) is float
+
     def test_string_float_is_coerced(self) -> None:
         # Kills dropping the float(...) call (the str "1.25" != 1.25).
         assert _safe_float("1.25", 9.0) == 1.25
@@ -79,3 +101,26 @@ class TestSafeFloat:
 
     def test_type_error_returns_default(self) -> None:
         assert _safe_float(object(), 9.0) == 9.0
+
+
+class _FakeWebSocket:
+    pass
+
+
+class TestApplyLease:
+    def test_apply_lease_writes_all_three_fields(self) -> None:
+        # Kills each `self.hijack_* = None` assignment mutant: every field of the
+        # lease (including the REST session) must be written back onto the state.
+        st = WorkerTermState()
+        ws = _FakeWebSocket()
+        sess = HijackSession(
+            hijack_id="hj",
+            owner="o",
+            acquired_at=0.0,
+            lease_expires_at=10.0,
+            last_heartbeat=0.0,
+        )
+        st.apply_lease(HijackLease(ws=ws, ws_expires_at=99.0, session=sess))  # type: ignore[arg-type]
+        assert st.hijack_owner is ws
+        assert st.hijack_owner_expires_at == 99.0
+        assert st.hijack_session is sess
