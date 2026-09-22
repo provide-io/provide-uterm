@@ -39,7 +39,7 @@ def _extract_worker_id(path: str) -> str | None:
     return None
 
 
-class Default(WorkerEntrypoint):  # type: ignore[misc]  # ty:ignore[invalid-base]
+class Default(WorkerEntrypoint):  # type: ignore[misc]
     """Default HTTP handler exposed to the Cloudflare Workers runtime."""
 
     async def fetch(self, request: object) -> object:
