@@ -154,4 +154,4 @@ class TestReplayPageHtmlMutationKilling:
     def test_xterm_cdn_passed_through(self):
         """xterm_cdn forwarded to _shell."""
         html = replay_page_html("T", "/assets", "s1", app_path="/app", xterm_cdn="https://x.com")
-        assert "x.com" in html
+        assert "<script src='https://x.com/lib/xterm.js'>" in html

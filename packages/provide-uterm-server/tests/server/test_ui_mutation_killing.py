@@ -352,7 +352,7 @@ class TestOperatorDashboardHtmlMutationKilling:
     def test_xterm_cdn_forwarded(self):
         """xterm_cdn is passed to _shell (mutmut_20/21)."""
         html = operator_dashboard_html("T", "/app", "/assets", xterm_cdn="https://cdn.x.com")
-        assert "cdn.x.com" in html
+        assert "<script src='https://cdn.x.com/lib/xterm.js'>" in html
 
 
 # (TestSessionPageHtmlMutationKilling, TestConnectPageHtmlMutationKilling,
