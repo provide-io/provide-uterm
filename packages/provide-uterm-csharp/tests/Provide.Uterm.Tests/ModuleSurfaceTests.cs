@@ -173,7 +173,7 @@ public class ModuleSurfaceTests
         ctrl.DeleteGroup(id, "alice");
         Assert.Null(ctrl.GetGroup(id, "alice"));
 
-        Assert.Throws<ArgumentException>(() => ctrl.CreateGroup(new Group
+        Assert.Throws<FanoutGroupRejectedException>(() => ctrl.CreateGroup(new Group
         {
             WorkerIds = Enumerable.Range(0, 20).Select(i => "w" + i).ToList(),
         }, "x"));
