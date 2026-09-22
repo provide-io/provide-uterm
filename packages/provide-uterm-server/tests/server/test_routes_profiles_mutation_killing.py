@@ -363,10 +363,9 @@ class TestUpdateProfile:
         assert store.update_profile.await_args.args[1] == {"name": "keep"}
 
     async def test_a_validation_error_is_a_422_carrying_the_message(self) -> None:
-        try:
+        with pytest.raises(ValidationError) as caught:
             ConnectionProfile(profile_id="p", owner="o", name="n", connector_type="nope")  # type: ignore[arg-type]
-        except ValidationError as real_error:
-            store = _store(profile=_profile(), update_exc=real_error)
+        store = _store(profile=_profile(), update_exc=caught.value)
         req = _request(store=store)
 
         with pytest.raises(HTTPException) as exc:
