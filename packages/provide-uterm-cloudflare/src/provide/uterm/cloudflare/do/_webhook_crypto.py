@@ -52,6 +52,7 @@ try:  # pragma: no cover - CF runtime only
 
     _to_js = to_js
 except ImportError:
+    # Not running under Pyodide: to_js stays None and callers take the pure-Python path.
     pass
 
 

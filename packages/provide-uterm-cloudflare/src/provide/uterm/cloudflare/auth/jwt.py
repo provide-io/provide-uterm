@@ -36,6 +36,7 @@ try:
 
     _IN_CF_RUNTIME = True  # pragma: no cover
 except ImportError:
+    # Not running under Pyodide: keep the pure-Python defaults set above.
     pass
 
 if TYPE_CHECKING:
@@ -392,6 +393,7 @@ def extract_bearer_or_cookie(request: object) -> str | None:
             if token:
                 return token
     except Exception:
+        # Authorization header missing or malformed: fall through to the cookie lookup.
         pass
     try:
         cookie_header = str(request.headers.get("Cookie") or "")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
@@ -400,5 +402,6 @@ def extract_bearer_or_cookie(request: object) -> str | None:
             if name.strip() == "CF_Authorization" and value.strip():
                 return value.strip()
     except Exception:
+        # Cookie header missing or malformed: treat as no token (None) below.
         pass
     return None
