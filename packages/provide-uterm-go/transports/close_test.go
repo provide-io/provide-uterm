@@ -8,7 +8,9 @@ package transports
 // Every transport reports the end of a connection as a typed close: which side
 // ended it, plus the protocol's code and reason when it has them. Port of the
 // Python contract in provide/uterm/transport_close.py (dc87968c) and its tests
-// test_transport_close.py / test_transport_close_mapping.py.
+// test_transport_close.py / test_transport_close_mapping.py. The cases the
+// ports share (summary, WebSocket attribution, telnet, chaos) are in
+// close_vectors_test.go; these are the Go-specific ones.
 
 import (
 	"context"
@@ -23,27 +25,6 @@ import (
 )
 
 func codePtr(n int) *int { return &n }
-
-func TestTransportCloseSummary(t *testing.T) {
-	cases := []struct {
-		close TransportClose
-		want  string
-	}{
-		{TransportClose{Initiator: CloseLocal, Code: codePtr(1011), Reason: "keepalive ping timeout"}, "local close 1011 keepalive ping timeout"},
-		{TransportClose{Initiator: CloseRemote, Code: codePtr(1001), Reason: "going away"}, "remote close 1001 going away"},
-		{TransportClose{Initiator: CloseRemote}, "remote close"},
-		{TransportClose{Initiator: CloseUnknown, Detail: "ConnectionResetError: reset"}, "unknown close (ConnectionResetError: reset)"},
-		// A zero code is a code, not an absent one.
-		{TransportClose{Initiator: CloseRemote, Code: codePtr(0)}, "remote close 0"},
-		{TransportClose{Initiator: CloseLocal, Code: codePtr(1000), Reason: "bye", Detail: "d"}, "local close 1000 bye (d)"},
-		{TransportClose{Initiator: CloseUnknown, Reason: "injected disconnect"}, "unknown close injected disconnect"},
-	}
-	for _, tc := range cases {
-		if got := tc.close.Summary(); got != tc.want {
-			t.Errorf("Summary() = %q, want %q", got, tc.want)
-		}
-	}
-}
 
 func TestCloseInitiatorSpelling(t *testing.T) {
 	if CloseLocal != "local" || CloseRemote != "remote" || CloseUnknown != "unknown" {
@@ -96,34 +77,6 @@ func TestCloseFromError(t *testing.T) {
 }
 
 // --- WebSocket ---------------------------------------------------------------
-
-func TestCloseFromWSFrames(t *testing.T) {
-	cases := []struct {
-		name         string
-		rcvd, sent   *wsCloseFrame
-		rcvdThenSent bool
-		initiator    CloseInitiator
-		code         *int
-		reason       string
-	}{
-		{"our-ping-timeout", nil, &wsCloseFrame{1011, "keepalive ping timeout"}, false, CloseLocal, codePtr(1011), "keepalive ping timeout"},
-		{"peer-closed", &wsCloseFrame{1001, "going away"}, nil, false, CloseRemote, codePtr(1001), "going away"},
-		{"peer-first-handshake", &wsCloseFrame{1000, ""}, &wsCloseFrame{1000, ""}, true, CloseRemote, codePtr(1000), ""},
-		{"we-first-handshake", &wsCloseFrame{1000, ""}, &wsCloseFrame{1000, "bye"}, false, CloseLocal, codePtr(1000), "bye"},
-		{"no-close-frames", nil, nil, false, CloseUnknown, nil, ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := closeFromWSFrames(tc.rcvd, tc.sent, tc.rcvdThenSent, "detail")
-			if got.Initiator != tc.initiator || got.Reason != tc.reason || got.Detail != "detail" {
-				t.Errorf("close = %+v", got)
-			}
-			if (got.Code == nil) != (tc.code == nil) || (got.Code != nil && *got.Code != *tc.code) {
-				t.Errorf("code = %v, want %v", got.Code, tc.code)
-			}
-		})
-	}
-}
 
 func TestCloseFromWSFramesCopiesTheCode(t *testing.T) {
 	rcvd := &wsCloseFrame{1001, "going away"}
@@ -247,22 +200,6 @@ func TestTelnetSendCloses(t *testing.T) {
 		if !errors.As(err, &netErr) {
 			t.Error("the socket error must stay reachable for retry classification")
 		}
-	}
-}
-
-func TestTelnetReceiveBufferOverflowIsALocalClose(t *testing.T) {
-	c1, c2 := net.Pipe()
-	defer func() { _ = c2.Close() }()
-	tr := telnetOn(c1)
-	// An unterminated subnegotiation just under the cap: the next byte
-	// pushes the unconsumed buffer over it.
-	tr.rxBuf = append([]byte{iacByte, cmdSB}, make([]byte, maxRxBufBytes)...)
-	go func() { _, _ = c2.Write([]byte{'x'}) }()
-
-	_, err := tr.Receive(context.Background(), 64, time.Second)
-	got := requireClose(t, err, "telnet receive buffer exceeded 262144 bytes (likely IAC SB without IAC SE)", CloseLocal)
-	if got.Summary() != "local close receive buffer exceeded" {
-		t.Errorf("summary = %q", got.Summary())
 	}
 }
 
