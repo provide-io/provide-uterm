@@ -9,10 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	ptel "github.com/provide-io/provide-telemetry/go"
@@ -23,6 +25,19 @@ import (
 // (memory-exhaustion DoS). 256 KiB is far above any legitimate subnegotiation.
 // Mirrors Python's _MAX_RX_BUF_BYTES.
 const maxRxBufBytes = 256 * 1024
+
+// closeFromSocketError attributes a telnet socket failure. A peer reset is the
+// remote end closing; anything else (a broken pipe, a locally closed socket)
+// cannot say who did. Mirrors Python's _close_from_socket_error. On Windows the
+// socket reports WSAECONNRESET, which is not syscall.ECONNRESET there, so a
+// reset reads as unknown: under-attributing is the safe direction.
+func closeFromSocketError(err error) TransportClose {
+	initiator := CloseUnknown
+	if errors.Is(err, syscall.ECONNRESET) {
+		initiator = CloseRemote
+	}
+	return CloseFromError(err, initiator)
+}
 
 // TelnetTransport is a full RFC 854 telnet client implementing
 // ConnectionTransport. It is a port of the Python TelnetTransport.
@@ -132,7 +147,7 @@ func (t *TelnetTransport) Send(ctx context.Context, data []byte) error {
 	t.mu.Unlock()
 	if err != nil {
 		_ = t.Disconnect(ctx)
-		return fmt.Errorf("send failed: %w", err)
+		return closedError("send failed", closeFromSocketError(err), err)
 	}
 	return nil
 }
@@ -175,10 +190,10 @@ func (t *TelnetTransport) Receive(ctx context.Context, maxBytes int, timeout tim
 			return []byte{}, nil
 		}
 		// EOF or reset: flush the remaining buffer as final.
-		return t.handleRemoteClose(ctx)
+		return t.handleRemoteClose(ctx, err)
 	}
 	if n == 0 {
-		return t.handleRemoteClose(ctx)
+		return t.handleRemoteClose(ctx, io.EOF)
 	}
 
 	t.mu.Lock()
@@ -191,7 +206,11 @@ func (t *TelnetTransport) Receive(ctx context.Context, maxBytes int, timeout tim
 		t.rxBuf = t.rxBuf[:0]
 		t.mu.Unlock()
 		_ = t.Disconnect(ctx)
-		return nil, fmt.Errorf("telnet receive buffer exceeded %d bytes (likely IAC SB without IAC SE)", maxRxBufBytes)
+		return nil, closedError(
+			fmt.Sprintf("telnet receive buffer exceeded %d bytes (likely IAC SB without IAC SE)", maxRxBufBytes),
+			TransportClose{Initiator: CloseLocal, Reason: "receive buffer exceeded"},
+			nil,
+		)
 	}
 	t.respondToEventsLocked(ctx, events)
 	t.mu.Unlock()
@@ -199,7 +218,10 @@ func (t *TelnetTransport) Receive(ctx context.Context, maxBytes int, timeout tim
 }
 
 // handleRemoteClose flushes the residual buffer (final=true) and disconnects.
-func (t *TelnetTransport) handleRemoteClose(ctx context.Context) ([]byte, error) {
+// readErr is the read failure that ended the connection: EOF is the remote
+// closing ("connection closed by remote"); any other error is classified by
+// closeFromSocketError ("connection lost").
+func (t *TelnetTransport) handleRemoteClose(ctx context.Context, readErr error) ([]byte, error) {
 	t.mu.Lock()
 	payload, _, consumed := parseTelnetBuffer(t.rxBuf, true)
 	if consumed > 0 {
@@ -210,7 +232,10 @@ func (t *TelnetTransport) handleRemoteClose(ctx context.Context) ([]byte, error)
 	if len(payload) > 0 {
 		return payload, nil
 	}
-	return nil, ErrConnectionClosed
+	if errors.Is(readErr, io.EOF) {
+		return nil, closedError("connection closed by remote", TransportClose{Initiator: CloseRemote}, readErr)
+	}
+	return nil, closedError("connection lost", closeFromSocketError(readErr), readErr)
 }
 
 // IsConnected reports whether a connection is active.

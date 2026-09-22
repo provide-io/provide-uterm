@@ -7,6 +7,7 @@ package transports
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -40,6 +41,53 @@ type WebSocketTransport struct {
 	baseCancel context.CancelFunc
 	rxCh       chan []byte
 	closed     chan struct{}
+	end        *wsEnd
+}
+
+// wsCloseFrame is one WebSocket close frame: its status code and reason.
+type wsCloseFrame struct {
+	code   int
+	reason string
+}
+
+// wsEnd records how one connection ended. sent is the close frame this side
+// sent first (Disconnect), guarded by mu; close is written by readLoop before
+// it closes the connection's closed channel, so a reader that has seen closed
+// may read it without the lock.
+type wsEnd struct {
+	mu    sync.Mutex
+	sent  *wsCloseFrame
+	close TransportClose
+}
+
+// closeFromWSFrames attributes a WebSocket close to the side whose close frame
+// came first. Port of Python's _close_from_websockets:
+//   - a received frame, when none was sent or it was received first: remote,
+//     with the received code and reason;
+//   - otherwise a sent frame: local, with the sent code and reason;
+//   - no frames at all: unknown.
+func closeFromWSFrames(rcvd, sent *wsCloseFrame, rcvdThenSent bool, detail string) TransportClose {
+	if rcvd != nil && (sent == nil || rcvdThenSent) {
+		code := rcvd.code
+		return TransportClose{Initiator: CloseRemote, Code: &code, Reason: rcvd.reason, Detail: detail}
+	}
+	if sent != nil {
+		code := sent.code
+		return TransportClose{Initiator: CloseLocal, Code: &code, Reason: sent.reason, Detail: detail}
+	}
+	return TransportClose{Initiator: CloseUnknown, Detail: detail}
+}
+
+// closeFromWSReadError maps the error that ended readLoop. coder/websocket
+// reports a received close frame as a CloseError and answers it itself, so a
+// received frame came first unless this side had already sent one.
+func closeFromWSReadError(err error, sent *wsCloseFrame) TransportClose {
+	var ce websocket.CloseError
+	var rcvd *wsCloseFrame
+	if errors.As(err, &ce) {
+		rcvd = &wsCloseFrame{code: int(ce.Code), reason: ce.Reason}
+	}
+	return closeFromWSFrames(rcvd, sent, sent == nil, err.Error())
 }
 
 // NewWebSocketTransport returns an unconnected WebSocketTransport.
@@ -84,29 +132,40 @@ func (t *WebSocketTransport) Connect(ctx context.Context, host string, port int,
 	t.baseCancel = baseCancel
 	t.rxCh = make(chan []byte)
 	t.closed = make(chan struct{})
-	rxCh, closed := t.rxCh, t.closed
+	t.end = &wsEnd{}
+	rxCh, closed, end := t.rxCh, t.closed, t.end
 	t.mu.Unlock()
 
-	go t.readLoop(baseCtx, conn, rxCh, closed)
+	go t.readLoop(baseCtx, conn, rxCh, closed, end)
 
 	logger.Debug("WebSocketTransport connected", "url", url)
 	return nil
 }
 
-// readLoop reads whole messages until the connection closes or baseCtx cancels.
-func (t *WebSocketTransport) readLoop(baseCtx context.Context, conn *websocket.Conn, rxCh chan []byte, closed chan struct{}) {
+// readLoop reads whole messages until the connection closes or baseCtx
+// cancels, recording how the connection ended in end before closing closed.
+func (t *WebSocketTransport) readLoop(baseCtx context.Context, conn *websocket.Conn, rxCh chan []byte, closed chan struct{}, end *wsEnd) {
 	defer close(closed)
 	for {
 		_, data, err := conn.Read(baseCtx)
 		if err != nil {
+			end.record(err)
 			return
 		}
 		select {
 		case rxCh <- data:
 		case <-baseCtx.Done():
+			end.record(baseCtx.Err())
 			return
 		}
 	}
+}
+
+// record stores how the connection ended, given the error that ended it.
+func (e *wsEnd) record(err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.close = closeFromWSReadError(err, e.sent)
 }
 
 // Disconnect closes the connection. Idempotent.
@@ -114,11 +173,21 @@ func (t *WebSocketTransport) Disconnect(ctx context.Context) error {
 	t.mu.Lock()
 	conn := t.conn
 	cancel := t.baseCancel
+	end := t.end
 	t.conn = nil
 	t.baseCancel = nil
 	t.connected = false
 	t.mu.Unlock()
 
+	if conn != nil && end != nil {
+		// Record our close frame before cancelling the reader, so a reader
+		// that ends now attributes the close to this side.
+		end.mu.Lock()
+		if end.sent == nil {
+			end.sent = &wsCloseFrame{code: int(websocket.StatusNormalClosure)}
+		}
+		end.mu.Unlock()
+	}
 	if cancel != nil {
 		cancel()
 	}
@@ -137,6 +206,7 @@ func (t *WebSocketTransport) Send(ctx context.Context, data []byte) error {
 	conn := t.conn
 	connected := t.connected
 	binary := t.binary
+	closed, end := t.closed, t.end
 	t.mu.Unlock()
 	if !connected || conn == nil {
 		return fmt.Errorf("%w: websocket send", ErrNotConnected)
@@ -147,21 +217,29 @@ func (t *WebSocketTransport) Send(ctx context.Context, data []byte) error {
 		msgType = websocket.MessageBinary
 	}
 	if err := conn.Write(ctx, msgType, data); err != nil {
+		tc := TransportClose{Initiator: CloseUnknown, Detail: err.Error()}
+		select {
+		case <-closed:
+			// The reader already saw how the connection ended; that is
+			// more specific than the write failure it caused.
+			tc = end.close
+		default:
+		}
 		_ = t.Disconnect(ctx)
-		return fmt.Errorf("%w: %v", ErrConnectionClosed, err)
+		return closedError("connection closed", tc, err)
 	}
 	return nil
 }
 
-// Receive returns the next whole message, an empty slice on timeout, or
-// ErrConnectionClosed when the connection drops. maxBytes is advisory and
+// Receive returns the next whole message, an empty slice on timeout, or a
+// *TransportClosedError carrying who closed when the connection drops. maxBytes is advisory and
 // ignored — WebSocket is message-framed, so each read yields one whole message.
 func (t *WebSocketTransport) Receive(ctx context.Context, maxBytes int, timeout time.Duration) ([]byte, error) {
 	_ = maxBytes
 	t.mu.Lock()
 	connected := t.connected
 	rxCh := t.rxCh
-	closed := t.closed
+	closed, end := t.closed, t.end
 	t.mu.Unlock()
 	if !connected || rxCh == nil {
 		return nil, fmt.Errorf("%w: websocket receive", ErrNotConnected)
@@ -176,7 +254,7 @@ func (t *WebSocketTransport) Receive(ctx context.Context, maxBytes int, timeout 
 		return []byte{}, nil
 	case <-closed:
 		_ = t.Disconnect(ctx)
-		return nil, ErrConnectionClosed
+		return nil, closedError("connection closed", end.close, nil)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

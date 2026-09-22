@@ -153,7 +153,8 @@ func (t *PTYTransport) Send(ctx context.Context, data []byte) error {
 }
 
 // Receive returns up to maxBytes from the PTY, an empty slice on timeout, or
-// ErrConnectionClosed when the child exits and its output drains.
+// a *transports.TransportClosedError (errors.Is ErrConnectionClosed; remote,
+// reason "child exited") when the child exits and its output drains.
 func (t *PTYTransport) Receive(ctx context.Context, maxBytes int, timeout time.Duration) ([]byte, error) {
 	t.mu.Lock()
 	rxCh := t.rxCh
@@ -181,7 +182,11 @@ func (t *PTYTransport) Receive(ctx context.Context, maxBytes int, timeout time.D
 		return []byte{}, nil
 	case <-closed:
 		_ = t.Disconnect(ctx)
-		return nil, transports.ErrConnectionClosed
+		// The child exiting is the far end of the terminal closing it.
+		return nil, &transports.TransportClosedError{
+			Message: "connection closed",
+			Close:   transports.TransportClose{Initiator: transports.CloseRemote, Reason: "child exited"},
+		}
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
