@@ -308,7 +308,6 @@ async def _handle_resume(runtime: RuntimeProtocol, ws: CFWebSocket, frame: dict[
         return
     reclaimed_hijack = False
     rejected_stale_owner = False
-    effective_role = "viewer"
     was_hijack_owner = False
     new_token = ""
     reclaimed_session: Any | None = None
