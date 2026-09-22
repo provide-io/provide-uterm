@@ -1103,7 +1103,7 @@ already documented for tunnel/token_hash x_hash_token__mutmut_9.\
 """
 
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_123"
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_127"
 reason = """\
 zip strictness: `zip(browsers_with_roles, results, strict=True)` -> `strict=None`. \
 `results` is constructed from `browsers_with_roles` on both arms -- one append per browser \
@@ -1112,16 +1112,16 @@ sequences cannot differ in length and the strict check never fires. `strict=None
 and therefore identical to `strict=False`, which the two entries below also cover."""
 
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_126"
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_130"
 reason = """\
 zip strictness: the `strict=True` keyword is dropped entirely. Same equivalence as \
-__mutmut_123 -- the two sequences are built from each other and cannot differ in length, \
+__mutmut_127 -- the two sequences are built from each other and cannot differ in length, \
 so nothing distinguishes a strict zip from a lenient one here."""
 
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_127"
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_131"
 reason = """\
-zip strictness: `strict=True` -> `strict=False`. Same equivalence as __mutmut_123."""
+zip strictness: `strict=True` -> `strict=False`. Same equivalence as __mutmut_127."""
 
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_send_hijack_state_to__mutmut_16"
@@ -1149,7 +1149,7 @@ reason = """\
 see __mutmut_16."""
 
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_19"
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_21"
 reason = """\
 Unused parameter: the `router` positional handed to `send_hijack_state_to` is replaced by \
 None. `send_hijack_state_to` never dereferences it -- the body uses only its keyword \
@@ -1159,12 +1159,12 @@ parameter is kept because every function in this module takes the MessageRouter 
 convention for callers in router_impl."""
 
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_57"
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_61"
 reason = """\
-Unused parameter: the same `router` positional on the second-pass call. See __mutmut_19."""
+Unused parameter: the same `router` positional on the second-pass call. See __mutmut_21."""
 
 [[equivalent]]
-mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_59"
+mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_broadcast_hijack_state__mutmut_63"
 reason = """\
 Dead argument under suppression: the second-pass call passes `worker_id=None`. \
 `send_hijack_state_to` reads worker_id in exactly one place -- the \
@@ -1192,7 +1192,7 @@ Unused parameter: the `self` positional forwarded as the impl's `router` argumen
 replaced by None. `router_broadcast.send_hijack_state_to` never dereferences it -- the \
 body uses only its keyword arguments plus module-level imports -- so no input can observe \
 the difference. Same equivalence already documented on the callee side for \
-router_broadcast.broadcast_hijack_state __mutmut_19 / __mutmut_57; the parameter exists \
+router_broadcast.broadcast_hijack_state __mutmut_21 / __mutmut_61; the parameter exists \
 because every function in that module takes the MessageRouter first."""
 
 # app/factory_impl.py -- typing.cast() type arguments. cast() returns its second
