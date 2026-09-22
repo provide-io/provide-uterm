@@ -227,6 +227,7 @@ class TelnetTransport(ConnectionTransport):
             self._writer.close()
             await self._writer.wait_closed()
         except (ConnectionResetError, BrokenPipeError, RuntimeError):
+            # Best-effort close of an already-dead connection; task cleanup follows in finally.
             pass
         finally:
             for t in list(self._tasks):
@@ -410,6 +411,7 @@ class TelnetTransport(ConnectionTransport):
             elif cmd == WONT:  # pragma: no branch
                 await self._send_dont(opt)
         except (ConnectionResetError, BrokenPipeError):
+            # The peer hung up mid-negotiation; the read loop observes EOF and closes the session.
             pass
 
     async def _handle_subnegotiation(self, sub: bytes) -> None:
