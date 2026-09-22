@@ -101,11 +101,9 @@ class WebSocketStreamWriter:
 
         Handles ``"peername"`` to return ``(host, port)`` tuple.
         """
-        match key:
-            case "peername" if client := self._ws.client:
-                return (client.host, client.port)
-            case _:
-                return default
+        if key == "peername" and (client := self._ws.client):
+            return (client.host, client.port)
+        return default
 
     def close(self) -> None:
         """Mark the writer as closed."""
