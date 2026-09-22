@@ -87,7 +87,15 @@ public sealed class TelnetTransport : IConnectionTransport, IAsyncDisposable
             }
         }
 
-        await stream.WriteAsync(escaped.ToArray(), cancellationToken);
+        try
+        {
+            await stream.WriteAsync(escaped.ToArray(), cancellationToken);
+        }
+        catch (IOException ex)
+        {
+            await DisconnectAsync(CancellationToken.None);
+            throw new TransportClosedException("send failed", TransportClose.FromSocketError(ex), ex);
+        }
     }
 
     public async Task<byte[]> ReceiveAsync(int maxBytes, TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -101,21 +109,29 @@ public sealed class TelnetTransport : IConnectionTransport, IAsyncDisposable
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout);
         var buf = new byte[Math.Max(1, maxBytes)];
+        int n;
         try
         {
-            var n = await stream.ReadAsync(buf.AsMemory(0, buf.Length), cts.Token);
-            if (n == 0)
-            {
-                throw TransportErrors.ConnectionClosed;
-            }
-
-            // Strip IAC sequences into a clean payload
-            return StripIac(buf.AsSpan(0, n));
+            n = await stream.ReadAsync(buf.AsMemory(0, buf.Length), cts.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return Array.Empty<byte>();
         }
+        catch (IOException ex)
+        {
+            await DisconnectAsync(CancellationToken.None);
+            throw new TransportClosedException("connection lost", TransportClose.FromSocketError(ex), ex);
+        }
+
+        if (n == 0)
+        {
+            await DisconnectAsync(CancellationToken.None);
+            throw new TransportClosedException("connection closed by remote", new TransportClose(CloseInitiator.Remote));
+        }
+
+        // Strip IAC sequences into a clean payload
+        return StripIac(buf.AsSpan(0, n));
     }
 
     public bool IsConnected()

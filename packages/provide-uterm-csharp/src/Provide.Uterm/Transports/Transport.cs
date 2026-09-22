@@ -86,6 +86,13 @@ public interface IConnectionTransport
 
 public static class TransportErrors
 {
+    /// <summary>Not a close: the transport was never connected, or was disconnected by this side.</summary>
     public static readonly Exception NotConnected = new InvalidOperationException("not connected");
+
+    /// <summary>
+    /// Untyped close kept for callers that reference it. Transports now throw a
+    /// <see cref="TransportClosedException"/> (also an <see cref="IOException"/>) that
+    /// says who closed the connection.
+    /// </summary>
     public static readonly Exception ConnectionClosed = new IOException("connection closed by remote");
 }

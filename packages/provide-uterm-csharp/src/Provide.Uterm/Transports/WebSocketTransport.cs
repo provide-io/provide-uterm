@@ -18,6 +18,13 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
     private ConnectOptions _options = new();
     private int _maxMessageBytes = DefaultMaxMessageBytes;
 
+    // The close frame this side sent, recorded before it is sent so a receive that
+    // is already waiting attributes the close to us. Reset on every connect.
+    private CloseFrame? _sentClose;
+
+    /// <summary>Status and reason <see cref="DisconnectAsync"/> sends in its close frame.</summary>
+    public static readonly CloseFrame DisconnectFrame = new((int)WebSocketCloseStatus.NormalClosure, "bye");
+
     public int MaxMessageBytes
     {
         get => _maxMessageBytes;
@@ -58,6 +65,7 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
         lock (_lock)
         {
             _ws = ws;
+            _sentClose = null;
         }
     }
 
@@ -79,7 +87,15 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
         {
             if (ws.State == WebSocketState.Open)
             {
-                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", cancellationToken);
+                Volatile.Write(ref _sentClose, DisconnectFrame);
+                await ws.CloseAsync(
+                    (WebSocketCloseStatus)DisconnectFrame.Code, DisconnectFrame.Reason, cancellationToken);
+            }
+            else if (ws.State == WebSocketState.CloseReceived)
+            {
+                // Answer the peer's close frame; the close is still theirs.
+                await ws.CloseOutputAsync(
+                    (WebSocketCloseStatus)DisconnectFrame.Code, DisconnectFrame.Reason, cancellationToken);
             }
         }
         catch
@@ -105,7 +121,16 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
         }
 
         var type = _options.Ws.SendBinary ? WebSocketMessageType.Binary : WebSocketMessageType.Text;
-        await ws.SendAsync(data, type, endOfMessage: true, cancellationToken);
+        try
+        {
+            await ws.SendAsync(data, type, endOfMessage: true, cancellationToken);
+        }
+        catch (Exception ex) when (IsSocketFailure(ex))
+        {
+            var close = CloseFromSocket(ws, ex);
+            await DisconnectAsync(CancellationToken.None);
+            throw new TransportClosedException("connection closed", close, ex);
+        }
     }
 
     public async Task<byte[]> ReceiveAsync(int maxBytes, TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -127,7 +152,12 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
                 var result = await ws.ReceiveAsync(chunk, cts.Token);
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    throw TransportErrors.ConnectionClosed;
+                    var received = new CloseFrame(
+                        (int)(result.CloseStatus ?? WebSocketCloseStatus.Empty), result.CloseStatusDescription ?? "");
+                    var close = TransportClose.FromWebSocketFrames(
+                        received, Volatile.Read(ref _sentClose), receivedThenSent: false);
+                    await DisconnectAsync(CancellationToken.None);
+                    throw new TransportClosedException("connection closed", close);
                 }
 
                 if (result.Count > 0)
@@ -153,6 +183,44 @@ public sealed class WebSocketTransport : IConnectionTransport, IAsyncDisposable
         {
             return Array.Empty<byte>();
         }
+        catch (Exception ex) when (IsSocketFailure(ex))
+        {
+            var close = CloseFromSocket(ws, ex);
+            await DisconnectAsync(CancellationToken.None);
+            throw new TransportClosedException(ReceiveFailurePrefix(ex, close), close, ex);
+        }
+    }
+
+    /// <summary>A send or receive failure that means the socket is gone (not a size or state misuse).</summary>
+    internal static bool IsSocketFailure(Exception ex) =>
+        ex is WebSocketException or ObjectDisposedException or IOException && ex is not TransportClosedException;
+
+    /// <summary>
+    /// Python maps websockets' ConnectionClosed to "Connection closed" and any other
+    /// receive failure to "WebSocket receive error". .NET has no ConnectionClosed; its
+    /// equivalents are a failure once a close frame was exchanged, and a peer that
+    /// dropped the TCP connection without one.
+    /// </summary>
+    internal static string ReceiveFailurePrefix(Exception ex, TransportClose close) =>
+        close.Code is not null
+        || ex is WebSocketException { WebSocketErrorCode: WebSocketError.ConnectionClosedPrematurely }
+            ? "connection closed"
+            : "WebSocket receive error";
+
+    private TransportClose CloseFromSocket(ClientWebSocket ws, Exception ex) =>
+        CloseFromFrames(ws.CloseStatus, ws.CloseStatusDescription, Volatile.Read(ref _sentClose), ex);
+
+    /// <summary>
+    /// The close a failed send or receive reports: the peer's close frame when the socket
+    /// recorded one (<see cref="WebSocket.CloseStatus"/> is the status it received), else
+    /// the one this side sent, else unknown; the failure is the detail.
+    /// </summary>
+    internal static TransportClose CloseFromFrames(
+        WebSocketCloseStatus? receivedStatus, string? receivedReason, CloseFrame? sent, Exception ex)
+    {
+        var received = receivedStatus is { } status ? new CloseFrame((int)status, receivedReason ?? "") : null;
+        return TransportClose.FromWebSocketFrames(
+            received, sent, receivedThenSent: false, TransportClose.FromException(ex).Detail);
     }
 
     public bool IsConnected()
