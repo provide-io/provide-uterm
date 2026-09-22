@@ -345,6 +345,11 @@ const rfbDialTimeout = 10 * time.Second
 const (
 	attachEgressRefused = "invalid endpoint: the target's host is not an allowed destination"
 	attachRfbFailed     = "rfb connect failed: the console did not accept a session"
+	// litevirt is this port's own protocol, so these have no reference text;
+	// they follow the same rule — the gRPC error names the endpoint and the
+	// transport's reason, so it is logged rather than returned.
+	attachLitevirtFailed  = "litevirt connect failed: the console did not accept a session"
+	attachHandshakeFailed = "gui handshake failed: the console did not complete the handshake"
 )
 
 // buildGraphicalSession dispatches on the target protocol, returning the live
@@ -428,7 +433,8 @@ func (s *Server) buildLitevirtSession(
 	if err != nil {
 		cancel()
 		_ = cc.Close()
-		detailError(w, http.StatusInternalServerError, err.Error())
+		s.logger.Info("gui_attach_litevirt_failed", "target", target.TargetID, "error", err.Error())
+		detailError(w, http.StatusInternalServerError, attachLitevirtFailed)
 		return nil, nil, nil, false
 	}
 	done := make(chan error, 1)
@@ -446,7 +452,8 @@ func (s *Server) buildLitevirtSession(
 		case <-done:
 		case <-time.After(time.Second):
 		}
-		detailError(w, http.StatusBadGateway, "gui handshake failed: "+err.Error())
+		s.logger.Info("gui_attach_handshake_failed", "target", target.TargetID, "error", err.Error())
+		detailError(w, http.StatusBadGateway, attachHandshakeFailed)
 		return nil, nil, nil, false
 	}
 	// Keep the loop running; cancel closes the stream. Connection close is
