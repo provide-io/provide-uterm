@@ -106,11 +106,10 @@ class TestWsToTcpMutationKilling:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
         kwargs.setdefault("token_holder", [None])
-        await _ws_to_tcp(_async_iter(messages), cast("StreamWriter", MockWriter()), **kwargs)
+        await _ws_to_tcp(_async_iter(messages), cast("asyncio.StreamWriter", MockWriter()), **kwargs)
         return b"".join(written)
 
     async def test_del_converted_to_backspace(self):
@@ -159,10 +158,9 @@ class TestWsToTcpMutationKilling:
             async def drain(self) -> None:
                 drains.append(True)
 
-        from asyncio import StreamWriter
         from typing import cast
 
-        await _ws_to_tcp(_async_iter(["hello"]), cast("StreamWriter", MockWriter()), token_holder=[None])
+        await _ws_to_tcp(_async_iter(["hello"]), cast("asyncio.StreamWriter", MockWriter()), token_holder=[None])
         assert len(drains) >= 1
 
 
