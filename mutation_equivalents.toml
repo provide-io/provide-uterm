@@ -1073,7 +1073,7 @@ Codec-name case flip on the merged-parts branch: merged.decode("utf-8") -> decod
 Case-insensitive codec lookup; identical decoded text."""
 
 [[equivalent]]
-mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_101"
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_103"
 reason = """\
 Codec-name case flip when re-seating the unconsumed tail: \
 self._buffer_bytes.decode("utf-8") -> decode("UTF-8"). Case-insensitive codec lookup; \
@@ -1094,7 +1094,7 @@ decode("ASCII"). Case-insensitive codec lookup, and the field has already been c
 against string.hexdigits, so every byte reaching the decode is ASCII either way."""
 
 [[equivalent]]
-mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_38"
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_40"
 reason = """\
 Escaped-DLE data slice guard: `if data_start < idx` -> `<= idx`. The two differ only when \
 data_start == idx, where the mutant appends the zero-length slice buf[idx:idx]. That part \
@@ -1127,7 +1127,7 @@ bound in the OTHER direction is not equivalent and is not excused here -- `range
 rejects a one-byte buffer, which TestDrainRejectsAParseThatDoesNotAdvance pins."""
 
 [[equivalent]]
-mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_24"
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_26"
 reason = """\
 Scan-miss sentinel: `idx = buf_len if nxt < 0 else nxt` -> `if nxt <= 0`. The two differ \
 only when nxt == 0, which cannot happen: the branch runs only when buf[idx] is not a DLE, \
@@ -1137,11 +1137,11 @@ case is unreachable. The mutants of this comparison that DO change reachable beh
 (`> 0`, `>= 0`, `== 0`, `!= 0`) are killed, not excused."""
 
 [[equivalent]]
-mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_25"
+mutant = "provide.uterm.control_channel.xǁControlFrameDecoderǁ_drain__mutmut_27"
 reason = """\
 Scan-miss sentinel: `idx = buf_len if nxt < 0 else nxt` -> `if nxt < 1`. `nxt < 1` and \
 `nxt < 0` differ only on nxt == 0, which bytearray.find cannot return here -- see the \
-_drain__mutmut_24 entry above for why."""
+_drain__mutmut_26 entry above for why."""
 
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.router_broadcast.x_send_worker__mutmut_53"
