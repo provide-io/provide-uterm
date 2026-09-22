@@ -181,6 +181,13 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+    # grpc 1.84.0 is inside CVE-2026-84445 (HIGH, DoS; fixed in 1.83.2 and the
+    # 1.85 line). The transitive group proposed it on 2026-09-21 (#114), which
+    # would have traded a patched release for a vulnerable one. Drop this once
+    # 1.85.0 is out.
+    ignore:
+      - dependency-name: "google.golang.org/grpc"
+        versions: ["1.84.x"]
     groups:
       transitive:
         applies-to: version-updates
