@@ -22,7 +22,8 @@ import json
 import httpx2
 import pytest
 
-from provide.uterm.server.auth import WebhookIdentityProvider, _BoundedReplayCache
+from provide.uterm.server.auth import WebhookIdentityProvider
+from provide.uterm.server.auth_webhook import _BoundedReplayCache
 from provide.uterm.server.webhook_signing import build_webhook_signature
 from tests.helpers import http_mock
 

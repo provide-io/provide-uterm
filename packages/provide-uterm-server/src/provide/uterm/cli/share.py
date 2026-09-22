@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import argparse
 
-    from provide.uterm.tunnel.pty_capture import SpawnedPty, TtyProxy
+    from provide.uterm.tunnel.pty_capture import SpawnedPty
 
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.tunnel.protocol import (
