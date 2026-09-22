@@ -16,6 +16,7 @@
 
 import { ControlFrameDecoder, type DataChunk } from "../control-channel/index.ts";
 import { TerminalEmulator } from "../emulator/index.ts";
+import { closeFromException, TransportClose, TransportClosedError } from "../transports/close.ts";
 import { DEFAULT_CAPTURE_MAX_CHARS, TerminalCapture } from "./capture.ts";
 import { type ExpectResult, type SendAndExpectOptions, sendAndExpect } from "./expect.ts";
 
@@ -36,7 +37,12 @@ export interface SessionTransport {
   close(): Promise<void>;
   /** Write to the far end. */
   send(data: string): Promise<void>;
-  /** The next chunk, or nothing when the transport has gone. */
+  /**
+   * The next chunk, or nothing when there is nothing yet.
+   *
+   * Throws when the connection has ended — ideally a
+   * {@link TransportClosedError}, which says who ended it.
+   */
   receive(): Promise<string | undefined>;
 }
 
@@ -65,6 +71,7 @@ export class TransportSession {
   /** Resolvers for callers waiting on the next update. */
   #waiters: Array<() => void> = [];
   #reader: Promise<void> | undefined;
+  #closeInfo: TransportClose | undefined;
 
   constructor(options: TransportSessionOptions) {
     this.#transport = options.transport;
@@ -78,12 +85,19 @@ export class TransportSession {
   /** Open the transport and start reading from it. */
   async connect(): Promise<void> {
     await this.#transport.connect();
+    // A fresh connection has not ended, whatever the last one did.
+    this.#closeInfo = undefined;
     this.#connected = true;
     this.#reader = this.#readLoop();
   }
 
   /** Stop reading and close the transport. Idempotent. */
   async close(): Promise<void> {
+    // Only when the transport reported nothing: a close it already reported
+    // is what happened, and this call is just the cleanup after it.
+    if (this.#closeInfo === undefined) {
+      this.#closeInfo = new TransportClose("local", { detail: "closed by client" });
+    }
     if (!this.#connected) {
       return;
     }
@@ -112,6 +126,16 @@ export class TransportSession {
   /** Whether the session is still reading. */
   isConnected(): boolean {
     return this.#connected;
+  }
+
+  /**
+   * How the connection ended, or nothing while it has not.
+   *
+   * Set by the reader from the transport's {@link TransportClosedError}, or by
+   * {@link close} when this side closes before the transport reports one.
+   */
+  get closeInfo(): TransportClose | undefined {
+    return this.#closeInfo;
   }
 
   /** The current screen state. */
@@ -204,8 +228,12 @@ export class TransportSession {
       let raw: string | undefined;
       try {
         raw = await this.#transport.receive();
-      } catch {
-        // A dead transport ends the session rather than the process.
+      } catch (error) {
+        // A dead transport ends the session rather than the process. A failure
+        // after close() began is the teardown this side asked for, not news.
+        if (this.#connected) {
+          this.#closeInfo = error instanceof TransportClosedError ? error.close : closeFromException(error);
+        }
         this.#connected = false;
         this.#wake();
         return;
