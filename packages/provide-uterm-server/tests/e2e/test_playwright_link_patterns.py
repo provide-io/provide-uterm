@@ -303,6 +303,7 @@ class _WsTestServer:
             async for msg in ws:
                 self.received.append(msg)
         except Exception:
+            # The socket closing ends the capture; received holds what arrived.
             pass
 
     async def _serve(self) -> None:
@@ -316,6 +317,7 @@ class _WsTestServer:
         try:
             self._loop.run_until_complete(self._serve())
         except (asyncio.CancelledError, Exception):
+            # The loop is torn down on stop(); errors after that are expected.
             pass
         finally:
             self._loop.close()

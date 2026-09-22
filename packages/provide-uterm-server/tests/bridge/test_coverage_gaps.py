@@ -249,6 +249,7 @@ class TestWorkerWsBadStream:
                     for _ in range(5):
                         worker.receive_json()
                 except Exception:
+                    # Fewer than five frames is fine; this only drains the socket.
                     pass
 
 
@@ -328,6 +329,7 @@ class TestBrowserWsBadStream:
                         for _ in range(5):
                             browser.receive_json()
                     except Exception:
+                        # Fewer than five frames is fine; this only drains the socket.
                         pass
 
 

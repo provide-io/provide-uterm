@@ -412,6 +412,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
             with _h.Client(base_url=base_url, timeout=10.0, headers=dev_bearer_headers()) as http:
                 http.post(f"/worker/provide-shell/hijack/{hijack_id}/release")
         except Exception:
+            # Releasing the demo hijack is best effort at teardown.
             pass
 
     img_server.shutdown()

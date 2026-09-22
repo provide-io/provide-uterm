@@ -59,6 +59,7 @@ async def _telnet_handler(reader: asyncio.StreamReader, writer: asyncio.StreamWr
             writer.write(data + b"\r\n> ")
             await writer.drain()
     except (TimeoutError, ConnectionResetError):
+        # Client idle or gone: end the fake telnet session.
         pass
     writer.close()
 

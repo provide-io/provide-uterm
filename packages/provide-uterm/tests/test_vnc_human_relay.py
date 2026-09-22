@@ -293,6 +293,7 @@ def test_socketpair_bidirectional_relay() -> None:
                     break
                 got_video += chunk
         except (TimeoutError, OSError):
+            # Timeout or socket close ends the read; the assert below checks what arrived.
             pass
         assert got_video == server_payload
 
@@ -306,6 +307,7 @@ def test_socketpair_bidirectional_relay() -> None:
                     break
                 got_input += chunk
         except (TimeoutError, OSError):
+            # Timeout or socket close ends the read; the assert below checks what arrived.
             pass
         assert got_input == client_payload
     finally:

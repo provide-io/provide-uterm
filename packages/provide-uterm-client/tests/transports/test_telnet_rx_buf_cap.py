@@ -46,6 +46,7 @@ class _OneShotServer:
             try:
                 await writer.drain()
             except (ConnectionResetError, BrokenPipeError):
+                # The client may hang up mid-flood; that is the case under test.
                 pass
         # Hold the connection open until the client disconnects, so its receive()
         # can read the payload and run the rx-buffer cap check before teardown.

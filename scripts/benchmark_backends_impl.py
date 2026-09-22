@@ -361,6 +361,7 @@ async def bench_scaling(base: str, tiers: list[int], *, settle_s: float = 0.0) -
                 t1 = time.perf_counter()
                 latencies.append((t1 - t0) * 1000)
             except TimeoutError:
+                # A timed-out round trip is dropped from the latency sample.
                 pass
 
             # Drain remaining browsers in parallel
