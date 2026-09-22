@@ -24,7 +24,7 @@ dependencies = [
 server = ["fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=12.0"]
 cli = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0", "textual>=0.50", "httpx2>=2.10"]
 tunnel = ["httpx2>=2.10", "uvicorn>=0.24", "websockets>=16.0", "fastapi>=0.110"]
-gateway = ["asyncssh>=2.22.0", "websockets>=16.0"]
+gateway = ["asyncssh>=2.24.0", "websockets>=16.0"]
 # Optional: PatternDetector + built-in rules + annotation models. Lives in the
 # separate provide-uterm-annotation package so deployments that don't need
 # pattern detection can ship a leaner wheel. The factory imports it lazily and
@@ -32,7 +32,7 @@ gateway = ["asyncssh>=2.22.0", "websockets>=16.0"]
 annotation = ["provide-uterm-annotation>=0.5.6"]
 all = [
     "fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=16.0",
-    "textual>=0.50", "httpx2>=2.10", "asyncssh>=2.22.0",
+    "textual>=0.50", "httpx2>=2.10", "asyncssh>=2.24.0",
     "provide-uterm-annotation>=0.5.6",
     # core's emulator dep — declared here so `uv sync --extra all` installs it
     # from the lock instead of a side-channel `uv pip install pyte` that
@@ -60,7 +60,7 @@ dev = [
     "websockets>=16.0",
     "textual>=0.50",
     "httpx2>=2.10",
-    "asyncssh>=2.22.0",
+    "asyncssh>=2.24.0",
     "Pillow>=10.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
