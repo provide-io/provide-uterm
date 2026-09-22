@@ -7,8 +7,7 @@
 These two scenario executors live beside ``test_session_lifecycle_security_scenarios``
 rather than inside it purely to keep that adapter under the repo's per-file LOC
 cap; they drive the same really-served app through the same public routes and
-reuse the adapter's fixtures. The adapter imports this module from inside its
-dispatch function so the shared-fixture import below is not a cycle.
+reuse the adapter's fixtures from ``session_lifecycle_scenario_support``.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ from typing import Any
 import httpx2
 import websockets
 
-from .test_session_lifecycle_security_scenarios import (
+from .session_lifecycle_scenario_support import (
     ADMIN_HEADERS,
     WORKER_HEADERS,
     _acquire_browser_owner,
