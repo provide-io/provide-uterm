@@ -222,9 +222,8 @@ class TestIacStripping:
             # telnet stack to absorb them) and would dwarf the test payload.
             gw = TelnetWsGateway(f"ws://127.0.0.1:{ws_port}", iac_negotiate=False)
             tcp_srv = await gw.start("127.0.0.1", 0)
-            from asyncio import Server
 
-            assert isinstance(tcp_srv, Server)
+            assert isinstance(tcp_srv, asyncio.Server)
             assert tcp_srv.sockets is not None
             tcp_port = tcp_srv.sockets[0].getsockname()[1]
 
@@ -314,11 +313,10 @@ class TestWsToTcpColorMode:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
         kwargs.setdefault("token_holder", [None])
-        await _ws_to_tcp(_async_iter(messages), cast("StreamWriter", MockWriter()), **kwargs)
+        await _ws_to_tcp(_async_iter(messages), cast("asyncio.StreamWriter", MockWriter()), **kwargs)
         return b"".join(written)
 
     async def test_passthrough_keeps_rgb(self) -> None:

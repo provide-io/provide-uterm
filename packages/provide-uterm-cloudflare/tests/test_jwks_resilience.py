@@ -20,8 +20,8 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
-import provide.uterm.cloudflare.auth.jwt as jwt_module
 import pytest
+from provide.uterm.cloudflare.auth import jwt as jwt_module
 from provide.uterm.cloudflare.auth.jwt import _JWKS_CACHE_TTL_S, _fetch_jwks
 
 

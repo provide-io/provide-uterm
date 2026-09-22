@@ -56,11 +56,10 @@ class TestWsToTcpResume:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
         msg = encode_control_frame({"type": "session_token", "token": "tok123"})
-        await _ws_to_tcp(_async_iter([msg]), cast("StreamWriter", MockWriter()), token_holder=token_holder)
+        await _ws_to_tcp(_async_iter([msg]), cast("asyncio.StreamWriter", MockWriter()), token_holder=token_holder)
         assert written == []
         assert token_holder[0] is not None
         assert token_holder[0]["token"] == "tok123"
@@ -75,12 +74,11 @@ class TestWsToTcpResume:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
         await _ws_to_tcp(
             _async_iter([encode_control_frame({"type": "resume_ok"})]),
-            cast("StreamWriter", MockWriter()),
+            cast("asyncio.StreamWriter", MockWriter()),
             token_holder=[None],
         )
         assert any(b"Session resumed" in w for w in written)
@@ -96,12 +94,11 @@ class TestWsToTcpResume:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
         await _ws_to_tcp(
             _async_iter([encode_control_frame({"type": "resume_failed"})]),
-            cast("StreamWriter", MockWriter()),
+            cast("asyncio.StreamWriter", MockWriter()),
             token_holder=token_holder,
         )
         assert token_holder[0] is None
@@ -116,10 +113,9 @@ class TestWsToTcpResume:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
-        await _ws_to_tcp(_async_iter(["hello"]), cast("StreamWriter", MockWriter()), token_holder=[None])
+        await _ws_to_tcp(_async_iter(["hello"]), cast("asyncio.StreamWriter", MockWriter()), token_holder=[None])
         assert b"hello" in written[0]
 
 
@@ -139,10 +135,9 @@ class TestWsToTcpCrlf:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
-        await _ws_to_tcp(_async_iter(["foo\nbar"]), cast("StreamWriter", MockWriter()), token_holder=[None])
+        await _ws_to_tcp(_async_iter(["foo\nbar"]), cast("asyncio.StreamWriter", MockWriter()), token_holder=[None])
         assert written[0] == b"foo\r\nbar"
 
     async def test_existing_crlf_not_doubled(self) -> None:
@@ -155,10 +150,9 @@ class TestWsToTcpCrlf:
             async def drain(self) -> None:
                 pass
 
-        from asyncio import StreamWriter
         from typing import cast
 
-        await _ws_to_tcp(_async_iter(["foo\r\nbar"]), cast("StreamWriter", MockWriter()), token_holder=[None])
+        await _ws_to_tcp(_async_iter(["foo\r\nbar"]), cast("asyncio.StreamWriter", MockWriter()), token_holder=[None])
         assert written[0] == b"foo\r\nbar"
 
 
@@ -218,13 +212,12 @@ class TestPipeWsResume:
                 async def wait_closed(self) -> None:
                     pass
 
-            from asyncio import StreamWriter
             from typing import cast
 
             await asyncio.wait_for(
                 _pipe_ws(
                     reader,
-                    cast("StreamWriter", MockWriter()),
+                    cast("asyncio.StreamWriter", MockWriter()),
                     f"ws://127.0.0.1:{port}",
                     token_holder=token_holder,
                     advertise_redirect=False,  # isolate resume behavior from the capability hello
@@ -269,13 +262,12 @@ class TestPipeWsResume:
                 async def wait_closed(self) -> None:
                     pass
 
-            from asyncio import StreamWriter
             from typing import cast
 
             await asyncio.wait_for(
                 _pipe_ws(
                     reader,
-                    cast("StreamWriter", MockWriter()),
+                    cast("asyncio.StreamWriter", MockWriter()),
                     f"ws://127.0.0.1:{port}",
                     token_holder=[None],
                     advertise_redirect=False,  # no hello — assert no resume frame is sent

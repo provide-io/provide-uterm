@@ -95,7 +95,7 @@ async def test_failed_do_session_delete_keeps_fleet_registry_and_credentials() -
 
 
 async def test_worker_dispatches_every_global_route_def_through_its_declared_capability() -> None:
-    import provide.uterm.cloudflare.entry.route_defs as route_defs
+    from provide.uterm.cloudflare.entry import route_defs
 
     global_routes = tuple(route for route in API_ROUTES if route.scope is RouteScope.GLOBAL)
     handlers = {
@@ -197,7 +197,7 @@ async def test_pam_route_def_denies_viewer_before_capability() -> None:
     [((), 403), (("viewer",), 403), (("operator",), 200), (("admin",), 200)],
 )
 async def test_worker_pam_route_def_enforces_declared_roles(roles: tuple[str, ...], expected_status: int) -> None:
-    import provide.uterm.cloudflare.entry.route_defs as route_defs
+    from provide.uterm.cloudflare.entry import route_defs
 
     pam_route = next(route for route in API_ROUTES if route.operation == "pam_events.ingest")
     handler = AsyncMock(return_value=SimpleNamespace(status=200, body="ok"))
@@ -217,8 +217,8 @@ async def test_worker_pam_route_def_enforces_declared_roles(roles: tuple[str, ..
 
 
 def test_worker_route_def_dispatch_replaces_legacy_matchers() -> None:
-    import provide.uterm.cloudflare.entry.handlers as handlers
     import provide.uterm.cloudflare.entry.registry as registry
+    from provide.uterm.cloudflare.entry import handlers
 
     for module, name in (
         (handlers, "_match_api_route"),
@@ -231,7 +231,7 @@ def test_worker_route_def_dispatch_replaces_legacy_matchers() -> None:
 
 
 def test_worker_route_def_capability_validation_rejects_missing_global_handler() -> None:
-    import provide.uterm.cloudflare.entry.route_defs as route_defs
+    from provide.uterm.cloudflare.entry import route_defs
 
     with patch.dict(route_defs.GLOBAL_CAPABILITIES, {}, clear=True):
         with pytest.raises(ValueError, match="missing Worker route capabilities"):
@@ -239,7 +239,7 @@ def test_worker_route_def_capability_validation_rejects_missing_global_handler()
 
 
 def test_worker_route_def_capability_validation_rejects_session_handler_in_global_map() -> None:
-    import provide.uterm.cloudflare.entry.route_defs as route_defs
+    from provide.uterm.cloudflare.entry import route_defs
 
     session_capability = next(route.capability for route in API_ROUTES if route.scope is RouteScope.SESSION)
     with patch.dict(route_defs.GLOBAL_CAPABILITIES, {session_capability: AsyncMock()}):
