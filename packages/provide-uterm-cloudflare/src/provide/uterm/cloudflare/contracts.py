@@ -15,7 +15,6 @@ if TYPE_CHECKING:
         ControlChunk,
         ControlFrameDecoder,
         ControlFrameProtocolError,
-        DataChunk,
         encode_control_frame,
         encode_terminal_data,
     )
@@ -25,7 +24,6 @@ else:
             ControlChunk,
             ControlFrameDecoder,
             ControlFrameProtocolError,
-            DataChunk,
             encode_control_frame,
             encode_terminal_data,
         )
@@ -34,7 +32,6 @@ else:
         ControlChunk = Any
         ControlFrameDecoder = Any
         ControlFrameProtocolError = Exception
-        DataChunk = Any
 
         def encode_control_frame(*_a: Any, **_k: Any) -> bytes:
             return b""
