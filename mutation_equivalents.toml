@@ -1420,3 +1420,13 @@ condition). The mutant keeps None where the original substitutes "multi_key".
 effective_input_type is read only by `== "single_key"` and `== "any_key"`; both
 None and "multi_key" fail both tests and take the same else branch
 (send keys + "\\r"). No other read exists, so every input behaves identically."""
+
+[[equivalent]]
+mutant = "provide.uterm.detection.flow.xǁFlowEngineǁadvance__mutmut_75"
+reason = """`next_action=None if terminal else send_keys` ->
+`None if (terminal) and False else send_keys` (mutmut 3.8 ternary condition):
+the mutant always yields send_keys. It differs only when terminal is True, and
+then send_keys is already None: _is_terminal is True only for (a) kind == "noop",
+where send_keys = keys-if-kind-is-"send_keys"-else-None is None, or (b) is_last
+and action.keys is None, where send_keys is None whatever the kind. Both arms
+agree on every reachable input."""
