@@ -86,7 +86,7 @@ InMemoryRecordingStore has no local file path; get_path always returns None afte
 `_ = session_id`. Replacing that discard with `_ = None` is behaviorally equivalent."""
 
 [[equivalent]]
-mutant = "provide.uterm.recording.xǁLocalFileRecordingStoreǁget_entries__mutmut_8"
+mutant = "provide.uterm.recording.xǁLocalFileRecordingStoreǁget_entries__mutmut_10"
 reason = """\
 `skip = 0 if offset is None else max(0, offset)` → `skip = 1 if offset is None ...`. \
 When offset is None the body takes the tail branch (`if offset is not None:` is false) \

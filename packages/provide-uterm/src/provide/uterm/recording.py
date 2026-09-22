@@ -73,7 +73,7 @@ def _open_append_owner_only(path: Path) -> TextIOWrapper:
 
 
 @runtime_checkable
-class RecordingStore(Protocol):
+class RecordingStore(Protocol):  # pragma: no mutate block — stub-only Protocol; trampolined members break isinstance
     """Protocol for persisting and retrieving session recordings.
 
     Implement this protocol to provide a custom recording backend (e.g. S3,
