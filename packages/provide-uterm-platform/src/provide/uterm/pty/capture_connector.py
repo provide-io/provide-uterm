@@ -159,7 +159,7 @@ class CaptureConnector:
         for _attempt in range(2):
             if self._stdin_writer is None:
                 try:
-                    _reader, self._stdin_writer = await asyncio.open_unix_connection(self._stdin_socket_path)
+                    self._stdin_writer = (await asyncio.open_unix_connection(self._stdin_socket_path))[1]
                 except OSError:
                     return
             try:
