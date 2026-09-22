@@ -390,11 +390,21 @@ def _enqueue_worker_messages(session: DemoSessionState, messages: list[dict[str,
         queue.put_nowait(msg)
 
 
+def _log_safe(value: object) -> str:
+    """Render *value* for a log line with CR/LF escaped, so it cannot forge entries."""
+    return str(value).replace("\r", "\\r").replace("\n", "\\n")
+
+
 async def _sync_hub_input_mode(worker_id: str, mode: str) -> None:
     """Keep the hub's browser-facing input mode aligned with the demo worker."""
     ok, err = await _hub.set_input_mode(worker_id, mode)
     if not ok and err != "not_found":
-        logger.debug("demo_sync_input_mode_failed worker_id=%s mode=%s err=%s", worker_id, mode, err)
+        logger.debug(
+            "demo_sync_input_mode_failed worker_id=%s mode=%s err=%s",
+            _log_safe(worker_id),
+            _log_safe(mode),
+            _log_safe(err),
+        )
 
 
 async def _force_release_hijack_for_shared_mode(worker_id: str) -> bool:
