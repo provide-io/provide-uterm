@@ -1249,19 +1249,19 @@ mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_116"
 reason = '''cast() type argument -> "REQUEST | WEBSOCKET" on idp.resolve_principal; runtime no-op.'''
 
 [[equivalent]]
-mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_359"
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_361"
 reason = '''cast() type argument -> None on ControlPlaneResumeStore; runtime no-op.'''
 
 [[equivalent]]
-mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_363"
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_365"
 reason = '''cast() type argument -> "XX_ControlPlaneResumeBackendXX" on ControlPlaneResumeStore; runtime no-op.'''
 
 [[equivalent]]
-mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_364"
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_366"
 reason = '''cast() type argument -> "_controlplaneresumebackend" on ControlPlaneResumeStore; runtime no-op.'''
 
 [[equivalent]]
-mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_365"
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_367"
 reason = '''cast() type argument -> "_CONTROLPLANERESUMEBACKEND" on ControlPlaneResumeStore; runtime no-op.'''
 
 [[equivalent]]
@@ -1296,30 +1296,16 @@ a short configured token, and the config accepts short tokens -- and it is kille
 test_a_missing_bearer_never_matches_the_configured_worker_token.'''
 
 [[equivalent]]
-mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_68"
-reason = '''Pre-declaration initial value: `registry: SessionRegistry | None = None` -> "".
-The name is declared here only so the closures defined above can reference it; it is
-reassigned to the real SessionRegistry before anything reads it, and no closure runs
-during construction. No input can observe the initial value.'''
-
-[[equivalent]]
-mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_266"
-reason = '''Unreachable guard: `if registry is None: return True` -> `return False` inside
-_on_resume. The registry is always assigned before the first WebSocket connection, which
-is the only thing that can trigger a resume -- the source carries a `# pragma: no cover`
-on that branch for the same reason.'''
-
-[[equivalent]]
-mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_436"
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_440"
 reason = '''Constructor-absorbed default: FanOutController(store=InMemoryFanOutStore()) ->
 store=None. The controller does `store if store is not None else InMemoryFanOutStore()`,
 so passing None yields an equivalent fresh store of the same type. Nothing distinguishes
 the two, since the factory passes a newly constructed store either way.'''
 
 [[equivalent]]
-mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_443"
+mutant = "provide.uterm.server.app.factory_impl.x_create_server_app__mutmut_447"
 reason = '''The `store=InMemoryFanOutStore()` argument is dropped entirely, which lands on
-the same constructor default as __mutmut_436. Equivalent for the same reason.'''
+the same constructor default as __mutmut_440. Equivalent for the same reason.'''
 
 # ---------------------------------------------------------------------------
 # bridge/routes/rest_gui.py — 5 equivalents, measured 2026-09-04
