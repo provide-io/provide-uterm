@@ -12,8 +12,9 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { PromptRegexError } from "../hub/index.ts";
 import { FakeController, golden, harness, PRINCIPAL, request, withoutId } from "../testing/fanout-routes-harness.ts";
-import type { FanOutGroup } from "./index.ts";
+import { type FanOutGroup, FanOutGroupRejectedError } from "./index.ts";
 
 describe("creating a group", () => {
   it("fills in every default", async () => {
@@ -147,9 +148,27 @@ describe("creating a group", () => {
 
   it("passes a controller refusal back as a 400", async () => {
     const controller = new FakeController();
-    controller.createError = new Error("group too large: 99 > 50");
+    controller.createError = new FanOutGroupRejectedError("group too large: 99 > 50");
     const { routes } = harness({ controller });
     expect(await routes.createGroup(request(PRINCIPAL, { worker_ids: ["w1"] }))).toStrictEqual(golden.create_rejected);
+  });
+
+  it("passes an unusable error pattern back as a 400 naming the rule", async () => {
+    const controller = new FakeController();
+    controller.createError = new PromptRegexError("expect_regex too long", "too_long", 200);
+    const { routes } = harness({ controller });
+    expect(await routes.createGroup(request(PRINCIPAL, { worker_ids: ["w1"] }))).toStrictEqual({
+      status: 400,
+      body: { error: "expect_regex too long" },
+    });
+  });
+
+  it("does not echo an error that was not written for the caller", async () => {
+    // A store's failure can name its backend; it used to come back as a 400.
+    const controller = new FakeController();
+    controller.createError = new Error("store backend /var/lib/uterm/fanout.db is locked");
+    const { routes } = harness({ controller });
+    await expect(routes.createGroup(request(PRINCIPAL, { worker_ids: ["w1"] }))).rejects.toThrow("fanout.db");
   });
 
   it("lets a failure that is not a refusal through", async () => {

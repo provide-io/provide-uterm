@@ -11,6 +11,7 @@ import {
   FanOutController,
   type FanOutControllerHub,
   type FanOutGroup,
+  FanOutGroupRejectedError,
   fanOutGroup,
   InMemoryFanOutStore,
 } from "./index.ts";
@@ -185,7 +186,10 @@ describe("FanOutController group management", () => {
     // Every member is a session the hub drives on one keystroke; the cap is
     // what stops one request fanning out to the whole estate.
     const { controller } = build({ maxGroupSize: 2 });
-    await expect(controller.createGroup(group(["w1", "w2", "w3"]), "alice")).rejects.toThrow(/exceeds/);
+    await expect(controller.createGroup(group(["w1", "w2", "w3"]), "alice")).rejects.toThrow(FanOutGroupRejectedError);
+    await expect(controller.createGroup(group(["w1", "w2", "w3"]), "alice")).rejects.toThrow(
+      "Group size 3 exceeds max 2",
+    );
   });
 
   it("accepts a group exactly at the cap", async () => {

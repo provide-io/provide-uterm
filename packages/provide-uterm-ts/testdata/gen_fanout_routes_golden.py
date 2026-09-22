@@ -42,6 +42,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from provide.uterm.server.bridge.fanout import _routes as routes_module
+from provide.uterm.server.bridge.fanout._controller import FanOutGroupRejectedError
 from provide.uterm.server.bridge.fanout._models import FanOutGroup
 
 OUT = Path(__file__).with_name("fanout_routes_golden.json")
@@ -254,8 +255,9 @@ async def _record() -> dict[str, Any]:
         corpus["create_authorization_unavailable"] = await _call(create, FakeRequest(PRINCIPAL, {"worker_ids": ["w1"]}))
         controller.authorization_ready = True
 
-        # A controller that refuses the group.
-        controller.create_error = ValueError("group too large: 99 > 50")
+        # A controller that refuses the group. Only a refusal written for the
+        # caller is echoed as a 400; any other error is a server fault.
+        controller.create_error = FanOutGroupRejectedError("group too large: 99 > 50")
         corpus["create_rejected"] = await _call(create, FakeRequest(PRINCIPAL, {"worker_ids": ["w1"]}))
         controller.create_error = None
 
