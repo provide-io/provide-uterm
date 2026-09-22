@@ -45,8 +45,6 @@ DEFAULT_SHM = "256m"
 _RFB_VERSION_38 = b"RFB 003.008\n"
 _RFB_VERSION_37 = b"RFB 003.007\n"
 _RFB_VERSION_33 = b"RFB 003.003\n"
-# Back-compat alias used by tests/callers
-_RFB_VERSION = _RFB_VERSION_38
 
 
 def _repo_root() -> Path:

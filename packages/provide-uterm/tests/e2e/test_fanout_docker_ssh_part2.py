@@ -36,21 +36,10 @@ from .test_fanout_docker_ssh_part1 import (
 # ---------------------------------------------------------------------------
 
 _NUM_CONTAINERS = 3
-_IMAGE_NAME = "uterm-test-ssh"
 _CONTAINER_PREFIX = "uterm-test-ssh"
 _SSH_USER = "root"
 _SSH_PASS = "testpass"
 _ADMIN_H = {"X-Uterm-Principal": "admin-user", "X-Uterm-Role": "admin"}
-
-_DOCKERFILE = """\
-FROM alpine:3.20
-RUN apk add --no-cache openssh-server coreutils && \\
-    ssh-keygen -A && \\
-    echo "root:testpass" | chpasswd && \\
-    sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \\
-    sed -i 's/#PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
-CMD ["/usr/sbin/sshd", "-D", "-e"]
-"""
 
 # Skip everything if Docker is not available
 pytestmark = [
