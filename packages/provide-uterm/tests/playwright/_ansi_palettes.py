@@ -230,12 +230,7 @@ def build_ansi_art() -> str:
     for y in range(6):
         row = " "
         for x in range(40):
-            val = (
-                math.sin(x * 0.3)
-                + math.sin(y * 0.5)
-                + math.sin((x + y) * 0.2)
-                + math.sin(math.sqrt(x * x + y * y) * 0.3)
-            )
+            val = math.sin(x * 0.3) + math.sin(y * 0.5) + math.sin((x + y) * 0.2) + math.sin(math.hypot(x, y) * 0.3)
             n = max(16, min(231, 16 + int((val + 4) / 8 * 215)))
             row += f"\x1b[48;5;{n}m \x1b[0m"
         lines.append(f"{row}\r\n")
@@ -274,7 +269,7 @@ def build_animation_frames(num_frames: int = 30) -> list[str]:
                     math.sin(x * 0.1 + t)
                     + math.sin(y * 0.15 - t * 0.7)
                     + math.sin((x + y) * 0.1 + t * 0.5)
-                    + math.sin(math.sqrt((x - w / 2) ** 2 + (y - 6) ** 2) * 0.15 - t)
+                    + math.sin(math.hypot(x - w / 2, y - 6) * 0.15 - t)
                 )
                 # Map [-4,4] to hue
                 hue2 = (val + 4) / 8

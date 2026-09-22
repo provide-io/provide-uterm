@@ -162,13 +162,16 @@ def _wait_healthy(proc: subprocess.Popen[bytes], base_url: str, log_path: Path) 
 def _read_token(token_path: Path) -> str:
     """Return the dev-token JWT the server writes to UTERM_DEV_TOKEN_PATH at start."""
     deadline = time.monotonic() + 10.0
+    token = ""
     while time.monotonic() < deadline:
         with contextlib.suppress(OSError):
             token = token_path.read_text().strip()
-            if token:
-                return token
+        if token:
+            break
         time.sleep(0.2)
-    pytest.fail("dev token file was never written by the Go server")
+    if not token:
+        pytest.fail("dev token file was never written by the Go server")
+    return token
 
 
 def _terminate(proc: subprocess.Popen[bytes]) -> None:

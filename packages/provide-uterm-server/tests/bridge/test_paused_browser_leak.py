@@ -131,7 +131,7 @@ async def test_resolve_approval_survives_browser_disconnect_allow() -> None:
     hub._paused_browsers.update({good, dead})
     generation = await hub.capture_browser_ownership("w1", good)
     assert generation is not None
-    request = _add_approval(hub, "req1", "ls\r", good)
+    _add_approval(hub, "req1", "ls\r", good)
     with hub.approval_store._lock:
         hub.approval_store._requests["req1"].ownership_generation = generation
     request = hub.approval_store.get("req1")

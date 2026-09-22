@@ -157,8 +157,7 @@ async def test_cast_no_output_events():
 
 async def test_cast_only_empty_buckets():
     """All events at t=0 → frame list stays at just the clear-screen → no displayable output."""
-    cast_text = _make_cast_text([])
-    # Add only events that are malformed so they get skipped
+    # Only malformed events, so every one of them is skipped
     header = json.dumps({"version": 2, "width": 80, "height": 24})
     cast_text = header + "\n" + "INVALID_JSON\n"
     d = make_dispatcher()

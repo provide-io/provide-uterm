@@ -142,7 +142,8 @@ def _state_record() -> dict[str, Any]:
     view.ws = None
     view.ws_expires_at = None
     leaked = state.hijack_owner is None
-    same_object = state.lease is state.lease
+    first_read = state.lease
+    same_object = first_read is state.lease
 
     # apply_lease is how a mutated view is written back.
     written = WorkerTermState()
