@@ -327,3 +327,20 @@ async def test_wait_for_guard_none_snapshot_else_branch_zero(clock: _FakeClock) 
     )
     assert len(clock.sleeps) == 5
     assert len(hub.requests) == 6  # pre-loop + re-request on every poll
+
+
+async def test_wait_for_guard_loop_missing_worker_times_out_cleanly(clock: _FakeClock) -> None:
+    """A worker absent from the registry polls to the deadline and returns ``None``.
+
+    Pins the in-loop ``st.last_snapshot if st is not None else None`` ternary:
+    mutmut 3.8's ``(st is not None) or True`` condition mutant dereferences
+    ``None.last_snapshot`` and raises AttributeError instead of timing out.
+    """
+    hub = _FakeHub({})
+    ok, out, reason = await PollingCoordinator(hub).wait_for_guard(
+        "ghost", expect_prompt_id="never", expect_regex=None, timeout_ms=5000, poll_interval_ms=20
+    )
+    assert ok is False
+    assert out is None
+    assert reason == "prompt_guard_not_satisfied"
+    assert len(clock.sleeps) == 5
