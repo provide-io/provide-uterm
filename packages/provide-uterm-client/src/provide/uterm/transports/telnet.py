@@ -74,4 +74,25 @@ from provide.uterm.transports.telnet_transport import (
     TelnetTransport as TelnetTransport,
 )
 
-__all__ = ["TelnetClient", "TelnetTransport", "start_telnet_server"]
+__all__ = [
+    "DO",
+    "DONT",
+    "ECHO",
+    "IAC",
+    "LINEMODE",
+    "NAWS",
+    "OPT_BINARY",
+    "OPT_ECHO",
+    "OPT_NAWS",
+    "OPT_SGA_OPT",
+    "OPT_TTYPE",
+    "SB",
+    "SE",
+    "SGA",
+    "TTYPE_IS",
+    "WILL",
+    "WONT",
+    "TelnetClient",
+    "TelnetTransport",
+    "start_telnet_server",
+]
