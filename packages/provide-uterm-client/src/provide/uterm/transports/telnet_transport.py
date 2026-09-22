@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from provide.telemetry import get_logger
 from provide.uterm.transport_close import CloseInitiator, TransportClose, TransportClosedError, close_from_exception
@@ -41,9 +41,6 @@ from provide.uterm.transports._telnet_const import (
     SGA as SGA,
 )
 from provide.uterm.transports.base import ConnectionTransport
-
-if TYPE_CHECKING:
-    from asyncio import StreamReader, StreamWriter
 
 logger = get_logger(__name__)
 
@@ -83,8 +80,8 @@ class TelnetTransport(ConnectionTransport):
     """
 
     def __init__(self) -> None:
-        self._reader: StreamReader | None = None
-        self._writer: StreamWriter | None = None
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
         self._negotiated: dict[str, set[int]] = {"do": set(), "dont": set(), "will": set(), "wont": set()}
         self._rx_buf = bytearray()
         self._cols: int = 80
@@ -260,7 +257,7 @@ class TelnetTransport(ConnectionTransport):
             raise TransportClosedError("Send failed", _close_from_socket_error(exc)) from exc
 
     @staticmethod
-    async def _read_bounded(reader: StreamReader, max_bytes: int, timeout: float) -> bytes:
+    async def _read_bounded(reader: asyncio.StreamReader, max_bytes: int, timeout: float) -> bytes:
         """Read up to *max_bytes*, raising :class:`TimeoutError` after *timeout*.
 
         Deliberately not ``asyncio.wait_for``. On CPython < 3.12 ``wait_for``
