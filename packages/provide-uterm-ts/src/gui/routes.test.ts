@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { InMemoryGraphicalTargetRegistry, makeGraphicalTarget } from "../graphical/index.ts";
+import type { Logger } from "../telemetry/index.ts";
 import { loadGolden, must } from "../testing/golden.ts";
 import {
   CAP_GRAPHICAL_ATTACH,
@@ -565,6 +566,14 @@ describe("attaching an rfb console", () => {
     ]);
   }
 
+  function recordingLogger(records: { fields: Record<string, unknown>; msg?: string }[]): Logger {
+    const keep = (fields: Record<string, unknown>, msg?: string): void => {
+      records.push(msg === undefined ? { fields } : { fields, msg });
+    };
+    const logger: Logger = { trace: keep, debug: keep, info: keep, warn: keep, error: keep, child: () => logger };
+    return logger;
+  }
+
   function rfbDeps(endpoint: string): { deps: GuiDeps; request: GuiRequest } {
     const stored = makeGraphicalTarget({ targetId: "gt-rfb", tenantId: "acme", protocol: "rfb", endpoint });
     const { deps } = depsFor({} as Case);
@@ -584,7 +593,7 @@ describe("attaching an rfb console", () => {
     deps.dialRfb = () => scriptedStream(Buffer.from("HTTP/1.1 200", "ascii")) as never;
     const answer = await guiAttach(deps, request, WORKER);
     expect(answer.status).toBe(502);
-    expect(String((answer.body as { error: string }).error)).toContain("rfb connect failed:");
+    expect(answer.body).toEqual({ error: "rfb connect failed: the console did not accept a session" });
   });
 
   it("refuses an endpoint the registry cannot parse", async () => {
@@ -605,7 +614,20 @@ describe("attaching an rfb console", () => {
     };
     const answer = await guiAttach(deps, request, WORKER);
     expect(answer.status).toBe(403);
+    expect(answer.body).toEqual({ error: "invalid endpoint: the target's host is not an allowed destination" });
+    expect(JSON.stringify(answer.body)).not.toContain("169.254");
     expect(dialled).toBe(false);
+  });
+
+  it("logs an egress refusal's reason instead of returning it", async () => {
+    const { deps, request } = rfbDeps("169.254.169.254:5900");
+    const records: { fields: Record<string, unknown>; msg?: string }[] = [];
+    deps.logger = recordingLogger(records);
+    await guiAttach(deps, request, WORKER);
+    expect(records).toHaveLength(1);
+    expect(records[0]?.msg).toBe("gui_attach_egress_blocked");
+    expect(records[0]?.fields).toMatchObject({ target: "gt-rfb", host: "169.254.169.254" });
+    expect(String(records[0]?.fields.reason)).not.toBe("");
   });
 
   it("dials for real when the deployment injects nothing", async () => {
@@ -622,8 +644,20 @@ describe("attaching an rfb console", () => {
       // Not everything thrown is an Error; the refusal still has to read.
       throw "upstream said no";
     };
+    const records: { fields: Record<string, unknown>; msg?: string }[] = [];
+    deps.logger = recordingLogger(records);
     const answer = await guiAttach(deps, request, WORKER);
     expect(answer.status).toBe(502);
-    expect((answer.body as { error: string }).error).toBe("rfb connect failed: upstream said no");
+    expect(answer.body).toEqual({ error: "rfb connect failed: the console did not accept a session" });
+    expect(records).toEqual([
+      { fields: { target: "gt-rfb", error: "upstream said no" }, msg: "gui_attach_rfb_failed" },
+    ]);
+  });
+
+  it("does not return the socket error of a real failed dial", async () => {
+    const { deps, request } = rfbDeps("127.0.0.1:1");
+    const answer = await guiAttach(deps, request, WORKER);
+    expect(answer.body).toEqual({ error: "rfb connect failed: the console did not accept a session" });
+    expect(JSON.stringify(answer.body)).not.toMatch(/127\.0\.0\.1|ECONNREFUSED|:1\b/);
   });
 });
