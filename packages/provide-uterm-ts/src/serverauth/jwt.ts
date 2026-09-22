@@ -24,7 +24,6 @@
 
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
-import { pyB64UrlDecode } from "../pycompat/base64.ts";
 
 /** A token this server will not act on, and PyJWT's name for the reason. */
 export class JwtError extends Error {
@@ -84,13 +83,29 @@ export function encodeJwt(claims: JwtClaims, secret: string): string {
   return `${header}.${payload}.${b64urlEncode(signature)}`;
 }
 
-/** Decode one segment, turning the decoder's refusal into PyJWT's wording. */
+/** The characters an unpadded base64url segment may hold, and nothing else. */
+const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]*$/;
+
+/**
+ * Decode one segment, refusing anything that is not canonical base64url.
+ *
+ * PyJWT 2.14 (`_decode_base64url_segment`) stopped leaning on the lenient
+ * stdlib decoder: a segment is refused as `Invalid <what> padding` when its
+ * length leaves a lone trailing character, when it holds anything outside the
+ * url-safe alphabet (padding `=` included), or when it does not re-encode to
+ * itself — i.e. its final character carries set bits past the last whole
+ * byte. The last rule is what refuses `not.a.real.token` at the header now,
+ * before any JSON is attempted.
+ */
 function segment(text: string, what: string): Uint8Array {
-  try {
-    return pyB64UrlDecode(text);
-  } catch {
+  if (text.length % 4 === 1 || !BASE64URL_SEGMENT.test(text)) {
     throw new JwtError("DecodeError", `Invalid ${what} padding`);
   }
+  const decoded = Buffer.from(text, "base64url");
+  if (b64urlEncode(decoded) !== text) {
+    throw new JwtError("DecodeError", `Invalid ${what} padding`);
+  }
+  return decoded;
 }
 
 /** Parse one decoded segment as JSON, in PyJWT's two-step wording. */
