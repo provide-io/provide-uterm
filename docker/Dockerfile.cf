@@ -104,20 +104,26 @@ ENV UV_FROZEN=1
 # memory), fixed in 6.27.0. The override pins undici to >=6.27.0,<7 across the
 # dependency tree (Trivy's HIGH/CRITICAL gate flags the bundled 6.26.0).
 #
-# The wrangler version is pinned to the exact one the repo's package.json
-# depends on. It was `wrangler@latest`, which made each image build resolve a
-# fresh dependency tree, so the CVEs the scan reported changed on their own
-# between builds with no commit in between — the run that prompted this pin
+# The wrangler version is the exact one the repo's package.json pins, read from
+# that file at build time. It was `wrangler@latest`, which made each image build
+# resolve a fresh dependency tree, so the CVEs the scan reported changed on their
+# own between builds with no commit in between — the run that prompted the pin
 # failed on brace-expansion (CVE-2026-13149, CVE-2026-14257) and tar
-# (CVE-2026-59873 CRITICAL, CVE-2026-59874), neither of which 4.118.0 pulls in
-# at all. Keep this in sync with package.json when bumping wrangler.
+# (CVE-2026-59873 CRITICAL, CVE-2026-59874). The pin was then a hand-copied
+# literal "kept in sync with package.json", and it wasn't: the image sat on
+# 4.118.0 while package.json moved to 4.129.0, and the older miniflare's
+# sharp 0.35.2 (GHSA-rgj7-g3m4-5g8c, HIGH) failed the scan on every PR. Reading
+# the version from package.json removes the second copy rather than guarding it.
 #
 # The wrangler binary is symlinked onto PATH so pywrangler resolves it exactly
 # as a global install would.
+COPY package.json /tmp/repo-package.json
 RUN mkdir -p /opt/wrangler \
     && cd /opt/wrangler \
     && printf '{"name":"wrangler-host","private":true,"overrides":{"undici":"^6.27.0"}}\n' > package.json \
-    && npm install --no-audit --no-fund wrangler@4.118.0 \
+    && WRANGLER_VERSION="$(node -p 'require("/tmp/repo-package.json").devDependencies.wrangler')" \
+    && npm install --no-audit --no-fund "wrangler@${WRANGLER_VERSION}" \
+    && rm /tmp/repo-package.json \
     && ln -sf /opt/wrangler/node_modules/.bin/wrangler /usr/local/bin/wrangler \
     && wrangler --version
 
