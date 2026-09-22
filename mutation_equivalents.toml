@@ -624,12 +624,6 @@ mutant = "provide.uterm.deckmux._service.xǁDeckMuxPresenceǁhandle_message__mut
 reason = "except-ValueError fallback user = None -> ''; user is only consumed by the immediately-following `if user:` truthiness guard, and both None and '' are falsy → the broadcast is skipped identically — unobservable."
 # --- detection/engine.py (full-perimeter survivors) ---
 [[equivalent]]
-mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ__init____mutmut_1"
-reason = "Trampoline-masked default-arg DetectionEngine(buffer_size=50->51); mutmut's dispatcher forwards the bound 50 to the variant, so the mutated default is never reached. Real default tested (the existing __init__ default-value test)."
-[[equivalent]]
-mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ__init____mutmut_2"
-reason = "Trampoline-masked default-arg DetectionEngine(idle_threshold_s=2.0->3.0); dispatcher forwards the bound 2.0. Real default tested."
-[[equivalent]]
 mutant = "provide.uterm.detection.engine.xǁDetectionEngineǁ_sync_process_screen__mutmut_19"
 reason = "snapshot.get('screen', ''->None) default; the default is dead — extract_kv is only reached after a prompt matched, which required snapshot['screen'] to be present, so .get('screen', X) always returns the screen and never the default. Unobservable."
 [[equivalent]]

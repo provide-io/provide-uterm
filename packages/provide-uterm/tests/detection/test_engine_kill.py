@@ -142,3 +142,53 @@ def test_debug_state_empty_buffer_defaults(monkeypatch: pytest.MonkeyPatch) -> N
     sb = engine.debug_state()["screen_buffer"]
     assert sb["last_change_seconds_ago"] == 0.0
     assert sb["is_idle"] is False
+
+
+# == mutmut 3.8 ternary-condition mutants ====================================
+
+
+def test_debug_state_empty_buffer_ignores_live_idle_state() -> None:
+    """With nothing buffered, ``is_idle`` is False even when the manager reports idle.
+
+    ``buffer_size=0`` keeps the deque empty while ``add_screen`` still records the
+    last hash/change time, so ``detect_idle_state()`` alone would say True. Pins
+    ``detect_idle_state() if recent else False`` (-> ``if recent or True``).
+    """
+    engine = DetectionEngine(_ruleset("login"), buffer_size=0)
+    engine._buffer_manager.add_screen({**_snap("idle-screen"), "captured_at": 1.0})
+    assert engine._buffer_manager.detect_idle_state() is True  # precondition: manager alone says idle
+
+    sb = engine.debug_state()["screen_buffer"]
+    assert sb["size"] == 0
+    assert sb["is_idle"] is False
+
+
+def test_debug_state_reports_screen_saver_status_when_configured() -> None:
+    """A configured saver's status is embedded, not None (``if saver is not None and False``)."""
+    saver = MagicMock()
+    saver._enabled = True
+    saver._namespace = "ns"
+    saver.get_screens_dir.return_value = "/screens"
+    saver.get_saved_count.return_value = 3
+    engine = DetectionEngine(_ruleset("login"), screen_saver=saver)
+
+    assert engine.debug_state()["screen_saver"] == {
+        "enabled": True,
+        "screens_dir": "/screens",
+        "saved_count": 3,
+        "namespace": "ns",
+    }
+
+
+async def test_process_screen_saves_unmatched_screen_with_none_prompt_id() -> None:
+    """No detection still saves the screen, with ``prompt_id=None``.
+
+    The ``if detection or True`` mutant dereferences ``None.prompt_id``; the
+    AttributeError is swallowed by the saver guard, so ``save_screen`` never runs.
+    """
+    saver = MagicMock()
+    engine = DetectionEngine(_ruleset("login"), screen_saver=saver)
+    snap = _snap("nothing here")
+
+    assert await engine.process_screen(snap) is None
+    saver.save_screen.assert_called_once_with(snap, prompt_id=None)
