@@ -360,3 +360,58 @@ class TestDetectedFullScreenAssignment:
         assert payload["screen"] == "LIVE-SCREEN"
         assert "XXscreenXX" not in payload
         assert "SCREEN" not in payload
+
+
+# ---------------------------------------------------------------------------
+# In-body None -> default ternaries (mutmut 3.8 ternary-condition mutants:
+# `DEFAULT if (x is None) and False else x` leaves the None in place).
+# ---------------------------------------------------------------------------
+
+
+class TestNoneArgumentsTakeDefaults:
+    async def test_omitted_timeout_uses_default_not_none(self) -> None:
+        """timeout_ms=None must resolve to the default; the mutant divides None and raises."""
+        wait_calls: list[int | None] = []
+        waiter = _waiter([_prompt_snapshot(is_idle=True)], wait_calls)
+        result = await waiter.wait_for_prompt()
+        assert result["prompt_id"] == "main_menu"
+
+    async def test_omitted_require_idle_still_skips_non_idle_prompt(self) -> None:
+        """require_idle=None must resolve to True, so an early non-idle prompt is skipped.
+
+        The mutant keeps None (falsy) and returns the first, non-idle prompt.
+        """
+        wait_calls: list[int | None] = []
+        snaps = [
+            _prompt_snapshot(prompt_id="busy", is_idle=False),
+            _prompt_snapshot(prompt_id="ready", is_idle=True),
+        ]
+        session = MagicMock()
+        session.is_connected = MagicMock(return_value=True)
+        session.snapshot = MagicMock(side_effect=snaps)
+        session.seconds_until_idle = MagicMock(return_value=0.0)
+
+        async def _wait(*, timeout_ms: int | None) -> bool:
+            wait_calls.append(timeout_ms)
+            return True
+
+        session.wait_for_update = _wait
+        waiter = PromptWaiter(session)
+        result = await waiter.wait_for_prompt(timeout_ms=5000)
+        assert result["prompt_id"] == "ready"
+        assert wait_calls == [1]
+
+    async def test_omitted_wait_after_sleeps_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """wait_after_sec=None must resolve to the 0.2s default; the mutant compares None > 0 and raises."""
+        slept: list[float] = []
+
+        async def _sleep(delay: float) -> None:
+            slept.append(delay)
+
+        monkeypatch.setattr(io_mod.asyncio, "sleep", _sleep)
+        session = MagicMock()
+        session.is_connected = MagicMock(return_value=True)
+        session.send = AsyncMock()
+        await io_mod.InputSender(session).send_input("go")
+        session.send.assert_awaited_once_with("go\r")
+        assert slept == [io_mod.DEFAULT_WAIT_AFTER_SEC]
