@@ -36,11 +36,23 @@ import {
   scopeForTenant,
 } from "../graphical/index.ts";
 import { pyStr } from "../pycompat/index.ts";
+import { getLogger, type Logger } from "../telemetry/index.ts";
 import { RfbGraphicalSession, type RfbStream } from "./rfb.ts";
 import { encodeRgbaPng, type GraphicalSession, MemoryGraphicalSession } from "./session.ts";
 
 /** The capability attaching a console needs. */
 export const CAP_GRAPHICAL_ATTACH = "graphical.session.attach";
+
+/**
+ * What a refused or failed attach tells the caller, as the reference's
+ * ATTACH_EGRESS_REFUSED / ATTACH_RFB_FAILED. Fixed text on purpose: the caller
+ * named a target id, not a host, so the egress guard's reason (which host, and
+ * whether it resolved to metadata or an internal range) and the dial error
+ * (which address and port refused) describe the operator's network, not the
+ * request. Both are logged with the target id instead.
+ */
+export const ATTACH_EGRESS_REFUSED = "invalid endpoint: the target's host is not an allowed destination";
+export const ATTACH_RFB_FAILED = "rfb connect failed: the console did not accept a session";
 
 /** Key name to X11 keysym, as the C# and Go ports spell it. */
 export const GUI_KEY_SYMS: Readonly<Record<string, number>> = {
@@ -103,6 +115,8 @@ export interface GuiDeps {
   blockPrivateConnectorTargets?: boolean;
   /** Inject a socket for tests; production dials for real. */
   dialRfb?: (host: string, port: number) => RfbStream;
+  /** Where a refused or failed attach's detail goes. Defaults to the server logger. */
+  logger?: Logger;
 }
 
 /** A request, as much of one as these handlers read. */
@@ -152,6 +166,11 @@ export function strField(body: Record<string, unknown>, key: string, fallback = 
 }
 
 /** Attach a graphical session to a worker. */
+/** The logger an attach failure is written to. */
+function attachLogger(deps: GuiDeps): Logger {
+  return deps.logger ?? getLogger("provide.uterm.server.gui");
+}
+
 /** The message from a thrown value, without assuming it is an Error. */
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -211,14 +230,19 @@ export async function guiAttach(deps: GuiDeps, request: GuiRequest, workerId: st
       // is the point; cloud-metadata is refused either way.
       await assertConnectorTargetAllowed(host, { blockPrivate: deps.blockPrivateConnectorTargets ?? false });
     } catch (error) {
-      return { status: 403, body: { error: `invalid endpoint: ${errorText(error)}` } };
+      attachLogger(deps).info(
+        { target: target.targetId, host, reason: errorText(error) },
+        "gui_attach_egress_blocked",
+      );
+      return { status: 403, body: { error: ATTACH_EGRESS_REFUSED } };
     }
     try {
       session = await connectRfb(host, port, deps);
     } catch (error) {
       // The registry entry is valid and the console is not answering, which is
       // a gateway failure rather than a bad request.
-      return { status: 502, body: { error: `rfb connect failed: ${errorText(error)}` } };
+      attachLogger(deps).info({ target: target.targetId, error: errorText(error) }, "gui_attach_rfb_failed");
+      return { status: 502, body: { error: ATTACH_RFB_FAILED } };
     }
   } else {
     // Floored at one pixel: a size the framebuffer would refuse can only come
