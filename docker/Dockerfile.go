@@ -18,7 +18,7 @@
 #
 
 ARG GO_IMAGE=golang:1.26-bookworm
-ARG NODE_IMAGE=node:22-slim
+ARG NODE_IMAGE=node:26-slim
 
 # ---- frontend-build --------------------------------------------------------
 FROM ${NODE_IMAGE} AS frontend-build
