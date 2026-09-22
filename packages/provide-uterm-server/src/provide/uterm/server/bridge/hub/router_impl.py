@@ -68,7 +68,6 @@ from provide.uterm.server.bridge.hub.router_broadcast import (
 # Re-exported so the ``router_impl`` namespace (and tests importing these from
 # it) is unchanged after the redaction helpers moved to ``router_redaction``.
 from provide.uterm.server.bridge.hub.router_redaction import (
-    _REDACT_MAX_DEPTH,  # noqa: F401  (re-export for namespace stability)
     _redact_frame_fields,
     _redact_value,
 )

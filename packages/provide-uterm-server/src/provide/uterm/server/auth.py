@@ -17,14 +17,11 @@ from provide.telemetry import get_logger
 from provide.uterm.server.api_keys import canonical_tenant_id
 from provide.uterm.server.audit import audit_event
 from provide.uterm.server.auth_roles import (
-    _DEFAULT_ROLE,  # noqa: F401  # re-exported for legacy server.auth import surface
     _KNOWN_ROLES,
     _filter_known_roles,
 )
 from provide.uterm.server.auth_webhook import (
-    _REPLAY_CACHE_MAX_ENTRIES,  # noqa: F401  # re-exported for legacy server.auth import surface
     WebhookIdentityProvider,
-    _BoundedReplayCache,  # noqa: F401  # re-exported for legacy server.auth import surface
 )
 from provide.uterm.server.bridge.identity import IdentityProvider, Principal
 
