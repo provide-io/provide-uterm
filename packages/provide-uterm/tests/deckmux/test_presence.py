@@ -196,7 +196,8 @@ def test_store_remove() -> None:
 
 def test_store_remove_missing() -> None:
     store = PresenceStore()
-    assert store.remove("nonexistent") is None
+    removed = store.remove("nonexistent")
+    assert removed is None
 
 
 def test_store_get_all() -> None:
