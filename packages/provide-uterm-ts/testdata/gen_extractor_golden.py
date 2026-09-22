@@ -42,6 +42,7 @@ Usage (from the repository root)::
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -336,7 +337,7 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, bool):
         return value
     if isinstance(value, float):
-        if value != value:
+        if math.isnan(value):
             return {"__float__": "nan"}
         if value == float("inf"):
             return {"__float__": "inf"}
@@ -365,7 +366,7 @@ def _convert(value: str, target: str) -> dict[str, Any]:
     except (ValueError, TypeError) as exc:
         return {"ok": False, "error": type(exc).__name__, "message": str(exc)}
     # NaN has no JSON form; it is described rather than written.
-    if isinstance(converted, float) and converted != converted:
+    if isinstance(converted, float) and math.isnan(converted):
         return {"ok": True, "value_out": None, "is_nan": True}
     if isinstance(converted, float) and converted in (float("inf"), float("-inf")):
         return {"ok": True, "value_out": None, "is_infinite": converted > 0}
