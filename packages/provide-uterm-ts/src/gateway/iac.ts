@@ -97,8 +97,16 @@ export function deriveColormode(
 export class IacNegotiator {
   /** What the client said it is. */
   term = "";
-  /** What the client said about its environment. */
-  readonly env: Record<string, string> = {};
+  /**
+   * What the client said about its environment.
+   *
+   * Held in a `Map` because every name in it is chosen by the client. Written
+   * into a plain object, a variable called `__proto__` hit the prototype
+   * setter instead of being stored — silently dropped, where the reference's
+   * dict keeps it — and any other name was a property write keyed by the
+   * remote end. Read through {@link env} as a fresh plain record.
+   */
+  readonly #env = new Map<string, string>();
 
   #pending: number[] = [];
   #inSubnegotiation = false;
@@ -107,6 +115,13 @@ export class IacNegotiator {
   #newEnvironRequested = false;
   #ttypeReceived = false;
   #newEnvironReceived = false;
+
+  /** What the client said about its environment, as a fresh plain record. */
+  get env(): Record<string, string> {
+    // Object.fromEntries defines each entry as an own data property, so even a
+    // `__proto__` name arrives as data rather than through the setter.
+    return Object.fromEntries(this.#env);
+  }
 
   /** What to send the moment a client connects. */
   startBytes(): Uint8Array {
@@ -277,7 +292,7 @@ export class IacNegotiator {
 
     const store = (): void => {
       if (started && key.length > 0) {
-        this.env[String.fromCharCode(...key)] = String.fromCharCode(...value);
+        this.#env.set(String.fromCharCode(...key), String.fromCharCode(...value));
       }
     };
 
