@@ -131,7 +131,7 @@ jobs:
       # Static quality gate — single source of truth shared with local dev:
       # run `ci/quality_checks.sh` before pushing to catch these without CI.
       # Covers max-LOC, SPDX headers, codegen-frames drift, event literals,
-      # ruff (format + lint), strict mypy plus informational mypy-soft/ty,
+      # ruff (format + lint), strict mypy and ty,
       # bandit, xenon, vulture, pip-audit, licenses, the performance smoke,
       # the CF vendor tree, and package artifacts. Runs every check and reports
       # all failures (no fail-fast masking of later checks).
