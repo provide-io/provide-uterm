@@ -162,6 +162,7 @@ async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -
     try:
         await asyncio.get_event_loop().create_future()  # wait until cancelled
     except asyncio.CancelledError:
+        # Cancellation is the normal shutdown path; the finally block stops the listener.
         pass
     finally:
         await listener.stop()

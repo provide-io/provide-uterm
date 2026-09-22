@@ -29,6 +29,7 @@ def _get_term_size(fd: int) -> tuple[int, int]:
         if cols > 0 and rows > 0:
             return cols, rows
     except (OSError, ValueError):
+        # Not a TTY or ioctl unsupported: fall back to the default 80x24 below.
         pass
     return 80, 24
 
