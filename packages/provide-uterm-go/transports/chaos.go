@@ -95,7 +95,11 @@ func (c *ChaosTransport) Receive(ctx context.Context, maxBytes int, timeout time
 
 	if c.disconnectN > 0 && count%c.disconnectN == 0 {
 		_ = c.inner.Disconnect(ctx)
-		return nil, fmt.Errorf("%s: injected disconnect on receive #%d", c.label, count)
+		return nil, closedError(
+			fmt.Sprintf("%s: injected disconnect on receive #%d", c.label, count),
+			TransportClose{Initiator: CloseUnknown, Reason: "injected disconnect"},
+			nil,
+		)
 	}
 
 	if c.timeoutN > 0 && count%c.timeoutN == 0 {

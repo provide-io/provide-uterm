@@ -8,6 +8,7 @@ package transports
 import (
 	"bytes"
 	"context"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -79,7 +80,7 @@ func TestTelnetHandleRemoteCloseLeftover(t *testing.T) {
 	// Trailing lone IAC: final parse emits it as literal, consumed>0.
 	tr.rxBuf = []byte{'h', 'i', iacByte}
 
-	payload, err := tr.handleRemoteClose(context.Background())
+	payload, err := tr.handleRemoteClose(context.Background(), io.EOF)
 	if err != nil {
 		t.Fatalf("expected leftover payload, got err %v", err)
 	}

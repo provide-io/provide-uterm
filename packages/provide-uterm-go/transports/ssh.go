@@ -7,6 +7,7 @@ package transports
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -39,7 +40,67 @@ type SSHTransport struct {
 	rxCh    chan []byte
 	closed  chan struct{} // closed by readLoop when stdout ends
 	quit    chan struct{} // closed by Disconnect to unblock a parked readLoop
+	end     *TransportClose
 	remnant []byte
+}
+
+// sshExitWait bounds how long readLoop waits, after stdout ends, for the
+// peer's exit-status/exit-signal. A peer that sends EOF but keeps the channel
+// open would otherwise hold the close report back indefinitely.
+const sshExitWait = 500 * time.Millisecond
+
+// sshWaiter is the part of *ssh.Session readLoop needs: Wait returns the
+// remote command's exit status once the channel closes.
+type sshWaiter interface {
+	Wait() error
+}
+
+// sshExitReason renders the result of session.Wait as a close reason:
+// "exit status N", "signal NAME", or "" when the peer reported neither.
+func sshExitReason(err error) string {
+	if err == nil {
+		return "exit status 0"
+	}
+	var exitErr *ssh.ExitError
+	if !errors.As(err, &exitErr) {
+		return ""
+	}
+	if sig := exitErr.Signal(); sig != "" {
+		return "signal " + sig
+	}
+	return fmt.Sprintf("exit status %d", exitErr.ExitStatus())
+}
+
+// waitExitReason waits up to limit for w's exit status and renders it with
+// sshExitReason, or returns "" if it does not arrive in time.
+func waitExitReason(w sshWaiter, limit time.Duration) string {
+	result := make(chan error, 1)
+	go func() { result <- w.Wait() }()
+	timer := time.NewTimer(limit)
+	defer timer.Stop()
+	select {
+	case err := <-result:
+		return sshExitReason(err)
+	case <-timer.C:
+		return ""
+	}
+}
+
+// closeFromSSHRead maps the read failure that ended the SSH stdout stream:
+//   - Disconnect had already run (quit closed): local;
+//   - EOF, i.e. the peer closed the channel or connection: remote, with any
+//     exit status or signal as the reason;
+//   - any other transport or protocol error: unknown, with the error as detail.
+func closeFromSSHRead(err error, quit <-chan struct{}, w sshWaiter) TransportClose {
+	select {
+	case <-quit:
+		return TransportClose{Initiator: CloseLocal}
+	default:
+	}
+	if errors.Is(err, io.EOF) {
+		return TransportClose{Initiator: CloseRemote, Reason: waitExitReason(w, sshExitWait)}
+	}
+	return CloseFromError(err, CloseUnknown)
 }
 
 // NewSSHTransport returns an unconnected SSHTransport.
@@ -159,11 +220,12 @@ func (t *SSHTransport) Connect(ctx context.Context, host string, port int, opts 
 	t.rxCh = make(chan []byte)
 	t.closed = make(chan struct{})
 	t.quit = make(chan struct{})
+	t.end = &TransportClose{}
 	t.remnant = nil
-	rxCh, closed, quit := t.rxCh, t.closed, t.quit
+	rxCh, closed, quit, end := t.rxCh, t.closed, t.quit, t.end
 	t.mu.Unlock()
 
-	go t.readLoop(stdout, rxCh, closed, quit)
+	go t.readLoop(stdout, session, rxCh, closed, quit, end)
 
 	logger.Debug("ssh_transport connected", "host", host, "port", port, "user", opts.SSH.User)
 	return nil
@@ -171,8 +233,9 @@ func (t *SSHTransport) Connect(ctx context.Context, host string, port int, opts 
 
 // readLoop pumps stdout chunks into rxCh until EOF/error or Disconnect. It
 // selects on quit so a Disconnect while the loop is parked on a channel send
-// does not leak the goroutine.
-func (t *SSHTransport) readLoop(stdout io.Reader, rxCh chan []byte, closed, quit chan struct{}) {
+// does not leak the goroutine. It records how the stream ended in *end before
+// closing closed, so a reader that has seen closed may read it.
+func (t *SSHTransport) readLoop(stdout io.Reader, w sshWaiter, rxCh chan []byte, closed, quit chan struct{}, end *TransportClose) {
 	defer close(closed)
 	buf := make([]byte, 32*1024)
 	for {
@@ -183,10 +246,12 @@ func (t *SSHTransport) readLoop(stdout io.Reader, rxCh chan []byte, closed, quit
 			select {
 			case rxCh <- chunk:
 			case <-quit:
+				*end = TransportClose{Initiator: CloseLocal}
 				return
 			}
 		}
 		if err != nil {
+			*end = closeFromSSHRead(err, quit, w)
 			return
 		}
 	}
@@ -220,27 +285,40 @@ func (t *SSHTransport) Disconnect(ctx context.Context) error {
 	return nil
 }
 
-// Send writes data to the session stdin.
+// Send writes data to the session stdin. A write failure is reported as a
+// *TransportClosedError: the reader's close when it has already seen the
+// stream end, else remote for EOF (the peer closed the channel) and unknown
+// with the error as detail for anything else.
 func (t *SSHTransport) Send(ctx context.Context, data []byte) error {
 	t.mu.Lock()
 	stdin := t.stdin
+	closed, end := t.closed, t.end
 	t.mu.Unlock()
 	if stdin == nil {
 		return fmt.Errorf("%w: ssh send", ErrNotConnected)
 	}
 	if _, err := stdin.Write(data); err != nil {
+		tc := CloseFromError(err, CloseUnknown)
+		if errors.Is(err, io.EOF) {
+			tc = TransportClose{Initiator: CloseRemote}
+		}
+		select {
+		case <-closed:
+			tc = *end
+		default:
+		}
 		_ = t.Disconnect(ctx)
-		return fmt.Errorf("send failed: %w", err)
+		return closedError("send failed", tc, err)
 	}
 	return nil
 }
 
-// Receive returns up to maxBytes from stdout, an empty slice on timeout, or
-// ErrConnectionClosed when the remote closes.
+// Receive returns up to maxBytes from stdout, an empty slice on timeout, or a
+// *TransportClosedError carrying who closed when the stream ends.
 func (t *SSHTransport) Receive(ctx context.Context, maxBytes int, timeout time.Duration) ([]byte, error) {
 	t.mu.Lock()
 	rxCh := t.rxCh
-	closed := t.closed
+	closed, end := t.closed, t.end
 	if rxCh == nil {
 		t.mu.Unlock()
 		return nil, fmt.Errorf("%w: ssh receive", ErrNotConnected)
@@ -265,7 +343,7 @@ func (t *SSHTransport) Receive(ctx context.Context, maxBytes int, timeout time.D
 		return []byte{}, nil
 	case <-closed:
 		_ = t.Disconnect(ctx)
-		return nil, ErrConnectionClosed
+		return nil, closedError("connection closed", *end, nil)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
