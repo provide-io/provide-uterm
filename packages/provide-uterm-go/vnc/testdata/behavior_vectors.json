@@ -1,4 +1,313 @@
 {
+  "close_cases": {
+    "chaos": [
+      {
+        "code": null,
+        "event": "injected_disconnect",
+        "initiator": "unknown",
+        "name": "injected-disconnect",
+        "operation": "receive",
+        "reason": "injected disconnect"
+      }
+    ],
+    "summary": [
+      {
+        "code": 1001,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "local",
+        "reason": "going away",
+        "summary": "local close 1001 going away (ConnectionResetError: reset)"
+      },
+      {
+        "code": 1001,
+        "detail": "",
+        "initiator": "local",
+        "reason": "going away",
+        "summary": "local close 1001 going away"
+      },
+      {
+        "code": 1001,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "local",
+        "reason": "",
+        "summary": "local close 1001 (ConnectionResetError: reset)"
+      },
+      {
+        "code": 1001,
+        "detail": "",
+        "initiator": "local",
+        "reason": "",
+        "summary": "local close 1001"
+      },
+      {
+        "code": null,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "local",
+        "reason": "going away",
+        "summary": "local close going away (ConnectionResetError: reset)"
+      },
+      {
+        "code": null,
+        "detail": "",
+        "initiator": "local",
+        "reason": "going away",
+        "summary": "local close going away"
+      },
+      {
+        "code": null,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "local",
+        "reason": "",
+        "summary": "local close (ConnectionResetError: reset)"
+      },
+      {
+        "code": null,
+        "detail": "",
+        "initiator": "local",
+        "reason": "",
+        "summary": "local close"
+      },
+      {
+        "code": 1001,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "remote",
+        "reason": "going away",
+        "summary": "remote close 1001 going away (ConnectionResetError: reset)"
+      },
+      {
+        "code": 1001,
+        "detail": "",
+        "initiator": "remote",
+        "reason": "going away",
+        "summary": "remote close 1001 going away"
+      },
+      {
+        "code": 1001,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "remote",
+        "reason": "",
+        "summary": "remote close 1001 (ConnectionResetError: reset)"
+      },
+      {
+        "code": 1001,
+        "detail": "",
+        "initiator": "remote",
+        "reason": "",
+        "summary": "remote close 1001"
+      },
+      {
+        "code": null,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "remote",
+        "reason": "going away",
+        "summary": "remote close going away (ConnectionResetError: reset)"
+      },
+      {
+        "code": null,
+        "detail": "",
+        "initiator": "remote",
+        "reason": "going away",
+        "summary": "remote close going away"
+      },
+      {
+        "code": null,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "remote",
+        "reason": "",
+        "summary": "remote close (ConnectionResetError: reset)"
+      },
+      {
+        "code": null,
+        "detail": "",
+        "initiator": "remote",
+        "reason": "",
+        "summary": "remote close"
+      },
+      {
+        "code": 1001,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "unknown",
+        "reason": "going away",
+        "summary": "unknown close 1001 going away (ConnectionResetError: reset)"
+      },
+      {
+        "code": 1001,
+        "detail": "",
+        "initiator": "unknown",
+        "reason": "going away",
+        "summary": "unknown close 1001 going away"
+      },
+      {
+        "code": 1001,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "unknown",
+        "reason": "",
+        "summary": "unknown close 1001 (ConnectionResetError: reset)"
+      },
+      {
+        "code": 1001,
+        "detail": "",
+        "initiator": "unknown",
+        "reason": "",
+        "summary": "unknown close 1001"
+      },
+      {
+        "code": null,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "unknown",
+        "reason": "going away",
+        "summary": "unknown close going away (ConnectionResetError: reset)"
+      },
+      {
+        "code": null,
+        "detail": "",
+        "initiator": "unknown",
+        "reason": "going away",
+        "summary": "unknown close going away"
+      },
+      {
+        "code": null,
+        "detail": "ConnectionResetError: reset",
+        "initiator": "unknown",
+        "reason": "",
+        "summary": "unknown close (ConnectionResetError: reset)"
+      },
+      {
+        "code": null,
+        "detail": "",
+        "initiator": "unknown",
+        "reason": "",
+        "summary": "unknown close"
+      },
+      {
+        "code": 0,
+        "detail": "",
+        "initiator": "remote",
+        "reason": "",
+        "summary": "remote close 0"
+      }
+    ],
+    "telnet": [
+      {
+        "code": null,
+        "event": "eof",
+        "initiator": "remote",
+        "name": "eof",
+        "operation": "receive",
+        "reason": ""
+      },
+      {
+        "code": null,
+        "event": "reset",
+        "initiator": "remote",
+        "name": "reset-on-receive",
+        "operation": "receive",
+        "reason": ""
+      },
+      {
+        "code": null,
+        "event": "reset",
+        "initiator": "remote",
+        "name": "reset-on-send",
+        "operation": "send",
+        "reason": ""
+      },
+      {
+        "code": null,
+        "event": "broken_pipe",
+        "initiator": "unknown",
+        "name": "broken-pipe-on-receive",
+        "operation": "receive",
+        "reason": ""
+      },
+      {
+        "code": null,
+        "event": "broken_pipe",
+        "initiator": "unknown",
+        "name": "broken-pipe-on-send",
+        "operation": "send",
+        "reason": ""
+      },
+      {
+        "code": null,
+        "event": "rx_buffer_cap",
+        "initiator": "local",
+        "name": "rx-buffer-cap",
+        "operation": "receive",
+        "reason": "receive buffer exceeded"
+      }
+    ],
+    "websocket": [
+      {
+        "code": 1011,
+        "detail": "sent 1011 (internal error) keepalive ping timeout; no close frame received",
+        "initiator": "local",
+        "name": "sent-only-keepalive-timeout",
+        "reason": "keepalive ping timeout",
+        "received": null,
+        "received_then_sent": null,
+        "sent": {
+          "code": 1011,
+          "reason": "keepalive ping timeout"
+        }
+      },
+      {
+        "code": 1001,
+        "detail": "received 1001 (going away) going away; no close frame sent",
+        "initiator": "remote",
+        "name": "received-only",
+        "reason": "going away",
+        "received": {
+          "code": 1001,
+          "reason": "going away"
+        },
+        "received_then_sent": null,
+        "sent": null
+      },
+      {
+        "code": 1000,
+        "detail": "received 1000 (OK); then sent 1000 (OK)",
+        "initiator": "remote",
+        "name": "received-then-sent",
+        "reason": "",
+        "received": {
+          "code": 1000,
+          "reason": ""
+        },
+        "received_then_sent": true,
+        "sent": {
+          "code": 1000,
+          "reason": ""
+        }
+      },
+      {
+        "code": 1000,
+        "detail": "sent 1000 (OK) bye; then received 1000 (OK)",
+        "initiator": "local",
+        "name": "sent-then-received",
+        "reason": "bye",
+        "received": {
+          "code": 1000,
+          "reason": ""
+        },
+        "received_then_sent": false,
+        "sent": {
+          "code": 1000,
+          "reason": "bye"
+        }
+      },
+      {
+        "code": null,
+        "detail": "no close frame received or sent",
+        "initiator": "unknown",
+        "name": "neither",
+        "reason": "",
+        "received": null,
+        "received_then_sent": null,
+        "sent": null
+      }
+    ]
+  },
   "hello_defaults": {
     "csharp": {
       "mcp_supported": false,

@@ -163,6 +163,29 @@ Opt-in feature. Enabled on FastAPI by passing `resume_store` to `TermHub`; alway
   prior browser role from the token; consumers that need identity-aware resume
   checks must provide `on_resume` validation when constructing `TermHub`.
 
+### Transport close (client side)
+
+No wire bytes change here: this is how every client port *reports* the end of a
+connection. The contract is `provide.uterm.transport_close` (Python), mirrored
+by `TransportClose` in TypeScript, Go and C#, and pinned for all four by
+`close_cases` in `spec/behavior_vectors.json` (generated from the Python
+reference by `scripts/generate_behavior_vectors.py`).
+
+| Event | Initiator | Code / reason |
+|---|---|---|
+| WebSocket close frame received first (or only) | `remote` | from the received frame |
+| WebSocket close frame sent first (or only), e.g. keepalive timeout | `local` | from the sent frame (`1011 keepalive ping timeout`) |
+| WebSocket ended with no close frame | `unknown` | none |
+| Telnet EOF, or peer reset on receive/send | `remote` | none |
+| Telnet broken pipe | `unknown` | none |
+| Telnet receive-buffer cap exceeded | `local` | reason `receive buffer exceeded` |
+| Chaos injected disconnect | `unknown` | reason `injected disconnect` |
+
+`summary()` is `"<initiator> close"`, then the code and reason when present,
+then `" (<detail>)"` when there is a detail; a code of `0` is a code, not an
+absent one. Port gaps are skipped by name in each port's vector test: C# has no
+chaos transport and no telnet receive-buffer cap.
+
 ## Tunnel protocol
 
 Binary multiplexed WebSocket framing for terminal sharing, TCP forwarding, and HTTP inspection.
