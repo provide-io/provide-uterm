@@ -646,8 +646,11 @@ reason = "options_str = ''->None in the keytype-first branch; options_str is con
 mutant = "provide.uterm.auth.x__parse_authorized_keys_line__mutmut_19"
 reason = "line[first_token_end:].lstrip()-> rstrip(); rest is consumed only by rest.split(None, 2), which already ignores leading whitespace, and the only field that could retain whitespace (parts[2], the comment) is .strip()'d downstream — so parts[0]/parts[1]/the final subject are identical. Unobservable."
 [[equivalent]]
-mutant = "provide.uterm.auth.x__parse_authorized_keys_line__mutmut_44"
+mutant = "provide.uterm.auth.x__parse_authorized_keys_line__mutmut_46"
 reason = "blob_text.encode('ascii'->'ASCII'); codec name lookup is case-insensitive and normalizes 'ASCII'->'ascii', identical bytes for the ASCII keytype+payload text. Unobservable."
+[[equivalent]]
+mutant = "provide.uterm.auth.x__parse_authorized_keys_line__mutmut_49"
+reason = "opts = _parse_options(options_str) if options_str else {} -> `if (options_str) or True` (mutmut 3.8 ternary condition): always calls _parse_options. options_str is always a str (the literal '' or a slice of line), so the only falsy value is '', and _parse_options('') iterates _split_options('') == [] and returns {} — the same as the else arm. Unobservable."
 [[equivalent]]
 mutant = "provide.uterm.auth.x__find_first_token_end__mutmut_1"
 reason = "in_quotes = False->None; in_quotes is only read via `not in_quotes` and toggled via `not in_quotes` — `not False` and `not None` are both True, so False and None drive identical control flow. Unobservable."
