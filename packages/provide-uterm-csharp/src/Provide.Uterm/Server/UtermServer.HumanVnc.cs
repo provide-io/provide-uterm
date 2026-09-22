@@ -199,7 +199,15 @@ public sealed partial class UtermServer
         }
         catch (Exception ex)
         {
-            await DetailError(403, "invalid endpoint: " + ex.Message).ExecuteAsync(ctx).ConfigureAwait(false);
+            // Same fixed text as gui attach: the caller named a target id, not a
+            // host, so the guard's reason is logged rather than returned.
+            GuiLog.Info("gui_vnc_egress_blocked", new Dictionary<string, object?>
+            {
+                ["target"] = target.TargetId,
+                ["host"] = rfbHost,
+                ["reason"] = ex.Message,
+            });
+            await DetailError(403, AttachEgressRefused).ExecuteAsync(ctx).ConfigureAwait(false);
             return null;
         }
 
@@ -218,7 +226,12 @@ public sealed partial class UtermServer
             try { tcp?.Dispose(); }
             catch { /* best-effort */ }
 
-            await DetailError(502, "rfb connect failed: " + ex.Message).ExecuteAsync(ctx).ConfigureAwait(false);
+            GuiLog.Info("gui_vnc_rfb_failed", new Dictionary<string, object?>
+            {
+                ["target"] = target.TargetId,
+                ["error"] = ex.Message,
+            });
+            await DetailError(502, AttachRfbFailed).ExecuteAsync(ctx).ConfigureAwait(false);
             return null;
         }
     }
