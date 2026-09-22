@@ -15,8 +15,10 @@ namespace Provide.Uterm.Tests;
 /// A closed transport says who closed it, and the session keeps that answer.
 /// Port of packages/provide-uterm/tests/test_transport_close.py and the pure
 /// mapping half of provide-uterm-client/tests/transports/test_transport_close_mapping.py
-/// (issue #102). Before this, WebSocketTransport and TelnetTransport threw the shared
-/// untyped TransportErrors.ConnectionClosed and the session reader swallowed it.
+/// (issue #102). The cases every port shares (close_cases in spec/behavior_vectors.json)
+/// are in <see cref="TermSessionTransportCloseVectorTests"/>; these are the C#-specific
+/// ones. Before this, WebSocketTransport and TelnetTransport threw the shared untyped
+/// TransportErrors.ConnectionClosed and the session reader swallowed it.
 /// </summary>
 public class TermSessionTransportCloseTests
 {
@@ -41,26 +43,6 @@ public class TermSessionTransportCloseTests
         Assert.Same(cause, err.InnerException);
     }
 
-    public static TheoryData<TransportClose, string> Summaries() => new()
-    {
-        { new TransportClose(CloseInitiator.Remote, 1001, "going away"), "remote close 1001 going away" },
-        { new TransportClose(CloseInitiator.Remote), "remote close" },
-        {
-            new TransportClose(CloseInitiator.Unknown, Detail: "ConnectionResetError: reset"),
-            "unknown close (ConnectionResetError: reset)"
-        },
-        { new TransportClose(CloseInitiator.Local, 1011, "keepalive ping timeout"), "local close 1011 keepalive ping timeout" },
-        { new TransportClose(CloseInitiator.Local, 0), "local close 0" },
-        { new TransportClose(CloseInitiator.Local, Reason: "receive buffer exceeded"), "local close receive buffer exceeded" },
-        { new TransportClose(CloseInitiator.Remote, 1000, "", "d"), "remote close 1000 (d)" },
-        { new TransportClose(CloseInitiator.Unknown, 1006, "r", "d"), "unknown close 1006 r (d)" },
-    };
-
-    [Theory]
-    [MemberData(nameof(Summaries))]
-    public void TheSummaryNamesInitiatorCodeAndReason(TransportClose close, string summary) =>
-        Assert.Equal(summary, close.Summary());
-
     [Theory]
     [InlineData(CloseInitiator.Local, "local")]
     [InlineData(CloseInitiator.Remote, "remote")]
@@ -78,37 +60,7 @@ public class TermSessionTransportCloseTests
             TransportClose.FromException(new IOException("x"), CloseInitiator.Local).Initiator);
     }
 
-    // ---- WebSocket frame attribution (mirrors ws_transport._close_from_websockets) ----
-
-    [Fact]
-    public void AReceivedFrameAloneIsARemoteClose() =>
-        Assert.Equal(
-            new TransportClose(CloseInitiator.Remote, 1001, "going away", "d"),
-            TransportClose.FromWebSocketFrames(new CloseFrame(1001, "going away"), null, false, "d"));
-
-    [Fact]
-    public void ReceivedThenSentIsARemoteClose() =>
-        Assert.Equal(
-            new TransportClose(CloseInitiator.Remote, 1000, "server bye"),
-            TransportClose.FromWebSocketFrames(new CloseFrame(1000, "server bye"), new CloseFrame(1000, "bye"), true));
-
-    [Fact]
-    public void SentThenReceivedIsALocalCloseWithTheSentFrame() =>
-        Assert.Equal(
-            new TransportClose(CloseInitiator.Local, 1000, "bye"),
-            TransportClose.FromWebSocketFrames(new CloseFrame(1001, "echo"), new CloseFrame(1000, "bye"), false));
-
-    [Fact]
-    public void AKeepaliveTimeoutIsALocalClose() =>
-        Assert.Equal(
-            "local close 1011 keepalive ping timeout",
-            TransportClose.FromWebSocketFrames(null, new CloseFrame(1011, "keepalive ping timeout"), false).Summary());
-
-    [Fact]
-    public void NoFramesIsAnUnknownClose() =>
-        Assert.Equal(
-            new TransportClose(CloseInitiator.Unknown, Detail: "no close frame received or sent"),
-            TransportClose.FromWebSocketFrames(null, null, false, "no close frame received or sent"));
+    // ---- WebSocket (shared frame attribution: TermSessionTransportCloseVectorTests) ----
 
     [Fact]
     public void AFailedWebSocketOperationPrefersTheReceivedStatus()

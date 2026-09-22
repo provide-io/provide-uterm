@@ -133,7 +133,7 @@ public class TermSessionTransportCloseLiveTests
     }
 
     /// <summary>Accepts one telnet client, drains its negotiation, then runs <paramref name="end"/>.</summary>
-    private static async Task<(TelnetTransport Transport, Task Server)> ConnectTelnet(Action<Socket> end)
+    internal static async Task<(TelnetTransport Transport, Task Server)> ConnectTelnet(Action<Socket> end)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
