@@ -239,6 +239,40 @@ describe("reading what a client sends", () => {
     expect(negotiator.env).toEqual({ COLORTERM: "truecolor", LANG: "en_GB" });
   });
 
+  it("stores a variable named like a prototype key as data", () => {
+    // Every name here is chosen by the client. `__proto__` written into a
+    // plain object hits the prototype setter and vanishes; the reference's
+    // dict keeps it, and so must this — without touching any prototype.
+    const bytes = (s: string) => [...s].map((c) => c.charCodeAt(0));
+    const negotiator = new IacNegotiator();
+    negotiator.feed(
+      Uint8Array.from([
+        IAC,
+        SB,
+        NEW_ENVIRON,
+        IS,
+        VAR,
+        ...bytes("__proto__"),
+        VALUE,
+        ...bytes("polluted"),
+        VAR,
+        ...bytes("constructor"),
+        VALUE,
+        ...bytes("x"),
+        IAC,
+        SE,
+      ]),
+    );
+    const env = negotiator.env;
+    expect(Object.keys(env).sort()).toEqual(["__proto__", "constructor"]);
+    expect(Object.getOwnPropertyDescriptor(env, "__proto__")?.value).toBe("polluted");
+    expect(Object.getPrototypeOf(env)).toBe(Object.prototype);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    // Each read is a fresh copy, so a caller cannot write into the negotiator.
+    env.TERM = "vt100";
+    expect(negotiator.env.TERM).toBeUndefined();
+  });
+
   it("reads a variable with no value as empty", () => {
     const negotiator = new IacNegotiator();
     negotiator.feed(
