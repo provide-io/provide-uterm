@@ -112,6 +112,7 @@ class CaptureSocket:
         try:
             Path(self._path).unlink()
         except FileNotFoundError:
+            # Already removed (or never created); nothing to clean up.
             pass
 
     async def read_frame(self) -> CaptureFrame:
@@ -152,6 +153,7 @@ class CaptureSocket:
                 data = await reader.readexactly(length)
                 self._enqueue(CaptureFrame(channel=channel, data=data))
         except (asyncio.IncompleteReadError, ConnectionResetError):
+            # The capture client disconnected (EOF mid-frame or reset); the finally block drops it.
             pass
         finally:
             self._connections.discard(writer)
