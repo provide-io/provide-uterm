@@ -42,8 +42,6 @@ from provide.uterm.server import _http, create_server_app, default_server_config
 from provide.uterm.server import app as server_app_pkg
 from provide.uterm.server.app import factory_impl
 
-_WEBHOOK_VALUE = "uterm-test-governance-webhook-32b"
-
 
 @pytest.fixture()
 def stub_http(monkeypatch: pytest.MonkeyPatch) -> None:

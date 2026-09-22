@@ -192,7 +192,7 @@ class TestAnnotateEffects:
         logger = SimpleNamespace(log_event=AsyncMock())
         reg = _registry(get_runtime=MagicMock(return_value=SimpleNamespace(_logger=logger)))
 
-        _result, _audit, _hub = await _annotate({"label": "x"}, registry=reg)
+        await _annotate({"label": "x"}, registry=reg)
 
         logger.log_event.assert_awaited_once()
         assert logger.log_event.await_args.args[0] == "annotation"

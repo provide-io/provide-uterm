@@ -180,7 +180,7 @@ async def test_wait_for_guard_poll_interval_minimum() -> None:
 
     # poll_interval_ms=1 should be clamped to 20ms
     start = time.time()
-    ok, snap, reason = await hub.wait_for_guard(
+    await hub.wait_for_guard(
         "bot1",
         expect_prompt_id="nonexistent",
         expect_regex=None,
@@ -248,7 +248,7 @@ async def test_wait_for_guard_no_new_snapshot_rerequests() -> None:
         "ts": old_ts,
     }
 
-    ok, snap, reason = await hub.wait_for_guard(
+    await hub.wait_for_guard(
         "bot1",
         expect_prompt_id="nonexistent",
         expect_regex=None,
@@ -388,7 +388,7 @@ async def test_wait_for_guard_min_timeout_50ms() -> None:
 
     # Request very small timeout that should be clamped to 50ms
     start = time.time()
-    ok, snap, reason = await hub.wait_for_guard(
+    await hub.wait_for_guard(
         "bot1",
         expect_prompt_id="nonexistent",
         expect_regex=None,
@@ -409,7 +409,7 @@ async def test_wait_for_guard_min_interval_20ms() -> None:
 
     # Request very small interval
     start = time.time()
-    ok, snap, reason = await hub.wait_for_guard(
+    await hub.wait_for_guard(
         "bot1",
         expect_prompt_id="nonexistent",
         expect_regex=None,
