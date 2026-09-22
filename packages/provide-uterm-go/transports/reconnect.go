@@ -94,11 +94,12 @@ type ReconnectingTransport struct {
 	isRetryable IsRetryableFunc
 	onReconnect func(ConnectionTransport)
 
-	mu    sync.Mutex
-	inner ConnectionTransport
-	host  string
-	port  int
-	opts  ConnectOptions
+	mu        sync.Mutex
+	inner     ConnectionTransport
+	host      string
+	port      int
+	opts      ConnectOptions
+	lastClose *TransportClose
 }
 
 // ReconnectingOptions configures a ReconnectingTransport.
@@ -232,6 +233,7 @@ func (r *ReconnectingTransport) runWithReconnect(ctx context.Context, op func(Co
 		if !r.isRetryable(err) {
 			return err
 		}
+		r.recordClose(err)
 		if retries >= r.policy.MaxRetries {
 			_ = inner.Disconnect(ctx)
 			return fmt.Errorf("%w: %v", ErrRetriesExhausted, err)
@@ -241,6 +243,31 @@ func (r *ReconnectingTransport) runWithReconnect(ctx context.Context, op func(Co
 			return rerr
 		}
 	}
+}
+
+// recordClose keeps the close carried by a retried error, if it has one.
+func (r *ReconnectingTransport) recordClose(err error) {
+	var closedErr *TransportClosedError
+	if !errors.As(err, &closedErr) {
+		return
+	}
+	tc := closedErr.Close
+	r.mu.Lock()
+	r.lastClose = &tc
+	r.mu.Unlock()
+}
+
+// LastClose returns how the connection that triggered the most recent
+// reconnect (or the final, exhausted retry) ended, or nil if no retried
+// failure reported a close. Port of Python's ReconnectingSession.last_close.
+func (r *ReconnectingTransport) LastClose() *TransportClose {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.lastClose == nil {
+		return nil
+	}
+	tc := *r.lastClose
+	return &tc
 }
 
 // Disconnect closes the active inner transport.
