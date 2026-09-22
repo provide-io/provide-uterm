@@ -277,9 +277,9 @@ api:
       note: >-
         Scope validity check (exactly one of system/tenant). A method in Go
         (Scope.IsValid) but a PROPERTY in Python (@property is_valid) and C#
-        (bool IsValid => ...). The C# extractor matches methods only, so this is
-        required: false rather than a false miss. The behavior is identical in
-        all three.
+        (bool IsValid => ...). The C# extractor does not scan structs (C#'s
+        GraphicalTargetScope is a readonly struct), so this is required: false
+        rather than a false miss. The behavior is identical in all three.
     - name: get
       kind: function
       required: true
@@ -301,6 +301,62 @@ api:
       kind: function
       required: true
       note: "seed an immutable system target (Python add_static; Go/C# AddStatic)"
+  # provide.uterm.transport_close + TransportSession.close_info (Python core),
+  # ReconnectingSession.last_close (Python client) <->
+  # packages/provide-uterm-go/transports + termsession (Go) <->
+  # Provide.Uterm/Transports + TermSession (C#). How a client connection ended:
+  # which side closed it, plus the protocol's code and reason. The behaviour is
+  # pinned by close_cases in spec/behavior_vectors.json, which Python,
+  # TypeScript, Go and C# all replay; this category pins the names.
+  transport_close:
+    - name: CloseInitiator
+      kind: type
+      required: true
+      note: >-
+        local | remote | unknown. A StrEnum in Python, a string type with
+        CloseLocal/CloseRemote/CloseUnknown constants in Go, an enum in C#.
+    - name: TransportClose
+      kind: type
+      required: true
+      note: "initiator, optional code, reason, detail (a record in C#)"
+    - name: summary
+      kind: function
+      required: true
+      note: >-
+        "<initiator> close[ <code>][ <reason>][ (<detail>)]", byte-identical in
+        every port (close_cases.summary).
+    - name: TransportClosedError
+      kind: type
+      required: true
+      note: >-
+        The error a transport raises when its connection ended, carrying the
+        close. Python subclasses ConnectionError; Go's *TransportClosedError
+        matches errors.Is(err, ErrConnectionClosed); C# spells it
+        TransportClosedException (an IOException), per .NET's Exception suffix
+        -- validate_conformance.csharp_satisfies accepts that spelling.
+    - name: close_from_exception
+      kind: function
+      required: false
+      note: >-
+        Describe a failure as a close with detail "<type>: <message>". Python
+        close_from_exception; Go CloseFromError (Go has errors, not
+        exceptions); C# the static TransportClose.FromException. Accepted
+        naming difference; the detail format is the same in all three.
+    - name: close_info
+      kind: function
+      required: true
+      note: >-
+        The close the transport session observed (Python property close_info;
+        Go TransportSession.CloseInfo(); C# property CloseInfo).
+    - name: last_close
+      kind: function
+      required: false
+      note: >-
+        The close that triggered the last reconnect (Python
+        ReconnectingSession.last_close; Go ReconnectingTransport.LastClose();
+        TypeScript lastClose). required: false only because the C# port has no
+        reconnecting wrapper to carry it yet (issue #102); make it required
+        when one lands.
   # provide.uterm.server.api_keys + bridge.identity (Python) <->
   # packages/provide-uterm-go/serverauth (Go) <-> Provide.Uterm/ServerAuth (C#).
   # The tenant-scoped API-key store methods + the resolved Principal. Note:
