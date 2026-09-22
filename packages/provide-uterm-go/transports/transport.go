@@ -34,8 +34,10 @@ var (
 	// ErrNotConnected is returned by Send/Receive when there is no live
 	// connection (mirrors Python's ConnectionError("Not connected")).
 	ErrNotConnected = errors.New("not connected")
-	// ErrConnectionClosed is returned when the remote closes the connection
-	// (mirrors Python's ConnectionError("Connection closed by remote")).
+	// ErrConnectionClosed matches every error a transport returns when its
+	// connection has ended. Transports return a *TransportClosedError, which
+	// errors.Is matches against this sentinel and which carries the observed
+	// TransportClose (who closed, code, reason, detail).
 	ErrConnectionClosed = errors.New("connection closed by remote")
 )
 
@@ -132,8 +134,8 @@ type ConnectionTransport interface {
 	// Send transmits raw bytes with protocol-appropriate encoding/escaping.
 	Send(ctx context.Context, data []byte) error
 	// Receive reads up to maxBytes, waiting at most timeout. It returns an
-	// empty slice (and nil error) on timeout, and ErrConnectionClosed when the
-	// remote closes.
+	// empty slice (and nil error) on timeout, and a *TransportClosedError
+	// (errors.Is ErrConnectionClosed) when the connection ends.
 	Receive(ctx context.Context, maxBytes int, timeout time.Duration) ([]byte, error)
 	// IsConnected reports whether the connection is currently active.
 	IsConnected() bool

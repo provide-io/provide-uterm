@@ -120,6 +120,10 @@ func TestPTYTransportChildExitClosesConn(t *testing.T) {
 	for time.Now().Before(deadline) {
 		_, err := tr.Receive(ctx, 4096, 200*time.Millisecond)
 		if errors.Is(err, transports.ErrConnectionClosed) {
+			var closedErr *transports.TransportClosedError
+			if !errors.As(err, &closedErr) || closedErr.Close.Summary() != "remote close child exited" {
+				t.Fatalf("close = %v, want remote close child exited", err)
+			}
 			return // expected
 		}
 		if err != nil {

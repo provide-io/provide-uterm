@@ -11,6 +11,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -258,8 +259,13 @@ func TestSSHReceiveConnectionClosed(t *testing.T) {
 			break
 		}
 	}
-	if lastErr != ErrConnectionClosed {
-		t.Errorf("want ErrConnectionClosed, got %v", lastErr)
+	if !errors.Is(lastErr, ErrConnectionClosed) {
+		t.Fatalf("want ErrConnectionClosed, got %v", lastErr)
+	}
+	// The peer closed the channel without an exit status: remote, no reason.
+	var closedErr *TransportClosedError
+	if !errors.As(lastErr, &closedErr) || closedErr.Close != (TransportClose{Initiator: CloseRemote}) {
+		t.Errorf("close = %+v, want remote with no reason", closedErr)
 	}
 }
 
