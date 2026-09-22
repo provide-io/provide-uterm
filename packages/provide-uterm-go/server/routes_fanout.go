@@ -96,7 +96,7 @@ func (s *Server) handleFanoutCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	groupID, err := s.fanout.CreateGroup(group, p.SubjectID)
 	if err != nil {
-		bridgeError(w, http.StatusBadRequest, err.Error())
+		s.writeCreateGroupError(w, err)
 		return
 	}
 	s.audit(r, "fanout.create_group", map[string]any{"group_id": groupID, "name": name})
@@ -105,6 +105,21 @@ func (s *Server) handleFanoutCreate(w http.ResponseWriter, r *http.Request) {
 		"name":          name,
 		"session_count": len(workerIDs),
 	})
+}
+
+// writeCreateGroupError answers a failed CreateGroup. Only a refusal written for
+// the caller (fanout.GroupRejectedError) is a 400 carrying its message, as in
+// the reference. Anything else is a server fault: it is logged and answered
+// with the framework-style generic 500, never echoed, because its text
+// describes the server (a store's DSN, a path), not the request.
+func (s *Server) writeCreateGroupError(w http.ResponseWriter, err error) {
+	var rejected *fanout.GroupRejectedError
+	if errors.As(err, &rejected) {
+		bridgeError(w, http.StatusBadRequest, rejected.Error())
+		return
+	}
+	s.logger.Error("fanout_create_group_failed", "error", err.Error())
+	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
 // handleFanoutList lists the groups visible to the caller. Port of GET /groups.

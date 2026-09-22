@@ -336,6 +336,17 @@ func (s *Server) handleGUIAttach(w http.ResponseWriter, r *http.Request) {
 // How long an rfb console has to answer before attach gives up.
 const rfbDialTimeout = 10 * time.Second
 
+// What a refused or failed attach tells the caller, matching the reference's
+// ATTACH_EGRESS_REFUSED / ATTACH_RFB_FAILED. Fixed text on purpose: the caller
+// named a target id, not a host, so the egress guard's reason (which host, and
+// whether it resolved to metadata or an internal range) and the dial error
+// (which address and port refused) describe the operator's network, not the
+// request. Both are logged with the target id instead.
+const (
+	attachEgressRefused = "invalid endpoint: the target's host is not an allowed destination"
+	attachRfbFailed     = "rfb connect failed: the console did not accept a session"
+)
+
 // buildGraphicalSession dispatches on the target protocol, returning the live
 // session or writing the error response and returning ready=false. memory,
 // litevirt and rfb are wired; anything else is 501.
@@ -388,7 +399,8 @@ func (s *Server) buildRfbSession(
 		blockPrivate = s.cfg.Security.BlockPrivateConnectorTargets
 	}
 	if err := guard.AssertConnectorTargetAllowed(r.Context(), host, blockPrivate); err != nil {
-		detailError(w, http.StatusForbidden, "invalid endpoint: "+err.Error())
+		s.logger.Info("gui_attach_egress_blocked", "target", target.TargetID, "host", host, "reason", err.Error())
+		detailError(w, http.StatusForbidden, attachEgressRefused)
 		return nil, nil, nil, false
 	}
 
@@ -396,7 +408,8 @@ func (s *Server) buildRfbSession(
 	if err != nil {
 		// The registry entry is valid and the console is not answering, so this
 		// is a gateway failure rather than a bad request.
-		detailError(w, http.StatusBadGateway, "rfb connect failed: "+err.Error())
+		s.logger.Info("gui_attach_rfb_failed", "target", target.TargetID, "error", err.Error())
+		detailError(w, http.StatusBadGateway, attachRfbFailed)
 		return nil, nil, nil, false
 	}
 	return client, client, nil, true
