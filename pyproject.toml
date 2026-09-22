@@ -12,7 +12,7 @@ dependencies = [
     "provide-uterm-annotation>=0.5.6",
     "provide-uterm-server[all]>=0.5.6",
     "provide-uterm-platform[all]>=0.5.6",
-    "provide-telemetry>=0.7",
+    "provide-telemetry>=0.10.1",
 ]
 
 [dependency-groups]
@@ -22,7 +22,7 @@ dev = [
     "codespell>=2.4.3",
     "detect-secrets>=1.5.0",
     "fastapi>=0.141.1",
-    "httpx2>=2.10",
+    "httpx2>=2.12.0",
     "hypothesis>=6.167.1",
     "memray>=1.20.0; sys_platform != 'win32'",
     "mutmut>=3.7.0",
@@ -38,13 +38,13 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-playwright>=0.7.2",
-    "pytest-randomly>=3.15.0",
+    "pytest-randomly>=5.0.0",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8",
     "reuse>=6.2.0",
     "ruff>=0.16.5",
     "ty>=0.0.75",
-    "uv>=0.12.7",
+    "uv>=0.12.13",
     "uvicorn>=0.52.4",
     "vulture>=2.16",
     "websockets>=17.1",
