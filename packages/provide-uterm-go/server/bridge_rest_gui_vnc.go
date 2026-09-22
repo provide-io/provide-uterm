@@ -203,7 +203,8 @@ func (s *Server) dialLitevirtTarget(
 		blockPrivate = s.cfg.Security.BlockPrivateConnectorTargets
 	}
 	if err := guard.AssertConnectorTargetAllowed(r.Context(), host, blockPrivate); err != nil {
-		detailError(w, http.StatusForbidden, "invalid endpoint: "+err.Error())
+		s.logger.Info("gui_attach_egress_blocked", "target", target.TargetID, "host", host, "reason", err.Error())
+		detailError(w, http.StatusForbidden, attachEgressRefused)
 		return nil, "", false
 	}
 

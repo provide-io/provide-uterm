@@ -45,6 +45,16 @@ var (
 	ErrAdminRequired = errors.New("fanout: global admin role is required")
 )
 
+// GroupRejectedError is a group [Controller.CreateGroup] refuses to create: too
+// many members, or an error_pattern that is too long or does not compile. Its
+// message is written for the caller and is safe to return to it, which is what
+// distinguishes it from any other error that reaches the route — those are
+// server faults and are not echoed. Port of FanOutGroupRejectedError (the
+// reference raises PromptRegexError for the pattern; both are echoed there).
+type GroupRejectedError struct{ msg string }
+
+func (e *GroupRejectedError) Error() string { return e.msg }
+
 // Authorizer owns the two authorization decisions required immediately before
 // dispatch. The controller iterates only the stored group's members, so callers
 // cannot inject an arbitrary authorized subset.
@@ -140,10 +150,10 @@ func newHexID() string {
 // compilable) exactly like the Python create_group. Port of create_group.
 func (c *Controller) CreateGroup(group *Group, principal string) (string, error) {
 	if len(group.WorkerIDs) > c.maxGroupSize {
-		return "", fmt.Errorf("Group size %d exceeds max %d", len(group.WorkerIDs), c.maxGroupSize)
+		return "", &GroupRejectedError{fmt.Sprintf("Group size %d exceeds max %d", len(group.WorkerIDs), c.maxGroupSize)}
 	}
 	if _, err := validateErrorPattern(group.ErrorPattern); err != nil {
-		return "", err
+		return "", &GroupRejectedError{err.Error()}
 	}
 	group.CreatedBy = principal
 	c.store.Save(group)

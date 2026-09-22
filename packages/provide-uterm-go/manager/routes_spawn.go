@@ -12,29 +12,36 @@ import (
 	"time"
 )
 
+// spawnFailedMessage is what a failed single spawn tells the caller, mirroring
+// SPAWN_FAILED_MESSAGE. The cause — max agents, a missing config, or the
+// process launch's error (with its paths and errno) — goes to the manager log,
+// not the response.
+const spawnFailedMessage = "agent spawn failed; the manager log has the cause"
+
 // handleSpawn serves POST /swarm/spawn, mirroring spawn.
 func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	configPath := r.URL.Query().Get("config_path")
 	agentID := r.URL.Query().Get("agent_id")
-	if _, err := validateConfigPath(configPath, s.M.Config.SpawnConfigDir, s.getenv); err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+	if _, rejected := validateConfigPath(configPath, s.M.Config.SpawnConfigDir, s.getenv); rejected != nil {
+		jsonError(w, http.StatusBadRequest, rejected.public)
 		return
 	}
 	var err error
 	if agentID == "" {
 		agentID, err = s.M.PM.AllocateAgentID()
-		if err != nil {
-			jsonError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 	} else {
 		s.M.PM.NoteAgentID(agentID)
 	}
-	agentID, err = s.M.SpawnAgent(r.Context(), configPath, agentID)
+	spawned := ""
+	if err == nil {
+		spawned, err = s.M.SpawnAgent(r.Context(), configPath, agentID)
+	}
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, err.Error())
+		s.M.logger.Warn("swarm_spawn_failed", "config_path", configPath, "agent_id", agentID, "error", err.Error())
+		jsonError(w, http.StatusBadRequest, spawnFailedMessage)
 		return
 	}
+	agentID = spawned
 	s.M.mu.Lock()
 	var pid any
 	if a, ok := s.M.Agents[agentID]; ok && a.PID != nil {
@@ -66,8 +73,8 @@ func (s *Server) handleSpawnBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, p := range req.ConfigPaths {
-		if _, err := validateConfigPath(p, s.M.Config.SpawnConfigDir, s.getenv); err != nil {
-			jsonError(w, http.StatusBadRequest, err.Error())
+		if _, rejected := validateConfigPath(p, s.M.Config.SpawnConfigDir, s.getenv); rejected != nil {
+			jsonError(w, http.StatusBadRequest, rejected.public)
 			return
 		}
 	}
