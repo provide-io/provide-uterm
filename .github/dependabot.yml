@@ -1,64 +1,60 @@
-# Dependabot configuration — weekly, batched.
+# Dependabot configuration — one PR a week, across every ecosystem.
 #
-# Every ecosystem lands on Monday morning, and patch/minor bumps are grouped so
-# a week's transitive churn arrives as one PR per ecosystem rather than one per
-# package. That batching is the whole point: the noise that made this
-# unbearable was volume and frequency, not currency. A daily cadence, or an
-# ungrouped one, produces a queue nobody reads and stale deps anyway.
+# Every ecosystem below joins the `weekly` multi-ecosystem group, so a week's
+# version updates for Python, npm, GitHub Actions, Docker, Go and NuGet arrive
+# as a single PR on Monday morning rather than one PR per ecosystem (or, before
+# grouping, one per package). The volume, not the currency, was what made the
+# queue unreadable: on 2026-09-22 a single config change produced seven PRs in
+# a minute, all of which had to be superseded by hand.
+#
+# What that trades away: majors are no longer split out into PRs of their own,
+# and one update that breaks CI turns the whole week's PR red. When that
+# happens, push the fix to the Dependabot branch, or add an `ignore` for the
+# offending version below (with the reason) and let the rest land.
+#
+# Version choices that need a decision rather than a batch are held back with
+# per-ecosystem `ignore` rules, each with its reason: base-image runtime moves
+# (Docker minor/major), vitest majors for the TS port, and a vulnerable grpc.
 #
 # Security updates are a separate Dependabot feature with their own internal
-# limit (10) and ignore the limits below entirely, so advisory-driven PRs land
-# regardless of cadence — keeping the supply-chain gap in
-# docs/security-considerations.md §1 closed.
-#
-# Major bumps are deliberately left out of every group: they arrive as their
-# own PRs because they are the ones that need reading.
+# limit and schedule, and are not part of the weekly group: advisory-driven
+# PRs still land as soon as an advisory is published, keeping the
+# supply-chain gap in docs/security-considerations.md §1 closed.
 
 version: 2
-updates:
-  # Python: the canonical pyproject.toml at the repo root.
-  - package-ecosystem: "pip"
-    directory: "/"
+
+multi-ecosystem-groups:
+  weekly:
     schedule:
       interval: "weekly"
       day: "monday"
       time: "08:00"
       timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
     labels:
       - "dependencies"
-      - "python"
     commit-message:
       prefix: "deps"
-      include: "scope"
-    # Group all transitive bumps together so the PR queue doesn't explode.
-    groups:
-      transitive:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-          - "minor"
+
+updates:
+  # Python: the uv workspace at the repo root. The `uv` ecosystem (not `pip`)
+  # so updates rewrite uv.lock along with pyproject.toml; the `pip` ecosystem
+  # only raised pyproject floors and left the lock to be re-resolved by hand.
+  - package-ecosystem: "uv"
+    directory: "/"
+    multi-ecosystem-group: "weekly"
+    patterns: ["*"]
+    labels:
+      - "python"
 
   # npm: workspace root. Covers the root package.json devDependencies plus the
-  # shared package-lock.json, so transitive bumps for the whole npm workspace
-  # (frontend + app) and base-tooling deps land here. Per-workspace entries
-  # below still target their own package.json direct deps.
+  # shared package-lock.json, so every npm workspace member (app, frontend, ts)
+  # is covered by this one entry.
   - package-ecosystem: "npm"
     directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "08:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    multi-ecosystem-group: "weekly"
+    patterns: ["*"]
     labels:
-      - "dependencies"
       - "javascript"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
     # vitest majors are moved by hand, per workspace. packages/provide-uterm-ts
     # stays on vitest 4: under vitest 5, @stryker-mutator/vitest-runner 10.0.0
     # records no per-test coverage ("covered 0"), so ~3100 mutants report as
@@ -69,14 +65,6 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@vitest/coverage-v8"
         update-types: ["version-update:semver-major"]
-    groups:
-      transitive:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-          - "minor"
 
   # No entry for /packages/provide-uterm-app, /packages/provide-uterm-frontend
   # or /packages/provide-uterm-ts: all three are npm workspace members resolved
@@ -92,105 +80,51 @@ updates:
   # npm: Cloudflare Worker wrangler config.
   - package-ecosystem: "npm"
     directory: "/packages/provide-uterm-cloudflare"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "08:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    multi-ecosystem-group: "weekly"
+    patterns: ["*"]
     labels:
-      - "dependencies"
       - "javascript"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-    groups:
-      transitive:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-          - "minor"
 
   # GitHub Actions: keeps workflow action versions current. Closes the
-  # "GHA workflow pinning" gap in docs/security-considerations.md §9.
+  # "GHA workflow pinning" gap in docs/security-considerations.md §9. Every
+  # workflow pins actions by commit SHA, so each bump rewrites a SHA + comment.
   - package-ecosystem: "github-actions"
     directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "08:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    multi-ecosystem-group: "weekly"
+    patterns: ["*"]
     labels:
-      - "dependencies"
       - "ci"
-    commit-message:
-      prefix: "ci"
-      include: "scope"
-    # Every workflow here pins actions by commit SHA, so an ungrouped run would
-    # open one PR per action per week.
-    groups:
-      actions:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-          - "minor"
 
-  # Docker base-image (digest) bumps for the reference server image
-  # (docker/Dockerfile.server) and the Cloudflare Worker image
-  # (docker/Dockerfile.cf). Both Dockerfiles live under docker/, so the
-  # docker ecosystem scanning this directory picks up every FROM in both —
-  # keeping node:* / python:* base tags current as new CVE-fix images ship.
+  # Docker base-image (digest) bumps for the images under docker/, keeping
+  # node:* / python:* base tags current as new CVE-fix images ship.
   - package-ecosystem: "docker"
     directories:
       - "/docker"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "08:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    multi-ecosystem-group: "weekly"
+    patterns: ["*"]
     labels:
-      - "dependencies"
       - "docker"
-    commit-message:
-      prefix: "docker"
-      include: "scope"
-    # Patch only, unlike every other group here. These tags track language
-    # runtimes, where Dependabot's "minor" is a whole new interpreter: grouping
-    # minor swept python:3.11-slim -> python:3.14-slim into a routine batch on
-    # the first run. A base-image change that moves the runtime three versions
-    # is a decision, not churn, so it arrives on its own.
-    groups:
-      base-images:
-        applies-to: version-updates
-        patterns:
-          - "*"
+    # Patch only. These tags track language runtimes, where Dependabot's
+    # "minor" is a whole new interpreter: grouping minor swept
+    # python:3.11-slim -> python:3.14-slim into a routine batch on the first
+    # run. A base-image change that moves the runtime is a decision, not churn,
+    # so it is made by hand.
+    ignore:
+      - dependency-name: "*"
         update-types:
-          - "patch"
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
 
   # Go: the client/server implementation in packages/provide-uterm-go. This had
-  # no entry at all, which meant Dependabot never scanned go.mod — not for
+  # no entry at all once, which meant Dependabot never scanned go.mod — not for
   # routine bumps and not for advisories either, since security updates only
   # reach ecosystems listed here.
   - package-ecosystem: "gomod"
     directory: "/packages/provide-uterm-go"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "08:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    multi-ecosystem-group: "weekly"
+    patterns: ["*"]
     labels:
-      - "dependencies"
       - "go"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
     # grpc 1.84.0 is inside CVE-2026-84445 (HIGH, DoS; fixed in 1.83.2 and the
     # 1.85 line). The transitive group proposed it on 2026-09-21 (#114), which
     # would have traded a patched release for a vulnerable one. Drop this once
@@ -198,20 +132,11 @@ updates:
     ignore:
       - dependency-name: "google.golang.org/grpc"
         versions: ["1.84.x"]
-    groups:
-      transitive:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-          - "minor"
 
-  # NuGet: the C# implementation. Same omission as Go — unscanned until now.
-  # Note the restore is not pinned: there is no packages.lock.json in any of the
-  # five .csproj projects, so a resolved graph is whatever the registry serves
-  # at restore time. Dependabot can raise a direct-dependency advisory here, but
-  # transitive pinning needs the lock files.
+  # NuGet: the C# implementation. Note the restore is not pinned: there is no
+  # packages.lock.json in any of the five .csproj projects, so a resolved graph
+  # is whatever the registry serves at restore time. Dependabot can raise a
+  # direct-dependency advisory here, but transitive pinning needs the lock files.
   # There is no .sln at the package root, so the projects are named by glob
   # rather than trusting recursive discovery from a bare directory — an entry
   # that resolves to no project files fails silently, which is the failure this
@@ -221,23 +146,7 @@ updates:
       - "/packages/provide-uterm-csharp/src/*"
       - "/packages/provide-uterm-csharp/tests/*"
       - "/packages/provide-uterm-csharp/cmd/*"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "08:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+    multi-ecosystem-group: "weekly"
+    patterns: ["*"]
     labels:
-      - "dependencies"
       - "csharp"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-    groups:
-      transitive:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - "patch"
-          - "minor"
