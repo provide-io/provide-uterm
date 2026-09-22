@@ -202,10 +202,37 @@ public sealed partial class UtermServer
                 session_count = workerIds.Count,
             }, JsonOpts);
         }
-        catch (ArgumentException ex)
+        catch (Exception ex)
         {
-            return BridgeError(400, ex.Message);
+            return CreateGroupFailure(ex);
         }
+    }
+
+    private static readonly Provide.Telemetry.Logger FanoutLog =
+        Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.server.fanout");
+
+    /// <summary>
+    /// Answers a failed CreateGroup. Only a refusal written for the caller
+    /// (<see cref="FanoutGroupRejectedException"/>) is a 400 carrying its
+    /// message, as in the reference. Anything else — including a pluggable
+    /// store's own <see cref="ArgumentException"/> — is a server fault: logged,
+    /// and answered with the reference framework's generic plain-text 500, never
+    /// echoed, because its text describes the server (a DSN, a path), not the
+    /// request.
+    /// </summary>
+    internal static IResult CreateGroupFailure(Exception ex)
+    {
+        if (ex is FanoutGroupRejectedException rejected)
+        {
+            return BridgeError(400, rejected.Message);
+        }
+
+        FanoutLog.Error("fanout_create_group_failed", new Dictionary<string, object?>
+        {
+            ["error_type"] = ex.GetType().Name,
+            ["error"] = ex.Message,
+        });
+        return Results.Text("Internal Server Error", "text/plain", statusCode: 500);
     }
 
     private async Task<IResult> HandleFanoutList(HttpContext ctx)

@@ -12,6 +12,18 @@ namespace Provide.Uterm.Server;
 /// <summary>GUI REST handlers — path-compatible with packages/provide-uterm-go/server/bridge_rest.go.</summary>
 public sealed partial class UtermServer
 {
+    // What a refused or failed attach tells the caller, matching the reference's
+    // ATTACH_EGRESS_REFUSED / ATTACH_RFB_FAILED. Fixed text on purpose: the
+    // caller named a target id, not a host, so the egress guard's reason (which
+    // host, and whether it resolved to metadata or an internal range) and the
+    // socket error (which address and port refused) describe the operator's
+    // network, not the request. Both are logged with the target id instead.
+    internal const string AttachEgressRefused = "invalid endpoint: the target's host is not an allowed destination";
+    internal const string AttachRfbFailed = "rfb connect failed: the console did not accept a session";
+
+    private static readonly Provide.Telemetry.Logger GuiLog =
+        Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.server.gui");
+
     private async Task<IResult> HandleGuiAttach(HttpContext ctx, string workerId)
     {
         if (!SafeId.IsMatch(workerId)) return DetailError(422, "invalid worker_id");
@@ -62,7 +74,13 @@ public sealed partial class UtermServer
                 }
                 catch (Exception ex)
                 {
-                    return DetailError(403, "invalid endpoint: " + ex.Message);
+                    GuiLog.Info("gui_attach_egress_blocked", new Dictionary<string, object?>
+                    {
+                        ["target"] = target.TargetId,
+                        ["host"] = rfbHost,
+                        ["reason"] = ex.Message,
+                    });
+                    return DetailError(403, AttachEgressRefused);
                 }
 
                 var client = new Vnc.RfbClient();
@@ -72,7 +90,12 @@ public sealed partial class UtermServer
                 }
                 catch (Exception ex)
                 {
-                    return DetailError(502, "rfb connect failed: " + ex.Message);
+                    GuiLog.Info("gui_attach_rfb_failed", new Dictionary<string, object?>
+                    {
+                        ["target"] = target.TargetId,
+                        ["error"] = ex.Message,
+                    });
+                    return DetailError(502, AttachRfbFailed);
                 }
 
                 // Dispose any previous graphical session before replace.

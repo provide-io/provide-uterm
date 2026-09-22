@@ -166,13 +166,13 @@ public class CoverageTo97Wave7Tests
             MaxGroupSize = 2,
             IdGen = () => "fixed-id",
         });
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<FanoutGroupRejectedException>(() =>
             ctl.CreateGroup(new Group
             {
                 WorkerIds = new List<string> { "a", "b", "c" },
             }, "p"));
 
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<FanoutGroupRejectedException>(() =>
             ctl.CreateGroup(new Group
             {
                 WorkerIds = new List<string> { "a" },

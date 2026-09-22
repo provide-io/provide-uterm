@@ -98,6 +98,24 @@ public sealed class InMemoryGroupStore : IGroupStore
     }
 }
 
+/// <summary>
+/// A group <see cref="Controller.CreateGroup"/> refuses to create: too many
+/// members, or an error_pattern that is too long or does not compile. Its
+/// message is written for the caller and is safe to return to it, which is what
+/// distinguishes it from any other exception that reaches the route (a store's,
+/// say) — those are server faults and are not echoed. Port of
+/// FanOutGroupRejectedError (the reference raises PromptRegexError for the
+/// pattern; both are echoed there). Still an <see cref="ArgumentException"/>,
+/// as the refusals were before it existed.
+/// </summary>
+public sealed class FanoutGroupRejectedException : ArgumentException
+{
+    public FanoutGroupRejectedException(string message, Exception? inner = null)
+        : base(message, inner)
+    {
+    }
+}
+
 public sealed class ControllerConfig
 {
     public IGroupStore? Store { get; set; }
@@ -152,7 +170,7 @@ public sealed class Controller
     {
         if (group.WorkerIds.Count > _maxGroupSize)
         {
-            throw new ArgumentException($"Group size {group.WorkerIds.Count} exceeds max {_maxGroupSize}");
+            throw new FanoutGroupRejectedException($"Group size {group.WorkerIds.Count} exceeds max {_maxGroupSize}");
         }
 
         ValidateErrorPattern(group.ErrorPattern);
@@ -640,10 +658,19 @@ public sealed class Controller
 
         if (pattern.Length > MaxErrorPatternLen)
         {
-            throw new ArgumentException($"error_pattern exceeds max length {MaxErrorPatternLen}");
+            throw new FanoutGroupRejectedException($"error_pattern exceeds max length {MaxErrorPatternLen}");
         }
 
-        _ = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+        try
+        {
+            _ = new Regex(pattern, RegexOptions.Compiled, TimeSpan.FromSeconds(1));
+        }
+        catch (RegexParseException ex)
+        {
+            // The parser's own message, as before: it describes the caller's
+            // pattern, which is what the reference's PromptRegexError echoes too.
+            throw new FanoutGroupRejectedException(ex.Message, ex);
+        }
     }
 
     private sealed class FanoutDeadlineExceededException : TimeoutException { }

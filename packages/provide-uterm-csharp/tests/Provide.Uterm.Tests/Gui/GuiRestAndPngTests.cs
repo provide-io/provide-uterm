@@ -299,6 +299,59 @@ public class GuiRestAndPngTests
         }
     }
 
+    [Fact]
+    public async Task Gui_Attach_Rfb_ConnectFailure_DoesNotEchoTheSocketError()
+    {
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
+        await using (server)
+        {
+            var closed = FreePort();
+            var targetId = await CreateGraphicalTargetAsync(
+                graphicalTargets, protocol: "rfb", endpoint: $"127.0.0.1:{closed}");
+
+            var (status, body) = await RawAttachAsync(baseUrl, token, targetId);
+
+            Assert.Equal(502, status);
+            Assert.Equal(
+                "{\"detail\":\"rfb connect failed: the console did not accept a session\"}", body);
+            Assert.DoesNotContain("127.0.0.1", body);
+            Assert.DoesNotContain(closed.ToString(System.Globalization.CultureInfo.InvariantCulture), body);
+        }
+    }
+
+    [Theory]
+    // Cloud metadata: refused whatever block_private_connector_targets says.
+    [InlineData("169.254.169.254:5900", "169.254")]
+    // A host that cannot resolve (RFC 6761 .invalid): the guard's reason names it.
+    [InlineData("console.uterm-test.invalid:5900", "uterm-test")]
+    public async Task Gui_Attach_Rfb_EgressRefusal_DoesNotEchoTheGuardReason(string endpoint, string leaked)
+    {
+        var (server, baseUrl, token, graphicalTargets, _) = await StartServerAsync();
+        await using (server)
+        {
+            var targetId = await CreateGraphicalTargetAsync(graphicalTargets, protocol: "rfb", endpoint: endpoint);
+
+            var (status, body) = await RawAttachAsync(baseUrl, token, targetId);
+
+            Assert.Equal(403, status);
+            Assert.Equal(
+                "{\"detail\":\"invalid endpoint: the target's host is not an allowed destination\"}", body);
+            Assert.DoesNotContain(leaked, body);
+            Assert.DoesNotContain("resolve", body);
+        }
+    }
+
+    // The typed client throws on a non-2xx and does not surface the raw text,
+    // which is what these assertions are about.
+    private static async Task<(int Status, string Body)> RawAttachAsync(string baseUrl, string token, string targetId)
+    {
+        using var raw = new HttpClient { BaseAddress = new Uri(baseUrl) };
+        raw.DefaultRequestHeaders.Add("Authorization", "Bearer " + token);
+        var resp = await raw.PostAsync("/worker/demo/gui/attach",
+            new StringContent("{\"target_id\":\"" + targetId + "\"}", System.Text.Encoding.UTF8, "application/json"));
+        return ((int)resp.StatusCode, await resp.Content.ReadAsStringAsync());
+    }
+
     private static int FreePort()
     {
         var l = new TcpListener(IPAddress.Loopback, 0);
