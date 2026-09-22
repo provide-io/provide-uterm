@@ -147,6 +147,11 @@ public class HumanVncRouteTests
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath(hid, targetId));
             Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+            var body = await resp.Content.ReadAsStringAsync();
+            Assert.Equal(
+                "{\"detail\":\"invalid endpoint: the target's host is not an allowed destination\"}", body);
+            Assert.DoesNotContain("169.254", body);
+            Assert.DoesNotContain("metadata", body);
         }
     }
 
@@ -165,6 +170,10 @@ public class HumanVncRouteTests
             using var http = Authed(baseUrl, token);
             var resp = await http.GetAsync(VncPath(hid, targetId));
             Assert.Equal(HttpStatusCode.BadGateway, resp.StatusCode);
+            var body = await resp.Content.ReadAsStringAsync();
+            Assert.Equal("{\"detail\":\"rfb connect failed: the console did not accept a session\"}", body);
+            Assert.DoesNotContain("127.0.0.1", body);
+            Assert.DoesNotContain("refused", body, StringComparison.OrdinalIgnoreCase);
         }
     }
 
