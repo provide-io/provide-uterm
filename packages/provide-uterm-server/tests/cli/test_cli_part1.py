@@ -135,7 +135,7 @@ class TestCmdProxy:
         client = TestClient(captured_app["app"])
         resp = client.get("/", follow_redirects=False)
         assert resp.status_code == 200
-        assert "bbs.example.com:23" in resp.text
+        assert "<title>uterm — bbs.example.com:23</title>" in resp.text
         assert "/ws/terminal" in resp.text
         assert "ProvideTerminal" in resp.text
 
