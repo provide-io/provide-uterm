@@ -59,6 +59,16 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+    # vitest majors are moved by hand, per workspace. packages/provide-uterm-ts
+    # stays on vitest 4: under vitest 5, @stryker-mutator/vitest-runner 10.0.0
+    # records no per-test coverage ("covered 0"), so ~3100 mutants report as
+    # survived without being tested and the TS mutation gate fails. The app and
+    # frontend workspaces are already on 5. Drop this once the runner supports 5.
+    ignore:
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/coverage-v8"
+        update-types: ["version-update:semver-major"]
     groups:
       transitive:
         applies-to: version-updates
