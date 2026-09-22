@@ -85,6 +85,45 @@ public sealed class UiConfig
     public string? FitAddonCdnIntegrity { get; set; }
 }
 
+/// <summary>
+/// Mount-path normalisation for <see cref="UiConfig"/>, ported from the
+/// reference's <c>config_schema._clean_path</c>.
+/// </summary>
+/// <remarks>
+/// The leading run collapses to one slash rather than being kept: the path is a
+/// link and redirect prefix (<c>appPath + "/operator/..."</c>), and one that
+/// begins <c>//</c> is a protocol-relative URL pointing off-site. Browsers read
+/// a backslash as <c>/</c> and drop tab/CR/LF, so those join the run.
+/// </remarks>
+public static class UiPaths
+{
+    private static readonly char[] LeadingRun = { '/', '\\', '\t', '\r', '\n' };
+
+    /// <summary>The reference's <c>_clean_path</c>: one leading slash, no trailing one, root kept as <c>/</c>.</summary>
+    public static string Clean(string? value, string fallback)
+    {
+        var text = "/" + (string.IsNullOrEmpty(value) ? fallback : value).Trim().TrimStart(LeadingRun);
+        text = text.TrimEnd('/');
+        return text.Length == 0 ? "/" : text;
+    }
+
+    /// <summary>
+    /// The prefix a route or link is built on: a blank value takes
+    /// <paramref name="fallback"/>, and the root becomes empty so
+    /// <c>prefix + "/x"</c> can never begin <c>//</c>.
+    /// </summary>
+    public static string MountPrefix(string? value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        var cleaned = Clean(value, fallback);
+        return cleaned == "/" ? "" : cleaned;
+    }
+}
+
 public sealed class RecordingConfig
 {
     public bool EnabledByDefault { get; set; }

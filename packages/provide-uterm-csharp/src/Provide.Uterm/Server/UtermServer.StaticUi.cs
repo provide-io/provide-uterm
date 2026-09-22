@@ -6,6 +6,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.FileProviders;
+using Provide.Uterm.ServerConfig;
 
 namespace Provide.Uterm.Server;
 
@@ -33,8 +34,8 @@ public sealed partial class UtermServer
         }
 
         var ui = _deps.Config.Ui;
-        var assets = string.IsNullOrWhiteSpace(ui.AssetsPath) ? "/ui" : ui.AssetsPath.TrimEnd('/');
-        var appPath = string.IsNullOrWhiteSpace(ui.AppPath) ? "/app" : ui.AppPath.TrimEnd('/');
+        var assets = UiPaths.MountPrefix(ui.AssetsPath, "/ui");
+        var appPath = UiPaths.MountPrefix(ui.AppPath, "/app");
         var provider = new PhysicalFileProvider(Path.GetFullPath(frontendDir));
         // Static assets under AssetsPath remain public (same as Go static mount pattern);
         // HTML app routes require a principal.
