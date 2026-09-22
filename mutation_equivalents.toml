@@ -419,6 +419,20 @@ reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg 
 mutant = "provide.uterm.server.routes._helpers.x_principal__mutmut_23"
 reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged). Equivalent."
 
+# Ternary-condition mutants (mutmut >= 3.8) whose true arm already produces the
+# false arm's value on every input the false arm would have seen.
+[[equivalent]]
+mutant = "provide.uterm.server.routes._helpers.x_source_ip__mutmut_2"
+reason = """source_ip ternary condition forced true: `... if request.client else "unknown"` -> `if (request.client) or True`. \
+Starlette's Request.client is `Address | None`, and Address is a (host, port) NamedTuple -- two fields, so never falsy. The \
+guard's false arm is therefore reached only for None, and there the mutant's getattr(None, "host", "unknown") returns the same \
+"unknown" via its default. Measured: str(getattr(None, "host", "unknown")) == "unknown"."""
+[[equivalent]]
+mutant = "provide.uterm.server.routes.pam_events.x__tty_slug__mutmut_3"
+reason = """_tty_slug ternary condition forced true: `tty.split("/")[-1] if "/" in tty else tty` -> `if ("/" in tty) or True`. \
+For a string with no "/" the split yields [tty], so [-1] is tty itself -- the false arm's value -- for every str input, \
+including the empty string ("".split("/") == [""])."""
+
 # pages.py default-value mutations that cannot change observable behaviour:
 [[equivalent]]
 mutant = "provide.uterm.server.routes.pages.x__is_secure_request__mutmut_5"
@@ -715,16 +729,16 @@ reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg 
 mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_24"
 reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged; VERIFIED cast(None, o) is o and cast('XXPrincipalXX', o) is o). Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_70"
+mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_72"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_71"
+mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_73"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_75"
+mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_77"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_76"
+mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_78"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
 
 # ---------------------------------------------------------------------------
@@ -739,58 +753,58 @@ reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases he
 #    checkers. Nulling or mangling that string cannot change behaviour. Same
 #    reasoning as the connection.py / connection_hijack.py cast() entries above.
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_280"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_282"
 reason = "cast(None, uterm_tunnel_tokens) in create_tunnel — typing.cast is a runtime no-op; the type arg is ignored."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_284"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_286"
 reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) — runtime no-op; mangled type string ignored.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_285"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_287"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) — runtime no-op; type-string case has no effect.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_287"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_289"
 reason = "cast(None, uterm_tunnel_invites) in create_tunnel — typing.cast runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_291"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_293"
 reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_292"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_294"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_473"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_481"
 reason = "cast(None, uterm_tunnel_tokens) in revoke_tunnel_tokens — typing.cast runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_477"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_485"
 reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) in revoke — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_478"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_486"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) in revoke — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_484"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_492"
 reason = "cast(None, uterm_tunnel_invites) in revoke_tunnel_tokens — typing.cast runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_488"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_496"
 reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) in revoke — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_489"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_497"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) in revoke — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_548"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_556"
 reason = "cast(None, uterm_tunnel_tokens) in rotate_tunnel_tokens — typing.cast runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_552"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_560"
 reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) in rotate — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_553"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_561"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) in rotate — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_555"
-reason = "cast(None, uterm_tunnel_invites) in rotate_tunnel_tokens — typing.cast runtime no-op. Sits between two mutants that are NOT equivalent (554 replaces the variable with None, 556 replaces the cast's value argument); both are killed by the invite-store assertions."
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_563"
+reason = "cast(None, uterm_tunnel_invites) in rotate_tunnel_tokens — typing.cast runtime no-op. Sits between two mutants that are NOT equivalent (562 replaces the variable with None, 564 replaces the cast's value argument); both are killed by the invite-store assertions."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_559"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_567"
 reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) in rotate — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_560"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_568"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) in rotate — runtime no-op.'
 # NOTE: the sibling mutants that replace the cast's *value* argument
 # (``= None``, ``cast(type, None)``) are NOT listed — those change behaviour and
@@ -849,43 +863,43 @@ reason = 'list_sessions order default -> "DESC": same, `!= "asc"` is true either
 #    exactly "created_at" anyway. The other two members are killable and are
 #    killed (see TestListSortWhitelistMembers).
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_80"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_82"
 reason = 'sort whitelist member "created_at" -> "XXcreated_atXX": unrecognised input falls back to the same key the member would have selected.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_81"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_83"
 reason = 'sort whitelist member "created_at" -> "CREATED_AT": same — the fallback is "created_at" either way.'
 # 3. set_mode's `payload.get("input_mode", <default>)`. Every mutated default
 #    ("XXXX", None, absent) is still outside {"open", "hijack"}, so the handler
 #    raises the same 422 with the same message. Only a default that WAS a valid
 #    mode would change behaviour.
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_562"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_564"
 reason = 'set_mode input_mode default -> None: str(None)="None", still outside {"open","hijack"} — same 422, same detail.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_564"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_566"
 reason = "set_mode input_mode default dropped: get returns None, str(None)=\"None\" — same 422."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_567"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_569"
 reason = 'set_mode input_mode default -> "XXXX": still not a valid mode — same 422, same detail.'
 # 4. typing.cast type-arg (runtime no-op) and FileResponse's media_type, which
 #    Starlette guesses from the filename when omitted. Verified empirically:
 #    FileResponse("x.json", filename="x.json", media_type=None).media_type ==
 #    "application/json", the same value the literal supplies.
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_421"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_423"
 reason = "cast(None, uterm_tunnel_tokens) in delete_session — typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_425"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_427"
 reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_426"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_428"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_996"
-reason = 'recording_download media_type -> None: Starlette guesses "application/json" from the .json filename, so the response header is byte-identical. (Was _993 until the 2026-08-15 renumbering.)'
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_1000"
+reason = 'recording_download media_type -> None: Starlette guesses "application/json" from the .json filename, so the response header is byte-identical. (Was _993 until the 2026-08-15 renumbering, _996 until mutmut 3.8.)'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_999"
-reason = "recording_download media_type argument dropped: same guess from the filename — identical response. (Was _996 until the 2026-08-15 renumbering.)"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_1003"
+reason = "recording_download media_type argument dropped: same guess from the filename — identical response. (Was _996 until the 2026-08-15 renumbering, _999 until mutmut 3.8.)"
 
 # -------------------------------------------------------------------------
 # routes/route_defs.py — the shared binder. Two verified-equivalent pairs in
@@ -918,40 +932,40 @@ reason = "Allow header name uppercased -- same, the name is lowercased before it
 # 1. typing.cast type arguments (12). cast(t, v) returns v untouched and
 #    never inspects t, which exists only for static checkers.
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_66"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_68"
 reason = "create_profile connector_type cast type arg nulled -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_70"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_72"
 reason = "create_profile connector_type cast type arg padded -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_71"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_73"
 reason = "create_profile connector_type cast type arg lowercased -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_72"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_74"
 reason = "create_profile connector_type cast type arg uppercased -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_83"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_85"
 reason = "create_profile input_mode cast type arg nulled -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_87"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_89"
 reason = "create_profile input_mode cast type arg padded -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_88"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_90"
 reason = "create_profile input_mode cast type arg lowercased -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_89"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_91"
 reason = "create_profile input_mode cast type arg uppercased -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_100"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_102"
 reason = "create_profile visibility cast type arg nulled -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_104"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_106"
 reason = "create_profile visibility cast type arg padded -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_105"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_107"
 reason = "create_profile visibility cast type arg lowercased -- typing.cast is a runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_106"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_108"
 reason = "create_profile visibility cast type arg uppercased -- typing.cast is a runtime no-op."
 # 2. The tags default. The next line guards with isinstance(tags_raw, list),
 #    so None and the empty list both yield the empty tag list.
@@ -964,22 +978,22 @@ reason = "create_profile tags default dropped -- get returns None, and the isins
 # 3. bool(...) around the recording flag: bool(None) is False, which is the
 #    value the literal default supplies.
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_174"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_182"
 reason = "create_profile recording_enabled default nulled -- bool(None) is False, identical to the literal."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_176"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_184"
 reason = "create_profile recording_enabled default dropped -- bool(None) is False, identical to the literal."
 # 4. model_dump mode. Measured on ConnectionProfile: python mode, None, a
 #    mangled string and even json mode all produce byte-identical output,
 #    because every field is a primitive whose representations coincide.
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_182"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_190"
 reason = "create_profile model_dump mode nulled -- ConnectionProfile is all primitives, so every mode yields identical output."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_183"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_191"
 reason = "create_profile model_dump mode padded -- same, no field distinguishes the modes."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_184"
+mutant = "provide.uterm.server.routes.profiles.x_profile_capability_handlers__mutmut_192"
 reason = "create_profile model_dump mode uppercased -- same, no field distinguishes the modes."
 
 # --- control_channel.py ----------------------------------------------------
