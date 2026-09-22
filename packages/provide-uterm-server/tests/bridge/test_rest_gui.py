@@ -190,7 +190,24 @@ class TestAttach:
         )
         resp = await ep(req, WID)
         assert _status(resp) == 502
-        assert _body(resp)["error"].startswith("rfb connect failed:")
+        assert _body(resp) == {"error": rest_gui.ATTACH_RFB_FAILED}
+
+    async def test_a_failed_dial_does_not_echo_the_socket_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The socket error names the console's address; the caller named a target id."""
+        from provide.uterm.server import rfb_session
+
+        def _refuse(_target: Any) -> Any:
+            raise ConnectionRefusedError(61, "Connect call failed ('10.9.8.7', 5900)")
+
+        monkeypatch.setattr(rfb_session.RfbGraphicalSession, "connect", staticmethod(_refuse))
+        ep = _endpoint(_hub(), ATTACH)
+        req = _FakeRequest(
+            principal=_principal(), authz=_authz(), targets=_seeded_targets(), body={"target_id": "gt-rfb"}
+        )
+        resp = await ep(req, WID)
+        assert _status(resp) == 502
+        assert _body(resp) == {"error": "rfb connect failed: the console did not accept a session"}
+        assert "10.9.8.7" not in json.dumps(_body(resp))
 
     async def test_a_cloud_metadata_console_is_refused_before_the_dial(self) -> None:
         """The egress guard runs first, so a target cannot name 169.254.169.254.
@@ -210,7 +227,26 @@ class TestAttach:
         req = _FakeRequest(principal=_principal(), authz=_authz(), targets=registry, body={"target_id": "gt-meta"})
         resp = await ep(req, WID)
         assert _status(resp) == 403
-        assert _body(resp)["error"].startswith("invalid endpoint:")
+        assert _body(resp) == {"error": "invalid endpoint: the target's host is not an allowed destination"}
+        assert "169.254" not in json.dumps(_body(resp))
+
+    async def test_an_egress_refusal_does_not_echo_the_guard_reason(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Whatever the guard raises — its own refusal or anything else — the
+        caller gets the fixed text, not the host or the exception."""
+        from provide.uterm.server import egress
+
+        async def _boom(host: str, *, block_private: bool) -> None:
+            raise RuntimeError(f"resolver exploded for {host} at /etc/resolv.conf")
+
+        monkeypatch.setattr(egress, "assert_connector_target_allowed", _boom)
+        ep = _endpoint(_hub(), ATTACH)
+        req = _FakeRequest(
+            principal=_principal(), authz=_authz(), targets=_seeded_targets(), body={"target_id": "gt-rfb"}
+        )
+        resp = await ep(req, WID)
+        assert _status(resp) == 403
+        assert _body(resp) == {"error": rest_gui.ATTACH_EGRESS_REFUSED}
+        assert "resolv" not in json.dumps(_body(resp))
 
     async def test_memory_success_creates_worker_state(self) -> None:
         hub = _hub()  # no worker state pre-registered

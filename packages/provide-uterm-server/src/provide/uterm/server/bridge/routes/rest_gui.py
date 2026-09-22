@@ -56,6 +56,14 @@ logger = get_logger(__name__)
 
 CAP_ATTACH = "graphical.session.attach"
 
+# What a refused or failed attach tells the caller. Fixed text on purpose: the
+# caller named a target id, not a host, so the egress guard's reason (which host,
+# and whether it resolved to metadata or an internal range) and the socket error
+# (which address and port refused) describe the operator's network, not the
+# request. Both are logged server-side with the target id instead.
+ATTACH_EGRESS_REFUSED = "invalid endpoint: the target's host is not an allowed destination"
+ATTACH_RFB_FAILED = "rfb connect failed: the console did not accept a session"
+
 # key_name → X11 keysym (matches the C#/Go canonical switch).
 _KEY_SYMS: dict[str, int] = {
     "Enter": 0xFF0D,
@@ -172,8 +180,8 @@ def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
                 # this a tenant who can name a target can name 169.254.169.254.
                 await assert_connector_target_allowed(dial.host, block_private=_block_private(request))
             except Exception as exc:
-                logger.info("gui_attach_egress_blocked target=%s host=%s", target.target_id, dial.host)
-                return JSONResponse({"error": f"invalid endpoint: {exc}"}, status_code=403)
+                logger.info("gui_attach_egress_blocked target=%s host=%s reason=%s", target.target_id, dial.host, exc)
+                return JSONResponse({"error": ATTACH_EGRESS_REFUSED}, status_code=403)
 
             try:
                 session = RfbGraphicalSession.connect(target)
@@ -181,7 +189,7 @@ def register_gui_routes(hub: TermHub, router: APIRouter) -> None:
                 # The registry entry is valid and the console is unreachable, so
                 # this is a bad gateway rather than a bad request.
                 logger.info("gui_attach_rfb_failed target=%s error=%s", target.target_id, exc)
-                return JSONResponse({"error": f"rfb connect failed: {exc}"}, status_code=502)
+                return JSONResponse({"error": ATTACH_RFB_FAILED}, status_code=502)
         else:
             return JSONResponse({"error": f"graphical protocol not supported: {protocol}"}, status_code=501)
 
