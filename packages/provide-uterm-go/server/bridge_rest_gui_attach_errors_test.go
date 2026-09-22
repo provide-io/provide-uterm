@@ -10,12 +10,17 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
 
+	"google.golang.org/grpc"
+
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
+
+	pb "github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc/gen/litevirt/v1"
 )
 
 // attachErrorServer seeds the targets and records the server log, so a test can
@@ -127,5 +132,64 @@ func TestGUIAttachLitevirtMetadataRefusalIsFixedText(t *testing.T) {
 		"169.254", "metadata")
 	if !strings.Contains(logs.String(), "gui_attach_egress_blocked") || !strings.Contains(logs.String(), "gt-meta") {
 		t.Fatalf("egress refusal not logged with the target id: %s", logs.String())
+	}
+}
+
+// garbageLitevirtServer answers ProxyVNC with something that is not RFB, so the
+// handshake fails after the stream opened.
+type garbageLitevirtServer struct {
+	pb.UnimplementedLiteVirtServer
+}
+
+func (garbageLitevirtServer) ProxyVNC(stream grpc.BidiStreamingServer[pb.VNCData, pb.VNCData]) error {
+	if err := stream.Send(&pb.VNCData{Data: []byte("HTTP/1.1 400 at 10.9.8.7\n")}); err != nil {
+		return err
+	}
+	_, err := stream.Recv()
+	return err
+}
+
+func insecureLitevirtTarget(endpoint string) *graphical.Definition {
+	return &graphical.Definition{
+		TargetID: "gt-lv", TenantID: "acme", Protocol: graphical.ProtocolLitevirt,
+		Endpoint: strPtrLocal(endpoint), Width: 64, Height: 48,
+		Config: map[string]any{"vm_name": "vm1", "insecure_no_tls": true},
+	}
+}
+
+func TestGUIAttachLitevirtStreamFailureIsFixedText(t *testing.T) {
+	// Nothing listens on port 1, so opening the ProxyVNC stream fails; the gRPC
+	// error names the address and the transport's reason.
+	ts, logs := attachErrorServer(t, insecureLitevirtTarget("127.0.0.1:1"))
+	rec := ts.do("POST", "/worker/w1/gui/attach", `{"target_id":"gt-lv"}`, tenantHeaders("admin", "acme"))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d %s", rec.Code, rec.Body.String())
+	}
+	assertAttachBody(t, rec.Body.String(), "litevirt connect failed: the console did not accept a session",
+		"127.0.0.1", "Unavailable", "refused", "rpc error")
+	if !strings.Contains(logs.String(), "gui_attach_litevirt_failed") || !strings.Contains(logs.String(), "gt-lv") {
+		t.Fatalf("litevirt failure not logged: %s", logs.String())
+	}
+}
+
+func TestGUIAttachLitevirtHandshakeFailureIsFixedText(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv := grpc.NewServer()
+	pb.RegisterLiteVirtServer(srv, garbageLitevirtServer{})
+	go func() { _ = srv.Serve(lis) }()
+	t.Cleanup(srv.Stop)
+
+	ts, logs := attachErrorServer(t, insecureLitevirtTarget(lis.Addr().String()))
+	rec := ts.do("POST", "/worker/w1/gui/attach", `{"target_id":"gt-lv"}`, tenantHeaders("admin", "acme"))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d %s", rec.Code, rec.Body.String())
+	}
+	assertAttachBody(t, rec.Body.String(), "gui handshake failed: the console did not complete the handshake",
+		"HTTP", "10.9.8.7", "RFB")
+	if !strings.Contains(logs.String(), "gui_attach_handshake_failed") || !strings.Contains(logs.String(), "gt-lv") {
+		t.Fatalf("handshake failure not logged: %s", logs.String())
 	}
 }
