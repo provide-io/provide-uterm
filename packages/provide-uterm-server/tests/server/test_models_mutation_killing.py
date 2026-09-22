@@ -82,6 +82,40 @@ class TestCleanPath:
         result = _clean_path("/adminX", "/fallback")
         assert result == "/adminX", f"Expected '/adminX', got {result!r}"
 
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("//evil.example", "/evil.example"),
+            ("///a//", "/a"),
+            ("/\\evil.example", "/evil.example"),
+            ("\\\\evil.example", "/evil.example"),
+            ("/\t/evil.example", "/evil.example"),
+            ("/\r/evil.example", "/evil.example"),
+            ("/\n/evil.example", "/evil.example"),
+        ],
+    )
+    def test_leading_run_collapses_to_one_slash(self, value: str, expected: str) -> None:
+        """A leading "//" (or a spelling a browser reads as one) must not survive.
+
+        ``f"{app_path}/operator"`` with app_path "//evil.example" is a
+        protocol-relative link off-site. Kills lstrip -> rstrip, lstrip(None),
+        and the prepended "/" -> "XX/XX".
+        """
+        assert _clean_path(value, "/fallback") == expected
+
+    def test_leading_collapse_strips_only_the_slash_run(self) -> None:
+        """lstrip's char set must not contain 'X'.
+
+        Kills lstrip("/\\\\\\t\\r\\n") -> lstrip("XX/\\\\\\t\\r\\nXX"): that mutant eats
+        a leading 'X' — only an input whose first non-slash char is 'X' sees it.
+        """
+        assert _clean_path("Xapp", "/fallback") == "/Xapp"
+        assert _clean_path("//Xapp", "/fallback") == "/Xapp"
+
+    def test_slash_run_after_first_segment_is_untouched(self) -> None:
+        """Only the LEADING run collapses; an inner "//" is a path, not a host."""
+        assert _clean_path("/a//b", "/fallback") == "/a//b"
+
 
 # ---------------------------------------------------------------------------
 # model_dump

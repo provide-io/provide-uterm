@@ -25,12 +25,16 @@ const LOOPBACK = new Set(LOOPBACK_HOSTS);
  *
  * A path without a leading slash registers a route nothing matches, and a
  * trailing one makes two spellings of the same mount.
+ *
+ * The leading run collapses to one slash rather than being kept: the path is a
+ * link prefix (`${appPath}/operator/...`), and one that begins `//` is a
+ * protocol-relative URL pointing off-site. Browsers read `\` as `/` and drop
+ * tab/CR/LF, so those join the run.
  */
 export function cleanPath(value: string | undefined, fallback: string): string {
-  let text = String(value === undefined || value === "" ? fallback : value).trim();
-  if (!text.startsWith("/")) {
-    text = `/${text}`;
-  }
+  const text = `/${String(value === undefined || value === "" ? fallback : value)
+    .trim()
+    .replace(/^[/\\\t\r\n]+/, "")}`;
   // The root has to survive: stripping its trailing slash would leave nothing.
   return text.replace(/\/+$/, "") || "/";
 }

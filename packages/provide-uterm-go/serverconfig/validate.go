@@ -65,15 +65,17 @@ func requireSecureURL(u *string, field string) error {
 }
 
 // cleanPath ports config_schema._clean_path.
+//
+// The leading run collapses to one slash rather than being kept: the path is a
+// link prefix (app_path + "/operator/..."), and one that begins "//" is a
+// protocol-relative URL pointing off-site. Browsers read a backslash as "/" and drop
+// tab/CR/LF, so those join the run.
 func cleanPath(value, fallback string) string {
 	text := value
 	if text == "" {
 		text = fallback
 	}
-	text = strings.TrimSpace(text)
-	if !strings.HasPrefix(text, "/") {
-		text = "/" + text
-	}
+	text = "/" + strings.TrimLeft(strings.TrimSpace(text), "/\\\t\r\n")
 	text = strings.TrimRight(text, "/")
 	if text == "" {
 		return "/"

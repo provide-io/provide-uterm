@@ -297,6 +297,60 @@
       "fallback": "/app",
       "name": "no slashes at all",
       "value": "app/sub"
+    },
+    {
+      "cleaned": "/evil.example",
+      "fallback": "/app",
+      "name": "protocol-relative",
+      "value": "//evil.example"
+    },
+    {
+      "cleaned": "/a",
+      "fallback": "/app",
+      "name": "a run of leading and trailing slashes",
+      "value": "///a//"
+    },
+    {
+      "cleaned": "/evil.example",
+      "fallback": "/app",
+      "name": "a backslash after the slash",
+      "value": "/\\evil.example"
+    },
+    {
+      "cleaned": "/evil.example",
+      "fallback": "/app",
+      "name": "only backslashes",
+      "value": "\\\\evil.example"
+    },
+    {
+      "cleaned": "/evil.example",
+      "fallback": "/app",
+      "name": "a tab between the slashes",
+      "value": "/\t/evil.example"
+    },
+    {
+      "cleaned": "/evil.example",
+      "fallback": "/app",
+      "name": "a carriage return between the slashes",
+      "value": "/\r/evil.example"
+    },
+    {
+      "cleaned": "/evil.example",
+      "fallback": "/app",
+      "name": "a newline between the slashes",
+      "value": "/\n/evil.example"
+    },
+    {
+      "cleaned": "/Xapp",
+      "fallback": "/app",
+      "name": "a leading X survives the collapse",
+      "value": "//Xapp"
+    },
+    {
+      "cleaned": "/a//b",
+      "fallback": "/app",
+      "name": "an inner double slash is kept",
+      "value": "/a//b"
     }
   ],
   "ui_defaults": {
