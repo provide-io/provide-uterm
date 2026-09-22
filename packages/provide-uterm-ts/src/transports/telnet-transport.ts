@@ -17,6 +17,7 @@
  */
 
 import { type ConnectionTransport, TransportConnectionError } from "./base.ts";
+import { closeFromException, TransportClose, TransportClosedError } from "./close.ts";
 import { escapeTelnetData, TELNET, TelnetBuffer } from "./telnet.ts";
 
 /** The socket this transport drives. */
@@ -83,6 +84,17 @@ const DELETE = 0x7f;
 
 /** Which of the four commands an option has already been sent. */
 type NegotiationSide = "will" | "wont" | "do" | "dont";
+
+/**
+ * Describe a socket failure as a close.
+ *
+ * A peer reset is the far end closing; a broken pipe, or anything else the
+ * socket raised, cannot say who did.
+ */
+export function closeFromSocketError(error: unknown): TransportClose {
+  const code = error instanceof Error ? (error as { code?: unknown }).code : undefined;
+  return closeFromException(error, code === "ECONNRESET" ? "remote" : "unknown");
+}
 
 /** A full RFC 854 telnet client behind the transport interface. */
 export class TelnetTransport implements ConnectionTransport {
@@ -155,8 +167,8 @@ export class TelnetTransport implements ConnectionTransport {
   /**
    * Send bytes, escaped for the wire.
    *
-   * @throws {TransportConnectionError} If not connected, or the far end went
-   *   mid-send.
+   * @throws {TransportConnectionError} If not connected.
+   * @throws {TransportClosedError} If the far end went mid-send.
    */
   async send(data: Uint8Array): Promise<void> {
     const socket = this.#requireSocket();
@@ -167,16 +179,17 @@ export class TelnetTransport implements ConnectionTransport {
       await socket.write(escapeTelnetData(remapped));
     } catch (error) {
       await this.disconnect();
-      throw new TransportConnectionError("Connection lost", { cause: error });
+      throw new TransportClosedError("Connection lost", closeFromSocketError(error), { cause: error });
     }
   }
 
   /**
    * Read application bytes, answering any negotiation that arrives.
    *
-   * @throws {TransportConnectionError} If not connected, the far end closed
-   *   with nothing left to hand over, or the peer sent more unconsumed input
-   *   than {@link TELNET_MAX_RX_BUFFER}.
+   * @throws {TransportConnectionError} If not connected.
+   * @throws {TransportClosedError} If the far end closed with nothing left to
+   *   hand over (remote), the socket failed, or the peer sent more unconsumed
+   *   input than {@link TELNET_MAX_RX_BUFFER} (local: this end gives up).
    */
   async receive(maxBytes: number, timeoutMs: number): Promise<Uint8Array> {
     const socket = this.#requireSocket();
@@ -185,7 +198,7 @@ export class TelnetTransport implements ConnectionTransport {
       chunk = await this.#readWithTimeout(socket, maxBytes, timeoutMs);
     } catch (error) {
       await this.disconnect();
-      throw new TransportConnectionError("Connection lost", { cause: error });
+      throw new TransportClosedError("Connection lost", closeFromSocketError(error), { cause: error });
     }
     if (chunk === TIMED_OUT) {
       // A quiet terminal is not a broken one.
@@ -201,7 +214,7 @@ export class TelnetTransport implements ConnectionTransport {
       if (flushed.payload.length > 0) {
         return flushed.payload;
       }
-      throw new TransportConnectionError("Connection closed by remote");
+      throw new TransportClosedError("Connection closed by remote", new TransportClose("remote"));
     }
 
     const result = this.#buffer.feed(chunk);
@@ -209,9 +222,10 @@ export class TelnetTransport implements ConnectionTransport {
     if (this.#pending > TELNET_MAX_RX_BUFFER) {
       this.#buffer = new TelnetBuffer();
       this.#pending = 0;
-      throw new TransportConnectionError(
+      throw new TransportClosedError(
         `telnet receive buffer exceeded ${TELNET_MAX_RX_BUFFER} bytes ` +
           "(likely IAC SB without IAC SE) — closing connection",
+        new TransportClose("local", { reason: "receive buffer exceeded" }),
       );
     }
     // Answered before returning rather than in a background task: the bytes

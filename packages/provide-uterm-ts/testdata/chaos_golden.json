@@ -90,7 +90,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #3"
+          "message": "chaos: injected disconnect on receive #3 (unknown close injected disconnect)"
         },
         {
           "data": "read-3",
@@ -103,7 +103,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #6"
+          "message": "chaos: injected disconnect on receive #6 (unknown close injected disconnect)"
         },
         {
           "data": "read-5",
@@ -150,37 +150,37 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #1"
+          "message": "chaos: injected disconnect on receive #1 (unknown close injected disconnect)"
         },
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #2"
+          "message": "chaos: injected disconnect on receive #2 (unknown close injected disconnect)"
         },
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #3"
+          "message": "chaos: injected disconnect on receive #3 (unknown close injected disconnect)"
         },
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #4"
+          "message": "chaos: injected disconnect on receive #4 (unknown close injected disconnect)"
         },
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #5"
+          "message": "chaos: injected disconnect on receive #5 (unknown close injected disconnect)"
         },
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #6"
+          "message": "chaos: injected disconnect on receive #6 (unknown close injected disconnect)"
         },
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #7"
+          "message": "chaos: injected disconnect on receive #7 (unknown close injected disconnect)"
         }
       ]
     },
@@ -194,7 +194,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #2"
+          "message": "chaos: injected disconnect on receive #2 (unknown close injected disconnect)"
         },
         {
           "data": "read-2",
@@ -203,7 +203,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #4"
+          "message": "chaos: injected disconnect on receive #4 (unknown close injected disconnect)"
         },
         {
           "data": "read-3",
@@ -212,7 +212,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #6"
+          "message": "chaos: injected disconnect on receive #6 (unknown close injected disconnect)"
         },
         {
           "data": "read-4",
@@ -234,7 +234,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #3"
+          "message": "chaos: injected disconnect on receive #3 (unknown close injected disconnect)"
         },
         {
           "data": "",
@@ -247,7 +247,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #6"
+          "message": "chaos: injected disconnect on receive #6 (unknown close injected disconnect)"
         },
         {
           "data": "read-3",
@@ -265,7 +265,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "flaky-bbs: injected disconnect on receive #2"
+          "message": "flaky-bbs: injected disconnect on receive #2 (unknown close injected disconnect)"
         },
         {
           "data": "read-2",
@@ -274,7 +274,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "flaky-bbs: injected disconnect on receive #4"
+          "message": "flaky-bbs: injected disconnect on receive #4 (unknown close injected disconnect)"
         },
         {
           "data": "read-3",
@@ -283,7 +283,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "flaky-bbs: injected disconnect on receive #6"
+          "message": "flaky-bbs: injected disconnect on receive #6 (unknown close injected disconnect)"
         },
         {
           "data": "read-4",
@@ -301,7 +301,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #2"
+          "message": "chaos: injected disconnect on receive #2 (unknown close injected disconnect)"
         },
         {
           "data": "read-2",
@@ -310,7 +310,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #4"
+          "message": "chaos: injected disconnect on receive #4 (unknown close injected disconnect)"
         },
         {
           "data": "read-3",
@@ -319,7 +319,7 @@
         {
           "connected_after": false,
           "kind": "disconnect",
-          "message": "chaos: injected disconnect on receive #6"
+          "message": "chaos: injected disconnect on receive #6 (unknown close injected disconnect)"
         },
         {
           "data": "read-4",

@@ -56,6 +56,10 @@ POLICY_CASES: list[tuple[str, dict[str, Any]]] = [
 class RecordingSession:
     """A transport session recording what was asked of it, failing on cue."""
 
+    # The reconnecting session reads this before closing a dead session; a
+    # fake that reports no close leaves `last_close` to the raised error.
+    close_info = None
+
     def __init__(self, log: list[Any], name: str, failures: list[str]) -> None:
         self._log = log
         self._name = name

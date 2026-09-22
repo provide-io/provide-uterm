@@ -82,11 +82,11 @@
     },
     "receive_closed": {
       "connected_after": false,
-      "message": "Connection closed"
+      "message": "Connection closed (unknown close (no close frame received or sent))"
     },
     "receive_error": {
       "connected_after": false,
-      "message": "WebSocket receive error"
+      "message": "WebSocket receive error (unknown close (ValueError: frame too large))"
     },
     "receive_not_connected": "Not connected",
     "receive_timeout": {
@@ -95,7 +95,7 @@
     },
     "send_closed": {
       "connected_after": false,
-      "message": "Connection closed"
+      "message": "Connection closed (unknown close (no close frame received or sent))"
     },
     "send_not_connected": "Not connected"
   },

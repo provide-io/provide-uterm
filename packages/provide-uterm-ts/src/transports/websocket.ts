@@ -18,16 +18,122 @@
  */
 
 import { type ConnectionTransport, TransportConnectionError } from "./base.ts";
+import { closeFromException, TransportClose, TransportClosedError } from "./close.ts";
 
 /** The state of the underlying socket. */
 export type SocketState = "connecting" | "open" | "closing" | "closed";
 
-/** Signals that the far end closed. */
+/** A WebSocket close frame: its status code and reason. */
+export interface WebSocketCloseFrame {
+  readonly code: number;
+  readonly reason: string;
+}
+
+/** What a socket knows about the close handshake when it reports a close. */
+export interface WebSocketClosedOptions {
+  cause?: unknown;
+  /** The close frame the far end sent, if one arrived. */
+  received?: WebSocketCloseFrame | undefined;
+  /** The close frame this end sent, if one went out. */
+  sent?: WebSocketCloseFrame | undefined;
+  /** With both frames present: whether the far end's came first. */
+  receivedThenSent?: boolean | undefined;
+}
+
+/**
+ * Signals that the connection closed.
+ *
+ * Carries the close frames the way the reference's `ConnectionClosed` does,
+ * because which side's frame came first is the only way to say who closed —
+ * a keepalive timeout is a frame *this* end sent, a server hanging up is one
+ * it received.
+ */
 export class WebSocketClosedError extends Error {
-  constructor(message: string, options?: { cause?: unknown }) {
-    super(message, options);
+  readonly received: WebSocketCloseFrame | undefined;
+  readonly sent: WebSocketCloseFrame | undefined;
+  readonly receivedThenSent: boolean;
+
+  constructor(message: string, options: WebSocketClosedOptions = {}) {
+    super(message, options.cause === undefined ? undefined : { cause: options.cause });
     this.name = "WebSocketClosedError";
+    this.received = options.received;
+    this.sent = options.sent;
+    this.receivedThenSent = options.receivedThenSent ?? false;
   }
+}
+
+/** The reference's explanation of each well-known close code. */
+const CLOSE_CODE_EXPLANATIONS: Readonly<Record<number, string>> = {
+  1000: "OK",
+  1001: "going away",
+  1002: "protocol error",
+  1003: "unsupported data",
+  1005: "no status received [internal]",
+  1006: "abnormal closure [internal]",
+  1007: "invalid frame payload data",
+  1008: "policy violation",
+  1009: "message too big",
+  1010: "mandatory extension",
+  1011: "internal error",
+  1012: "service restart",
+  1013: "try again later",
+  1014: "bad gateway",
+  1015: "TLS handshake failure [internal]",
+};
+
+/** A close frame as the reference prints it: `1011 (internal error) reason`. */
+function describeFrame(frame: WebSocketCloseFrame): string {
+  let explanation: string;
+  if (frame.code >= 3000 && frame.code < 4000) {
+    explanation = "registered";
+  } else if (frame.code >= 4000 && frame.code < 5000) {
+    explanation = "private use";
+  } else {
+    explanation = CLOSE_CODE_EXPLANATIONS[frame.code] ?? "unknown";
+  }
+  const text = `${frame.code} (${explanation})`;
+  return frame.reason === "" ? text : `${text} ${frame.reason}`;
+}
+
+/**
+ * The close handshake as the reference's `ConnectionClosed` prints it.
+ *
+ * Used as the close's detail, so the message a port records matches the one
+ * the reference does.
+ */
+export function describeWebSocketClose(error: WebSocketClosedError): string {
+  const { received, sent } = error;
+  if (received === undefined) {
+    return sent === undefined
+      ? "no close frame received or sent"
+      : `sent ${describeFrame(sent)}; no close frame received`;
+  }
+  if (sent === undefined) {
+    return `received ${describeFrame(received)}; no close frame sent`;
+  }
+  return error.receivedThenSent
+    ? `received ${describeFrame(received)}; then sent ${describeFrame(sent)}`
+    : `sent ${describeFrame(sent)}; then received ${describeFrame(received)}`;
+}
+
+/**
+ * Attribute a close to the side whose close frame came first.
+ *
+ * A received frame wins when nothing was sent, or when it arrived before this
+ * end answered; otherwise a sent frame means this end closed — the keepalive
+ * timeout is `sent 1011 keepalive ping timeout` with nothing received. No
+ * frames at all cannot say who closed.
+ */
+export function closeFromWebSocket(error: WebSocketClosedError): TransportClose {
+  const { received, sent } = error;
+  const detail = describeWebSocketClose(error);
+  if (received !== undefined && (sent === undefined || error.receivedThenSent)) {
+    return new TransportClose("remote", { code: received.code, reason: received.reason, detail });
+  }
+  if (sent !== undefined) {
+    return new TransportClose("local", { code: sent.code, reason: sent.reason, detail });
+  }
+  return new TransportClose("unknown", { detail });
 }
 
 /** The socket this transport drives. */
@@ -181,9 +287,10 @@ export class WebSocketTransport implements ConnectionTransport {
    * The bytes are decoded back to text first: a BINARY frame is dropped by
    * the worker without an error.
    *
-   * @throws {TransportConnectionError} If not connected, or the far end
-   *   closed mid-send — in which case the connection is torn down first, so a
-   *   caller cannot keep writing into a socket that is already gone.
+   * @throws {TransportConnectionError} If not connected.
+   * @throws {TransportClosedError} If the connection closed mid-send — in
+   *   which case the connection is torn down first, so a caller cannot keep
+   *   writing into a socket that is already gone.
    */
   async send(data: Uint8Array): Promise<void> {
     const socket = this.#requireSocket();
@@ -192,7 +299,7 @@ export class WebSocketTransport implements ConnectionTransport {
     } catch (error) {
       if (error instanceof WebSocketClosedError) {
         await this.disconnect();
-        throw new TransportConnectionError("Connection closed", { cause: error });
+        throw new TransportClosedError("Connection closed", closeFromWebSocket(error), { cause: error });
       }
       throw error;
     }
@@ -204,9 +311,10 @@ export class WebSocketTransport implements ConnectionTransport {
    * `maxBytes` is advisory and ignored: WebSocket is message-framed, so
    * chunking to it would corrupt the framing.
    *
-   * @throws {TransportConnectionError} If not connected, or the connection is
-   *   lost. A read timeout is not a loss — it returns empty and leaves the
-   *   connection up, because a quiet terminal is not a broken one.
+   * @throws {TransportConnectionError} If not connected.
+   * @throws {TransportClosedError} If the connection is lost. A read timeout
+   *   is not a loss — it returns empty and leaves the connection up, because
+   *   a quiet terminal is not a broken one.
    */
   async receive(_maxBytes: number, timeoutMs: number): Promise<Uint8Array> {
     const socket = this.#requireSocket();
@@ -225,9 +333,10 @@ export class WebSocketTransport implements ConnectionTransport {
     } catch (error) {
       await this.disconnect();
       if (error instanceof WebSocketClosedError) {
-        throw new TransportConnectionError("Connection closed", { cause: error });
+        throw new TransportClosedError("Connection closed", closeFromWebSocket(error), { cause: error });
       }
-      throw new TransportConnectionError("WebSocket receive error", { cause: error });
+      // Any other receive failure cannot say who ended the connection.
+      throw new TransportClosedError("WebSocket receive error", closeFromException(error), { cause: error });
     } finally {
       clearTimeout(timer);
     }

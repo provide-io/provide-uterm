@@ -13,6 +13,9 @@
  * client hammering a server that is already down.
  */
 
+import { TransportConnectionError } from "./base.ts";
+import { type TransportClose, TransportClosedError } from "./close.ts";
+
 /** Retry budget and backoff. */
 export interface ReconnectPolicy {
   /** How many retries before giving up. */
@@ -91,6 +94,11 @@ export function isRetryableTransportError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
+  // The port's own connection error — and the typed close that extends it —
+  // is the reference's `ConnectionError`, which it retries.
+  if (error instanceof TransportConnectionError) {
+    return true;
+  }
   const code = (error as { code?: unknown }).code;
   if (typeof code === "string" && RETRYABLE.has(code)) {
     return true;
@@ -150,6 +158,8 @@ async function connectWithin<T>(connect: () => Promise<T>, options: ReconnectOpt
  */
 export interface ClosableSession {
   close(): Promise<void>;
+  /** How the session's connection ended, when it can say. */
+  readonly closeInfo?: TransportClose | undefined;
 }
 
 /** Close a session, ignoring the failure. */
@@ -166,6 +176,8 @@ async function closeQuietly(session: { close(): Promise<void> }): Promise<void> 
 export interface Reconnecting<T> {
   /** The live session, once one has been established. */
   readonly session: T | undefined;
+  /** How the most recently replaced session's connection ended, if it said. */
+  readonly lastClose: TransportClose | undefined;
   /** Run an operation, reconnecting and retrying if the transport drops. */
   run<R>(operation: (session: T) => Promise<R>): Promise<R>;
 }
@@ -185,6 +197,7 @@ export function reconnecting<T extends ClosableSession>(
   const maxRetries = policy.maxRetries ?? RECONNECT_DEFAULTS.maxRetries;
   const sleep = options.sleep ?? realSleep;
   let session: T | undefined;
+  let lastClose: TransportClose | undefined;
 
   /** Establish a session, or reuse the one already open. */
   const ensure = async (): Promise<T> => {
@@ -197,6 +210,11 @@ export function reconnecting<T extends ClosableSession>(
   /** Close the dead session and build another. */
   const rebuild = async (dead: T, attempt: number): Promise<T> => {
     session = undefined;
+    // Read before closing: closing records this side's own close.
+    const observed = dead.closeInfo;
+    if (observed !== undefined) {
+      lastClose = observed;
+    }
     // Before the backoff, not after: waiting thirty seconds with the dead
     // socket still open is thirty seconds of a descriptor held and a peer left
     // half-open.
@@ -217,6 +235,9 @@ export function reconnecting<T extends ClosableSession>(
     get session(): T | undefined {
       return session;
     },
+    get lastClose(): TransportClose | undefined {
+      return lastClose;
+    },
     async run<R>(operation: (session: T) => Promise<R>): Promise<R> {
       let current = await ensure();
       let retries = 0;
@@ -226,6 +247,9 @@ export function reconnecting<T extends ClosableSession>(
         } catch (error) {
           if (!isRetryableTransportError(error)) {
             throw error;
+          }
+          if (error instanceof TransportClosedError) {
+            lastClose = error.close;
           }
           if (retries >= maxRetries) {
             // Closed on the way out, so a caller that gives up does not leave

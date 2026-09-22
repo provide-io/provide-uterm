@@ -233,7 +233,7 @@
   "default_connect_timeout_s": 30.0,
   "failures": {
     "closed_leaves_it_disconnected": false,
-    "closed_with_nothing_buffered": "Connection closed by remote",
+    "closed_with_nothing_buffered": "Connection closed by remote (remote close)",
     "partial_then_close": {
       "first": [
         97
@@ -245,7 +245,7 @@
     "receive_before_connect": "Not connected",
     "send_before_connect": "Not connected",
     "set_size_before_connect": "Not connected",
-    "unbounded_subnegotiation": "telnet receive buffer exceeded 262144 bytes (likely IAC SB without IAC SE) \u2014 closing connection"
+    "unbounded_subnegotiation": "telnet receive buffer exceeded 262144 bytes (likely IAC SB without IAC SE) \u2014 closing connection (local close receive buffer exceeded)"
   },
   "handshake": {
     "connected": true,
