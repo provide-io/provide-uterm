@@ -101,10 +101,12 @@ async def handle_socket_message(runtime: RuntimeProtocol, ws: CFWebSocket, raw: 
                             }
                         )
                     except Exception:
+                        # Best-effort error frame; the socket is closed immediately below regardless.
                         pass
                     try:
                         ws.close(1002, "protocol_mismatch")
                     except Exception:
+                        # The socket may already be closed; the mismatch was already reported where possible.
                         pass
                     return
                 if mode in {"hijack", "open"} and (mode != "open" or runtime.hijack.session is None):

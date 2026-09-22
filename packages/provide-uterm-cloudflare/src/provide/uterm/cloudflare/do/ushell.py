@@ -96,6 +96,7 @@ def _load_connector(session_id: str, env: Any, storage: Any = None) -> Any:
 
             ctx["list_kv_sessions"] = _list_sessions2
         except Exception:
+            # KV registry unavailable: the ushell simply runs without the list_kv_sessions helper.
             pass
 
     return UshellConnector(session_id=session_id, extra_ctx=ctx)
