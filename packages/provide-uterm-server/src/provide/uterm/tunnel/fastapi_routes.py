@@ -135,6 +135,7 @@ def register_tunnel_routes(hub: TermHub, router: APIRouter) -> None:
                         cast("dict[str, Any]", make_term_frame(text, ts=time.time())),
                     )
         except WebSocketDisconnect:
+            # Normal tunnel worker disconnect; the finally block below performs cleanup.
             pass
         except Exception as exc:  # pragma: no cover
             logger.warning("tunnel_ws_error worker_id=%s error=%s", worker_id, exc)

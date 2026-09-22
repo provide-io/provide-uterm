@@ -98,6 +98,7 @@ async def _relay_tcp_to_ws(reader: asyncio.StreamReader, ws_send: Any) -> None:
                 break
             await ws_send(encode_frame(CHANNEL_TCP, data))
     except (ConnectionError, OSError):
+        # The local TCP peer disconnected; relaying stops and the caller tears down the tunnel.
         pass
 
 
@@ -113,6 +114,7 @@ async def _relay_ws_to_tcp(ws_recv: Any, writer: asyncio.StreamWriter) -> None:
             writer.write(frame.payload)
             await writer.drain()
     except (ConnectionError, OSError):
+        # The tunnel peer disconnected; the finally block closes the local writer.
         pass
     finally:
         with suppress(Exception):

@@ -270,6 +270,8 @@ class WebhookAuthorizationProvider:
             if resp.status_code == 200 and self._response_signature_ok(resp):
                 return frozenset(resp.json().get("capabilities", []))
         except Exception:
+            # Fail closed: an egress block, transport error or bad body grants
+            # no capabilities (the empty set below), like ``_check`` returning False.
             pass
         return frozenset()
 
@@ -336,6 +338,8 @@ class WebhookAuthorizationProvider:
                 raw_role = resp.json().get("role", "viewer")
                 return next(iter(_filter_known_roles([raw_role])))
         except Exception:
+            # Fail closed: any egress/transport/body error resolves to the
+            # least-privileged "viewer" role below.
             pass
         return "viewer"
 

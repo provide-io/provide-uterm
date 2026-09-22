@@ -83,6 +83,7 @@ def parse_http_frames(raw: str) -> list[dict[str, Any]]:
                     if isinstance(obj, dict) and obj.get("_channel") == "http":
                         frames.append(obj)
                 except (json.JSONDecodeError, ValueError):
+                    # Skip a malformed HTTP side-channel frame; the stream continues with the next one.
                     pass
                 pos = idx + 11 + length
                 continue

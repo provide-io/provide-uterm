@@ -231,6 +231,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     # downstream failure propagates instead of being miscounted.
                     await _dispatch_worker_frame(hub, worker_id, mtype, built_frame, websocket)
         except WebSocketDisconnect:
+            # Normal worker disconnect; the finally block below performs cleanup.
             pass
         except Exception as exc:  # pragma: no cover
             logger.warning("term_worker_ws_error worker_id=%s error=%s", worker_id, exc)
@@ -425,6 +426,7 @@ def register_ws_routes(hub: TermHub, router: APIRouter) -> None:
                     )
 
         except WebSocketDisconnect:
+            # Normal browser disconnect; the finally block below performs cleanup.
             pass
         except Exception as exc:  # pragma: no cover
             logger.warning("term_browser_ws_error worker_id=%s error=%s", worker_id, exc)

@@ -144,6 +144,7 @@ async def _bridge_loop(
                 frame = encode_frame(CHANNEL_DATA, data)
                 await ws_send(frame)
         except (OSError, EOFError):
+            # The PTY closed (child exited); stop relaying its output to the WebSocket.
             pass
 
     async def ws_to_pty() -> None:
@@ -157,6 +158,7 @@ async def _bridge_loop(
                 else:
                     await pty_source.write(data)
         except (OSError, EOFError):
+            # The PTY closed (child exited); stop relaying WebSocket input into it.
             pass
 
     await asyncio.gather(pty_to_ws(), ws_to_pty())
@@ -224,6 +226,7 @@ def _cmd_share(args: argparse.Namespace) -> None:
             _run_share(pty_source, ws_endpoint, worker_token, attach=attach),
         )
     except KeyboardInterrupt:
+        # Ctrl-C is the normal way to stop sharing; the finally block closes the PTY.
         pass
     finally:
         pty_source.close()

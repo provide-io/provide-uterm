@@ -42,7 +42,9 @@ def _read_vanilla_manifest() -> dict[str, Any] | None:
             _vanilla_manifest = json.loads(raw)
             logger.info("vanilla_manifest loaded entries=%d", len(_vanilla_manifest or {}))
     except Exception:
-        pass
+        # An unreadable manifest falls back to the unhashed asset names; log it
+        # (as the Vite manifest reader does) so a broken build is diagnosable.
+        logger.debug("vanilla_manifest read failed", exc_info=True)
     return _vanilla_manifest
 
 
