@@ -193,7 +193,8 @@ class TestApiKeyRoutes:
         resp = admin_client.delete(f"/api/keys/{created['key_id']}", headers=self._BETA)
         assert resp.status_code == 404
         # acme admin can revoke its own key
-        assert admin_client.delete(f"/api/keys/{created['key_id']}", headers=self._ACME).status_code == 200
+        own_revoke = admin_client.delete(f"/api/keys/{created['key_id']}", headers=self._ACME)
+        assert own_revoke.status_code == 200
 
     def test_system_admin_sees_all_tenants_keys(self, admin_client: TestClient) -> None:
         admin_client.post("/api/keys", json={"name": "acme-k", "scopes": ["viewer"]}, headers=self._ACME)

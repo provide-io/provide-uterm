@@ -390,20 +390,16 @@ def test_tunnel_owner_can_rotate_and_revoke() -> None:
             headers={"Authorization": f"Bearer {alice}"},
         )
         tunnel_id = r.json()["tunnel_id"]
-        assert (
-            client.post(
-                f"/api/tunnels/{tunnel_id}/tokens/rotate",
-                headers={"Authorization": f"Bearer {alice}"},
-            ).status_code
-            == 200
+        rotated = client.post(
+            f"/api/tunnels/{tunnel_id}/tokens/rotate",
+            headers={"Authorization": f"Bearer {alice}"},
         )
-        assert (
-            client.delete(
-                f"/api/tunnels/{tunnel_id}/tokens",
-                headers={"Authorization": f"Bearer {alice}"},
-            ).status_code
-            == 200
+        assert rotated.status_code == 200
+        revoked = client.delete(
+            f"/api/tunnels/{tunnel_id}/tokens",
+            headers={"Authorization": f"Bearer {alice}"},
         )
+        assert revoked.status_code == 200
 
 
 def test_tunnel_rotate_on_missing_session_404() -> None:
