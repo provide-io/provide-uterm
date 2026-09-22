@@ -26,6 +26,7 @@ told to refuse.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -372,3 +373,61 @@ async def test_the_fanout_session_lookup_asks_for_the_worker_it_was_given(
 
     assert await controller._resolve_session("some-worker") is session
     lookup.assert_awaited_once_with("some-worker")
+
+
+# ---------------------------------------------------------------------------
+# Before the registry exists
+# ---------------------------------------------------------------------------
+
+
+def _probe_before_the_registry_exists(monkeypatch: pytest.MonkeyPatch, probe: Any) -> Any:
+    """Run *probe(hub)* at the one moment the registry is still unassigned.
+
+    Both lookups are closures over a ``registry`` that is declared ``None`` and
+    only assigned once ``SessionRegistry`` is constructed -- which is handed the
+    live hub. Wrapping that constructor is the one seam where the hub and its
+    fan-out controller exist but the registry does not, so the ``is not None``
+    guard is observable: without it the lookup dereferences ``None``.
+    """
+    real = factory_impl.SessionRegistry
+    seen: list[Any] = []
+
+    def _wrapped(*args: Any, **kwargs: Any) -> Any:
+        seen.append(asyncio.run(probe(kwargs["hub"])))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(factory_impl, "SessionRegistry", _wrapped)
+    _app()
+    assert len(seen) == 1
+    return seen[0]
+
+
+def test_a_role_asked_for_before_the_registry_exists_is_resolved_as_unregistered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No registry means no session definition, which is the fail-closed arm -- not a crash."""
+
+    async def _probe(hub: Any) -> str:
+        return str(await hub._resolve_browser_role(_ws(_principal("admin")), _WORKER))
+
+    assert _probe_before_the_registry_exists(monkeypatch, _probe) == "admin"
+
+
+def test_a_fanout_lookup_before_the_registry_exists_finds_no_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fan-out lookup has the same guard: no registry answers "no session"."""
+
+    async def _probe(hub: Any) -> Any:
+        return await hub.fan_out_controller._resolve_session(_WORKER)
+
+    assert _probe_before_the_registry_exists(monkeypatch, _probe) is None
+
+
+def test_a_resume_before_the_registry_exists_is_not_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The resume guard shares the seam, and with nothing to check against it lets the token through."""
+
+    async def _probe(hub: Any) -> Any:
+        return await hub._on_resume("tok", MagicMock(worker_id=_WORKER, wall_created_at=100.0))
+
+    assert _probe_before_the_registry_exists(monkeypatch, _probe) is True
