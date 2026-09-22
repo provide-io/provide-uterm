@@ -62,6 +62,7 @@ class _AuthMixin:
             if cookie_key in cookies:
                 token = cookies[cookie_key].value
         except Exception:
+            # Cookie header missing or malformed: fall through to the no-token rejection below.
             pass
         if not token:
             return None
@@ -92,6 +93,7 @@ class _AuthMixin:
             try:
                 client_ip = str(request.headers.get("CF-Connecting-IP") or "")  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
             except Exception:
+                # Headers unreadable: client_ip stays empty, so an IP-bound token is rejected below.
                 pass
             if issued_ip and client_ip != issued_ip:
                 return None

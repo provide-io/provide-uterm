@@ -33,12 +33,14 @@ def read_asset_text(path: str) -> str | None:
         if local_target.is_file():
             return local_target.read_text(encoding="utf-8")
     except (ModuleNotFoundError, TypeError):
+        # Server package assets unavailable here: try the __file__-relative static dir next.
         pass
     try:
         local_target2 = _LOCAL_STATIC / rel
         if local_target2.is_file():
             return local_target2.read_text(encoding="utf-8")
     except OSError:
+        # Local static dir unreadable: fall through to the server package's frontend.
         pass
     try:
         frontend_root = importlib.resources.files("provide.uterm.server") / "frontend"
@@ -46,6 +48,7 @@ def read_asset_text(path: str) -> str | None:
         if target.is_file():
             return target.read_text(encoding="utf-8")
     except (ModuleNotFoundError, TypeError):
+        # Server package frontend unavailable: report the asset as missing (None).
         pass
     return None
 
@@ -64,6 +67,7 @@ def serve_asset(path: str) -> Response:
             mime = _MIME.get(suffix, "application/octet-stream")
             return Response(local_target.read_text(encoding="utf-8"), status=200, headers={"content-type": mime})
     except (ModuleNotFoundError, TypeError):
+        # Server package assets unavailable here: try the __file__-relative static dir next.
         pass
 
     # 2. Try __file__-relative path (works in pywrangler dev when static dir is populated).
@@ -74,6 +78,7 @@ def serve_asset(path: str) -> Response:
             mime = _MIME.get(suffix, "application/octet-stream")
             return Response(local_target2.read_text(encoding="utf-8"), status=200, headers={"content-type": mime})
     except OSError:
+        # Local static dir unreadable: fall through to the main package's frontend assets.
         pass
 
     # 3. Fall back to the main provide-uterm package (installed alongside this package).

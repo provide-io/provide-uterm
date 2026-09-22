@@ -314,6 +314,7 @@ async def resolve_share_context(
         if cookie_key in cookies:
             provided = cookies[cookie_key].value
     except Exception:
+        # Cookie header missing or malformed: no token provided, rejected by the check below.
         pass
 
     # Check expiry.
@@ -339,6 +340,7 @@ async def resolve_share_context(
             headers = getattr(request, "headers", {})
             client_ip = str(headers.get("CF-Connecting-IP") or headers.get("cf-connecting-ip") or "")
         except Exception:
+            # Headers unreadable: client_ip stays empty, so an IP-bound token is rejected below.
             pass
         if issued_ip and client_ip != issued_ip:
             return None

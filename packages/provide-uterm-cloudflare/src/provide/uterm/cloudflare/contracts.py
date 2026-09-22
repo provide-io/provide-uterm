@@ -118,6 +118,7 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
                     try:
                         block[key] = int(proto[key])
                     except (ValueError, TypeError):
+                        # Drop a non-integer protocol bound rather than reject the whole frame.
                         pass
             if block:
                 normalized["protocol"] = block
@@ -126,6 +127,7 @@ def _normalize_frame(value: dict[str, Any], *, limits: MessageLimits) -> Frame:
             try:
                 normalized["protocol_version"] = int(value["protocol_version"])
             except (ValueError, TypeError):
+                # Drop a non-integer protocol_version rather than reject the whole frame.
                 pass
     elif frame_type == "resume":
         normalized["token"] = str(value.get("token", ""))
