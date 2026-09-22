@@ -35,8 +35,8 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 _DurableObject: type = object
 try:
-    from workers import DurableObject as _DurableObject  # pragma: no cover  # ty:ignore[unresolved-import]
-    from workers import (  # pragma: no cover  # ty:ignore[unresolved-import]
+    from workers import DurableObject as _DurableObject  # pragma: no cover
+    from workers import (  # pragma: no cover
         Response,
         WorkerEntrypoint,
     )
@@ -117,7 +117,7 @@ except ImportError:  # pragma: no cover — Pyodide flat-layout / validation pha
         # WorkerEntrypoint / Response / DurableObject came from `workers` above,
         # so handler registration always succeeds.
         _import_error = _tb.format_exc()
-        JwtValidationError = Exception  # ty:ignore[conflicting-declarations]
+        JwtValidationError = Exception
 
         def decode_jwt(*_a: object, **_k: object) -> None:
             return None
@@ -131,12 +131,12 @@ except ImportError:  # pragma: no cover — Pyodide flat-layout / validation pha
             typed_headers = (
                 {str(key): str(value) for key, value in headers.items()} if isinstance(headers, dict) else None
             )
-            return Response.json(payload, status=status, headers=typed_headers)
+            return Response.json(payload, status=status, headers=typed_headers)  # ty:ignore[invalid-argument-type]  # SDK types static .json() as Never; still supported at runtime
 
         try:
             from config import CloudflareConfig  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
         except Exception:
-            CloudflareConfig = object  # ty:ignore[conflicting-declarations]
+            CloudflareConfig = object
 
         try:
             from do.session_runtime import (  # ty:ignore[unresolved-import]
@@ -144,11 +144,11 @@ except ImportError:  # pragma: no cover — Pyodide flat-layout / validation pha
             )
         except Exception:
 
-            class SessionRuntime(_DurableObject):
+            class SessionRuntime(_DurableObject):  # ty:ignore[unsupported-base]  # base picked at import time (workers or object)
                 """Stub DO for validation phase — real impl loaded at runtime."""
 
                 async def fetch(self, _request):
-                    return Response.json({"error": "not initialized"}, status=503)  # ty:ignore[unresolved-attribute]
+                    return Response.json({"error": "not initialized"}, status=503)  # ty:ignore[unresolved-attribute, invalid-argument-type]
 
         def get_kv_session(*_a: object, **_k: object) -> None:
             return None
