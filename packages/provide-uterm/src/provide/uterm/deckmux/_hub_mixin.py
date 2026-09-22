@@ -29,12 +29,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-try:
-    from provide.uterm.deckmux._service import DeckMuxPresence
-
-    _HAS_DECKMUX = True
-except ImportError:  # pragma: no cover
-    _HAS_DECKMUX = False
+from provide.uterm.deckmux._service import DeckMuxPresence
 
 if TYPE_CHECKING:
     from provide.uterm.deckmux._presence import PresenceStore
