@@ -595,10 +595,10 @@ reason = "Trampoline-masked default-arg InterceptGate(timeout_action='forward'->
 mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_3"
 reason = "Trampoline-masked default-arg InterceptGate(timeout_action='forward'->'FORWARD'); dispatcher forwards the bound 'forward'. Real default tested."
 [[equivalent]]
-mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_16"
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_18"
 reason = "timeout_action validation tuple ('forward','drop')->('XXforwardXX','drop'); 'forward' is redundant with the else default 'forward', so an input of 'forward' yields 'forward' via the else — identical, unobservable."
 [[equivalent]]
-mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_17"
+mutant = "provide.uterm.tunnel.intercept.xǁInterceptGateǁ__init____mutmut_19"
 reason = "timeout_action validation tuple 'forward'->'FORWARD'; redundant with the else default 'forward' (input 'forward' falls through to the same 'forward') — unobservable."
 [[equivalent]]
 mutant = "provide.uterm.tunnel.intercept.x_parse_action_message__mutmut_4"
