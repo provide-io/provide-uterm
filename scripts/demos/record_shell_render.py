@@ -390,7 +390,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     steps: list[BrowserStep] = [
         # Navigate to operator view (WebSocket connects here)
         ("/app/operator/provide-shell", 1.0, None),
-        (lambda p: wait_for_terminal(p), 0.3, None),
+        (wait_for_terminal, 0.3, None),
         # Hide all chrome so xterm fills the viewport
         (_full_terminal, 0.3, None),
         # Send render command while browser WebSocket is connected

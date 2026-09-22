@@ -169,13 +169,13 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
     perspectives: dict[str, list[BrowserStep]] = {
         "viewer": [
             ("/app/session/provide-shell", 0.5, None),  # step 0: navigate
-            (lambda p: wait_for_terminal(p), 1.0, "viewer-01-initial.png"),  # step 1: initial state
+            (wait_for_terminal, 1.0, "viewer-01-initial.png"),  # step 1: initial state
             (None, 0.0, None),  # step 2: idle while operator acts
             (None, 2.0, "viewer-02-sees-operator-output.png"),  # step 3: operator output visible
         ],
         "operator": [
             ("/app/operator/provide-shell", 0.5, None),  # step 0: navigate
-            (lambda p: wait_for_terminal(p), 1.0, "operator-01-initial.png"),  # step 1: initial state
+            (wait_for_terminal, 1.0, "operator-01-initial.png"),  # step 1: initial state
             (operator_actions, 1.5, "operator-02-hijacked-and-typed.png"),  # step 2: take control + type
             (None, 0.5, "operator-03-result.png"),  # step 3: final state
         ],

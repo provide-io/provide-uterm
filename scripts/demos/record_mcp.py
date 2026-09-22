@@ -118,7 +118,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     steps: list[BrowserStep] = [
         ("/app/session/provide-shell", 0.5, None),
-        (lambda p: wait_for_terminal(p), 2.0, "01-session-mcp.png"),
+        (wait_for_terminal, 2.0, "01-session-mcp.png"),
         ("/api/health", 1.0, "02-api-health.png"),  # Shows server health with MCP info
         ("/api/sessions", 1.0, "03-sessions-list.png"),  # Shows sessions available to MCP
     ]

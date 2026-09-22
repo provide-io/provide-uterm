@@ -103,9 +103,9 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     steps: list[BrowserStep] = [
         ("/app/session/provide-shell", 0.0, None),
-        (lambda p: wait_for_terminal(p), 2.5, "01-pty-session.png"),
+        (wait_for_terminal, 2.5, "01-pty-session.png"),
         ("/app/operator/provide-shell", 0.0, None),
-        (lambda p: wait_for_terminal(p), 2.0, "02-pty-operator.png"),
+        (wait_for_terminal, 2.0, "02-pty-operator.png"),
     ]
     mp4_path = browser_record(base_url, steps, feat_dir)
     stop_server(server)

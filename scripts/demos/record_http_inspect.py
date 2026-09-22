@@ -149,7 +149,7 @@ def record(base_out: Path = BASE_OUT) -> dict[str, Path | None]:
 
     steps: list[BrowserStep] = [
         ("/app/session/provide-shell", 0.5, None),
-        (lambda p: wait_for_terminal(p), 2.0, "01-session-terminal.png"),
+        (wait_for_terminal, 2.0, "01-session-terminal.png"),
         ("/api/tunnels", 1.0, "02-tunnels-list.png"),  # Shows active tunnels
         ("/app/", 1.0, "03-dashboard.png"),
     ]

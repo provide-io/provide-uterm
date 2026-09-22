@@ -32,17 +32,17 @@ def _make_status(**overrides):
 class TestTimeseriesManager:
     def test_init_creates_dir(self, tmp_path):
         ts_dir = tmp_path / "metrics"
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(ts_dir))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(ts_dir))
         assert ts_dir.is_dir()
         assert mgr.samples_count == 0
         assert mgr.interval_s == 20
 
     def test_init_clamps_interval(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path), interval_s=0)
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path), interval_s=0)
         assert mgr.interval_s == 1
 
     def test_get_info(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         info = mgr.get_info()
         assert info["interval_seconds"] == 20
         assert info["samples"] == 0
@@ -59,21 +59,21 @@ class TestTimeseriesManager:
         assert rows[0]["total_agents"] == 5
 
     def test_read_tail_empty(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         assert mgr.read_tail(10) == []
 
     def test_read_tail_nonexistent(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         mgr.path = tmp_path / "nonexistent.jsonl"
         assert mgr.read_tail(10) == []
 
     def test_read_tail_empty_file(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         mgr.path.write_text("")
         assert mgr.read_tail(10) == []
 
     def test_read_tail_corrupt_lines(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         with mgr.path.open("w") as f:
             f.write("not json\n")
             f.write(json.dumps({"ts": 1, "total_agents": 1}) + "\n")
@@ -82,7 +82,7 @@ class TestTimeseriesManager:
         assert len(rows) == 1
 
     def test_read_tail_limits(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         with mgr.path.open("w") as f:
             for i in range(50):
                 f.write(json.dumps({"ts": i, "total_agents": 1, "total_turns": i}) + "\n")
@@ -91,7 +91,7 @@ class TestTimeseriesManager:
         assert rows[-1]["ts"] == 49
 
     def test_get_recent(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         status = _make_status()
         for _ in range(3):
             mgr.write_sample(status, reason="test")
@@ -99,20 +99,20 @@ class TestTimeseriesManager:
         assert len(rows) == 3
 
     def test_get_summary_no_plugin(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         result = mgr.get_summary(60)
         assert result["error"] == "no timeseries plugin configured"
 
     def test_get_summary_with_plugin(self, tmp_path):
         plugin = MagicMock()
         plugin.get_summary.return_value = {"window_minutes": 60, "rows": 10}
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path), plugin=plugin)
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path), plugin=plugin)
         result = mgr.get_summary(60)
         assert result["rows"] == 10
         plugin.get_summary.assert_called_once_with(mgr, 60)
 
     def test_build_row_no_plugin(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         status = _make_status()
         row = mgr._build_row(status, "test")
         assert row["reason"] == "test"
@@ -122,12 +122,12 @@ class TestTimeseriesManager:
     def test_build_row_with_plugin(self, tmp_path):
         plugin = MagicMock()
         plugin.build_row.return_value = {"custom": True}
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path), plugin=plugin)
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path), plugin=plugin)
         row = mgr._build_row(_make_status(), "test")
         assert row == {"custom": True}
 
     def test_write_sample_handles_error(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         # Make path read-only dir to cause write error
         mgr.path = tmp_path / "readonly" / "file.jsonl"
         # This should not raise
@@ -137,7 +137,7 @@ class TestTimeseriesManager:
 
     def test_write_sample_reuses_file_handle(self, tmp_path):
         """write_sample keeps file handle open across calls."""
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         mgr.write_sample(_make_status(), reason="first")
         fh1 = mgr._fh
         assert fh1 is not None and not fh1.closed
@@ -148,7 +148,7 @@ class TestTimeseriesManager:
 
     def test_close_fh_closes_handle(self, tmp_path):
         """_close_fh closes the persistent handle."""
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         mgr.write_sample(_make_status(), reason="test")
         assert mgr._fh is not None
         mgr._close_fh()
@@ -156,7 +156,7 @@ class TestTimeseriesManager:
 
     def test_rotate_closes_and_reopens_handle(self, tmp_path):
         """Rotation closes the old handle; next write opens a new one."""
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         mgr._max_bytes = 1  # force rotation on next write
         mgr.write_sample(_make_status(), reason="trigger-rotate")
         # Rotation closed the handle
@@ -170,7 +170,7 @@ class TestTimeseriesManager:
 
     @pytest.mark.asyncio
     async def test_loop_writes_startup(self, tmp_path):
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path), interval_s=1)
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path), interval_s=1)
         # Run loop until the startup sample lands (busy CI can exceed 0.1s).
         import asyncio
 
