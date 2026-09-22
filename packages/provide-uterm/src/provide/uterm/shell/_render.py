@@ -56,4 +56,3 @@ _nearest_256 = nearest_256
 _sgr_truecolor = sgr_truecolor
 _sgr_256 = sgr_256
 _sgr_16 = sgr_16
-_SGR_FN = SGR_FUNCTIONS
