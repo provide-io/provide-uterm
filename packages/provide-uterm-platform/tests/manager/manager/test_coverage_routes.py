@@ -216,9 +216,16 @@ class TestSpawnRouteCoverage:
         config = tmp_path / "test.yaml"
         config.write_text("worker_type: test_game\n")
         manager.broadcast_status = AsyncMock()
-        with patch.object(manager.agent_process_manager, "_spawn_process", side_effect=OSError("fail")):
+        with patch.object(
+            manager.agent_process_manager,
+            "_spawn_process",
+            side_effect=OSError(13, "Permission denied", "/opt/secret/bin/worker"),
+        ):
             resp = client.post(f"/swarm/spawn?config_path={config}")
         assert resp.status_code == 400
+        # The launch error (its path and errno) is logged, not returned.
+        assert resp.json() == {"error": "agent spawn failed; the manager log has the cause"}
+        assert "/opt/secret" not in resp.text
 
     def test_kill_all_with_failure(self, setup):
         client, manager, _ = setup

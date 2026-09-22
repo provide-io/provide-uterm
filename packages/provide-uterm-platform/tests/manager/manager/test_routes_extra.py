@@ -141,7 +141,39 @@ class TestSpawnRoute:
             json={"config_paths": ["bad.json"], "group_size": 1, "group_delay": 0},
         )
         assert resp.status_code == 400
-        assert "error" in resp.json()
+        # No sandbox is configured for this client, which is refused first.
+        assert resp.json() == {"error": "config dir is not configured; refusing to spawn from an unrestricted path"}
+
+    def test_spawn_outside_the_sandbox_does_not_reveal_where_it_is(self, client, tmp_path, monkeypatch):
+        """The refusal names the rule, not the sandbox's resolved location."""
+        sandbox = tmp_path / "sandbox-location-xyz"
+        sandbox.mkdir()
+        monkeypatch.setenv("UTERM_CONFIG_DIR", str(sandbox))
+        outside = tmp_path / "elsewhere.yaml"
+        outside.write_text("worker_type: x\n")
+        for resp in (
+            client.post(f"/swarm/spawn?config_path={outside}"),
+            client.post(
+                "/swarm/spawn-batch",
+                json={"config_paths": [str(outside)], "group_size": 1, "group_delay": 0},
+            ),
+        ):
+            assert resp.status_code == 400
+            assert resp.json() == {"error": "config_path is outside the spawn config dir"}
+            assert "sandbox-location-xyz" not in resp.text
+
+    def test_spawn_of_a_non_yaml_path_names_the_rule(self, client, tmp_path, monkeypatch):
+        monkeypatch.setenv("UTERM_CONFIG_DIR", str(tmp_path))
+        resp = client.post(f"/swarm/spawn?config_path={tmp_path / 'c.json'}")
+        assert resp.status_code == 400
+        assert resp.json() == {"error": "config_path must be a .yaml or .yml file"}
+
+    def test_rejection_keeps_the_detail_for_the_log(self, tmp_path):
+        from provide.uterm.manager.routes.spawn import ConfigPathRejectedError
+
+        with pytest.raises(ConfigPathRejectedError, match="outside config dir") as info:
+            _validate_config_path(str(tmp_path / "x.yaml"), config_dir_env=str(tmp_path / "base"))
+        assert info.value.public_message == "config_path is outside the spawn config dir"
 
 
 class TestKillAgentWithProcess:

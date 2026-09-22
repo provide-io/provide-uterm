@@ -43,6 +43,25 @@ def _manager_config_dir() -> str:
     return ManagerConfig().spawn_config_dir.strip()
 
 
+# What a failed single spawn tells the caller. The cause — max agents, a
+# missing config, a policy refusal, or the OSError of the process launch (with
+# its paths and errno) — goes to the manager log, not the response.
+SPAWN_FAILED_MESSAGE = "agent spawn failed; the manager log has the cause"
+
+
+class ConfigPathRejectedError(ValueError):
+    """A spawn ``config_path`` the sandbox refuses.
+
+    ``str()`` keeps the full detail (including the sandbox's resolved location)
+    for logs and tests; :attr:`public_message` is the part written for the
+    caller, which names the rule broken but not where the sandbox lives.
+    """
+
+    def __init__(self, detail: str, public_message: str) -> None:
+        super().__init__(detail)
+        self.public_message = public_message
+
+
 def _validate_config_path(config_path: str, *, config_dir_env: str = "") -> Path:
     """Validate *config_path* is a safe YAML file inside the spawn sandbox.
 
@@ -55,13 +74,18 @@ def _validate_config_path(config_path: str, *, config_dir_env: str = "") -> Path
     """
     base_raw = config_dir_env or os.environ.get(CONFIG_DIR_ENV_VAR, "").strip() or _manager_config_dir()
     if not base_raw:
-        raise ValueError("config dir is not configured; refusing to spawn from an unrestricted path")
+        msg = "config dir is not configured; refusing to spawn from an unrestricted path"
+        raise ConfigPathRejectedError(msg, msg)
     base = Path(os.path.realpath(base_raw))
     resolved = Path(os.path.realpath(config_path))
     if resolved.suffix.lower() not in (".yaml", ".yml"):
-        raise ValueError(f"config_path must be a .yaml or .yml file: {config_path}")
+        raise ConfigPathRejectedError(
+            f"config_path must be a .yaml or .yml file: {config_path}", "config_path must be a .yaml or .yml file"
+        )
     if not resolved.is_relative_to(base):
-        raise ValueError(f"config_path is outside config dir ({base}): {config_path}")
+        raise ConfigPathRejectedError(
+            f"config_path is outside config dir ({base}): {config_path}", "config_path is outside the spawn config dir"
+        )
     return resolved
 
 
@@ -69,8 +93,8 @@ def _validate_config_path(config_path: str, *, config_dir_env: str = "") -> Path
 async def spawn(config_path: str, agent_id: str = "", manager: AgentManager = Depends(require_manager)) -> Any:  # noqa: B008
     try:
         _validate_config_path(config_path, config_dir_env=manager.config.spawn_config_dir)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+    except ConfigPathRejectedError as e:
+        return JSONResponse({"error": e.public_message}, status_code=400)
     try:
         if not agent_id:
             agent_id = manager.agent_process_manager.allocate_agent_id()
@@ -79,7 +103,8 @@ async def spawn(config_path: str, agent_id: str = "", manager: AgentManager = De
         agent_id = await manager.spawn_agent(config_path, agent_id)
         return {"agent_id": agent_id, "pid": manager.agents[agent_id].pid}
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=400)
+        logger.warning("swarm_spawn_failed", config_path=config_path, agent_id=agent_id, error=str(e))
+        return JSONResponse({"error": SPAWN_FAILED_MESSAGE}, status_code=400)
 
 
 @router.post("/swarm/spawn-batch")
@@ -87,8 +112,8 @@ async def spawn_batch(request: SpawnBatchRequest, manager: AgentManager = Depend
     for path in request.config_paths:
         try:
             _validate_config_path(path, config_dir_env=manager.config.spawn_config_dir)
-        except ValueError as e:
-            return JSONResponse({"error": str(e)}, status_code=400)
+        except ConfigPathRejectedError as e:
+            return JSONResponse({"error": e.public_message}, status_code=400)
     total = len(request.config_paths)
     groups = (total + request.group_size - 1) // request.group_size
 
