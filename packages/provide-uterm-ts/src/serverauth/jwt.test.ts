@@ -84,18 +84,6 @@ function headers(values: Record<string, string>): { get(name: string): string | 
   return { get: (name) => values[name] ?? null };
 }
 
-/**
- * The one vector whose refusal *message* this port cannot reproduce.
- *
- * The reference's text is CPython's codec error — `'utf-8' codec can't decode
- * byte 0x9e in position 0: invalid start byte` — reached because
- * `json.loads` is handed bytes. Reproducing it would mean porting CPython's
- * UTF-8 error taxonomy for a string that never leaves the process: it is
- * logged, never served. The refusal *kind* is what the wire depends on, and
- * that is asserted for this vector like every other.
- */
-const CODEC_MESSAGE_VECTOR = "not_a_token";
-
 describe("the token vectors the reference recorded", () => {
   it("covers every vector, so a corpus that shrank is visible", () => {
     expect(CORPUS.vectors.length).toBe(24);
@@ -131,14 +119,6 @@ describe("the token vectors the reference recorded", () => {
       }
       expect(thrown).toBeInstanceOf(JwtError);
       expect((thrown as JwtError).code).toBe(expected.error_type);
-      if (vector.name === CODEC_MESSAGE_VECTOR) {
-        // The divergence, stated as an assertion rather than a comment: the
-        // prefix is the reference's, the tail is this runtime's decoder.
-        expect(expected.error).toMatch(/^Invalid header string: /);
-        expect((thrown as JwtError).message).toMatch(/^Invalid header string: /);
-        expect((thrown as JwtError).message).not.toBe(expected.error);
-        return;
-      }
       expect((thrown as JwtError).message).toBe(expected.error);
     });
   }
@@ -229,6 +209,23 @@ describe("the shapes only a hand-built token has", () => {
       jwt_public_key_pem: "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----",
     };
     expect(() => principalFromJwtToken(token, settings, now)).toThrow(JwtError);
+  });
+
+  it("refuses a canonical header that is not JSON, in the reference's wording", () => {
+    // `bm90` is canonical base64url for `not`, so it passes the segment check
+    // and fails at the parse. The reference's tail is CPython's json error text,
+    // which no vector records because this runtime's parser words it differently;
+    // the prefix and the refusal kind are what the two share.
+    const token = `bm90.${Buffer.from("{}", "utf8").toString("base64url")}.AAAA`;
+    let thrown: unknown;
+    try {
+      principalFromJwtToken(token, SETTINGS, now);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(JwtError);
+    expect((thrown as JwtError).code).toBe("DecodeError");
+    expect((thrown as JwtError).message).toMatch(/^Invalid header string: /);
   });
 });
 
