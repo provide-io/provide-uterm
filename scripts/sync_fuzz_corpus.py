@@ -13,10 +13,8 @@ def sync_corpus():
     print(f"Fuzz corpus directory ready at: {corpus_dir}")
     print("Implement specific OSS-Fuzz download logic here if needed.")
 
-    # Example logic to gather .bin crashes from local runs if they exist
-    # for crash_file in glob.glob("**/crash-*.bin", recursive=True):
-    #     if "fuzz_corpus" not in crash_file:
-    #         shutil.copy(crash_file, corpus_dir)
+    # A local sweep could later copy any crash-*.bin files found outside
+    # tests/fuzz_corpus/ into corpus_dir.
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from provide.uterm.annotation._models import DetectionRule
 from provide.uterm.annotation._rules import BUILTIN_RULES
 
 # ---------------------------------------------------------------------------
@@ -15,12 +16,12 @@ from provide.uterm.annotation._rules import BUILTIN_RULES
 # ---------------------------------------------------------------------------
 
 
-def _rule(rule_id: str):  # type: ignore[return]
+def _rule(rule_id: str) -> DetectionRule:
     """Return the DetectionRule with the given rule_id, failing the test if absent."""
-    for r in BUILTIN_RULES:
-        if r.rule_id == rule_id:
-            return r
-    pytest.fail(f"Rule {rule_id!r} not found in BUILTIN_RULES")
+    rule = next((r for r in BUILTIN_RULES if r.rule_id == rule_id), None)
+    if rule is None:
+        pytest.fail(f"Rule {rule_id!r} not found in BUILTIN_RULES")
+    return rule
 
 
 def _matches(rule_id: str, text: str) -> bool:

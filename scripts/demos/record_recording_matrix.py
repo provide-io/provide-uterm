@@ -88,8 +88,6 @@ def record_go(out: Path) -> Path | None:
 
 def record_csharp(out: Path) -> Path | None:
     proj = REPO_ROOT / "packages" / "provide-uterm-csharp" / "cmd" / "RecordingDemo" / "RecordingDemo.csproj"
-    # Prefer DOTNET_ROOT-aware `dotnet` on PATH.
-    cmd = f"dotnet run --project {shlex.quote(str(proj))} -c Release --no-restore 2>/dev/null || dotnet run --project {shlex.quote(str(proj))} -c Release"
     # Build first so cast is clean.
     try:
         subprocess.run(
@@ -101,6 +99,7 @@ def record_csharp(out: Path) -> Path | None:
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
         warn(f"dotnet build failed: {exc}")
         return None
+    # Prefer DOTNET_ROOT-aware `dotnet` on PATH; the build above means --no-build is safe.
     cmd = f"dotnet run --project {shlex.quote(str(proj))} -c Release --no-build"
     return _asciinema_cmd(cmd, out)
 
