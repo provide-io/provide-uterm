@@ -21,6 +21,9 @@ namespace Provide.Uterm.Tests;
 /// </summary>
 public sealed partial class ServerIntegrationControlPlaneRestTests
 {
+    // Well under half of macOS's default listen-queue limit (somaxconn 128).
+    private const int BurstConnections = 16;
+
     private static int FreePort()
     {
         var l = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
@@ -211,12 +214,24 @@ public sealed partial class ServerIntegrationControlPlaneRestTests
     [Fact]
     public async Task Fanout_ConcurrentFirstUseSharesOneControllerAndStore()
     {
-        var (server, http, _) = await StartServerAsync();
+        var (server, http, token) = await StartServerAsync();
+        // 64 concurrent requests, but over at most BurstConnections sockets. An unbounded
+        // client opened one connection per request, all at once. Under load Kestrel falls
+        // behind accepting them (its listen queue was sampled holding up to 63 of them)
+        // and the kernel resets a connection after its handshake, so a request failed
+        // with "Connection reset by peer" before the server ever saw it. What this test proves is concurrent first
+        // use of the fan-out controller and store, which needs concurrent requests, not
+        // concurrent TCP handshakes.
+        using var burst = new HttpClient(new SocketsHttpHandler { MaxConnectionsPerServer = BurstConnections })
+        {
+            BaseAddress = http.BaseAddress,
+        };
+        burst.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + token);
         await using (server)
         using (http)
         {
             const int requests = 64;
-            var creates = Enumerable.Range(0, requests).Select(index => http.PostAsync(
+            var creates = Enumerable.Range(0, requests).Select(index => burst.PostAsync(
                 "/api/fanout/groups",
                 new StringContent(
                     $$"""{"name":"g{{index}}","worker_ids":["demo"]}""",
