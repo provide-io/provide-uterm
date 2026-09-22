@@ -274,7 +274,6 @@ class _FetchMixin:
                 self.worker_id,
                 auth_type,
             )
-            _principal, auth_error = None, None
         else:
             _principal, auth_error = await self.resolve_principal(request)
             if auth_error is not None:

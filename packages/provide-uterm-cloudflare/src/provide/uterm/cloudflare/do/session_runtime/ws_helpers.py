@@ -132,7 +132,8 @@ class _WsHelperMixin:
             if isinstance(existing, str) and existing:
                 return existing
         except Exception:
-            existing = None
+            # A socket proxy that rejects attribute reads just gets a fresh key.
+            pass
 
         key = f"{time.time_ns()}_{secrets.token_hex(4)}"
         with contextlib.suppress(Exception):
