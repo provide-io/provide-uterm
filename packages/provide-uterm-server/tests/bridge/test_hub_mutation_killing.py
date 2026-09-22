@@ -65,9 +65,6 @@ class TestForceReleaseHijackControlMsg:
         worker_ws = AsyncMock()
         sent_msgs: list[dict[str, Any]] = []
 
-        async def _capture(msg: dict[str, Any]) -> None:
-            sent_msgs.append(msg)
-
         worker_ws.send_text = AsyncMock(side_effect=lambda s: sent_msgs.append(decode_control_payload(s)))
 
         async with hub._lock:

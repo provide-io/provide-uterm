@@ -555,7 +555,7 @@ def test_ws_route_connect_time_snapshot_redacted_via_route() -> None:
 
     with connect_test_ws(client, "/ws/worker/w-int/term") as worker:
         # Drain the initial snapshot_req from the worker
-        _snap_req = worker.receive_json()
+        worker.receive_json()
 
         # Worker sends a snapshot with a secret in screen
         worker.send_json(
@@ -600,7 +600,7 @@ def test_ws_route_connect_time_snapshot_no_gate_unchanged_via_route() -> None:
     # Empty-rules gate: _gate is not None, but rules=[] so _rules is falsy → no redaction
 
     with connect_test_ws(client, "/ws/worker/w-nr/term") as worker:
-        _snap_req = worker.receive_json()
+        worker.receive_json()
 
         worker.send_json(
             {
