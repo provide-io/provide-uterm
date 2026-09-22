@@ -78,8 +78,6 @@ _CAST: list[dict[str, str]] = [
     {"name": "sentinel", "display": "Sentinel", "role": "viewer"},
 ]
 
-_HERO_NAMES = ["operator", "falcon_finn", "heron_hugo"]
-
 # ---------------------------------------------------------------------------
 # record()
 # ---------------------------------------------------------------------------
