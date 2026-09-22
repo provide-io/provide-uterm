@@ -77,6 +77,8 @@ jobs:
           # than the default "code-scanning" pack. Includes maintainability
           # checks alongside security ones.
           queries: security-and-quality
+          # Query filters (with the reason for each) live in the config file.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1

@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# CodeQL configuration, read by .github/workflows/codeql.yml.
+#
+# py/ineffectual-statement is excluded. In this repository it fired on ~400
+# lines and every one was a false positive: the `...` body of a Protocol
+# method, an @overload, or a TYPE_CHECKING-only stub, and bare `await task`
+# lines whose whole purpose is to wait and re-raise. A genuinely useless
+# expression is still caught: ruff's B018 (flake8-bugbear, enforced in the
+# quality gate) flags the same mistake without the stub false positives.
+query-filters:
+  - exclude:
+      id: py/ineffectual-statement
