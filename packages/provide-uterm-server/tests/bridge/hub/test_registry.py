@@ -49,15 +49,18 @@ def test_registry_put_get_pop_roundtrip() -> None:
     popped = r.pop("w1")
     assert popped is st
     assert r.get("w1") is None
-    assert r.pop("w1") is None  # absent -> None
+    absent = r.pop("w1")
+    assert absent is None  # absent -> None
 
 
 def test_registry_setdefault_keeps_existing() -> None:
     r = WorkerRegistry()
     first = _state()
     second = _state()
-    assert r.setdefault("w1", first) is first
-    assert r.setdefault("w1", second) is first  # not replaced
+    kept = r.setdefault("w1", first)
+    assert kept is first
+    kept_again = r.setdefault("w1", second)
+    assert kept_again is first  # not replaced
     assert r.get("w1") is first
 
 
