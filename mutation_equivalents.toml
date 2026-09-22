@@ -1411,3 +1411,12 @@ mutant = "provide.uterm.server.bridge.routes.rest_gui.x__str_field__mutmut_6"
 reason = """body.get(key, default) -> body.get(key). Same substitution as
 mutmut_4, reached via the implicit None default of dict.get; the else branch
 returns default."""
+
+[[equivalent]]
+mutant = "provide.uterm.io.xǁInputSenderǁsend_input__mutmut_13"
+reason = """`DEFAULT_INPUT_TYPE if input_type is None else input_type` ->
+`... if (input_type is None) and False else input_type` (mutmut 3.8 ternary
+condition). The mutant keeps None where the original substitutes "multi_key".
+effective_input_type is read only by `== "single_key"` and `== "any_key"`; both
+None and "multi_key" fail both tests and take the same else branch
+(send keys + "\\r"). No other read exists, so every input behaves identically."""
