@@ -92,7 +92,6 @@ class TestRebuildRawStream:
 class TestRebuildRawStreamBlankLines:
     def test_skips_blank_lines(self, tmp_path: Path) -> None:
         import base64
-        import json
 
         log = tmp_path / "session.jsonl"
         log.write_text(
@@ -108,7 +107,6 @@ class TestRebuildRawStreamBlankLines:
 
 class TestReplayLog:
     def test_replay_log_renders_screens(self, tmp_path: Path, capsys) -> None:
-        import json
 
         from provide.uterm.replay.viewer import replay_log
 
@@ -124,7 +122,6 @@ class TestReplayLog:
         assert "Hello World" in captured.out or "Second Frame" in captured.out
 
     def test_replay_log_skips_non_matching_events(self, tmp_path: Path, capsys) -> None:
-        import json
 
         from provide.uterm.replay.viewer import replay_log
 
@@ -135,7 +132,6 @@ class TestReplayLog:
         assert "Should Not Appear" not in captured.out
 
     def test_replay_log_step_mode(self, tmp_path: Path, monkeypatch) -> None:
-        import json
 
         from provide.uterm.replay.viewer import replay_log
 
@@ -146,7 +142,6 @@ class TestReplayLog:
         replay_log(log, step=True)
 
     def test_replay_log_skips_records_without_screen(self, tmp_path: Path, capsys) -> None:
-        import json
 
         from provide.uterm.replay.viewer import replay_log
 
@@ -157,7 +152,6 @@ class TestReplayLog:
 
     def test_replay_log_skips_blank_lines(self, tmp_path: Path, capsys) -> None:
         """Blank lines in the log file are skipped (covers line 45)."""
-        import json
 
         from provide.uterm.replay.viewer import replay_log
 
@@ -173,7 +167,6 @@ class TestReplayLog:
 
     def test_replay_log_sleeps_between_frames(self, tmp_path: Path, monkeypatch, capsys) -> None:
         """time.sleep is called when delta > 0 between frames (covers line 56)."""
-        import json
 
         from provide.uterm.replay.viewer import replay_log
 

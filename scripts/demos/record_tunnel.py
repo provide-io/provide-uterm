@@ -248,8 +248,6 @@ def _strip_to_path(url: str) -> str:
 
 
 if __name__ == "__main__":
-    import asyncio
-
     if "--run-demo" in sys.argv:
         asyncio.run(run_terminal_demo())
     else:
