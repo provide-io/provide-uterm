@@ -30,6 +30,20 @@ if TYPE_CHECKING:
     from provide.uterm.server.models import SessionDefinition
 
 
+class FanOutGroupRejectedError(ValueError):
+    """A group :meth:`FanOutController.create_group` refuses to create.
+
+    Its message is written for the caller and is safe to return to it, which
+    is what distinguishes it from any other ``ValueError`` that reaches the
+    route (from a pluggable store, say) — those are server faults and are not
+    echoed.
+    """
+
+    def __init__(self, public_message: str) -> None:
+        super().__init__(public_message)
+        self.public_message = public_message
+
+
 class FanOutController:
     """Orchestrates fan-out groups and broadcasts input to multiple sessions."""
 
@@ -90,11 +104,11 @@ class FanOutController:
         """Validate and persist a new fan-out group. Returns the group_id."""
         if len(group.worker_ids) > self._max_group_size:
             msg = f"Group size {len(group.worker_ids)} exceeds max {self._max_group_size}"
-            raise ValueError(msg)
+            raise FanOutGroupRejectedError(msg)
         # error_pattern is caller-supplied and re.search'd against every output
         # delta — an unbounded or pathological pattern is a ReDoS vector. Bound
-        # its length and validate it compiles at creation time (PromptRegexError
-        # is a ValueError, so the REST route maps it to a 400) rather than
+        # its length and validate it compiles at creation time (the REST route
+        # maps PromptRegexError to a 400 carrying its message) rather than
         # letting it reach the per-delta match path.
         compile_expect_regex(group.error_pattern)
         group.created_by = self._principal_id(principal)

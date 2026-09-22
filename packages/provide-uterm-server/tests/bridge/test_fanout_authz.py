@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from provide.uterm.server import create_server_app, default_server_config
-from provide.uterm.server.bridge.fanout._controller import FanOutController
+from provide.uterm.server.bridge.fanout._controller import FanOutController, FanOutGroupRejectedError
 from provide.uterm.server.bridge.fanout._models import FanOutGroup
 from provide.uterm.server.bridge.fanout._routes import _require_global_admin
 from provide.uterm.server.bridge.identity import Principal
@@ -210,6 +210,47 @@ class TestCreateGroupExceedsMaxSize:
         )
         assert resp.status_code == 400
         assert "exceeds max" in resp.json()["error"].lower()
+
+
+class TestCreateGroupErrorBodies:
+    """Only refusals written for the caller are echoed; other errors are not."""
+
+    def test_an_oversized_group_names_the_limit(self) -> None:
+        client = TestClient(_make_app(allow_unknown_members=True))
+        resp = client.post(
+            "/api/fanout/groups",
+            json={"name": "big", "worker_ids": [f"w{i}" for i in range(51)]},
+        )
+        assert resp.status_code == 400
+        assert resp.json() == {"error": "Group size 51 exceeds max 50"}
+
+    def test_an_unusable_error_pattern_is_a_400_that_says_why(self) -> None:
+        client = TestClient(_make_app(allow_unknown_members=True))
+        resp = client.post(
+            "/api/fanout/groups",
+            json={"name": "bad-re", "worker_ids": ["w1"], "error_pattern": "("},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"].startswith("invalid expect_regex:")
+
+    def test_any_other_value_error_is_not_echoed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A ValueError from elsewhere (a pluggable store, say) is a server fault.
+        It used to be returned verbatim as a 400."""
+        internal = "store backend /var/lib/uterm/fanout.db is locked by pid 4242"
+
+        async def _explode(self: Any, group: Any, *, principal: Any) -> str:
+            raise ValueError(internal)
+
+        monkeypatch.setattr(FanOutController, "create_group", _explode)
+        client = TestClient(_make_app(allow_unknown_members=True), raise_server_exceptions=False)
+        resp = client.post("/api/fanout/groups", json={"name": "g", "worker_ids": ["w1"]})
+        assert resp.status_code == 500
+        assert "fanout.db" not in resp.text
+
+    def test_the_rejection_carries_its_public_message(self) -> None:
+        exc = FanOutGroupRejectedError("Group size 9 exceeds max 1")
+        assert isinstance(exc, ValueError)
+        assert exc.public_message == str(exc) == "Group size 9 exceeds max 1"
 
 
 class TestGrantAccess:

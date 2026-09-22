@@ -27,7 +27,9 @@ except ImportError as _e:  # pragma: no cover
 
 from provide.telemetry import get_logger
 from provide.uterm.server.audit import audit_event
+from provide.uterm.server.bridge.fanout._controller import FanOutGroupRejectedError
 from provide.uterm.server.bridge.fanout._models import FanOutGroup
+from provide.uterm.server.bridge.rest_helpers import PromptRegexError
 
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.fanout._controller import FanOutController
@@ -116,10 +118,15 @@ def register_fanout_routes(hub: TermHub, router: APIRouter) -> None:
             max_response_ms=max_response_ms,
             divergence_threshold=divergence_threshold,
         )
+        # Only the two refusals written for the caller are echoed. Any other
+        # ValueError (a pluggable store's, say) is a server fault: it propagates
+        # to the framework's generic 500 and is logged there, not returned.
         try:
             group_id = await ctrl.create_group(group, principal=principal)
-        except ValueError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=400)
+        except FanOutGroupRejectedError as exc:
+            return JSONResponse({"error": exc.public_message}, status_code=400)
+        except PromptRegexError as exc:
+            return JSONResponse({"error": exc.message}, status_code=400)
         audit_event("fanout.create_group", principal=principal.subject_id, detail={"group_id": group_id, "name": name})
         logger.info("fanout_group_created group_id=%s principal=%s", group_id, principal.subject_id)
         return {"group_id": group_id, "name": name, "session_count": len(worker_ids)}

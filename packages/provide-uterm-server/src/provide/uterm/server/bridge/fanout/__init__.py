@@ -7,12 +7,13 @@
 
 from __future__ import annotations
 
-from provide.uterm.server.bridge.fanout._controller import FanOutController
+from provide.uterm.server.bridge.fanout._controller import FanOutController, FanOutGroupRejectedError
 from provide.uterm.server.bridge.fanout._models import FanOutGroup, FanOutResult, SessionFanOutResult
 from provide.uterm.server.bridge.fanout._store import FanOutStore, InMemoryFanOutStore
 
 __all__ = [
     "FanOutController",
+    "FanOutGroupRejectedError",
     "FanOutGroup",
     "FanOutResult",
     "FanOutStore",
