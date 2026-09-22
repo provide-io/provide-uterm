@@ -106,7 +106,7 @@ repos:
         language: python
         language_version: python3.11
         additional_dependencies:
-          - ty==0.0.19
+          - ty==0.0.83
           - pamela>=1.2
           - fastapi>=0.110
           - httpx2>=2.10
