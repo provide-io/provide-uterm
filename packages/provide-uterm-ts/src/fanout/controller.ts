@@ -117,6 +117,21 @@ interface Answered {
   output: string;
 }
 
+/**
+ * A group {@link FanOutController.createGroup} refuses to create.
+ *
+ * Port of the reference's `FanOutGroupRejectedError`. Its message is written
+ * for the caller, which is what lets the create route return it: any other
+ * error reaching the route (a store's, say) is a server fault and is not
+ * echoed.
+ */
+export class FanOutGroupRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FanOutGroupRejectedError";
+  }
+}
+
 /** Orchestrates fan-out groups and broadcast input. */
 export class FanOutController {
   readonly #hub: FanOutControllerHub;
@@ -156,7 +171,7 @@ export class FanOutController {
    * The creator comes from the authenticated principal rather than the
    * submitted record — otherwise anyone could create groups owned by anyone.
    *
-   * @throws {RangeError} When the group exceeds the size cap. Every member is
+   * @throws {FanOutGroupRejectedError} When the group exceeds the size cap. Every member is
    *   a session one keystroke drives, so the cap is what stops a single
    *   request reaching the whole estate.
    * @throws {PromptRegexError} When the error pattern is unusable. It is
@@ -166,7 +181,7 @@ export class FanOutController {
    */
   async createGroup(group: FanOutGroup, principal: string): Promise<string> {
     if (group.workerIds.length > this.#maxGroupSize) {
-      throw new RangeError(`Group size ${group.workerIds.length} exceeds max ${this.#maxGroupSize}`);
+      throw new FanOutGroupRejectedError(`Group size ${group.workerIds.length} exceeds max ${this.#maxGroupSize}`);
     }
     compileExpectRegex(group.errorPattern);
     group.createdBy = principal;
