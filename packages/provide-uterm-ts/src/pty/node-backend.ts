@@ -19,6 +19,19 @@ import type { PtyBackend } from "./connector.ts";
 export const QUEUE_CAP = 1 << 20;
 
 /** What to run, and how. */
+/**
+ * Append `bytes` to `queue`, keeping at most the newest `cap` bytes.
+ *
+ * Oldest first: what a viewer wants is the newest output, and dropping the
+ * newest would hide the thing that just went wrong.
+ */
+export function appendCapped(queue: Uint8Array, bytes: Uint8Array, cap: number = QUEUE_CAP): Uint8Array<ArrayBuffer> {
+  const combined = new Uint8Array(queue.length + bytes.length);
+  combined.set(queue);
+  combined.set(bytes, queue.length);
+  return combined.length > cap ? combined.slice(-cap) : combined;
+}
+
 export interface SpawnOptions {
   command: string;
   args?: readonly string[];
@@ -52,13 +65,7 @@ export async function spawnNodePty(options: SpawnOptions): Promise<PtyBackend & 
   child.onData((chunk) => {
     // node-pty hands over a string it decoded itself; the connector decodes,
     // so this goes back to bytes rather than being decoded twice.
-    const bytes = Buffer.from(chunk, "utf8");
-    const combined = new Uint8Array(queue.length + bytes.length);
-    combined.set(queue);
-    combined.set(bytes, queue.length);
-    // Oldest first: what a viewer wants is the newest output, and dropping the
-    // newest would hide the thing that just went wrong.
-    queue = combined.length > QUEUE_CAP ? combined.slice(-QUEUE_CAP) : combined;
+    queue = appendCapped(queue, Buffer.from(chunk, "utf8"));
   });
 
   child.onExit(() => {

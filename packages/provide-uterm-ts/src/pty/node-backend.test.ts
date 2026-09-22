@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { PtyConnector, QUEUE_CAP, spawnNodePty } from "./index.ts";
+import { appendCapped, PtyConnector, QUEUE_CAP, spawnNodePty } from "./index.ts";
 
 /** Poll until `predicate` holds, or give up. A real child takes real time. */
 async function until(predicate: () => boolean, attempts = 200): Promise<boolean> {
@@ -184,10 +184,34 @@ describe("a real pseudo-terminal", () => {
       args: ["-c", "yes a | head -c 2097152"],
     });
     await until(() => !backend.isAlive());
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // node-pty can report the exit before it has delivered every chunk, so how
+    // much has arrived by now is timing, not behaviour. What this proves is the
+    // bound on a real child; the discard itself is pinned by the cases below.
     const kept = backend.read() ?? new Uint8Array();
     await backend.close();
     expect(kept.length).toBeLessThanOrEqual(QUEUE_CAP);
     expect(kept.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the output queue's cap", () => {
+  const bytes = (...values: number[]) => Uint8Array.from(values);
+
+  it("keeps everything while under the cap", () => {
+    expect([...appendCapped(bytes(1, 2), bytes(3), 4)]).toEqual([1, 2, 3]);
+  });
+
+  it("keeps everything at exactly the cap", () => {
+    expect([...appendCapped(bytes(1, 2), bytes(3, 4), 4)]).toEqual([1, 2, 3, 4]);
+  });
+
+  it("drops the oldest bytes once over the cap", () => {
+    expect([...appendCapped(bytes(1, 2, 3), bytes(4, 5, 6), 4)]).toEqual([3, 4, 5, 6]);
+  });
+
+  it("caps at QUEUE_CAP by default", () => {
+    const kept = appendCapped(new Uint8Array(QUEUE_CAP), bytes(7));
+    expect(kept.length).toBe(QUEUE_CAP);
+    expect(kept[QUEUE_CAP - 1]).toBe(7);
   });
 });
