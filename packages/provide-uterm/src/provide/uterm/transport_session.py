@@ -385,6 +385,7 @@ class TransportSession:
             try:
                 await asyncio.wait_for(notifier.wait(), timeout=remaining)
             except TimeoutError:
+                # Timed out waiting for this wake-up; the loop re-checks the deadline and the condition.
                 pass
 
     # ── Internal ──────────────────────────────────────────────────────────
@@ -545,6 +546,7 @@ class TransportSession:
                         bytes_total=self._bytes_total,
                     )
         except asyncio.CancelledError:
+            # Cancellation is the normal shutdown path for the read loop; nothing to report.
             pass
         except TransportClosedError as exc:
             self._close_info = exc.close

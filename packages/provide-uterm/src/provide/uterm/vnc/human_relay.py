@@ -50,6 +50,7 @@ def _unblock_fd_stream(stream: BinaryIO) -> None:
         try:
             close()
         except OSError:
+            # Best-effort close to unblock the peer thread; an already-closed stream is fine.
             pass
 
 
