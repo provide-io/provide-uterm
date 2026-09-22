@@ -4,6 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
+import { loadCloseCases, vectorCode } from "../testing/close-vectors.ts";
 import { closeFromException, TransportClose, TransportClosedError, TransportConnectionError } from "./index.ts";
 
 describe("the typed close", () => {
@@ -25,22 +26,14 @@ describe("the typed close", () => {
     expect(error.cause).toBe(cause);
   });
 
-  it.each([
-    [new TransportClose("remote", { code: 1001, reason: "going away" }), "remote close 1001 going away"],
-    [new TransportClose("remote"), "remote close"],
-    [
-      new TransportClose("unknown", { detail: "ConnectionResetError: reset" }),
-      "unknown close (ConnectionResetError: reset)",
-    ],
-    [new TransportClose("local", { code: 1000 }), "local close 1000"],
-    [new TransportClose("local", { code: 0 }), "local close 0"],
-    [new TransportClose("unknown", { reason: "injected disconnect" }), "unknown close injected disconnect"],
-    [
-      new TransportClose("remote", { code: 1006, reason: "abnormal", detail: "received 1006" }),
-      "remote close 1006 abnormal (received 1006)",
-    ],
-  ])("summarises %o as %s", (close, summary) => {
-    expect(close.summary()).toBe(summary);
+  // The shared vectors: every code/reason/detail combination for every initiator.
+  it.each(loadCloseCases().summary)("summarises as $summary", (vector) => {
+    const close = new TransportClose(vector.initiator, {
+      code: vectorCode(vector.code),
+      reason: vector.reason,
+      detail: vector.detail,
+    });
+    expect(close.summary()).toBe(vector.summary);
   });
 
   it("defaults to no code, reason or detail", () => {

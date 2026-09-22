@@ -11,9 +11,20 @@
  * a telnet socket knows whether the peer sent EOF, reset the connection, or
  * whether this end gave up on it. These pin that each transport passes that on
  * as a `TransportClosedError` instead of flattening it into a message.
+ *
+ * The cases are `close_cases` from `spec/behavior_vectors.json`, shared with
+ * the Python, Go and C# suites; the tests after them are this port's own.
  */
 
 import { describe, expect, it } from "vitest";
+import {
+  type CloseFrameVector,
+  type EventCase,
+  type ExpectedClose,
+  loadCloseCases,
+  vectorCode,
+  type WebSocketCase,
+} from "../testing/close-vectors.ts";
 import {
   ChaosTransport,
   type ConnectionTransport,
@@ -24,6 +35,7 @@ import {
   TELNET_MAX_RX_BUFFER,
   type TelnetSocket,
   TelnetTransport,
+  type TransportClose,
   TransportClosedError,
   TransportConnectionError,
   WebSocketClosedError,
@@ -67,59 +79,52 @@ async function rejection(operation: Promise<unknown>): Promise<unknown> {
 
 const frame = (code: number, reason: string): WebSocketCloseFrame => ({ code, reason });
 
+const CLOSE_CASES = loadCloseCases();
+
+/** The close frames a vector exchanged, as the socket layer reports them. */
+function closedBy(vector: WebSocketCase): WebSocketClosedError {
+  const toFrame = (value: CloseFrameVector | null) => (value === null ? undefined : frame(value.code, value.reason));
+  const received = toFrame(vector.received);
+  const sent = toFrame(vector.sent);
+  return new WebSocketClosedError("closed", {
+    ...(received === undefined ? {} : { received }),
+    ...(sent === undefined ? {} : { sent }),
+    ...(vector.received_then_sent === null ? {} : { receivedThenSent: vector.received_then_sent }),
+  });
+}
+
+/** Assert `close` is the one `vector` expects. */
+function expectClose(close: TransportClose, vector: ExpectedClose): void {
+  expect([close.initiator, close.code, close.reason]).toStrictEqual([
+    vector.initiator,
+    vectorCode(vector.code),
+    vector.reason,
+  ]);
+}
+
 describe("a WebSocket close", () => {
-  it.each([
-    {
-      id: "our ping timeout",
-      options: { sent: frame(1011, "keepalive ping timeout") },
-      expected: ["local", 1011, "keepalive ping timeout"],
-      detail: "sent 1011 (internal error) keepalive ping timeout; no close frame received",
-    },
-    {
-      id: "the peer closed",
-      options: { received: frame(1001, "going away") },
-      expected: ["remote", 1001, "going away"],
-      detail: "received 1001 (going away) going away; no close frame sent",
-    },
-    {
-      id: "the peer's frame came first",
-      options: { received: frame(1000, ""), sent: frame(1000, ""), receivedThenSent: true },
-      expected: ["remote", 1000, ""],
-      detail: "received 1000 (OK); then sent 1000 (OK)",
-    },
-    {
-      id: "our frame came first",
-      options: { received: frame(1000, ""), sent: frame(1000, "bye"), receivedThenSent: false },
-      expected: ["local", 1000, "bye"],
-      detail: "sent 1000 (OK) bye; then received 1000 (OK)",
-    },
-    {
-      id: "no close frames",
-      options: {},
-      expected: ["unknown", undefined, ""],
-      detail: "no close frame received or sent",
-    },
-  ])("on receive: $id", async ({ options, expected, detail }) => {
-    const transport = await connectedWs(failingSocket({ recv: new WebSocketClosedError("closed", options) }));
+  it.each(CLOSE_CASES.websocket)("on receive: $name", async (vector) => {
+    const transport = await connectedWs(failingSocket({ recv: closedBy(vector) }));
 
     const error = await rejection(transport.receive(4096, 1000));
 
     expect(error).toBeInstanceOf(TransportClosedError);
     const { close } = error as TransportClosedError;
-    expect([close.initiator, close.code, close.reason]).toStrictEqual(expected);
-    expect(close.detail).toBe(detail);
+    expectClose(close, vector);
+    expect(close.detail).toBe(vector.detail);
     expect((error as Error).message).toBe(`Connection closed (${close.summary()})`);
     expect(transport.isConnected()).toBe(false);
   });
 
-  it("on send", async () => {
-    const closed = new WebSocketClosedError("closed", { sent: frame(1011, "keepalive ping timeout") });
+  it.each(CLOSE_CASES.websocket)("on send: $name", async (vector) => {
+    const closed = closedBy(vector);
     const transport = await connectedWs(failingSocket({ send: closed }));
 
     const error = await rejection(transport.send(Uint8Array.from([104])));
 
     expect(error).toBeInstanceOf(TransportClosedError);
-    expect((error as TransportClosedError).close).toMatchObject({ initiator: "local", code: 1011 });
+    expectClose((error as TransportClosedError).close, vector);
+    expect((error as TransportClosedError).close.detail).toBe(vector.detail);
     expect((error as Error).cause).toBe(closed);
   });
 
@@ -197,56 +202,64 @@ async function connectedTelnet(socket: TelnetSocket): Promise<TelnetTransport> {
 const reset = () => Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
 const brokenPipe = () => Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
 
+/** The socket error a vector's event stands for. */
+const socketError = (event: string) => (event === "reset" ? reset() : brokenPipe());
+
+/** A telnet transport that meets `vector`'s event on its operation. */
+async function telnetMeeting(vector: EventCase): Promise<unknown> {
+  if (vector.event === "rx_buffer_cap") {
+    const flood = Uint8Array.from([TELNET.IAC, TELNET.SB, ...new Array(TELNET_MAX_RX_BUFFER + 1).fill(97)]);
+    const transport = await connectedTelnet(telnetSocket({ reads: [flood] }));
+    return rejection(transport.receive(TELNET_MAX_RX_BUFFER * 2, 1000));
+  }
+  if (vector.event === "eof") {
+    return rejection((await connectedTelnet(telnetSocket({}))).receive(64, 1000));
+  }
+  if (vector.operation === "receive") {
+    const transport = await connectedTelnet(telnetSocket({ reads: [socketError(vector.event)] }));
+    return rejection(transport.receive(64, 1000));
+  }
+  // The opening negotiation swallows a failed write, so only the data write
+  // reports it.
+  const transport = await connectedTelnet(telnetSocket({ writeError: socketError(vector.event) }));
+  return rejection(transport.send(Uint8Array.from([104])));
+}
+
+// The message prefix is this transport's own wording; the close is the shared contract.
+const TELNET_PREFIXES: Record<string, RegExp> = {
+  eof: /^Connection closed by remote/,
+  reset: /^Connection lost/,
+  broken_pipe: /^Connection lost/,
+  rx_buffer_cap: /^telnet receive buffer exceeded/,
+};
+
 describe("a telnet close", () => {
-  it("EOF is a remote close", async () => {
-    const transport = await connectedTelnet(telnetSocket({}));
+  it.each(CLOSE_CASES.telnet)("$name", async (vector) => {
+    const error = await telnetMeeting(vector);
 
-    const error = await rejection(transport.receive(64, 1000));
-
-    expect((error as Error).message).toMatch(/^Connection closed by remote/);
-    expect((error as TransportClosedError).close.initiator).toBe("remote");
+    expect(error).toBeInstanceOf(TransportClosedError);
+    expect((error as Error).message).toMatch(TELNET_PREFIXES[vector.event] as RegExp);
+    expectClose((error as TransportClosedError).close, vector);
   });
 
   it.each([
     [reset(), "remote"],
     [brokenPipe(), "unknown"],
-  ])("a receive loss says how: %s", async (cause, initiator) => {
+  ])("a receive loss names the socket error: %s", async (cause, initiator) => {
     const transport = await connectedTelnet(telnetSocket({ reads: [cause] }));
 
     const error = await rejection(transport.receive(64, 1000));
 
-    expect((error as Error).message).toMatch(/^Connection lost/);
     expect((error as TransportClosedError).close).toMatchObject({ initiator, detail: `Error: ${cause.message}` });
     expect((error as Error).cause).toBe(cause);
   });
 
-  it.each([
-    [reset(), "remote"],
-    [brokenPipe(), "unknown"],
-  ])("a send loss says how: %s", async (cause, initiator) => {
-    // The opening negotiation swallows a failed write, so only the data write
-    // reports it.
-    const transport = await connectedTelnet(telnetSocket({ writeError: cause }));
+  it("a send loss disconnects", async () => {
+    const transport = await connectedTelnet(telnetSocket({ writeError: reset() }));
 
-    const error = await rejection(transport.send(Uint8Array.from([104])));
+    await rejection(transport.send(Uint8Array.from([104])));
 
-    expect(error).toBeInstanceOf(TransportClosedError);
-    expect((error as Error).message).toMatch(/^Connection lost/);
-    expect((error as TransportClosedError).close.initiator).toBe(initiator);
     expect(transport.isConnected()).toBe(false);
-  });
-
-  it("a receive-buffer overflow is a local close", async () => {
-    const flood = Uint8Array.from([TELNET.IAC, TELNET.SB, ...new Array(TELNET_MAX_RX_BUFFER + 1).fill(97)]);
-    const transport = await connectedTelnet(telnetSocket({ reads: [flood] }));
-
-    const error = await rejection(transport.receive(TELNET_MAX_RX_BUFFER * 2, 1000));
-
-    expect((error as Error).message).toMatch(/^telnet receive buffer exceeded/);
-    expect((error as TransportClosedError).close).toMatchObject({
-      initiator: "local",
-      reason: "receive buffer exceeded",
-    });
   });
 
   it("not being connected is not a close", async () => {
@@ -265,7 +278,7 @@ describe("a telnet close", () => {
 });
 
 describe("an injected chaos disconnect", () => {
-  it("is a typed close nobody initiated", async () => {
+  it.each(CLOSE_CASES.chaos)("$name", async (vector) => {
     const inner: ConnectionTransport = {
       connect: async () => undefined,
       disconnect: async () => undefined,
@@ -279,9 +292,6 @@ describe("an injected chaos disconnect", () => {
 
     expect(error).toBeInstanceOf(TransportClosedError);
     expect((error as Error).message).toMatch(/^chaos: injected disconnect on receive #1/);
-    expect((error as TransportClosedError).close).toMatchObject({
-      initiator: "unknown",
-      reason: "injected disconnect",
-    });
+    expectClose((error as TransportClosedError).close, vector);
   });
 });
