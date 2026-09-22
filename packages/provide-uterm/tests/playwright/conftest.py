@@ -469,7 +469,6 @@ def spinner_server() -> Generator[tuple[str, TermHub | None], None, None]:
     * default python → in-process TermHub + /test-page
     * UTERM_MULTI_BACKEND / go / csharp → real subprocess; mock page via page.route
     """
-    import importlib.resources
     import os
 
     from .ui_routes import multi_backend_env, spinner_mock_page_html

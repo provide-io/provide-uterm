@@ -44,8 +44,6 @@ class TestQueueMaxsize:
         # Patch _run so it doesn't actually try to connect
         rt._task = None
 
-        import asyncio
-
         original_create_task = asyncio.create_task
 
         async def _dummy_run() -> None:
@@ -80,7 +78,6 @@ class TestQueueMaxsize:
         rt = _make_runtime()
 
         async def _dummy_run() -> None:
-            import asyncio
 
             await asyncio.sleep(0)
 
@@ -103,7 +100,6 @@ class TestLastErrorResetOnStart:
         `if last_error is None` to distinguish "no error" from "error present"
         would misinterpret "" as an error message.
         """
-        import asyncio
 
         rt = _make_runtime()
         rt._last_error = "previous error"  # simulate a past failure

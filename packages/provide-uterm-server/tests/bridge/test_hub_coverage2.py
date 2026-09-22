@@ -138,7 +138,6 @@ class TestStartConnectorIsConnectedFalse:
 class TestBridgeSessionUnknownMtypeRecvWins:
     async def test_unknown_mtype_recv_wins_over_poll(self) -> None:
         """Line 233->237: recv_task completes first with unknown mtype → responses=[]."""
-        import asyncio
         import json
         from unittest.mock import AsyncMock, MagicMock
 
