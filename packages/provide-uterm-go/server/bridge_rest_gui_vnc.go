@@ -236,7 +236,8 @@ func (s *Server) dialLitevirtTarget(
 	}
 	cc, err := grpc.NewClient(endpoint, dialOpts)
 	if err != nil {
-		detailError(w, http.StatusInternalServerError, err.Error())
+		s.logger.Info("gui_attach_litevirt_failed", "target", target.TargetID, "error", err.Error())
+		detailError(w, http.StatusInternalServerError, attachLitevirtFailed)
 		return nil, "", false
 	}
 	return cc, vmName, true
