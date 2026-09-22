@@ -18,7 +18,7 @@
 #
 
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
-ARG NODE_IMAGE=node:22-slim
+ARG NODE_IMAGE=node:26-slim
 
 # ---- frontend-build: same Vite artifacts as Dockerfile.server ---------------
 FROM ${NODE_IMAGE} AS frontend-build
