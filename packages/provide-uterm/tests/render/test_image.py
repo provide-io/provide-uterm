@@ -286,8 +286,7 @@ def test_render_frame_alpha_threshold_128_opaque() -> None:
 
 def test_render_frame_odd_height_last_row_padding() -> None:
     class FakePixels:
-        def __getitem__(self, xy: tuple[int, int]) -> tuple[int, int, int, int]:
-            x, y = xy
+        def __getitem__(self, _xy: tuple[int, int]) -> tuple[int, int, int, int]:
             return (0, 255, 0, 255)
 
     result = render_frame(FakePixels(), 1, 1, sgr_truecolor)

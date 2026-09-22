@@ -262,8 +262,7 @@ def test_render_frame_odd_height_last_row_padding() -> None:
     from provide.uterm.shell._render import _sgr_truecolor as sgr_fn
 
     class FakePixels:
-        def __getitem__(self, xy: tuple[int, int]) -> tuple[int, int, int, int]:
-            x, y = xy
+        def __getitem__(self, _xy: tuple[int, int]) -> tuple[int, int, int, int]:
             return (0, 255, 0, 255)  # always green
 
     # px_h=1 → loop runs once (y=0); y+1=1 >= px_h=1 → fallback (0,0,0,0)

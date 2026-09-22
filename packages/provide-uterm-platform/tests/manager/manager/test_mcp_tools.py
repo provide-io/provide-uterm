@@ -129,7 +129,7 @@ class TestRegistration:
             assert result["total_agents"] == 0
 
             # Call again to ensure callback is not invoked twice
-            result = await _call(app, "swarm_status")
+            await _call(app, "swarm_status")
             assert callback_mock.call_count == 1
 
 
