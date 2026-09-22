@@ -329,7 +329,7 @@ class TestTimeseriesCleanup:
 
         from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         # Create an old timeseries file
         old_file = tmp_path / "swarm_timeseries_20200101_000000.jsonl"
         old_file.write_text("{}")
@@ -342,7 +342,7 @@ class TestTimeseriesCleanup:
         """timeseries/manager.py:194-195 — OSError in stat returns early."""
         from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         # Point path to nonexistent file — stat() raises OSError
         mgr.path = tmp_path / "nonexistent.jsonl"
         mgr._rotate_if_needed()  # should not raise
@@ -353,7 +353,7 @@ class TestTimeseriesCleanup:
 
         from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         # Make the current path file old so it would be deleted if not skipped
         mgr.path.write_text("{}")
         os.utime(mgr.path, (0, 0))
@@ -365,7 +365,7 @@ class TestTimeseriesCleanup:
         """Line 171->167: recent file (mtime >= cutoff) is not deleted."""
         from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         # Create a recent timeseries file — default mtime is now
         recent = tmp_path / "swarm_timeseries_20990101_000000.jsonl"
         recent.write_text("{}")
@@ -378,7 +378,7 @@ class TestTimeseriesCleanup:
 
         from provide.uterm.manager.timeseries.manager import TimeseriesManager
 
-        mgr = TimeseriesManager(lambda: _make_status(), timeseries_dir=str(tmp_path))
+        mgr = TimeseriesManager(_make_status, timeseries_dir=str(tmp_path))
         bad_file = tmp_path / "swarm_timeseries_20200101_000000.jsonl"
         bad_file.write_text("{}")
         os.utime(bad_file, (0, 0))

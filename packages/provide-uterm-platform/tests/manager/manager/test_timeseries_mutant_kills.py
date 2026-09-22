@@ -36,7 +36,7 @@ def _make_status(
 
 def _make_mgr(tmp_path: Path, interval_s: int = 20, plugin: Any = None) -> TimeseriesManager:
     return TimeseriesManager(
-        lambda: _make_status(),
+        _make_status,
         timeseries_dir=str(tmp_path / "ts"),
         interval_s=interval_s,
         plugin=plugin,
@@ -54,7 +54,7 @@ class TestInit:
         # Default is 'logs/metrics' — test that the stored path matches
         # (We can only check this by checking the path attribute)
         Path.cwd()
-        mgr = TimeseriesManager(lambda: _make_status())
+        mgr = TimeseriesManager(_make_status)
         assert str(mgr.timeseries_dir).endswith("logs/metrics") or "logs" in str(mgr.timeseries_dir).lower()
         # Cleanup: just verify no exception
         assert mgr.samples_count == 0
