@@ -196,11 +196,10 @@ async def _connect(
         return json_response({"detail": f"unknown profile: {pid}"}, status=404)
     if not _can_access(p, principal_id):
         return json_response({"detail": "insufficient privileges"}, status=403)
-    try:
-        raw = await request.json()  # type: ignore[attr-defined]  # ty:ignore[unresolved-attribute]
-        raw.to_py() if hasattr(raw, "to_py") else raw
-    except Exception:
-        pass
+    # The request body is deliberately not read. The only field the FastAPI
+    # route takes from it is ``password``, and credentials must never be
+    # persisted to KV (see the connector_config note below).
+    del request
     # Build session entry (same shape as /api/connect)
     import json as _json
 
