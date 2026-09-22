@@ -38,7 +38,7 @@ _SPEC_PATH = _REPO_ROOT / "spec" / "uterm-api.yaml"
 
 
 def csharp_satisfies(name: str, exports: set[str]) -> bool:
-    """Whether the C# source provides *name*, allowing the ``Async`` suffix.
+    """Whether the C# source provides *name*, allowing the ``Async`` and ``Exception`` suffixes.
 
     C#'s Task-based Asynchronous Pattern requires that suffix on any method
     returning a Task, so an asynchronous registry spells the spec's ``get`` as
@@ -46,7 +46,12 @@ def csharp_satisfies(name: str, exports: set[str]) -> bool:
     would be asking the C# port to break its own language's convention to
     satisfy a rule written for Go, which does not have one.
     """
-    return name in exports or f"{name}Async" in exports
+    if name in exports or f"{name}Async" in exports:
+        return True
+    # The same argument for exception types: .NET names every exception type
+    # "...Exception" (CA1710), so Python's and Go's TransportClosedError is
+    # TransportClosedException in C#.
+    return name.endswith("Error") and f"{name.removesuffix('Error')}Exception" in exports
 
 
 def _load_spec() -> dict[str, object]:

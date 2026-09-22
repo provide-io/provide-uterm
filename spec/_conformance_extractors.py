@@ -120,6 +120,41 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
             {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Server", "type": "GraphicalTargetParsing"},
         ],
     },
+    # Typed transport close (issue #102): which side ended a connection, how
+    # the session keeps it, and what the reconnect wrapper saw last.
+    #   provide.uterm.transport_close + TransportSession.close_info (core) and
+    #   ReconnectingSession.last_close (client) (Python)
+    #   <-> packages/provide-uterm-go/transports + termsession (Go)
+    #   <-> Provide.Uterm/Transports + TermSession (C#).
+    # The behaviour behind these names is pinned by close_cases in
+    # spec/behavior_vectors.json, which all four ports replay.
+    "transport_close": {
+        "python": [
+            {"file": "packages/provide-uterm/src/provide/uterm/transport_close.py", "class": "CloseInitiator"},
+            {"file": "packages/provide-uterm/src/provide/uterm/transport_close.py", "class": "TransportClose"},
+            {"file": "packages/provide-uterm/src/provide/uterm/transport_close.py", "class": "TransportClosedError"},
+            {"file": "packages/provide-uterm/src/provide/uterm/transport_close.py", "module_functions": True},
+            {"file": "packages/provide-uterm/src/provide/uterm/transport_session.py", "class": "TransportSession"},
+            {
+                "file": "packages/provide-uterm-client/src/provide/uterm/transports/reconnect.py",
+                "class": "ReconnectingSession",
+            },
+        ],
+        "go": [
+            {"dir": "packages/provide-uterm-go/transports", "type": "CloseInitiator"},
+            {"dir": "packages/provide-uterm-go/transports", "type": "TransportClose"},
+            {"dir": "packages/provide-uterm-go/transports", "type": "TransportClosedError"},
+            {"dir": "packages/provide-uterm-go/transports", "type": "ReconnectingTransport"},
+            {"dir": "packages/provide-uterm-go/transports", "top_level_functions": True},
+            {"dir": "packages/provide-uterm-go/termsession", "type": "TransportSession"},
+        ],
+        "csharp": [
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Transports", "type": "CloseInitiator"},
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Transports", "type": "TransportClose"},
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Transports", "type": "TransportClosedException"},
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/TermSession", "type": "TransportSession"},
+        ],
+    },
     # Tenant-scoped auth surface: the API-key store's tenant methods + the
     # resolved Principal. provide.uterm.server.api_keys + bridge.identity
     # (Python) <-> packages/provide-uterm-go/serverauth (Go) <->
@@ -262,14 +297,28 @@ def _csharp_files(dir_path: Path) -> list[Path]:
     return sorted(dir_path.rglob("*.cs"))
 
 
-def _csharp_type_methods(dir_path: Path, type_name: str) -> set[str]:
-    """Return {type_name} plus public method names declared on type_name.
+# public [static|virtual|override|required] Type Name { ... }  or  => ...
+# A C# property is the idiomatic spelling of a Python @property (close_info ->
+# CloseInfo), so it satisfies a spec function name the way a method does.
+_CSHARP_PROPERTY_PATTERN = re.compile(
+    r"^\s*public\s+(?:static\s+|virtual\s+|override\s+|required\s+)*"
+    r"(?!(?:class|record|enum|struct|interface|sealed|abstract|partial|const|readonly|event|delegate)\b)"
+    r"[\w.<>\[\]?,]+\s+([A-Z]\w*)\s*(?:\{|=>|$)",
+    re.MULTILINE,
+)
 
-    Matches `public ... TypeName` / `public sealed class TypeName` and methods
-    of the form `public ... Name(` inside the scanned files. PascalCase names
-    only (same convention as Go).
+
+def _csharp_type_methods(dir_path: Path, type_name: str) -> set[str]:
+    """Return {type_name} plus public method and property names declared on type_name.
+
+    Matches `public ... TypeName` / `public sealed class TypeName` (or a record
+    or enum of that name), methods of the form `public ... Name(` and
+    properties of the form `public Type Name {` / `=>` inside the scanned
+    files. PascalCase names only (same convention as Go).
     """
-    type_pattern = re.compile(rf"\b(?:public\s+)?(?:sealed\s+|abstract\s+|static\s+)*class\s+{re.escape(type_name)}\b")
+    type_pattern = re.compile(
+        rf"\b(?:public\s+)?(?:sealed\s+|abstract\s+|static\s+)*(?:class|record|enum)\s+{re.escape(type_name)}\b"
+    )
     # public [async] [static] ReturnType MethodName(  -- ReturnType is either a
     # normal token sequence or a tuple type "(string Host, int Port)".
     method_pattern = re.compile(
@@ -285,6 +334,7 @@ def _csharp_type_methods(dir_path: Path, type_name: str) -> set[str]:
         if type_pattern.search(text):
             found_type = True
             names |= set(method_pattern.findall(text))
+            names |= set(_CSHARP_PROPERTY_PATTERN.findall(text))
     if found_type:
         names.add(type_name)
     return names

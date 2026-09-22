@@ -53,3 +53,17 @@ def test_a_csharp_async_method_satisfies_the_synchronous_spec_name() -> None:
     assert not module.csharp_satisfies("Get", {"GetSomethingElse"})
     # The suffix is not a wildcard: it must be the whole of the difference.
     assert not module.csharp_satisfies("Get", {"Asyncget"})
+
+
+def test_a_csharp_exception_satisfies_the_spec_error_type() -> None:
+    """``TransportClosedError`` is satisfied by ``TransportClosedException``.
+
+    .NET names every exception type ``...Exception`` (CA1710); the Python and
+    Go ports name the same type ``...Error``.
+    """
+    module = _load_validator()
+    assert module.csharp_satisfies("TransportClosedError", {"TransportClosedException"})
+    assert module.csharp_satisfies("TransportClosedError", {"TransportClosedError"})
+    assert not module.csharp_satisfies("TransportClosedError", {"TransportClosed"})
+    # Only an Error name maps: a plain type does not gain an Exception alias.
+    assert not module.csharp_satisfies("TransportClose", {"TransportCloseException"})
