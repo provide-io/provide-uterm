@@ -96,10 +96,10 @@ def _create_tunnel(server: str, display_name: str, token: str | None) -> dict[st
         with suppress(Exception):
             detail = exc.read().decode(errors="replace")
         print(f"error: tunnel creation failed (HTTP {exc.code}): {detail}", file=sys.stderr)
-        sys.exit(1)
+        raise SystemExit(1) from exc
     except urllib.error.URLError as exc:
         print(f"error: cannot reach server: {exc.reason}", file=sys.stderr)
-        sys.exit(1)
+        raise SystemExit(1) from exc
 
 
 def _display_name(args: argparse.Namespace) -> str:
