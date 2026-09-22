@@ -234,7 +234,6 @@ class TestRunAuthHeader:
     async def test_authorization_header_uses_correct_key(self) -> None:
         """mut_14/15/16: 'Authorization' → 'XXAuthorizationXX'/'authorization'/'AUTHORIZATION'."""
         rt = _make_runtime(bearer_token="mytoken")
-        captured_headers: dict[str, str] = {}
 
         class _FakeWS:
             async def __aenter__(self):
@@ -248,11 +247,6 @@ class TestRunAuthHeader:
 
             async def recv(self):
                 raise asyncio.CancelledError
-
-        async def _fake_connect(url, additional_headers=None, open_timeout=None):
-            if additional_headers:
-                captured_headers.update(additional_headers)
-            return _FakeWS()
 
         async def _fake_start_connector():
             conn = MagicMock()
