@@ -73,6 +73,7 @@ class PamTunnelBridge:
                 if frame.channel == CHANNEL_DATA and frame.payload:  # pragma: no branch
                     os.write(master_fd, frame.payload)
         except asyncio.CancelledError:
+            # Cancellation is the normal shutdown path for this relay task.
             pass
         except Exception as exc:
             logger.warning("tunnel_to_pty_error: %s", exc)
