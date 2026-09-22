@@ -142,13 +142,16 @@ TWINNED_FIXTURES: tuple[tuple[str, ...], ...] = (
         "packages/provide-uterm-go/tunnel/testdata/token_hash_golden.json",
         "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/tunnel/token_hash_golden.json",
     ),
-    # spec/ is the source here; the three ports each keep a copy next to the
-    # tests that replay it.
+    # spec/ is the source here (scripts/generate_behavior_vectors.py writes all of
+    # them); Python, Go and C# each keep a copy next to the tests that replay it.
+    # TypeScript reads spec/ directly.
     (
         "spec/behavior_vectors.json",
         "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/behavior/behavior_vectors.json",
         "packages/provide-uterm-go/policy/testdata/behavior_vectors.json",
         "packages/provide-uterm-go/vnc/testdata/behavior_vectors.json",
+        "packages/provide-uterm-go/transports/testdata/behavior_vectors.json",
+        "packages/provide-uterm/tests/bridge/testdata/behavior_vectors.json",
     ),
 )
 

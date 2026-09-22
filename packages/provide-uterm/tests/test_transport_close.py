@@ -15,6 +15,8 @@ session dropped after 20-30s of silence and nothing could say which side ended i
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -32,19 +34,27 @@ def test_the_closed_error_is_a_connection_error_carrying_the_close() -> None:
     assert str(err) == "Connection closed (local close 1011 keepalive ping timeout)"
 
 
-@pytest.mark.parametrize(
-    ("close", "summary"),
-    [
-        (TransportClose(CloseInitiator.REMOTE, code=1001, reason="going away"), "remote close 1001 going away"),
-        (TransportClose(CloseInitiator.REMOTE), "remote close"),
-        (
-            TransportClose(CloseInitiator.UNKNOWN, detail="ConnectionResetError: reset"),
-            "unknown close (ConnectionResetError: reset)",
-        ),
-    ],
-)
-def test_the_summary_names_initiator_code_and_reason(close: TransportClose, summary: str) -> None:
-    assert close.summary() == summary
+def _close_cases() -> dict[str, Any]:
+    """``close_cases`` from the shared vectors every port is tested against."""
+    here = Path(__file__).resolve()
+    for path in (
+        here.parents[3] / "spec" / "behavior_vectors.json",  # repo root
+        here.parents[4] / "spec" / "behavior_vectors.json",  # mutants/<root>
+        here.parent / "bridge" / "testdata" / "behavior_vectors.json",
+    ):
+        if path.is_file():
+            cases: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))["close_cases"]
+            return cases
+    raise FileNotFoundError("behavior_vectors.json not found")
+
+
+@pytest.mark.parametrize("case", _close_cases()["summary"], ids=lambda case: case["summary"])
+def test_the_summary_matches_the_shared_vectors(case: dict[str, Any]) -> None:
+    close = TransportClose(
+        CloseInitiator(case["initiator"]), code=case["code"], reason=case["reason"], detail=case["detail"]
+    )
+
+    assert close.summary() == case["summary"]
 
 
 class _EndsWith:
