@@ -99,7 +99,7 @@ class TestWsWorkerHelloMode:
             connect_test_ws(client, "/ws/worker/w1/term") as worker,
             connect_test_ws(client, "/ws/browser/w1/term") as browser,
         ):
-            _hello, _hs = _read_initial(browser)
+            _read_initial(browser)
 
             # Initial snapshot_req comes before hello
             # Worker sends hello with open mode
@@ -142,7 +142,7 @@ class TestWsWorkerTermEmptyData:
             connect_test_ws(client, "/ws/worker/w1/term") as worker,
             connect_test_ws(client, "/ws/browser/w1/term") as browser,
         ):
-            _hello, _hs = _read_initial(browser)
+            _read_initial(browser)
 
             # initial_snapshot may be sent
             # Send term with empty data
@@ -178,7 +178,7 @@ class TestWsWorkerStatusMessage:
             connect_test_ws(client, "/ws/worker/w1/term") as worker,
             connect_test_ws(client, "/ws/browser/w1/term") as browser,
         ):
-            _hello, _hs = _read_initial(browser)
+            _read_initial(browser)
 
             worker.send_json({"type": "status", "hijacked": False, "ts": time.time()})
             msg = browser.receive_json()
@@ -225,7 +225,7 @@ class TestWsBrowserNoInitialSnapshot:
         asyncio.run(_setup())
 
         with connect_test_ws(client, "/ws/browser/w1/term") as browser:
-            hello, _hs = _read_initial(browser)
+            _read_initial(browser)
             # No snapshot message should follow (since last_snapshot was None)
             # The important thing is no crash occurred
 
@@ -253,7 +253,7 @@ class TestWsBrowserWasOwnerDisconnect:
             worker.receive_json()  # snapshot_req
 
             with connect_test_ws(client, "/ws/browser/w1/term") as browser:
-                _hello, _hs = _read_initial(browser)
+                _read_initial(browser)
 
                 # Browser acquires hijack
                 browser.send_json({"type": "hijack_request"})
@@ -292,7 +292,7 @@ class TestWsBrowserResumeWithoutOwner:
             # This hits the resume_without_owner branch
 
             with connect_test_ws(client, "/ws/browser/w1/term") as browser:
-                _hello, _hs = _read_initial(browser)
+                _read_initial(browser)
 
                 # Acquire hijack
                 browser.send_json({"type": "hijack_request"})
