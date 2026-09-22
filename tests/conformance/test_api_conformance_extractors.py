@@ -65,7 +65,15 @@ def test_transport_close_exports_in_every_language() -> None:
     go = get_go_exports("transport_close", repo_root=_REPO_ROOT)
     assert {"CloseInitiator", "TransportClose", "TransportClosedError", "Summary", "CloseInfo", "LastClose"} <= go
     csharp = get_csharp_exports("transport_close", repo_root=_REPO_ROOT)
-    assert {"CloseInitiator", "TransportClose", "TransportClosedException", "Summary", "CloseInfo"} <= csharp
+    assert {
+        "CloseInitiator",
+        "TransportClose",
+        "TransportClosedException",
+        "Summary",
+        "CloseInfo",
+        "ReconnectingTransport",
+        "LastClose",
+    } <= csharp
 
 
 def _csharp_session_tree(tmp_path: Path, source: str) -> Path:

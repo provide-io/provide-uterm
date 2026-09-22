@@ -152,6 +152,7 @@ CATEGORY_SOURCES: dict[str, dict[str, list[dict[str, object]]]] = {
             {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Transports", "type": "CloseInitiator"},
             {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Transports", "type": "TransportClose"},
             {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Transports", "type": "TransportClosedException"},
+            {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/Transports", "type": "ReconnectingTransport"},
             {"dir": "packages/provide-uterm-csharp/src/Provide.Uterm/TermSession", "type": "TransportSession"},
         ],
     },
