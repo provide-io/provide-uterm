@@ -45,7 +45,7 @@ class TestServerCliParserSetup:
             with contextlib.redirect_stderr(buf), pytest.raises(SystemExit):
                 main(["--help"])
         except Exception:
-            pass
+            pass  # only exercises --help; the assertions that kill mutants are on main([]) below
 
         # Alternatively, parse with known-good argv and introspect
         # We test by ensuring it doesn't use a mutated prog value

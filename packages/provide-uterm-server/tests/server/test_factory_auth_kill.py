@@ -391,7 +391,7 @@ def test_a_worker_token_mints_a_full_admin_named_worker(minted: list[dict[str, A
             with client.websocket_connect("/ws/worker/w1/term", headers={"Authorization": f"Bearer {_WORKER_TOKEN}"}):
                 pass
         except Exception:
-            pass
+            pass  # the upgrade may be refused; only the minted identity below matters
 
     assert {
         "subject_id": "worker",

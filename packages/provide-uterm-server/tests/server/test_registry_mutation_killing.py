@@ -962,7 +962,7 @@ async def _collect_sse(gen: Any, *, max_chunks: int = 12, per_timeout: float = 3
         for _ in range(max_chunks):
             chunks.append(await asyncio.wait_for(gen.__anext__(), timeout=per_timeout))
     except StopAsyncIteration:
-        pass
+        pass  # generator exhausted: collection ends with the chunks gathered so far
     return chunks
 
 
