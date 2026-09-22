@@ -32,9 +32,16 @@ SERVER_BUILTIN_CONNECTOR_TYPES = frozenset({"shell", "ssh", "telnet", "websocket
 
 
 def _clean_path(value: str, fallback: str) -> str:
+    """Normalise a mount path to exactly one leading slash and no trailing one.
+
+    The leading run collapses to a single "/" rather than being kept: the result is
+    used as a link prefix (``f"{app_path}/operator/..."``), and a value beginning
+    "//" is a protocol-relative URL that points off-site. Browsers read "\\" as "/"
+    and drop tab/CR/LF anywhere in a URL, so those join the run — "/\\evil" and
+    "/\\t/evil" are the same off-site link spelled differently.
+    """
     text = str(value or fallback).strip()
-    if not text.startswith("/"):
-        text = "/" + text
+    text = "/" + text.lstrip("/\\\t\r\n")
     return text.rstrip("/") or "/"
 
 

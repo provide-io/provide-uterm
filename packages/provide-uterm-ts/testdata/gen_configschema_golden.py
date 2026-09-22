@@ -232,6 +232,8 @@ CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("UiConfig", "a mount path with no leading slash", {"app_path": "app"}),
     ("UiConfig", "a mount path with a trailing slash", {"app_path": "/app/"}),
     ("UiConfig", "a mount path of only slashes", {"assets_path": "///"}),
+    ("UiConfig", "a protocol-relative mount path", {"app_path": "//evil.example"}),
+    ("UiConfig", "a mount path led by a backslash", {"assets_path": "/\\evil.example/"}),
     ("UiConfig", "an empty mount path", {"app_path": ""}),
     ("UiConfig", "a mount path that is not a string", {"app_path": 5}),
     ("UiConfig", "a field nobody defined", {"xterm_cdn_sri": "sha384-x"}),

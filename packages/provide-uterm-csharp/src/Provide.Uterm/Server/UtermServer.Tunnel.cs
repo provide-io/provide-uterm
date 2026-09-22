@@ -274,7 +274,7 @@ public sealed partial class UtermServer
             page = "operator";
         }
 
-        var appPath = string.IsNullOrWhiteSpace(_deps.Config.Ui.AppPath) ? "/app" : _deps.Config.Ui.AppPath.TrimEnd('/');
+        var appPath = UiPaths.MountPrefix(_deps.Config.Ui.AppPath, "/app");
         var target = appPath + "/" + page + "/" + sessionId;
         if (invite is not null)
         {
@@ -307,8 +307,8 @@ public sealed partial class UtermServer
         // TEST_MODE / multi-backend: open page without JWT so Playwright can load UI.
         // Production still authenticates browser WS separately.
         var ui = _deps.Config.Ui;
-        var assets = string.IsNullOrWhiteSpace(ui.AssetsPath) ? "/ui" : ui.AssetsPath.TrimEnd('/');
-        var appPath = string.IsNullOrWhiteSpace(ui.AppPath) ? "/app" : ui.AppPath.TrimEnd('/');
+        var assets = UiPaths.MountPrefix(ui.AssetsPath, "/ui");
+        var appPath = UiPaths.MountPrefix(ui.AppPath, "/app");
         var bootstrap = JsonSerializer.Serialize(new Dictionary<string, object?>
         {
             ["page_kind"] = "inspect",

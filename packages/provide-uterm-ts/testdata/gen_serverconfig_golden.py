@@ -82,6 +82,18 @@ PATH_CASES: list[tuple[str, Any, str]] = [
     ("empty falls back", "", "/fallback"),
     ("nested", "/a/b/c/", "/app"),
     ("no slashes at all", "app/sub", "/app"),
+    # A leading "//" is a protocol-relative URL once the path is used as a link
+    # prefix, so the whole leading run collapses to one slash. "\\" and tab/CR/LF
+    # join the run because browsers read them as, or drop them from, a slash.
+    ("protocol-relative", "//evil.example", "/app"),
+    ("a run of leading and trailing slashes", "///a//", "/app"),
+    ("a backslash after the slash", "/\\evil.example", "/app"),
+    ("only backslashes", "\\\\evil.example", "/app"),
+    ("a tab between the slashes", "/\t/evil.example", "/app"),
+    ("a carriage return between the slashes", "/\r/evil.example", "/app"),
+    ("a newline between the slashes", "/\n/evil.example", "/app"),
+    ("a leading X survives the collapse", "//Xapp", "/app"),
+    ("an inner double slash is kept", "/a//b", "/app"),
 ]
 
 # (name, kwargs) — the auth combinations a validator has an opinion about.

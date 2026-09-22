@@ -145,6 +145,32 @@ describe("cleanPath", () => {
     expect(golden.paths.find((entry) => entry.name === "nested")?.cleaned).toBe("/a/b/c");
   });
 
+  it("collapses a leading run to one slash so the path stays same-origin", () => {
+    // `${appPath}/operator` with "//evil.example" would be a protocol-relative
+    // link off-site. Each character of the run is exercised on its own so no
+    // member of the character class can go missing unnoticed.
+    const cases: [string, string][] = [
+      ["protocol-relative", "/evil.example"],
+      ["a run of leading and trailing slashes", "/a"],
+      ["a backslash after the slash", "/evil.example"],
+      ["only backslashes", "/evil.example"],
+      ["a tab between the slashes", "/evil.example"],
+      ["a carriage return between the slashes", "/evil.example"],
+      ["a newline between the slashes", "/evil.example"],
+      ["a leading X survives the collapse", "/Xapp"],
+      ["an inner double slash is kept", "/a//b"],
+    ];
+    for (const [name, cleaned] of cases) {
+      expect(golden.paths.find((entry) => entry.name === name)?.cleaned).toBe(cleaned);
+    }
+  });
+
+  it("collapses only the leading run, not the first slash found later", () => {
+    // An unanchored pattern would strip the "/" inside "app/sub".
+    expect(cleanPath("app/sub", "/fallback")).toBe("/app/sub");
+    expect(cleanPath("a\\b", "/fallback")).toBe("/a\\b");
+  });
+
   it("falls back on an explicit undefined, not just on an empty string", () => {
     // The ternary's first arm is `value === undefined`; a caller reaching
     // this with no value at all (rather than an empty string) must take the

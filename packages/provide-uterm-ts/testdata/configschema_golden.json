@@ -2773,6 +2773,38 @@
     },
     {
       "model": "UiConfig",
+      "name": "a protocol-relative mount path",
+      "kwargs": {
+        "app_path": "//evil.example"
+      },
+      "accepted": {
+        "app_path": "/evil.example",
+        "assets_path": "/_terminal",
+        "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+        "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+        "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+        "xterm_cdn_integrity": "",
+        "fitaddon_cdn_integrity": ""
+      }
+    },
+    {
+      "model": "UiConfig",
+      "name": "a mount path led by a backslash",
+      "kwargs": {
+        "assets_path": "/\\evil.example/"
+      },
+      "accepted": {
+        "app_path": "/app",
+        "assets_path": "/evil.example",
+        "xterm_cdn": "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0",
+        "fitaddon_cdn": "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0",
+        "fonts_cdn": "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap",
+        "xterm_cdn_integrity": "",
+        "fitaddon_cdn_integrity": ""
+      }
+    },
+    {
+      "model": "UiConfig",
       "name": "an empty mount path",
       "kwargs": {
         "app_path": ""

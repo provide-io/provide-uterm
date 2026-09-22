@@ -509,8 +509,8 @@ public static class ConfigLoader
     /// </remarks>
     private static void ApplyUi(UiConfig ui, TomlTable t)
     {
-        if (t.TryGetValue("app_path", out var app) && app is string apps) ui.AppPath = apps;
-        if (t.TryGetValue("assets_path", out var assets) && assets is string assetss) ui.AssetsPath = assetss;
+        if (t.TryGetValue("app_path", out var app) && app is string apps) ui.AppPath = UiPaths.Clean(apps, "/app");
+        if (t.TryGetValue("assets_path", out var assets) && assets is string assetss) ui.AssetsPath = UiPaths.Clean(assetss, "/_terminal");
         if (t.TryGetValue("xterm_cdn", out var xc) && xc is string xcs) ui.XtermCdn = xcs;
         if (t.TryGetValue("xterm_cdn_integrity", out var xi) && xi is string xis) ui.XtermCdnIntegrity = xis;
         if (t.TryGetValue("fitaddon_cdn", out var fc) && fc is string fcs) ui.FitAddonCdn = fcs;

@@ -6,6 +6,7 @@
 package serverconfig
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -196,10 +197,60 @@ func TestCleanPath(t *testing.T) {
 		{"/adminX/", "/fallback"}: "/adminX",
 		{"", "/fallback"}:         "/fallback",
 		{"///", "/fallback"}:      "/",
+		// The leading run collapses so the path stays same-origin: "//x" is a
+		// protocol-relative link, and browsers read a backslash as "/" and drop tab/CR/LF.
+		{"//evil.example", "/fallback"}:   "/evil.example",
+		{"///a//", "/fallback"}:           "/a",
+		{"/\\evil.example", "/fallback"}:  "/evil.example",
+		{"\\\\evil.example", "/fallback"}: "/evil.example",
+		{"/\t/evil.example", "/fallback"}: "/evil.example",
+		{"/\r/evil.example", "/fallback"}: "/evil.example",
+		{"/\n/evil.example", "/fallback"}: "/evil.example",
+		{"//Xapp", "/fallback"}:           "/Xapp",
+		{"/a//b", "/fallback"}:            "/a//b",
+		{"app/sub", "/fallback"}:          "/app/sub",
 	}
 	for in, want := range cases {
 		if got := cleanPath(in[0], in[1]); got != want {
 			t.Errorf("cleanPath(%q,%q) = %q, want %q", in[0], in[1], got, want)
+		}
+	}
+}
+
+// TestCleanPathMatchesReferenceCorpus holds cleanPath to the reference's
+// recorded mount-path normalisation, so a new vector added to
+// gen_serverconfig_golden.py is enforced here without a hand-copied case.
+func TestCleanPathMatchesReferenceCorpus(t *testing.T) {
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blob []byte
+	for {
+		blob, err = os.ReadFile(filepath.Join(dir, "packages", "provide-uterm-ts", "testdata", "serverconfig_golden.json"))
+		if err == nil {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("serverconfig_golden.json not found above cwd")
+		}
+		dir = parent
+	}
+	var golden struct {
+		Paths []struct {
+			Name, Value, Fallback, Cleaned string
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(blob, &golden); err != nil {
+		t.Fatal(err)
+	}
+	if len(golden.Paths) == 0 {
+		t.Fatal("the corpus recorded no paths")
+	}
+	for _, rec := range golden.Paths {
+		if got := cleanPath(rec.Value, rec.Fallback); got != rec.Cleaned {
+			t.Errorf("%s: cleanPath(%q,%q) = %q, want %q", rec.Name, rec.Value, rec.Fallback, got, rec.Cleaned)
 		}
 	}
 }
