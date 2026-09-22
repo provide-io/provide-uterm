@@ -431,41 +431,13 @@ mutant = "provide.uterm.server.routes.pages.x__is_secure_request__mutmut_10"
 reason = "forwarded_proto default mutation: the default is read only when the x-forwarded-proto header is absent, and its sole consumer (a substring-of-https test) treats empty / str-of-None / xxxx identically -- all fall through to the url.scheme check. Equivalent."
 
 # ---------------------------------------------------------------------------
-# manager/process_impl.py (AgentProcessManager) — 28 documented equivalents.
+# manager/process_impl.py (AgentProcessManager) — 16 documented equivalents.
 # Residual after the test_process_*.py + test_coverage_*.py suites + the dedicated
 # test_process_kill_part0*.py kill-suite (each <500 LOC). All NON-equivalent mutants
 # are killed (664/664). On CI exactly one of these equivalents may surface as a
 # wall-clock `timeout` rather than `survived` (excused either way — see the header
 # note above). See pyproject [tool.mutmut] note.
 # ---------------------------------------------------------------------------
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ__init____mutmut_1"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_1"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_2"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_3"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_4"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_5"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁstart_spawn_swarm__mutmut_6"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
 
 [[equivalent]]
 mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_load_worker_type__mutmut_12"
@@ -512,27 +484,7 @@ mutant = "provide.uterm.manager.process_impl_spawn.x__stop_process_tree__mutmut_
 reason = "contextlib.suppress(TimeoutError, OSError, RuntimeError) -> (OSError, RuntimeError): TimeoutError is a subclass of OSError (Python 3.10+), so it is still suppressed by OSError — behaviorally identical."
 
 [[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_1"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_2"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_3"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_4"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁspawn_swarm__mutmut_5"
-reason = "Trampoline-masked default-arg mutation. The mutmut public wrapper keeps the ORIGINAL signature defaults and binds them explicitly into kwargs (e.g. `kwargs = {'group_size': group_size, ...}`) before forwarding to the variant, so the variant's mutated default is dead code and unreachable."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁkill_agent__mutmut_14"
+mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁkill_agent__mutmut_16"
 reason = "getattr(agent, 'pid', 0) -> getattr(agent, 'pid', None): when agent is None, int(getattr(None,'pid',None) or 0) == int(getattr(None,'pid',0) or 0) == 0; when agent is present its pid attribute is read directly — identical."
 
 [[equivalent]]
@@ -1149,7 +1101,6 @@ and strips punctuation before lookup), so both names resolve to the identical co
 byte-identical output. No input, ASCII or otherwise, can distinguish them. Same equivalence \
 already documented for tunnel/token_hash x_hash_token__mutmut_9.\
 """
-
 
 [[equivalent]]
 mutant = "provide.uterm.server.bridge.hub.router_broadcast.x__broadcast_to_current_browsers__mutmut_123"
