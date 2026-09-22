@@ -195,6 +195,12 @@ warn_unused_ignores = false
 
 [tool.ty.environment]
 python-version = "3.11"
+# Pin the first-party root to the repo root. ty otherwise auto-adds ./src,
+# which here is the mutmut symlink tree (src/provide/uterm/... -> packages/*/src),
+# so every `provide.uterm.*` import resolved to a second copy of each module and
+# e.g. a TermHub method's `self` stopped matching the `TermHub` its delegate
+# module imported. Package sources resolve through the editable installs instead.
+root = ["."]
 extra-paths = []
 
 [tool.ty.rules]

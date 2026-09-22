@@ -193,10 +193,10 @@ class TermHub:
         await self.lease._recheck_and_resume(worker_id, now)
 
     async def cleanup_expired_hijack(self, worker_id: str) -> bool:
-        return await _lease_d.cleanup_expired_hijack(self, worker_id)  # ty:ignore[invalid-argument-type]
+        return await _lease_d.cleanup_expired_hijack(self, worker_id)
 
     async def get_rest_session(self, worker_id: str, hijack_id: str) -> HijackSession | None:
-        return await _lease_d.get_rest_session(self, worker_id, hijack_id)  # ty:ignore[invalid-argument-type]
+        return await _lease_d.get_rest_session(self, worker_id, hijack_id)
 
     async def try_acquire_rest_hijack(
         self,
@@ -208,7 +208,7 @@ class TermHub:
         now: float,
     ) -> tuple[bool, str | None]:
         return await _lease_d.try_acquire_rest_hijack(
-            self,  # ty:ignore[invalid-argument-type]
+            self,
             worker_id,
             owner=owner,
             lease_s=lease_s,
@@ -217,7 +217,7 @@ class TermHub:
         )
 
     async def try_acquire_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, str | None]:
-        return await _lease_d.try_acquire_ws_hijack(self, worker_id, ws)  # ty:ignore[invalid-argument-type]
+        return await _lease_d.try_acquire_ws_hijack(self, worker_id, ws)
 
     async def touch_hijack_owner(self, worker_id: str, lease_s: int | None = None) -> float | None:
         return await self.lease.touch_owner(worker_id, lease_s)
@@ -226,7 +226,7 @@ class TermHub:
         return await self.lease.touch_if_owner(worker_id, ws)
 
     async def try_release_ws_hijack(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
-        return await _lease_d.try_release_ws_hijack(self, worker_id, ws)  # ty:ignore[invalid-argument-type]
+        return await _lease_d.try_release_ws_hijack(self, worker_id, ws)
 
     async def extend_hijack_lease(
         self, worker_id: str, hijack_id: str, owner: str, lease_s: int, now: float
@@ -316,9 +316,7 @@ class TermHub:
         return self.connection_mgr.worker_token()
 
     async def register_worker(self, worker_id: str, ws: WebSocket, *, is_tunnel_worker: bool = False) -> bool:
-        return await _conn.register_worker(  # ty:ignore[invalid-argument-type]
-            self, worker_id, ws, is_tunnel_worker=is_tunnel_worker
-        )
+        return await _conn.register_worker(self, worker_id, ws, is_tunnel_worker=is_tunnel_worker)
 
     async def is_active_worker(self, worker_id: str, ws: WebSocket) -> bool:
         return await self.connection_mgr.is_active_worker(worker_id, ws)
@@ -335,7 +333,7 @@ class TermHub:
     async def register_browser(
         self, worker_id: str, ws: WebSocket, role: str, *, defer_broadcast: bool = False
     ) -> dict[str, Any]:
-        return await _conn.register_browser(self, worker_id, ws, role, defer_broadcast=defer_broadcast)  # ty:ignore[invalid-argument-type]
+        return await _conn.register_browser(self, worker_id, ws, role, defer_broadcast=defer_broadcast)
 
     async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:
         await self.connection_mgr.activate_browser_broadcasts(worker_id, ws)
@@ -510,13 +508,13 @@ class TermHub:
         await self.router.run_behavioral_audit_loop()
 
     async def cleanup_browser_disconnect(self, worker_id: str, ws: WebSocket, owned_hijack: bool) -> dict[str, Any]:
-        return await _conn.cleanup_browser_disconnect(self, worker_id, ws, owned_hijack)  # ty:ignore[invalid-argument-type]
+        return await _conn.cleanup_browser_disconnect(self, worker_id, ws, owned_hijack)
 
     async def remove_dead_browsers(self, worker_id: str, dead: set[WebSocket]) -> bool:
-        return await _conn.remove_dead_browsers(self, worker_id, dead)  # ty:ignore[invalid-argument-type]
+        return await _conn.remove_dead_browsers(self, worker_id, dead)
 
     async def deregister_worker(self, worker_id: str, ws: WebSocket) -> tuple[bool, bool]:
-        return await _conn.deregister_worker(self, worker_id, ws)  # ty:ignore[invalid-argument-type]
+        return await _conn.deregister_worker(self, worker_id, ws)
 
     @property
     def resume_store(self) -> ResumeTokenStore | None:
@@ -585,7 +583,7 @@ class TermHub:
         return True
 
     def create_router(self, *, extra_route_registrars: list[Any] | None = None) -> APIRouter:
-        return _orch.create_router(self, extra_route_registrars=extra_route_registrars)  # ty:ignore[invalid-argument-type]
+        return _orch.create_router(self, extra_route_registrars=extra_route_registrars)
 
     def __init__(
         self,
@@ -691,10 +689,10 @@ class TermHub:
         self.max_workers = max(1, int(max_workers))
         self._principal_browser_counts: dict[str, int] = {}
         self._ws_principal: dict[Any, str] = {}  # WebSocket → principal subject_id (disconnect decrement)
-        self.router = MessageRouter(self)  # ty:ignore[invalid-argument-type]  # built first: state/polling/connection reuse it
-        self.state = StateStore(self)  # ty:ignore[invalid-argument-type]
-        self.polling = PollingCoordinator(self)  # ty:ignore[invalid-argument-type]
-        self.connection_mgr = ConnectionManager(self)  # ty:ignore[invalid-argument-type]
+        self.router = MessageRouter(self)  # built first: state/polling/connection reuse it
+        self.state = StateStore(self)
+        self.polling = PollingCoordinator(self)
+        self.connection_mgr = ConnectionManager(self)
         self.presence_mgr = PresenceManager(self)
 
         if not isinstance(self._behavioral_audit_gate, NoOpBehavioralAuditGate):
@@ -707,7 +705,7 @@ class TermHub:
         return self._identity_provider
 
     async def set_worker_hello_mode(self, worker_id: str, mode: str) -> bool:
-        return await _orch.set_worker_hello_mode(self, worker_id, mode)  # ty:ignore[invalid-argument-type]
+        return await _orch.set_worker_hello_mode(self, worker_id, mode)
 
     async def emit_telemetry(
         self,
@@ -719,7 +717,7 @@ class TermHub:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         await _orch.emit_telemetry(
-            self,  # ty:ignore[invalid-argument-type]
+            self,
             event_type,
             worker_id=worker_id,
             principal=principal,
@@ -738,7 +736,7 @@ class TermHub:
         *,
         approval_request: Any | None = None,
     ) -> tuple[bool, str | None]:
-        return await _orch.resolve_approval(  # ty:ignore[invalid-argument-type]
+        return await _orch.resolve_approval(
             self,
             worker_id,
             request_id,
@@ -748,4 +746,4 @@ class TermHub:
         )
 
     async def _handle_expired_approval(self, request: Any) -> None:
-        await _orch.handle_expired_approval(self, request)  # ty:ignore[invalid-argument-type]
+        await _orch.handle_expired_approval(self, request)
