@@ -350,13 +350,12 @@ api:
         Go TransportSession.CloseInfo(); C# property CloseInfo).
     - name: last_close
       kind: function
-      required: false
+      required: true
       note: >-
-        The close that triggered the last reconnect (Python
-        ReconnectingSession.last_close; Go ReconnectingTransport.LastClose();
-        TypeScript lastClose). required: false only because the C# port has no
-        reconnecting wrapper to carry it yet (issue #102); make it required
-        when one lands.
+        The close that triggered the last reconnect, or the final attempt when
+        the retries ran out (Python ReconnectingSession.last_close; Go
+        ReconnectingTransport.LastClose(); C# property
+        ReconnectingTransport.LastClose; TypeScript lastClose).
   # provide.uterm.server.api_keys + bridge.identity (Python) <->
   # packages/provide-uterm-go/serverauth (Go) <-> Provide.Uterm/ServerAuth (C#).
   # The tenant-scoped API-key store methods + the resolved Principal. Note:
