@@ -20,7 +20,9 @@
  *   probe for groups it has no part in.
  */
 
+import { PromptRegexError } from "../hub/index.ts";
 import type { AuthorizablePrincipal } from "../server/authorization.ts";
+import { FanOutGroupRejectedError } from "./controller.ts";
 import { type FanOutGroup, type FanOutMode, type FanOutResult, fanOutGroup } from "./models.ts";
 
 /** A request, as much of one as these handlers read. */
@@ -285,13 +287,15 @@ export function createFanoutRoutes(options: FanoutRoutesOptions): FanoutRoutes {
       try {
         groupId = await ctrl.createGroup(group, principal);
       } catch (thrown) {
-        // A refusal is a client error; a bug in the controller is not, and
-        // dressing one as a 400 would send the caller looking at their own
+        // Only the two refusals written for the caller are a 400 carrying
+        // their message, as in the reference. Anything else — a bug in the
+        // controller, a store's failure — is a server fault: echoing it would
+        // hand the caller internal detail and send them looking at their own
         // request.
-        if (thrown instanceof TypeError || thrown instanceof RangeError) {
-          throw thrown;
+        if (thrown instanceof FanOutGroupRejectedError || thrown instanceof PromptRegexError) {
+          return refusal(400, thrown.message);
         }
-        return refusal(400, (thrown as Error).message);
+        throw thrown;
       }
       record("fanout.create_group", principal, { group_id: groupId, name });
       return { status: 200, body: { group_id: groupId, name, session_count: workerIds.length } };
