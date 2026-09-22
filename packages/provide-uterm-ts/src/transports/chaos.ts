@@ -15,7 +15,8 @@
  * schedule, not the individual delays.
  */
 
-import { type ConnectionTransport, TransportConnectionError } from "./base.ts";
+import type { ConnectionTransport } from "./base.ts";
+import { TransportClose, TransportClosedError } from "./close.ts";
 
 /** How the wrapper injects faults. */
 export interface ChaosOptions {
@@ -104,7 +105,9 @@ export class ChaosTransport implements ConnectionTransport {
    * still moves the schedule along — and it is one-based, because counting
    * from zero would make every session fail on its very first read.
    *
-   * @throws {TransportConnectionError} On an injected disconnect.
+   * @throws {TransportClosedError} On an injected disconnect, attributed to
+   *   neither side: a fault the wrapper injected is not the far end hanging
+   *   up, and not this side choosing to.
    */
   async receive(maxBytes: number, timeoutMs: number): Promise<Uint8Array> {
     this.#rxCount += 1;
@@ -122,7 +125,10 @@ export class ChaosTransport implements ConnectionTransport {
       } catch {
         // Cleanup that raised must not mask the fault the test asked for.
       }
-      throw new TransportConnectionError(`${this.#label}: injected disconnect on receive #${this.#rxCount}`);
+      throw new TransportClosedError(
+        `${this.#label}: injected disconnect on receive #${this.#rxCount}`,
+        new TransportClose("unknown", { reason: "injected disconnect" }),
+      );
     }
 
     if (this.#timeoutN > 0 && this.#rxCount % this.#timeoutN === 0) {

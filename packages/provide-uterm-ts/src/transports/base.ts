@@ -35,15 +35,18 @@ export interface ConnectionTransport {
   /**
    * Send raw bytes, with whatever encoding or escaping the protocol needs.
    *
-   * @throws {TransportConnectionError} If not connected, or the send fails.
+   * @throws {TransportClosedError} If the connection ended; carries who
+   *   closed it.
+   * @throws {TransportConnectionError} If not connected.
    */
   send(data: Uint8Array): Promise<void>;
 
   /**
    * Read raw bytes, returning empty on a read timeout.
    *
-   * @throws {TransportConnectionError} If not connected, or the connection is
-   *   lost.
+   * @throws {TransportClosedError} If the connection ended; carries who
+   *   closed it.
+   * @throws {TransportConnectionError} If not connected.
    */
   receive(maxBytes: number, timeoutMs: number): Promise<Uint8Array>;
 

@@ -183,7 +183,9 @@ describe("the fault schedule", () => {
     // disconnect still moves the schedule along.
     const record = golden.schedules.find((entry) => entry.name === "disconnect every one");
     expect(record?.outcomes.map((outcome) => outcome.message)).toStrictEqual(
-      record?.outcomes.map((_outcome, index) => `chaos: injected disconnect on receive #${index + 1}`),
+      record?.outcomes.map(
+        (_outcome, index) => `chaos: injected disconnect on receive #${index + 1} (unknown close injected disconnect)`,
+      ),
     );
   });
 });
@@ -191,12 +193,16 @@ describe("the fault schedule", () => {
 describe("the injected disconnect", () => {
   it("names the label so a log says which wrapper fired", async () => {
     const record = golden.schedules.find((entry) => entry.name === "a custom label");
-    expect(record?.outcomes[1]?.message).toBe("flaky-bbs: injected disconnect on receive #2");
+    expect(record?.outcomes[1]?.message).toBe(
+      "flaky-bbs: injected disconnect on receive #2 (unknown close injected disconnect)",
+    );
   });
 
   it("falls back to a label rather than an empty prefix", async () => {
     const record = golden.schedules.find((entry) => entry.name === "an empty label falls back");
-    expect(record?.outcomes[1]?.message).toBe(`${golden.defaults.label}: injected disconnect on receive #2`);
+    expect(record?.outcomes[1]?.message).toBe(
+      `${golden.defaults.label}: injected disconnect on receive #2 (unknown close injected disconnect)`,
+    );
   });
 
   it("takes the inner transport down with it", async () => {

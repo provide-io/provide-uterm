@@ -365,7 +365,9 @@ describe("receive", () => {
     // different operator responses.
     const { transport, socket } = harness();
     await transport.connect("h", 1);
-    socket().recvError = new RangeError("frame too large");
+    // The reference's fault is a ValueError; the detail names the error type,
+    // so the port's fault carries the same name.
+    socket().recvError = Object.assign(new RangeError("frame too large"), { name: "ValueError" });
     await expect(transport.receive(4096, 1000)).rejects.toThrow(golden.failures.receive_error.message);
     expect(transport.isConnected()).toBe(golden.failures.receive_error.connected_after);
   });
