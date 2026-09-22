@@ -162,6 +162,7 @@ class UshellConnector(_SessionConnector):
                 if not result.loop:
                     break
         except asyncio.CancelledError:
+            # Cancelled (e.g. replaced by a newer animation): stop streaming; the prompt is still re-emitted below.
             pass
         self._pending_frames.append(term(PROMPT))
 
