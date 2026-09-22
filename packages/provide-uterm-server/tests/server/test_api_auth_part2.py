@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -189,7 +188,7 @@ def test_session_delete_revokes_tunnel_tokens() -> None:
         assert tunnel_id not in client.app.state.uterm_tunnel_tokens
 
 
-def test_recording_download_no_config_on_app_state(app_client: TestClient, sid: str) -> None:
+def test_recording_download_no_config_on_app_state(app_client: TestClient, sid: str, tmp_path: Path) -> None:
     """Recording download returns 404 when uterm_config is absent from app state."""
     config = default_server_config()
     config.auth.mode = "header"
@@ -198,19 +197,16 @@ def test_recording_download_no_config_on_app_state(app_client: TestClient, sid: 
     app = create_server_app(config)
     del app.state.uterm_config  # type: ignore[attr-defined]
 
-    real_path = Path(tempfile.mktemp(suffix=".jsonl"))  # noqa: S306
+    real_path = tmp_path / "recording.jsonl"
     real_path.write_text("{}\n")
-    try:
 
-        async def _fake_path(session_id: str) -> Path:
-            return real_path
+    async def _fake_path(session_id: str) -> Path:
+        return real_path
 
-        with TestClient(app) as client:
-            app.state.uterm_registry.recording_path = _fake_path
-            r = client.get(f"/api/sessions/{sid}/recording/download")
-            assert r.status_code == 404
-    finally:
-        real_path.unlink(missing_ok=True)
+    with TestClient(app) as client:
+        app.state.uterm_registry.recording_path = _fake_path
+        r = client.get(f"/api/sessions/{sid}/recording/download")
+        assert r.status_code == 404
 
 
 # ---------------------------------------------------------------------------
