@@ -38,7 +38,6 @@ def _resolve_file_path(screens_dir: Path, filename: str, force: bool) -> Path:
         # Make forced saves stable and non-destructive by creating a distinct
         # filename instead of overwriting the prior capture.
         stem = screen_file.stem
-        candidate = screen_file
         for i in range(1, 10_000):
             candidate = screens_dir / f"{stem}-dup{i}.txt"
             if not candidate.exists():
