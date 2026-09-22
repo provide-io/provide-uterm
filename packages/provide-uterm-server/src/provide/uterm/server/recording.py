@@ -75,3 +75,4 @@ class WebhookRecordingStore(RecordingStore):
                     return resp.json()
         except Exception:
             return None
+        return None
