@@ -397,8 +397,6 @@ LIVE_DEMO_CHAPTERS: list[list[str]] = [
 
 # Per-keystroke delay inside a chapter (website-demo typing pace).
 _KEY_GAP_S = 0.08
-# Hold after a chapter so nested xterm + x11vnc can paint (no RFB reconnect).
-_CHAPTER_HOLD_S = 0.9
 
 
 def main(argv: list[str] | None = None) -> int:
