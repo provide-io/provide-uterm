@@ -36,7 +36,8 @@ async def cmd_render(arg: str) -> list[str] | AnimatedResult:
             _mode_raw = tokens[i + 1]
             if _mode_raw not in {"truecolor", "256", "16"}:
                 return [error_msg(f"unknown mode {_mode_raw!r} (use truecolor, 256, or 16)") + PROMPT]
-            mode = cast('Literal["truecolor", "256", "16"]', _mode_raw)
+            # mypy does not narrow `str in {...}` to a Literal, so the cast stays for it.
+            mode = cast('Literal["truecolor", "256", "16"]', _mode_raw)  # ty:ignore[redundant-cast]
             i += 2
         elif tok == "--cols" and i + 1 < len(tokens):
             cols = int(tokens[i + 1])

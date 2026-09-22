@@ -29,12 +29,15 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-try:
+if TYPE_CHECKING:
     from provide.uterm.server.connectors.base import SessionConnector as _SessionConnector
-except ImportError:  # pragma: no cover
-    _SessionConnector = object  # type: ignore[assignment,misc]  # ty:ignore[invalid-assignment]
+else:
+    try:
+        from provide.uterm.server.connectors.base import SessionConnector as _SessionConnector
+    except ImportError:  # pragma: no cover
+        _SessionConnector = object
 
 from provide.uterm.shell._output import BANNER, CLEAR_SCREEN, PROMPT
 from provide.uterm.shell._repl import LineBuffer

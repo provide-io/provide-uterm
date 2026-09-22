@@ -53,7 +53,7 @@ async def _cli() -> None:
             for text in result:
                 sys.stdout.write(text.replace("\r\n", "\n"))
             sys.stdout.flush()
-        if isinstance(result, list) and any("Goodbye" in r for r in result):  # ty:ignore[unsupported-operator]
+        if isinstance(result, list) and any("Goodbye" in r for r in result):
             break
 
 

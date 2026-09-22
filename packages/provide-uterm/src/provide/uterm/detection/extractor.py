@@ -34,7 +34,7 @@ class KVExtractor:
         # Use findall to get all matches and take the last one.
         # Screen buffers contain scroll history, so the most recent value
         # is at the end of the screen — re.search() would find old values first.
-        compiled = re.compile(pattern, re.MULTILINE | re.IGNORECASE)
+        compiled: re.Pattern[str] = re.compile(pattern, re.MULTILINE | re.IGNORECASE)
         matches = list(compiled.finditer(screen))
         if not matches:
             return None
