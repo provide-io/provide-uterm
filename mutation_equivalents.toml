@@ -1370,3 +1370,143 @@ then send_keys is already None: _is_terminal is True only for (a) kind == "noop"
 where send_keys = keys-if-kind-is-"send_keys"-else-None is None, or (b) is_last
 and action.keys is None, where send_keys is None whatever the kind. Both arms
 agree on every reachable input."""
+
+# ---------------------------------------------------------------------------
+# bridge/routes/browser_handlers.py — 20 equivalents, measured 2026-09-23
+# (mutmut 3.8; kill-suites test_*_mutation_killing.py for each handler)
+# ---------------------------------------------------------------------------
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_8"
+reason = """cast("BrowserInputFrame", msg_b) -> the type argument replaced (None).
+typing.cast returns its second argument unchanged at runtime and never inspects
+the first, so the frame read is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_12"
+reason = """cast("BrowserInputFrame", msg_b) -> the type argument replaced ("XXBrowserInputFrameXX").
+typing.cast returns its second argument unchanged at runtime and never inspects
+the first, so the frame read is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_13"
+reason = """cast("BrowserInputFrame", msg_b) -> the type argument replaced ("browserinputframe").
+typing.cast returns its second argument unchanged at runtime and never inspects
+the first, so the frame read is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_14"
+reason = """cast("BrowserInputFrame", msg_b) -> the type argument replaced ("BROWSERINPUTFRAME").
+typing.cast returns its second argument unchanged at runtime and never inspects
+the first, so the frame read is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_102"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` forced to None.
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_103"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` forced to "no_worker" (`ok and False`).
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_104"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` forced to None (`ok or True`).
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_105"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` with the literal mangled to "XXno_workerXX".
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_106"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` with the literal upper-cased to "NO_WORKER".
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_338"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` forced to None.
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_339"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` forced to "no_worker" (`ok and False`).
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_340"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` forced to None (`ok or True`).
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_341"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` with the literal mangled to "XXno_workerXX".
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_input__mutmut_342"
+reason = """In the reserved_sender branch, `error = None if ok else "no_worker"` with the literal upper-cased to "NO_WORKER".
+`error` is only ever compared with "invalid_owner", which neither None nor any
+"no_worker" spelling equals, and `ok` alone decides the send-failed branch, so
+every path through the rest of the function is unchanged."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_resume__mutmut_5"
+reason = """msg_b.get("token", "") -> the default replaced by None. A missing token then yields
+None instead of "", and the very next guard `not isinstance(old_token, str) or
+not old_token` rejects both identically (same warning, same reason
+"token_malformed", same return), so the default is never observable."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_resume__mutmut_7"
+reason = """msg_b.get("token", "") -> the default dropped (.get("token") defaults to None). A missing token then yields
+None instead of "", and the very next guard `not isinstance(old_token, str) or
+not old_token` rejects both identically (same warning, same reason
+"token_malformed", same return), so the default is never observable."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__select_resumed_role__mutmut_5"
+reason = """_ROLE_PRIORITY.get(session_role, 0) -> the default replaced by None. That lookup
+sits after `session_role in VALID_ROLES and`, and VALID_ROLES is exactly
+_ROLE_PRIORITY's key set, so the key is always present when it runs and the
+default is unreachable."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__select_resumed_role__mutmut_7"
+reason = """_ROLE_PRIORITY.get(session_role, 0) -> the default dropped. That lookup
+sits after `session_role in VALID_ROLES and`, and VALID_ROLES is exactly
+_ROLE_PRIORITY's key set, so the key is always present when it runs and the
+default is unreachable."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__select_resumed_role__mutmut_8"
+reason = """_ROLE_PRIORITY.get(session_role, 0) -> the default replaced by 1. That lookup
+sits after `session_role in VALID_ROLES and`, and VALID_ROLES is exactly
+_ROLE_PRIORITY's key set, so the key is always present when it runs and the
+default is unreachable."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.browser_handlers.x__handle_hijack_release__mutmut_10"
+reason = """`_do_resume = False` in the still-hijacked re-check -> `_do_resume = None`.
+`_do_resume` is only read afterwards as `if _do_resume:` (twice) and the function
+returns a literal False, so None and False are indistinguishable."""
