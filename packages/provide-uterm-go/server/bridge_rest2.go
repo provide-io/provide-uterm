@@ -208,7 +208,7 @@ func (s *Server) handleWorkerInputMode(w http.ResponseWriter, r *http.Request) {
 	}
 	okSet, errKind, err := s.deps.Hub.SetInputMode(r.Context(), workerID, mode)
 	if err != nil {
-		detailError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, detailError, http.StatusInternalServerError, hubOperationFailed, "input_mode_set_failed", err, "worker_id", workerID)
 		return
 	}
 	if !okSet {
@@ -232,7 +232,7 @@ func (s *Server) handleDisconnectWorker(w http.ResponseWriter, r *http.Request) 
 	}
 	okDisc, err := s.deps.Hub.DisconnectWorker(r.Context(), workerID)
 	if err != nil {
-		detailError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, detailError, http.StatusInternalServerError, hubOperationFailed, "worker_disconnect_failed", err, "worker_id", workerID)
 		return
 	}
 	if !okDisc {

@@ -223,7 +223,7 @@ func (s *Server) writeCreateError(w http.ResponseWriter, err error) {
 	case errors.As(err, &ce):
 		detailError(w, http.StatusConflict, ce.Msg)
 	default:
-		detailError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, detailError, http.StatusInternalServerError, sessionCreateFailed, "session_create_failed", err)
 	}
 }
 
