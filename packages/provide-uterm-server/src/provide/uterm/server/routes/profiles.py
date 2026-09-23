@@ -26,6 +26,7 @@ from fastapi import APIRouter, Body, HTTPException, Path, Request
 from pydantic import ValidationError
 
 from provide.uterm.api_routes import API_ROUTES, RouteDef
+from provide.uterm.server.config_schema import mount_prefix
 from provide.uterm.server.models import model_dump
 from provide.uterm.server.profiles import ConnectionProfile
 from provide.uterm.server.registry import SessionValidationError
@@ -189,7 +190,7 @@ def profile_capability_handlers() -> dict[str, Callable[..., object]]:
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         cfg = request.app.state.uterm_config
-        url = f"{cfg.ui.app_path}/session/{session_id}"
+        url = f"{mount_prefix(cfg.ui.app_path)}/session/{session_id}"
         return {"session_id": session_id, "url": url, **model_dump(session)}
 
     return {

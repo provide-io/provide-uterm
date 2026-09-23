@@ -45,6 +45,17 @@ def _clean_path(value: str, fallback: str) -> str:
     return text.rstrip("/") or "/"
 
 
+def mount_prefix(path: str) -> str:
+    """The prefix a route or link is built on: the root becomes ``""``.
+
+    ``_clean_path`` keeps the root as ``"/"``, which is right for display but not
+    for joining: ``"/" + "/session/x"`` begins ``//`` (a protocol-relative URL
+    pointing off-site), and FastAPI refuses a router prefix ending in ``/``.
+    Mirrors the C# port's ``UiPaths.MountPrefix``.
+    """
+    return "" if path == "/" else path
+
+
 class ServerBaseModel(BaseModel):
     """Base class for mutable server models with strict validation."""
 

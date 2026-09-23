@@ -36,6 +36,7 @@ from fastapi import APIRouter, Body, HTTPException, Request
 from provide.telemetry import get_tracer
 from provide.uterm.api_routes import API_ROUTES, RouteDef
 from provide.uterm.server.audit import audit_event
+from provide.uterm.server.config_schema import mount_prefix
 from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
 from provide.uterm.server.models import model_dump
 from provide.uterm.server.registry import SessionValidationError
@@ -161,7 +162,7 @@ def tunnel_capability_handlers() -> dict[str, Callable[..., object]]:
             detail={"connector_type": connector_type, "ephemeral": True},
         )
         cfg = request.app.state.uterm_config
-        url = f"{cfg.ui.app_path}/session/{session_id}"
+        url = f"{mount_prefix(cfg.ui.app_path)}/session/{session_id}"
         return {"session_id": session_id, "url": url, **model_dump(session)}
 
     async def create_tunnel(request: Request, payload: Annotated[dict[str, Any], Body(...)]) -> dict[str, Any]:
