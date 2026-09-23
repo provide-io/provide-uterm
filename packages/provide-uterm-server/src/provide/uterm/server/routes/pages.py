@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import HTMLResponse
 
 from provide.uterm.server.auth import extract_bearer_token, resolve_http_principal
+from provide.uterm.server.config_schema import mount_prefix
 from provide.uterm.server.ui import (
     connect_page_html,
     inspect_page_html,
@@ -105,7 +106,7 @@ def create_page_router() -> APIRouter:
         response = HTMLResponse(
             operator_dashboard_html(
                 cfg.server.title,
-                cfg.ui.app_path,
+                mount_prefix(cfg.ui.app_path),
                 cfg.ui.assets_path,
                 xterm_cdn=cfg.ui.xterm_cdn,
                 fitaddon_cdn=cfg.ui.fitaddon_cdn,
@@ -134,7 +135,7 @@ def create_page_router() -> APIRouter:
             cfg.ui.assets_path,
             session_id,
             operator=False,
-            app_path=cfg.ui.app_path,
+            app_path=mount_prefix(cfg.ui.app_path),
             share_role=_share_role(request),
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
@@ -162,7 +163,7 @@ def create_page_router() -> APIRouter:
             cfg.ui.assets_path,
             session_id,
             operator=True,
-            app_path=cfg.ui.app_path,
+            app_path=mount_prefix(cfg.ui.app_path),
             share_role=_share_role(request),
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
@@ -189,7 +190,7 @@ def create_page_router() -> APIRouter:
             session.display_name,
             cfg.ui.assets_path,
             session_id,
-            app_path=cfg.ui.app_path,
+            app_path=mount_prefix(cfg.ui.app_path),
             share_role=_share_role(request),
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
@@ -216,7 +217,7 @@ def create_page_router() -> APIRouter:
             session.display_name,
             cfg.ui.assets_path,
             session_id,
-            app_path=cfg.ui.app_path,
+            app_path=mount_prefix(cfg.ui.app_path),
             share_role=_share_role(request),
             xterm_cdn=cfg.ui.xterm_cdn,
             fitaddon_cdn=cfg.ui.fitaddon_cdn,
@@ -237,7 +238,7 @@ def create_page_router() -> APIRouter:
             connect_page_html(
                 cfg.server.title,
                 cfg.ui.assets_path,
-                cfg.ui.app_path,
+                mount_prefix(cfg.ui.app_path),
                 xterm_cdn=cfg.ui.xterm_cdn,
                 fitaddon_cdn=cfg.ui.fitaddon_cdn,
                 fonts_cdn=cfg.ui.fonts_cdn,

@@ -14,6 +14,7 @@ from fastapi import Depends
 from fastapi import Request as FastAPIRequest
 from starlette.staticfiles import StaticFiles
 
+from provide.uterm.server.config_schema import mount_prefix
 from provide.uterm.server.graphical_routes import create_graphical_router
 from provide.uterm.server.routes.api import create_api_router
 from provide.uterm.server.routes.approvals import create_approvals_router
@@ -59,7 +60,7 @@ def install_routers(
     app.include_router(create_graphical_router(), dependencies=[Depends(require_authenticated)])
     app.include_router(
         create_page_router(),
-        prefix=config.ui.app_path,
+        prefix=mount_prefix(config.ui.app_path),
         dependencies=[Depends(require_authenticated)],
     )
 
@@ -91,7 +92,7 @@ def install_routers(
         page = (
             "operator" if invite is not None and invite.role == "operator" else str(entry.get("share_page", "session"))
         )
-        target = f"{config.ui.app_path}/{page}/{session_id}"
+        target = f"{mount_prefix(config.ui.app_path)}/{page}/{session_id}"
         response = RedirectResponse(url=target, status_code=302)
         if invite is not None:
             # The Secure flag is taken from static config (tunnel.cookie_secure,

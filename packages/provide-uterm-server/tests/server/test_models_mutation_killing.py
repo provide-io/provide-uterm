@@ -19,12 +19,31 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from provide.uterm.server.config_schema import _clean_path, _require_secure_url
+from provide.uterm.server.config_schema import _clean_path, _require_secure_url, mount_prefix
 from provide.uterm.server.models import (
     SessionDefinition,
     model_dump,
     validation_error_message,
 )
+
+# ---------------------------------------------------------------------------
+# mount_prefix
+# ---------------------------------------------------------------------------
+
+
+class TestMountPrefix:
+    def test_root_becomes_empty(self) -> None:
+        """The root joins as "" so ``prefix + "/x"`` never begins "//".
+
+        Kills ``""`` → ``"XXXX"``, ``==`` → ``!=`` and ``"/"`` → ``"XX/XX"``.
+        """
+        assert mount_prefix("/") == ""
+
+    def test_non_root_passes_through(self) -> None:
+        """Any other cleaned path is its own prefix (kills ``==`` → ``!=``)."""
+        assert mount_prefix("/app") == "/app"
+        assert mount_prefix("/ops/ui") == "/ops/ui"
+
 
 # ---------------------------------------------------------------------------
 # _clean_path
