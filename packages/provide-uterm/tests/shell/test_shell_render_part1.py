@@ -16,12 +16,12 @@ from PIL import Image
 
 from provide.uterm.shell._render import (
     _color_dist_sq,
-    _nearest_16,
-    _nearest_256,
-    _sgr_16,
-    _sgr_256,
-    _sgr_truecolor,
     image_to_ansi_frames,
+    nearest_16,
+    nearest_256,
+    sgr_16,
+    sgr_256,
+    sgr_truecolor,
 )
 
 # ---------------------------------------------------------------------------
@@ -58,84 +58,84 @@ def _make_animated_gif(n_frames: int = 3, size: tuple[int, int] = (4, 4)) -> byt
 
 
 # ---------------------------------------------------------------------------
-# _sgr_truecolor
+# sgr_truecolor
 # ---------------------------------------------------------------------------
 
 
 def test_sgr_truecolor_black_black() -> None:
-    result = _sgr_truecolor((0, 0, 0), (0, 0, 0))
+    result = sgr_truecolor((0, 0, 0), (0, 0, 0))
     assert result == "\x1b[38;2;0;0;0;48;2;0;0;0m"
 
 
 def test_sgr_truecolor_red_fg_blue_bg() -> None:
-    result = _sgr_truecolor((255, 0, 0), (0, 0, 255))
+    result = sgr_truecolor((255, 0, 0), (0, 0, 255))
     assert result == "\x1b[38;2;255;0;0;48;2;0;0;255m"
 
 
 # ---------------------------------------------------------------------------
-# _nearest_256
+# nearest_256
 # ---------------------------------------------------------------------------
 
 
 def test_nearest_256_pure_red() -> None:
     # xterm index 196 = pure red (255, 0, 0) in the 216-color cube
-    assert _nearest_256(255, 0, 0) == 196
+    assert nearest_256(255, 0, 0) == 196
 
 
 def test_nearest_256_pure_white() -> None:
     # index 15 = bright white (255, 255, 255) in the standard 16
-    assert _nearest_256(255, 255, 255) == 15
+    assert nearest_256(255, 255, 255) == 15
 
 
 def test_nearest_256_pure_black() -> None:
     # index 0 = black (0, 0, 0)
-    assert _nearest_256(0, 0, 0) == 0
+    assert nearest_256(0, 0, 0) == 0
 
 
 # ---------------------------------------------------------------------------
-# _sgr_256
+# sgr_256
 # ---------------------------------------------------------------------------
 
 
 def test_sgr_256_format() -> None:
-    result = _sgr_256((255, 0, 0), (0, 0, 255))
+    result = sgr_256((255, 0, 0), (0, 0, 255))
     assert result.startswith("\x1b[38;5;")
     assert ";48;5;" in result
     assert result.endswith("m")
 
 
 # ---------------------------------------------------------------------------
-# _nearest_16
+# nearest_16
 # ---------------------------------------------------------------------------
 
 
 def test_nearest_16_pure_red() -> None:
     # (255, 0, 0) is closest to dark red (170,0,0) → fg=31, bg=41
-    fg, bg = _nearest_16(255, 0, 0)
+    fg, bg = nearest_16(255, 0, 0)
     assert fg == 31
     assert bg == 41
 
 
 def test_nearest_16_bright_red() -> None:
     # (255, 85, 85) is bright red → fg=91, bg=101
-    fg, bg = _nearest_16(255, 85, 85)
+    fg, bg = nearest_16(255, 85, 85)
     assert fg == 91
     assert bg == 101
 
 
 def test_nearest_16_pure_black() -> None:
-    fg, bg = _nearest_16(0, 0, 0)
+    fg, bg = nearest_16(0, 0, 0)
     assert fg == 30
     assert bg == 40
 
 
 # ---------------------------------------------------------------------------
-# _sgr_16
+# sgr_16
 # ---------------------------------------------------------------------------
 
 
 def test_sgr_16_format() -> None:
-    result = _sgr_16((255, 0, 0), (0, 0, 0))
+    result = sgr_16((255, 0, 0), (0, 0, 0))
     # Should be \x1b[FG;BGm — two codes separated by ;
     assert result.startswith("\x1b[")
     assert result.endswith("m")
@@ -370,7 +370,7 @@ def test_build_xterm256_length() -> None:
 
 def test_build_xterm256_first_16_match_ansi16() -> None:
     rm = _fresh_build()
-    for idx, (r, g, b, _fg, _bg) in enumerate(rm._ANSI16):
+    for idx, (r, g, b, _fg, _bg) in enumerate(rm.ANSI16_PALETTE):
         assert rm._XTERM256[idx] == (r, g, b), f"index {idx} mismatch"
 
 

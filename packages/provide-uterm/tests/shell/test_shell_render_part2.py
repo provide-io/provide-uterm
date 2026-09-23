@@ -12,11 +12,11 @@ import pytest
 from PIL import Image
 
 from provide.uterm.shell._render import (
-    _nearest_16,
-    _nearest_256,
-    _sgr_256,
-    _sgr_truecolor,
     image_to_ansi_frames,
+    nearest_16,
+    nearest_256,
+    sgr_256,
+    sgr_truecolor,
 )
 
 from .test_shell_render_part1 import _fresh_build
@@ -55,7 +55,7 @@ def _make_animated_gif(n_frames: int = 3, size: tuple[int, int] = (4, 4)) -> byt
 
 
 # ---------------------------------------------------------------------------
-# _sgr_truecolor
+# sgr_truecolor
 # ---------------------------------------------------------------------------
 
 
@@ -67,54 +67,54 @@ def test_build_xterm256_idempotent() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _sgr_truecolor — all 6 channel slots must be distinct
+# sgr_truecolor — all 6 channel slots must be distinct
 # ---------------------------------------------------------------------------
 
 
 def test_sgr_truecolor_all_channels_distinct() -> None:
     # Use all different values so any channel swap is caught
-    result = _sgr_truecolor((10, 20, 30), (40, 50, 60))
+    result = sgr_truecolor((10, 20, 30), (40, 50, 60))
     assert result == "\x1b[38;2;10;20;30;48;2;40;50;60m"
 
 
 def test_sgr_truecolor_fg_g_not_swapped_with_b() -> None:
     # fg[1] must not be replaced by fg[2]
-    result = _sgr_truecolor((1, 2, 3), (4, 5, 6))
+    result = sgr_truecolor((1, 2, 3), (4, 5, 6))
     assert "38;2;1;2;3" in result
 
 
 def test_sgr_truecolor_bg_r_not_swapped_with_g() -> None:
     # bg[0] must not be replaced by bg[1]
-    result = _sgr_truecolor((1, 2, 3), (4, 5, 6))
+    result = sgr_truecolor((1, 2, 3), (4, 5, 6))
     assert "48;2;4;5;6" in result
 
 
 # ---------------------------------------------------------------------------
-# _sgr_256 — verify actual numeric index values appear in output
+# sgr_256 — verify actual numeric index values appear in output
 # ---------------------------------------------------------------------------
 
 
 def test_sgr_256_fg_index_correct() -> None:
     # Pure red maps to index 196; the output must contain 38;5;196
-    result = _sgr_256((255, 0, 0), (0, 0, 0))
+    result = sgr_256((255, 0, 0), (0, 0, 0))
     assert "38;5;196" in result
 
 
 def test_sgr_256_bg_index_correct() -> None:
     # Black bg maps to index 0; output must contain 48;5;0
-    result = _sgr_256((255, 0, 0), (0, 0, 0))
+    result = sgr_256((255, 0, 0), (0, 0, 0))
     assert "48;5;0" in result
 
 
 # ---------------------------------------------------------------------------
-# _nearest_16 — index 0 participation and tie-breaking edge cases
+# nearest_16 — index 0 participation and tie-breaking edge cases
 # ---------------------------------------------------------------------------
 
 
 def test_nearest_16_loop_includes_index_0() -> None:
     # (0, 0, 0) is already initialized as best_i=0 before the loop;
     # result must still be correct regardless of loop start.
-    fg, bg = _nearest_16(0, 0, 0)
+    fg, bg = nearest_16(0, 0, 0)
     assert fg == 30
     assert bg == 40
 
@@ -122,7 +122,7 @@ def test_nearest_16_loop_includes_index_0() -> None:
 def test_nearest_16_second_entry_is_best() -> None:
     # Index 1 = dark red (170, 0, 0); choose a color closer to it than index 0
     # (160, 0, 0) → dist to index 0 (0,0,0) = 160^2; dist to index 1 (170,0,0) = 100
-    fg, bg = _nearest_16(160, 0, 0)
+    fg, bg = nearest_16(160, 0, 0)
     assert fg == 31
     assert bg == 41
 
@@ -133,27 +133,27 @@ def test_nearest_16_tie_broken_by_strict_less_than() -> None:
     # With strict '<' (original), index 0 wins → fg=30 (black fg).
     # With '<=' (mutmut_28), index 1 wins on the tie → fg=31 (red fg).
     # The correct behavior is to return index 0 (first encountered best).
-    fg, bg = _nearest_16(85, 0, 0)
+    fg, bg = nearest_16(85, 0, 0)
     assert fg == 30  # black fg wins the tie with strict '<'
     assert bg == 40  # black bg
 
 
 # ---------------------------------------------------------------------------
-# _nearest_256 — verify index 1 can be the best match
+# nearest_256 — verify index 1 can be the best match
 # ---------------------------------------------------------------------------
 
 
 def test_nearest_256_index_1_best() -> None:
-    # Index 1 = dark red (170, 0, 0) from _ANSI16.
+    # Index 1 = dark red (170, 0, 0) from ANSI16_PALETTE.
     # A color like (170, 0, 0) is exactly that entry.
-    result = _nearest_256(170, 0, 0)
+    result = nearest_256(170, 0, 0)
     assert result == 1
 
 
 def test_nearest_256_loop_covers_index_1() -> None:
     # If range started at 2 (mutmut_16), index 1 would never be considered.
     # (170, 0, 0) exactly matches index 1; it must not return index 0 or 2+.
-    result = _nearest_256(170, 0, 0)
+    result = nearest_256(170, 0, 0)
     assert result == 1
 
 
@@ -259,7 +259,7 @@ def test_render_frame_odd_height_last_row_padding() -> None:
     # When px_h is odd, the last row's bottom pixel uses the (0,0,0,0) fallback.
     # Call _render_frame directly with px_h=1 to force the odd-height code path.
     from provide.uterm.shell._render import _render_frame
-    from provide.uterm.shell._render import _sgr_truecolor as sgr_fn
+    from provide.uterm.shell._render import sgr_truecolor as sgr_fn
 
     class FakePixels:
         def __getitem__(self, _xy: tuple[int, int]) -> tuple[int, int, int, int]:
