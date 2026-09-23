@@ -1,11 +1,12 @@
 # Dependabot configuration — one PR a week, across every ecosystem.
 #
 # Every ecosystem below joins the `weekly` multi-ecosystem group, so a week's
-# version updates for Python, npm, GitHub Actions, Docker, Go and NuGet arrive
-# as a single PR on Monday morning rather than one PR per ecosystem (or, before
-# grouping, one per package). The volume, not the currency, was what made the
-# queue unreadable: on 2026-09-22 a single config change produced seven PRs in
-# a minute, all of which had to be superseded by hand.
+# version updates for Python, npm, GitHub Actions, pre-commit, Docker, Go and
+# NuGet arrive as a single PR on Monday morning rather than one PR per
+# ecosystem (or, before grouping, one per package). The volume, not the
+# currency, was what made the queue unreadable: on 2026-09-22 a single config
+# change produced seven PRs in a minute, all of which had to be superseded by
+# hand.
 #
 # What that trades away: majors are no longer split out into PRs of their own,
 # and one update that breaks CI turns the whole week's PR red. When that
@@ -95,11 +96,25 @@ updates:
     labels:
       - "ci"
 
+  # pre-commit hook revs in .pre-commit-config.yaml. These pin the same tools
+  # the lockfile pins (ruff, codespell) and had no updater at all, so they
+  # drifted behind uv.lock: ruff sat at v0.16.1 against a locked 0.16.8. The
+  # manual-stage hooks' `additional_dependencies` pins (mypy, ty, bandit,
+  # detect-secrets) are updated too.
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    multi-ecosystem-group: "weekly"
+    patterns: ["*"]
+    labels:
+      - "ci"
+
   # Docker base-image (digest) bumps for the images under docker/, keeping
   # node:* / python:* base tags current as new CVE-fix images ship.
   - package-ecosystem: "docker"
     directories:
       - "/docker"
+      # Not reached by "/docker": directories are not scanned recursively.
+      - "/docker/vnc-lab"
     multi-ecosystem-group: "weekly"
     patterns: ["*"]
     labels:
