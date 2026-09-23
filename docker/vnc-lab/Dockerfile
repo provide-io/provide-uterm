@@ -31,7 +31,7 @@
 #                  and tripped the SecretsUsedInArgOrEnv image check.
 #
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DEMO_URL=https://example.com \
