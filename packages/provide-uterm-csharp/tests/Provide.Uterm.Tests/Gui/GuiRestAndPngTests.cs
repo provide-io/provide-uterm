@@ -341,6 +341,51 @@ public class GuiRestAndPngTests
         }
     }
 
+    [Fact]
+    public async Task Attach_Unexpected_Failure_Returns_Fixed_Text()
+    {
+        // A fault below the handler (here the target store, whose message names
+        // its own address) describes the server, not the request: the body is
+        // fixed text and the exception is logged instead.
+        const string leaked = "store at 10.9.8.7:6379 refused the connection";
+        var (server, baseUrl, token, _, _) = await StartServerAsync(
+            wrapTargets: inner => new FaultingTargetRegistry(inner, leaked));
+        await using (server)
+        {
+            var (status, body) = await RawAttachAsync(baseUrl, token, "gt-any");
+            Assert.Equal(500, status);
+            Assert.Equal("{\"detail\":\"attach failed: internal error\"}", body);
+            Assert.DoesNotContain("10.9.8.7", body);
+        }
+    }
+
+    // Delegates to the real registry but faults every lookup, standing in for a
+    // target store that has gone away.
+    private sealed class FaultingTargetRegistry(IGraphicalTargetRegistry inner, string message)
+        : IGraphicalTargetRegistry
+    {
+        public Task<Provide.Uterm.Server.GraphicalTargetDefinition?> GetAsync(
+            GraphicalTargetScope scope, string targetId, CancellationToken ct = default) =>
+            throw new InvalidOperationException(message);
+
+        public Task<IReadOnlyList<Provide.Uterm.Server.GraphicalTargetDefinition>> ListAsync(
+            GraphicalTargetScope scope, CancellationToken ct = default) => inner.ListAsync(scope, ct);
+
+        public Task<Provide.Uterm.Server.GraphicalTargetDefinition> CreateAsync(
+            GraphicalTargetScope scope, Provide.Uterm.Server.GraphicalTargetDefinition target,
+            CancellationToken ct = default) => inner.CreateAsync(scope, target, ct);
+
+        public Task<Provide.Uterm.Server.GraphicalTargetDefinition> UpdateAsync(
+            GraphicalTargetScope scope, Provide.Uterm.Server.GraphicalTargetDefinition target,
+            CancellationToken ct = default) => inner.UpdateAsync(scope, target, ct);
+
+        public Task DeleteAsync(GraphicalTargetScope scope, string targetId, CancellationToken ct = default) =>
+            inner.DeleteAsync(scope, targetId, ct);
+
+        public Task AddStaticAsync(Provide.Uterm.Server.GraphicalTargetDefinition target, CancellationToken ct = default) =>
+            inner.AddStaticAsync(target, ct);
+    }
+
     // The typed client throws on a non-2xx and does not surface the raw text,
     // which is what these assertions are about.
     private static async Task<(int Status, string Body)> RawAttachAsync(string baseUrl, string token, string targetId)
@@ -392,7 +437,8 @@ public class GuiRestAndPngTests
 
     private static async Task<(UtermServer Server, string BaseUrl, string Token, InMemoryGraphicalTargetRegistry GraphicalTargets, TermHub Hub)> StartServerAsync(
         string[]? roles = null,
-        string? tenant = TestTenant)
+        string? tenant = TestTenant,
+        Func<IGraphicalTargetRegistry, IGraphicalTargetRegistry>? wrapTargets = null)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
@@ -433,7 +479,7 @@ public class GuiRestAndPngTests
             Authz = authz,
             Config = cfg,
             Registry = registry,
-            GraphicalTargets = graphicalTargets,
+            GraphicalTargets = wrapTargets is null ? graphicalTargets : wrapTargets(graphicalTargets),
             Version = "test",
             Clock = clock,
         });
