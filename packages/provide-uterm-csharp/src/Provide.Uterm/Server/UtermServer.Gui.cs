@@ -21,6 +21,11 @@ public sealed partial class UtermServer
     internal const string AttachEgressRefused = "invalid endpoint: the target's host is not an allowed destination";
     internal const string AttachRfbFailed = "rfb connect failed: the console did not accept a session";
 
+    // Any other attach fault (a target-store error, say) is the server's, and its
+    // message can name the store's address: fixed text out, exception to the log.
+    // The reference lets these reach the framework's generic 500.
+    internal const string AttachFailed = "attach failed: internal error";
+
     private static readonly Provide.Telemetry.Logger GuiLog =
         Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.server.gui");
 
@@ -135,7 +140,13 @@ public sealed partial class UtermServer
         }
         catch (Exception ex)
         {
-            return DetailError(500, "attach failed: " + ex.Message);
+            GuiLog.Error("gui_attach_failed", new Dictionary<string, object?>
+            {
+                ["worker_id"] = workerId,
+                ["target"] = targetId,
+                ["error"] = ex.Message,
+            });
+            return DetailError(500, AttachFailed);
         }
 
         return Results.Json(new { ok = true, target_id = targetId }, JsonOpts);
