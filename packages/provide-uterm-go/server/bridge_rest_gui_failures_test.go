@@ -6,10 +6,14 @@
 package server
 
 import (
+	"bytes"
 	"errors"
 	"image"
 	"image/color"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -85,23 +89,45 @@ func installGUISession(t *testing.T, ts *testServer, workerID string, sess *flak
 }
 
 // guiOpsFailing builds the standard GUI-attached hijack, then swaps in sess.
-func guiOpsFailing(t *testing.T, sess *flakyGUISession) (*testServer, string, map[string]string) {
+// The server log is recorded from here on, so a test can check that the console
+// error the response leaves out is still written down server-side.
+func guiOpsFailing(t *testing.T, sess *flakyGUISession) (*testServer, string, map[string]string, *bytes.Buffer) {
 	t.Helper()
 	ts, hid := guiOpsServer(t)
 	installGUISession(t, ts, "w1", sess)
-	return ts, hid, tenantHeaders("admin", "acme")
+	var logs bytes.Buffer
+	ts.srv.logger = slog.New(slog.NewTextHandler(&logs, nil))
+	return ts, hid, tenantHeaders("admin", "acme"), &logs
 }
 
-func TestHijackGUIScreenshotConsoleFailure(t *testing.T) {
-	ts, hid, hdr := guiOpsFailing(t, &flakyGUISession{screenshotErr: errGUIConsole})
-	rec := ts.do("GET", "/worker/w1/hijack/"+hid+"/gui/screenshot", "", hdr)
+// assertGUIOpFailure pins a failed console operation's response to the fixed
+// text, and checks the console's own error reached the log under event and not
+// the body.
+func assertGUIOpFailure(t *testing.T, rec *httptest.ResponseRecorder, logs *bytes.Buffer, event string) {
+	t.Helper()
 	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("screenshot: want 500, got %d %s", rec.Code, rec.Body.String())
+		t.Fatalf("%s: want 500, got %d %s", event, rec.Code, rec.Body.String())
+	}
+	body := decode(t, rec.Body.Bytes())
+	if len(body) != 1 || body["error"] != guiOperationFailed {
+		t.Fatalf("%s: body = %s, want {\"error\": %q}", event, rec.Body.String(), guiOperationFailed)
+	}
+	if strings.Contains(rec.Body.String(), errGUIConsole.Error()) {
+		t.Fatalf("%s: body leaks the console error: %s", event, rec.Body.String())
+	}
+	if !strings.Contains(logs.String(), event) || !strings.Contains(logs.String(), errGUIConsole.Error()) {
+		t.Fatalf("%s: console error not logged: %s", event, logs.String())
 	}
 }
 
+func TestHijackGUIScreenshotConsoleFailure(t *testing.T) {
+	ts, hid, hdr, logs := guiOpsFailing(t, &flakyGUISession{screenshotErr: errGUIConsole})
+	rec := ts.do("GET", "/worker/w1/hijack/"+hid+"/gui/screenshot", "", hdr)
+	assertGUIOpFailure(t, rec, logs, "gui_screenshot_failed")
+}
+
 func TestHijackGUIScreenshotUnencodableFrame(t *testing.T) {
-	ts, hid, hdr := guiOpsFailing(t, &flakyGUISession{emptyFrame: true})
+	ts, hid, hdr, _ := guiOpsFailing(t, &flakyGUISession{emptyFrame: true})
 	rec := ts.do("GET", "/worker/w1/hijack/"+hid+"/gui/screenshot", "", hdr)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("screenshot: want 500, got %d %s", rec.Code, rec.Body.String())
@@ -115,42 +141,34 @@ func TestHijackGUIClickPointerFailures(t *testing.T) {
 	// The press and the release are separate injections; either failing must
 	// surface as a 500 rather than a silent half-click.
 	for _, failAt := range []int{1, 2} {
-		ts, hid, hdr := guiOpsFailing(t, &flakyGUISession{failPointerAt: failAt})
+		ts, hid, hdr, logs := guiOpsFailing(t, &flakyGUISession{failPointerAt: failAt})
 		rec := ts.do("POST", "/worker/w1/hijack/"+hid+"/gui/click", `{"x":1,"y":2}`, hdr)
-		if rec.Code != http.StatusInternalServerError {
-			t.Fatalf("click failing at %d: want 500, got %d %s", failAt, rec.Code, rec.Body.String())
-		}
+		assertGUIOpFailure(t, rec, logs, "gui_click_failed")
 	}
 }
 
 func TestHijackGUITypeKeyFailures(t *testing.T) {
 	for _, failAt := range []int{1, 2} {
-		ts, hid, hdr := guiOpsFailing(t, &flakyGUISession{failKeyAt: failAt})
+		ts, hid, hdr, logs := guiOpsFailing(t, &flakyGUISession{failKeyAt: failAt})
 		rec := ts.do("POST", "/worker/w1/hijack/"+hid+"/gui/type", `{"text":"a"}`, hdr)
-		if rec.Code != http.StatusInternalServerError {
-			t.Fatalf("type failing at %d: want 500, got %d %s", failAt, rec.Code, rec.Body.String())
-		}
+		assertGUIOpFailure(t, rec, logs, "gui_type_failed")
 	}
 }
 
 func TestHijackGUIKeyFailures(t *testing.T) {
 	for _, failAt := range []int{1, 2} {
-		ts, hid, hdr := guiOpsFailing(t, &flakyGUISession{failKeyAt: failAt})
+		ts, hid, hdr, logs := guiOpsFailing(t, &flakyGUISession{failKeyAt: failAt})
 		rec := ts.do("POST", "/worker/w1/hijack/"+hid+"/gui/key", `{"key_name":"Enter"}`, hdr)
-		if rec.Code != http.StatusInternalServerError {
-			t.Fatalf("key failing at %d: want 500, got %d %s", failAt, rec.Code, rec.Body.String())
-		}
+		assertGUIOpFailure(t, rec, logs, "gui_key_failed")
 	}
 }
 
 func TestHijackGUIDragPointerFailures(t *testing.T) {
 	// press, move, release — three injections, each with its own error arm.
 	for _, failAt := range []int{1, 2, 3} {
-		ts, hid, hdr := guiOpsFailing(t, &flakyGUISession{failPointerAt: failAt})
+		ts, hid, hdr, logs := guiOpsFailing(t, &flakyGUISession{failPointerAt: failAt})
 		rec := ts.do("POST", "/worker/w1/hijack/"+hid+"/gui/drag",
 			`{"start_x":0,"start_y":0,"end_x":4,"end_y":5}`, hdr)
-		if rec.Code != http.StatusInternalServerError {
-			t.Fatalf("drag failing at %d: want 500, got %d %s", failAt, rec.Code, rec.Body.String())
-		}
+		assertGUIOpFailure(t, rec, logs, "gui_drag_failed")
 	}
 }

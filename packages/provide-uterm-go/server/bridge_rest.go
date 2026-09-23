@@ -147,7 +147,7 @@ func (s *Server) handleHijackAcquire(w http.ResponseWriter, r *http.Request) {
 
 	okAcq, errKind, err := s.deps.Hub.TryAcquireRestHijack(ctx, workerID, owner, leaseS, hijackID, monoNow)
 	if err != nil {
-		detailError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, detailError, http.StatusInternalServerError, hubOperationFailed, "hijack_acquire_failed", err, "worker_id", workerID)
 		return
 	}
 	if !okAcq {
@@ -489,7 +489,7 @@ func (s *Server) handleHijackGUIScreenshot(w http.ResponseWriter, r *http.Reques
 	}
 	img, err := st.GraphicalSession.Screenshot()
 	if err != nil {
-		bridgeError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_screenshot_failed", err, "worker_id", workerID)
 		return
 	}
 	// gui.EncodeImage, not image/png: a screenshot is a wire format, and the
@@ -560,11 +560,11 @@ func (s *Server) handleHijackGUIClick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := sess.InjectPointer(x, y, mask); err != nil {
-		bridgeError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_click_failed", err, "worker_id", workerID)
 		return
 	}
 	if err := sess.InjectPointer(x, y, 0); err != nil {
-		bridgeError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_click_failed", err, "worker_id", workerID)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -584,11 +584,11 @@ func (s *Server) handleHijackGUIType(w http.ResponseWriter, r *http.Request) {
 	for _, r := range text {
 		// Basic uint32 translation for standard ASCII
 		if err := sess.InjectKey(uint32(r), true); err != nil {
-			bridgeError(w, http.StatusInternalServerError, err.Error())
+			s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_type_failed", err, "worker_id", workerID)
 			return
 		}
 		if err := sess.InjectKey(uint32(r), false); err != nil {
-			bridgeError(w, http.StatusInternalServerError, err.Error())
+			s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_type_failed", err, "worker_id", workerID)
 			return
 		}
 	}
@@ -628,11 +628,11 @@ func (s *Server) handleHijackGUIKey(w http.ResponseWriter, r *http.Request) {
 		sym = 0
 	}
 	if err := sess.InjectKey(sym, true); err != nil {
-		bridgeError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_key_failed", err, "worker_id", workerID)
 		return
 	}
 	if err := sess.InjectKey(sym, false); err != nil {
-		bridgeError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_key_failed", err, "worker_id", workerID)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -653,15 +653,15 @@ func (s *Server) handleHijackGUIDrag(w http.ResponseWriter, r *http.Request) {
 	endX := intField(body, "end_x", 0)
 	endY := intField(body, "end_y", 0)
 	if err := sess.InjectPointer(startX, startY, 1); err != nil {
-		bridgeError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_drag_failed", err, "worker_id", workerID)
 		return
 	}
 	if err := sess.InjectPointer(endX, endY, 1); err != nil {
-		bridgeError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_drag_failed", err, "worker_id", workerID)
 		return
 	}
 	if err := sess.InjectPointer(endX, endY, 0); err != nil {
-		bridgeError(w, http.StatusInternalServerError, err.Error())
+		s.hideError(w, bridgeError, http.StatusInternalServerError, guiOperationFailed, "gui_drag_failed", err, "worker_id", workerID)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})

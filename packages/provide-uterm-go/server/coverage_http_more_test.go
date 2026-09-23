@@ -128,9 +128,15 @@ func TestCreateSessionErrorMapping(t *testing.T) {
 		t.Fatalf("egress: %d", rec.Code)
 	}
 	// Generic error → 500 (default arm).
+	// Its text is fixed: the registry's error describes the server (a dial
+	// failure, a store fault), not the request.
 	ts.reg.createErr = errors.New("boom")
-	if rec := ts.do("POST", "/api/sessions", `{"connector_type":"ssh"}`, adminHeaders()); rec.Code != http.StatusInternalServerError {
+	rec := ts.do("POST", "/api/sessions", `{"connector_type":"ssh"}`, adminHeaders())
+	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("generic: %d", rec.Code)
+	}
+	if got := decode(t, rec.Body.Bytes())["detail"]; got != sessionCreateFailed {
+		t.Fatalf("generic detail = %v, want %q", got, sessionCreateFailed)
 	}
 	ts.reg.createErr = nil
 }
