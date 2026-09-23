@@ -167,6 +167,9 @@ public sealed class ManagerServer : IAsyncDisposable
         }
     }
 
+    private static readonly Provide.Telemetry.Logger ManagerLog =
+        Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.manager");
+
     private async Task HandleAsync(HttpListenerContext ctx)
     {
         try
@@ -246,7 +249,15 @@ public sealed class ManagerServer : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            try { await WriteJson(ctx, 500, new { detail = ex.Message }).ConfigureAwait(false); }
+            // Fixed text out, exception to the log: a handler fault describes
+            // the manager, not the request. The reference answers its generic 500.
+            ManagerLog.Error("manager_request_failed", new Dictionary<string, object?>
+            {
+                ["method"] = ctx.Request.HttpMethod,
+                ["path"] = ctx.Request.Url?.AbsolutePath,
+                ["error"] = ex.Message,
+            });
+            try { await WriteJson(ctx, 500, new { detail = "internal error" }).ConfigureAwait(false); }
             catch { /* ignore */ }
         }
     }
