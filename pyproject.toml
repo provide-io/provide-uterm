@@ -781,6 +781,10 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_hijack_payload_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_hijack_recovery_kill.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_policy_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_startup_broadcast_window.py",
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_egress_fence.py",
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_broadcast_trace.py",
+    "packages/provide-uterm-server/tests/bridge/test_browser_quota_leak_m5.py",
     # router_impl.py — the event ring's write path, the snapshot commit fence,
     # the read accessors' copies + M5 read-path redaction, and the lifecycle helpers.
     "packages/provide-uterm-server/tests/bridge/hub/test_router_impl_event_ring_kill.py",
@@ -808,6 +812,14 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/test_approval_claim.py",
     "packages/provide-uterm-server/tests/bridge/test_mem_pruning.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_approvals_kill.py",
+    # bridge/routes/rest_gui.py — the /gui/ REST handlers. Listed in the scoped
+    #   BRIDGE_HUB_MUTATION_TESTS since 285f3b23 but not here, so a changed-only run
+    #   mixing rest_gui with a non-hub file fell back to this list and reported all
+    #   97 rest_gui mutants "no tests" (tests/scripts/test_mutation_test_selection.py).
+    "packages/provide-uterm-server/tests/bridge/test_rest_gui.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_gui_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_gui_routes_integration.py",
+    "packages/provide-uterm-server/tests/server/test_gui_principal_bind.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
     # mutmut actually mutates — _clean_path and the _require_secure_url SSRF guard
     # (it skips every @model_validator/@field_validator/@classmethod by design).
