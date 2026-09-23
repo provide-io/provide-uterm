@@ -745,56 +745,56 @@ reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases he
 #    checkers. Nulling or mangling that string cannot change behaviour. Same
 #    reasoning as the connection.py / connection_hijack.py cast() entries above.
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_282"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_283"
 reason = "cast(None, uterm_tunnel_tokens) in create_tunnel — typing.cast is a runtime no-op; the type arg is ignored."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_286"
-reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) — runtime no-op; mangled type string ignored.'
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_288"
+reason = 'cast(<mangled type string>, uterm_tunnel_tokens) — runtime no-op; the type string (XX-wrapped or upper-cased) is ignored.'
 [[equivalent]]
 mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_287"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) — runtime no-op; type-string case has no effect.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_289"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_290"
 reason = "cast(None, uterm_tunnel_invites) in create_tunnel — typing.cast runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_293"
-reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) — runtime no-op.'
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_295"
+reason = 'cast(<mangled type string>, uterm_tunnel_invites) — runtime no-op.'
 [[equivalent]]
 mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_294"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_481"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_482"
 reason = "cast(None, uterm_tunnel_tokens) in revoke_tunnel_tokens — typing.cast runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_485"
-reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) in revoke — runtime no-op.'
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_487"
+reason = 'cast(<mangled type string>, uterm_tunnel_tokens) in revoke — runtime no-op.'
 [[equivalent]]
 mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_486"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) in revoke — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_492"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_493"
 reason = "cast(None, uterm_tunnel_invites) in revoke_tunnel_tokens — typing.cast runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_496"
-reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) in revoke — runtime no-op.'
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_498"
+reason = 'cast(<mangled type string>, uterm_tunnel_invites) in revoke — runtime no-op.'
 [[equivalent]]
 mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_497"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) in revoke — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_556"
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_557"
 reason = "cast(None, uterm_tunnel_tokens) in rotate_tunnel_tokens — typing.cast runtime no-op."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_560"
-reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) in rotate — runtime no-op.'
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_562"
+reason = 'cast(<mangled type string>, uterm_tunnel_tokens) in rotate — runtime no-op.'
 [[equivalent]]
 mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_561"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) in rotate — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_563"
-reason = "cast(None, uterm_tunnel_invites) in rotate_tunnel_tokens — typing.cast runtime no-op. Sits between two mutants that are NOT equivalent (562 replaces the variable with None, 564 replaces the cast's value argument); both are killed by the invite-store assertions."
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_564"
+reason = "cast(None, uterm_tunnel_invites) in rotate_tunnel_tokens — typing.cast runtime no-op. Sits between two mutants that are NOT equivalent (563 replaces the variable with None, 565 replaces the cast's value argument); both are killed by the invite-store assertions."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_567"
-reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_invites) in rotate — runtime no-op.'
+mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_569"
+reason = 'cast(<mangled type string>, uterm_tunnel_invites) in rotate — runtime no-op.'
 [[equivalent]]
 mutant = "provide.uterm.server.routes.tunnels.x_tunnel_capability_handlers__mutmut_568"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_invites) in rotate — runtime no-op.'
