@@ -96,7 +96,7 @@ The columns map to:
 | seccomp profile for worker subprocess | 📋 spec'd | Open-source library spawns workers with the host's full syscall surface by design (portable across macOS/Linux/Windows, debuggable with stock tools). Enterprise-tier seccomp confinement of connector + agent subprocesses (per-connector JSON profiles + `log`/`enforce` modes + post-exec health probe) is a planned commercial feature. |
 | Resource limits (memory, file descriptors) | ⚠ | The server has memory baseline calibration; per-session memory caps aren't enforced via `setrlimit`. |
 | LD_PRELOAD capture security | ⚠ | The platform-tier `LD_PRELOAD` integration captures stdout/stderr; verify it can't be turned into an exfil channel by a compromised worker. |
-| Docker base image (Dockerfile.server) | ⚠ | Currently uses `python:3.11-slim`. Distroless or `gcr.io/distroless/python3-debian12` would shrink attack surface. |
+| Docker base image (Dockerfile.server) | ⚠ | Uses `python:3.14-slim-trixie`, with pip/setuptools/wheel stripped from the runtime stage's system site-packages. A distroless Python base would shrink the attack surface further. |
 | Container image scanning | ✅ | Trivy image scan + SARIF upload + HIGH/CRITICAL gate in `.github/workflows/container-scan.yml`. |
 
 ## 6. Recording, audit, replay
