@@ -75,23 +75,23 @@ COPY packages/provide-uterm-ts/ packages/provide-uterm-ts/
 RUN npm run build:frontend
 
 # ---- builder stage: resolve + install into a uv-managed venv ----------------
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim-trixie AS builder
 
 ARG FRONTEND_DIR
 
 ENV PYTHONUNBUFFERED=1
 
 # Pull in the latest base-image security patches (Debian point releases ship
-# fixes for libcap2 / libsystemd0 / libudev1 that the trailing python:3.11-slim
+# fixes for libcap2 / libsystemd0 / libudev1 that the trailing python:3.14-slim-trixie
 # digest doesn't yet pick up). Required to keep the Trivy HIGH/CRITICAL gate
-# green even between python:3.11-slim digest pins.
+# green even between python:3.14-slim-trixie digest pins.
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Pin the uv toolchain via the official image instead of bootstrapping it with
 # system pip. Pin to a digest for full reproducibility when you cut a release.
-COPY --from=ghcr.io/astral-sh/uv:0.12.17 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.18 /uv /uvx /bin/
 
 # uv installs into the venv at /app/.venv using the base image's interpreter (so
 # the venv is portable to the runtime stage, which shares the base), pinned to
@@ -170,7 +170,7 @@ RUN uv pip uninstall --python /app/.venv/bin/python \
              /app/.venv/bin/wheel*
 
 # ---- runtime stage ----------------------------------------------------------
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim-trixie AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH"
@@ -179,8 +179,8 @@ RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Strip build tooling from the base image's SYSTEM site-packages. python:3.11-slim
-# ships pip / setuptools / wheel in /usr/local/lib/python3.11/site-packages — and
+# Strip build tooling from the base image's SYSTEM site-packages. python:3.14-slim-trixie
+# ships pip / setuptools / wheel in /usr/local/lib/python3.14/site-packages — and
 # setuptools vendors its own copy of jaraco.context + wheel under _vendor/. The
 # server runs entirely from /app/.venv (which uv builds with isolation, so it
 # carries none of this), making the system build tooling dead weight that Trivy
@@ -188,14 +188,14 @@ RUN apt-get update \
 # so the runtime image carries only runtime-required packages. The strip verifies
 # itself at site-packages depth 1 only — nested METADATA files named WHEEL (e.g.
 # packaging-*.dist-info/WHEEL) are PEP 427 metadata, not the wheel package.
-RUN rm -rf /usr/local/lib/python3.11/site-packages/setuptools* \
-           /usr/local/lib/python3.11/site-packages/pkg_resources* \
-           /usr/local/lib/python3.11/site-packages/_distutils_hack* \
-           /usr/local/lib/python3.11/site-packages/distutils-precedence.pth \
-           /usr/local/lib/python3.11/site-packages/wheel* \
-           /usr/local/lib/python3.11/site-packages/pip* \
+RUN rm -rf /usr/local/lib/python3.14/site-packages/setuptools* \
+           /usr/local/lib/python3.14/site-packages/pkg_resources* \
+           /usr/local/lib/python3.14/site-packages/_distutils_hack* \
+           /usr/local/lib/python3.14/site-packages/distutils-precedence.pth \
+           /usr/local/lib/python3.14/site-packages/wheel* \
+           /usr/local/lib/python3.14/site-packages/pip* \
            /usr/local/bin/pip* /usr/local/bin/wheel* \
-    && ! find /usr/local/lib/python3.11/site-packages -mindepth 1 -maxdepth 1 \
+    && ! find /usr/local/lib/python3.14/site-packages -mindepth 1 -maxdepth 1 \
          \( -iname 'setuptools*' -o -iname 'wheel*' -o -iname 'jaraco*' -o -iname 'pip*' \) \
          -print | grep -q .
 
