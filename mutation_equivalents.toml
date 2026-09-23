@@ -445,21 +445,13 @@ mutant = "provide.uterm.server.routes.pages.x__is_secure_request__mutmut_10"
 reason = "forwarded_proto default mutation: the default is read only when the x-forwarded-proto header is absent, and its sole consumer (a substring-of-https test) treats empty / str-of-None / xxxx identically -- all fall through to the url.scheme check. Equivalent."
 
 # ---------------------------------------------------------------------------
-# manager/process_impl.py (AgentProcessManager) — 16 documented equivalents.
+# manager/process_impl.py (AgentProcessManager) — 14 documented equivalents.
 # Residual after the test_process_*.py + test_coverage_*.py suites + the dedicated
 # test_process_kill_part0*.py kill-suite (each <500 LOC). All NON-equivalent mutants
 # are killed (664/664). On CI exactly one of these equivalents may surface as a
 # wall-clock `timeout` rather than `survived` (excused either way — see the header
 # note above). See pyproject [tool.mutmut] note.
 # ---------------------------------------------------------------------------
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_load_worker_type__mutmut_12"
-reason = "raw.get('worker_type', 'default') default mutated/dropped, but the value is wrapped in str(... or 'default'), so a None/absent worker_type collapses back to 'default' — identical."
-
-[[equivalent]]
-mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_load_worker_type__mutmut_14"
-reason = "raw.get('worker_type', 'default') default mutated/dropped, but the value is wrapped in str(... or 'default'), so a None/absent worker_type collapses back to 'default' — identical."
 
 [[equivalent]]
 mutant = "provide.uterm.manager.process_impl.xǁAgentProcessManagerǁ_scope_worker_tokens__mutmut_6"
