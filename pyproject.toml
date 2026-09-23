@@ -520,6 +520,11 @@ source_paths = [
     # yet sat off the perimeter while server/routes/ was fully enforced. Line
     # coverage said 100% here and still hid an unreachable branch until 2026-09-04.
     "src/provide/uterm/server/bridge/routes/rest_gui.py",
+    # bridge/routes/browser_handlers.py — dispatch for every browser WebSocket
+    # frame; returns the owned_hijack flag, i.e. decides whether a browser holds
+    # the hijack lease. 1,119 mutants measured 2026-09-04, 668 survived — the
+    # perimeter is being closed function by function; _try_reclaim_hijack first.
+    "src/provide/uterm/server/bridge/routes/browser_handlers.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
     # Cross-language role/lease policy (spec/behavior.json).
@@ -818,6 +823,20 @@ pytest_add_cli_args_test_selection = [
     #   97 rest_gui mutants "no tests" (tests/scripts/test_mutation_test_selection.py).
     "packages/provide-uterm-server/tests/bridge/test_rest_gui.py",
     "packages/provide-uterm-server/tests/bridge/test_rest_gui_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_browser_handlers_mutations.py",
+    "packages/provide-uterm-server/tests/bridge/test_browser_handlers_coverage.py",
+    "packages/provide-uterm-server/tests/bridge/test_browser_handlers_resume.py",
+    "packages/provide-uterm-server/tests/bridge/test_try_reclaim_hijack_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_handle_input_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_handle_resume_gates_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_handle_resume_success_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_handle_hijack_request_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_handle_hijack_step_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_handle_hijack_release_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_handle_browser_message_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_browser_handlers_small_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_rollback_reclaimed_hijack_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_inspect_and_analyze_mutation_killing.py",
     "packages/provide-uterm-server/tests/server/test_gui_routes_integration.py",
     "packages/provide-uterm-server/tests/server/test_gui_principal_bind.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers

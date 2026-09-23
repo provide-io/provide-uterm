@@ -17,12 +17,10 @@ file closes ``_try_reclaim_hijack``'s 47; the other nine handlers in the module
 
 Re-measured under mutmut 3.8 on 2026-09-23 with this suite in the selection:
 1,127 mutants, 432 killed, 636 survived, 10 timeouts (score 38.33).
-``_try_reclaim_hijack`` has no survivors. ``browser_handlers.py`` is NOT on
-the ``[tool.mutmut]`` perimeter yet, and must not be added until every function
-in it is closed: listing it today would fail the full-perimeter run. When it
-is added, wire this file into ``BRIDGE_HUB_MUTATION_TESTS`` in
-``scripts/mutation_gate_config.py`` alongside the ``test_browser_handlers_*``
-suites, or scoped runs will not select it.
+``_try_reclaim_hijack`` has no survivors. ``browser_handlers.py`` joined the
+``[tool.mutmut]`` perimeter once every function in it was closed (2026-09-23);
+this file is wired into ``BRIDGE_HUB_MUTATION_TESTS`` in
+``scripts/mutation_gate_config.py`` and the root test selection.
 """
 
 from __future__ import annotations
