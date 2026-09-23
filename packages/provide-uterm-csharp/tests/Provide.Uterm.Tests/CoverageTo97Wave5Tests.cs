@@ -746,6 +746,13 @@ public class CoverageTo97Wave5Tests
         var nf = await http.GetAsync("/nope");
         Assert.Equal(HttpStatusCode.NotFound, nf.StatusCode);
 
+        // 500: "/swarm/agents/stop" matches both the prefix and the "/stop"
+        // suffix, and the id slice between them throws. A handler fault answers
+        // fixed text, never the exception's message.
+        var bad = await http.PostAsync("/swarm/agents/stop", new StringContent(""));
+        Assert.Equal(HttpStatusCode.InternalServerError, bad.StatusCode);
+        Assert.Equal("{\"detail\":\"internal error\"}", await bad.Content.ReadAsStringAsync());
+
         // delete missing agent
         var del = await http.DeleteAsync("/swarm/agents/missing");
         Assert.True((int)del.StatusCode is 404 or 200);
