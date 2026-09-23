@@ -17,7 +17,7 @@
 # Browser SPA is baked at /frontend (same Vite build as Python image).
 #
 
-ARG GO_IMAGE=golang:1.26-bookworm
+ARG GO_IMAGE=golang:1.27-bookworm
 ARG NODE_IMAGE=node:26-slim
 
 # ---- frontend-build --------------------------------------------------------
