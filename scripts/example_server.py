@@ -70,8 +70,6 @@ __all__ = [
     "app",
 ]
 
-logger = logging.getLogger(__name__)
-
 _runtime_base_url = os.environ.get("EXAMPLE_BASE_URL", f"http://127.0.0.1:{_DEFAULT_PORT}")
 
 
