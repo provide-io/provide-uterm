@@ -51,7 +51,7 @@ def _make_animated_gif(n_frames: int = 3, size: tuple[int, int] = (4, 4)) -> byt
 
 
 # ---------------------------------------------------------------------------
-# _sgr_truecolor
+# sgr_truecolor
 # ---------------------------------------------------------------------------
 
 
@@ -62,7 +62,7 @@ def test_render_frame_y_plus_1_not_y_minus_1() -> None:
     # Verify that the combined SGR for row 1 (y=2) uses yellow fg + blue bg,
     # not green fg + blue bg.
     from provide.uterm.shell._render import _render_frame
-    from provide.uterm.shell._render import _sgr_truecolor as sgr_fn
+    from provide.uterm.shell._render import sgr_truecolor as sgr_fn
 
     row_colors = [
         (255, 0, 0, 255),  # y=0: red   → bg for terminal row 0
