@@ -46,6 +46,13 @@ updates:
     patterns: ["*"]
     labels:
       - "python"
+    # pytest-textual-snapshot 1.1.x pins syrupy==4.8.0, which requires
+    # pytest<9, while the dev group requires pytest>=9, so the bump is
+    # unresolvable and failed the whole uv job. Drop this once a release
+    # accepts pytest 9.
+    ignore:
+      - dependency-name: "pytest-textual-snapshot"
+        versions: ["1.1.x"]
 
   # npm: workspace root. Covers the root package.json devDependencies plus the
   # shared package-lock.json, so every npm workspace member (app, frontend, ts)
@@ -75,16 +82,10 @@ updates:
   # and two more for @testing-library/jest-dom -> 7.0.1, one from each scan of
   # the same dependency.
   #
-  # provide-uterm-cloudflare is not a workspace member and has no lockfile of
-  # its own, so it does need the entry below.
-
-  # npm: Cloudflare Worker wrangler config.
-  - package-ecosystem: "npm"
-    directory: "/packages/provide-uterm-cloudflare"
-    multi-ecosystem-group: "weekly"
-    patterns: ["*"]
-    labels:
-      - "javascript"
+  # No entry for /packages/provide-uterm-cloudflare either: it has no
+  # package.json (wrangler is pinned in the root package.json, which the root
+  # entry covers). An entry there failed every run with "package.json not
+  # found".
 
   # GitHub Actions: keeps workflow action versions current. Closes the
   # "GHA workflow pinning" gap in docs/security-considerations.md §9. Every
