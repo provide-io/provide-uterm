@@ -48,11 +48,3 @@ __all__ = [
     "sgr_256",
     "sgr_truecolor",
 ]
-
-# Backwards-compat aliases for existing tests that use private names
-_ANSI16 = ANSI16_PALETTE
-_nearest_16 = nearest_16
-_nearest_256 = nearest_256
-_sgr_truecolor = sgr_truecolor
-_sgr_256 = sgr_256
-_sgr_16 = sgr_16
