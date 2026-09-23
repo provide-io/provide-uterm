@@ -52,7 +52,7 @@ updates:
     # accepts pytest 9.
     ignore:
       - dependency-name: "pytest-textual-snapshot"
-        versions: ["1.1.x"]
+        versions: [">=1.1.0, <1.2.0"]
 
   # npm: workspace root. Covers the root package.json devDependencies plus the
   # shared package-lock.json, so every npm workspace member (app, frontend, ts)
