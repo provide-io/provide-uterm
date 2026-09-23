@@ -17,6 +17,13 @@ hub, gate and approval store raise on any unexpected argument, the clock and
 uuid are pinned so every timestamp and request id is exact, and the module
 logger is replaced so the policy-block debug line is asserted verbatim.
 
+Measured under mutmut 3.8 on 2026-09-23 with this suite selected:
+``_handle_input`` went from 318 survivors to exactly the 14 equivalents below,
+and ``browser_handlers.py`` as a whole from 38.33 to 66.10 (745 of 1,127
+killed). The file is still NOT on the perimeter; see
+``test_try_reclaim_hijack_mutation_killing.py`` for the wiring to add when it
+is.
+
 Documented equivalents (to go into ``mutation_equivalents.toml`` when
 ``browser_handlers.py`` joins the perimeter):
 
