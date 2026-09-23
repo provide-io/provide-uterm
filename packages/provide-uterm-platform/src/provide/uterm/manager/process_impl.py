@@ -254,7 +254,10 @@ class AgentProcessManager:
         try:
             raw_text = await asyncio.to_thread(Path(config_path).read_text)
             raw = yaml.safe_load(raw_text) or {}
-            worker_type = str(raw.get("worker_type", "default") or "default")
+            # No .get() default: the `or "default"` already covers an absent key, and
+            # a redundant default only breeds equivalent mutants (dropped or None'd,
+            # identical either way) that a loaded machine can spuriously "kill".
+            worker_type = str(raw.get("worker_type") or "default")
         except Exception as exc:
             logger.warning("worker_type_read_failed", config_path=config_path, error=str(exc))
             worker_type = "default"
