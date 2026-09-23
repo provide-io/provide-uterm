@@ -229,7 +229,10 @@ public sealed class ManagerServer : IAsyncDisposable
                 return;
             }
 
-            if (method == "POST" && path.StartsWith("/swarm/agents/", StringComparison.Ordinal) && path.EndsWith("/stop", StringComparison.Ordinal))
+            // The length check keeps "/swarm/agents/stop" (prefix and suffix
+            // overlapping, no id between them) out of the id slice below.
+            if (method == "POST" && path.StartsWith("/swarm/agents/", StringComparison.Ordinal) && path.EndsWith("/stop", StringComparison.Ordinal)
+                && path.Length >= "/swarm/agents/".Length + "/stop".Length)
             {
                 var id = path["/swarm/agents/".Length..^"/stop".Length];
                 var ok = _manager.Stop(id);
