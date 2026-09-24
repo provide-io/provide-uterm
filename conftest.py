@@ -14,6 +14,10 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pytest
 
 # macOS aborts any process that calls into SystemConfiguration after fork()ing
 # without exec, and mutmut runs every mutant by forking and then calling
@@ -142,6 +146,22 @@ if Path(__file__).resolve().parent.name == "mutants" and (Path(__file__).resolve
             pass
 
     _logging.StreamHandler.emit = _mutmut_safe_emit  # type: ignore[method-assign]
+
+
+# --- mutmut: run kill-suites first --------------------------------------------
+# mutmut hands pytest a mutant's covering tests from a set, so their order is
+# arbitrary, and it runs them with ``-x``. For a mutant that turns a loop into
+# an infinite one (``i += 1`` -> ``i = 1`` in CommandSplitter.split), whichever
+# covering test runs first decides the outcome: a kill-suite bounds the call and
+# fails in under a second, but an ordinary test that happens to call the same
+# code spins until mutmut's CPU limit and the mutant is recorded as ``timeout``
+# -- a gate failure, not a kill. Running the dedicated kill-suites (fast, and
+# written to bound every call) ahead of everything else makes the outcome
+# independent of set order, and lets ``-x`` stop sooner on every other mutant.
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if not os.environ.get("MUTANT_UNDER_TEST"):
+        return
+    items.sort(key=lambda item: "kill" not in item.path.name)
 
 
 # --- Hypothesis: shared profiles + one repo-root example database -----------
