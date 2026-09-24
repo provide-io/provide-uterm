@@ -962,6 +962,50 @@ mutmut on a machine at load ~17 — its CPU limit is `(estimated_test_time + 1)
 suite with `asyncio.wait_for` and re-measuring at `--max-children 6` killed
 both. Always confirm an agent's kill map with a real measurement.
 
+### `websockets_impl.py` and the small hub modules (2026-09-24)
+
+- `bridge/routes/websockets_impl.py` — the two terminal sockets' connect,
+  receive loop and teardown. `ws_worker_term` and `ws_browser_term` were
+  `@router.websocket` closures, so the file's ~370 lines of socket handling
+  produced 0 mutants. Their bodies moved into `_ws_worker_term` /
+  `_ws_browser_term` (AST-identical pure move; the routes delegate), exposing
+  764 mutants, 369 surviving. Four kill-suites that call the coroutines
+  directly against fake sockets and hubs close it with 25 equivalents
+  (`cast()` type strings, `owner=None` defaults, `break` vs `return` as a
+  `while True:` loop's only exit, `False`/`None` flags read only for
+  truthiness, and one `.get()` default that the following ternary discards).
+- `hub/core_delegates_lease.py`, `core_delegates_connection.py`,
+  `semantics.py`, `redaction.py`, `redaction_defaults.py`, `core_helpers.py`,
+  `connections.py` — 469 mutants, 176 surviving; closed with 15 equivalents.
+  `snapshot_metrics.py` (module-level counters only) and `core.py` (a
+  re-export of the unlisted `core_impl.py`) generate nothing and stay off.
+
+Three findings:
+
+1. **A mutant that hangs is only killed if the bounded test runs first.**
+   Twelve `CommandSplitter.split` mutants turn the scan into an infinite loop
+   (`i += 1` -> `i = 1`). The kill-suite bounds every call in a daemon thread
+   and fails in under a second, yet all twelve still reported `timeout`.
+   mutmut hands pytest a mutant's covering tests from a *set*, with `-x`, so
+   the first test to run decides: when it was an ordinary test that also
+   calls `split()`, it spun until mutmut's CPU limit. The root `conftest.py`
+   now sorts kill-suites (`*kill*` in the file name) first whenever
+   `MUTANT_UNDER_TEST` is set; re-measured, all twelve are killed and the
+   file has 0 timeouts. This is not a case for the allowlist: a hang is a
+   detected mutant, not an equivalent one.
+2. **Dead code shows up as equivalents.** `split()` built a `shlex.shlex`
+   lexer and never read it; its 7 mutants were unkillable. The lexer was
+   deleted rather than allowlisted.
+3. **A single-event test can't tell `continue` from `break` inside a
+   per-batch loop.** `_ws_worker_term`'s drop path for a malformed frame
+   `continue`s through `for event in events:`. The first test sent the bad
+   frame and the good one in separate messages, which both variants handle
+   identically; putting both events in one decoded batch killed it. The same
+   file's agent also marked a `ts=time.time()` argument as equivalent to its
+   default, which is the `_build_worker_frame` clock trap above: pinning
+   `websockets_impl.time` and the frames module's `time` to different values
+   killed both mutants.
+
 ### Process notes
 
 Measure a file with a local-only commit that wires it into
