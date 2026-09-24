@@ -940,6 +940,19 @@ to `mutation_score=100.00`:
   `_disconnect_worker` (the routes delegate), and the file now has 87 mutants,
   all killed, 0 equivalents.
 
+- `bridge/routes/rest.py` — the REST path to the same hijack lease. All seven
+  endpoints (acquire, heartbeat, snapshot, events, send, step, release) were
+  `@router` closures, so before this wave mutmut saw only the three module
+  helpers; ~400 lines of lease logic were unmeasured. The bodies moved into
+  undecorated `_hijack_*` functions (verified as a pure move: every extracted
+  body is AST-identical to the original closure body, and each route keeps its
+  exact signature and decorator). That exposed 919 mutants at 49.84 (461
+  survived, 0 timeouts, 0 `no tests` — everything was executed, nothing was
+  pinned). Five kill-suites, one per endpoint group, close it to 100.00 with 4
+  documented equivalents (`None`/`False` flags read only through `not`/`if`,
+  a fallback dict key that misses either way, and an `owner=None` keyword that
+  equals the parameter's default).
+
 Two kill claims made by agents did not survive the real run and are worth the
 pattern: a "missing-data default" test that scripted `get_group` to return
 `None`, so the function returned before the default was ever read; and two
