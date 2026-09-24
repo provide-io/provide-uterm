@@ -1521,3 +1521,230 @@ reason = """secrets.token_urlsafe(32) -> token_urlsafe(None). token_urlsafe's ow
 default is nbytes=None, which CPython maps to DEFAULT_ENTROPY (32) before
 calling os.urandom, so both calls draw 32 random bytes and return a 43-char
 token: no input distinguishes them."""
+
+# ---------------------------------------------------------------------------
+# bridge/routes/websockets_browser.py — 1 equivalent, measured 2026-09-23
+# ---------------------------------------------------------------------------
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_browser.x_dispatch_browser_event__mutmut_188"
+reason = """`_fo_is_admin = False` in the fan-out authz `except Exception:` handler ->
+`= None`. Its only later use is `if not _fo_is_admin:`, and `not None` is
+`not False`, so the rejection path is identical."""
+
+# ---------------------------------------------------------------------------
+# bridge/routes/websockets_worker.py — 33 equivalents, measured 2026-09-23
+# ---------------------------------------------------------------------------
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_4"
+reason = """typing.cast("dict[str, Any]", ...) -> the type argument replaced by None. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_8"
+reason = """typing.cast("dict[str, Any]", ...) -> the type argument mangled to "XX...XX". cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_9"
+reason = """typing.cast("dict[str, Any]", ...) -> the type argument lower-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_10"
+reason = """typing.cast("dict[str, Any]", ...) -> the type argument upper-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_43"
+reason = """typing.cast("dict[str, int]", cursor) -> the type argument replaced by None. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_47"
+reason = """typing.cast("dict[str, int]", cursor) -> the type argument mangled to "XX...XX". cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_48"
+reason = """typing.cast("dict[str, int]", cursor) -> the type argument upper-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_107"
+reason = """typing.cast("dict[str, Any] | None", prompt_detected) -> the type argument replaced by None. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_111"
+reason = """typing.cast("dict[str, Any] | None", prompt_detected) -> the type argument mangled to "XX...XX". cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_112"
+reason = """typing.cast("dict[str, Any] | None", prompt_detected) -> the type argument lower-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_113"
+reason = """typing.cast("dict[str, Any] | None", prompt_detected) -> the type argument upper-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_117"
+reason = """typing.cast("str | None", raw_tail) -> the type argument replaced by None. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_121"
+reason = """typing.cast("str | None", raw_tail) -> the type argument mangled to "XX...XX". cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_122"
+reason = """typing.cast("str | None", raw_tail) -> the type argument lower-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_123"
+reason = """typing.cast("str | None", raw_tail) -> the type argument upper-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_145"
+reason = """typing.cast("dict[str, Any]", ...) -> the type argument replaced by None. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_149"
+reason = """typing.cast("dict[str, Any]", ...) -> the type argument mangled to "XX...XX". cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_150"
+reason = """typing.cast("dict[str, Any]", ...) -> the type argument lower-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_151"
+reason = """typing.cast("dict[str, Any]", ...) -> the type argument upper-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_176"
+reason = """typing.cast("dict[str, Any]", coerce_worker_status_frame(msg)) -> the type argument replaced by None. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_180"
+reason = """typing.cast("dict[str, Any]", coerce_worker_status_frame(msg)) -> the type argument mangled to "XX...XX". cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_181"
+reason = """typing.cast("dict[str, Any]", coerce_worker_status_frame(msg)) -> the type argument lower-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_182"
+reason = """typing.cast("dict[str, Any]", coerce_worker_status_frame(msg)) -> the type argument upper-cased. cast() returns its second
+argument unchanged at runtime and never inspects the first, so the built frame
+is identical."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_101"
+reason = """bool(msg.get("has_trailing_space", False)) -> the default replaced by None. The value is
+wrapped in bool(), and bool(None) == bool(False), so a missing key yields False
+either way."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__build_worker_frame__mutmut_103"
+reason = """bool(msg.get("has_trailing_space", False)) -> the default dropped (.get defaults to None). The value is
+wrapped in bool(), and bool(None) == bool(False), so a missing key yields False
+either way."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__handle_worker_hello__mutmut_12"
+reason = """`_safe_int(block.get("min"), MIN_PROTOCOL_VERSION, min_val=1)` -> `min_val=None`.
+Values below 1 are then kept instead of replaced by the default 1, but
+negotiate_protocol_version computes `lo = max(client_min, 1)`, which erases the
+difference, and nothing else reads _client_min below 1. Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
+the supported range widens, this mutant becomes observable and resurfaces as an
+unexcused survivor, which is the intended prompt to add tests for the new range."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__handle_worker_hello__mutmut_15"
+reason = """`_safe_int(block.get("min"), MIN_PROTOCOL_VERSION, min_val=1)` -> `min_val` dropped
+(defaults to None). Same as mutmut_12: negotiate_protocol_version's
+`max(client_min, 1)` re-floors any value below 1. Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
+the supported range widens, this mutant becomes observable and resurfaces as an
+unexcused survivor, which is the intended prompt to add tests for the new range."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__handle_worker_hello__mutmut_19"
+reason = """`_safe_int(block.get("min"), ..., min_val=1)` -> `min_val=2`. The only input
+where the floors disagree is client_min == 1, which then falls back to the
+default MIN_PROTOCOL_VERSION == 1: the same value. Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
+the supported range widens, this mutant becomes observable and resurfaces as an
+unexcused survivor, which is the intended prompt to add tests for the new range."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__handle_worker_hello__mutmut_30"
+reason = """`_safe_int(block.get("max"), MAX_PROTOCOL_VERSION, min_val=1)` -> `min_val=2`. The
+only input where the floors disagree is client_max == 1, which then falls back
+to the default MAX_PROTOCOL_VERSION == 1: the same value. Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
+the supported range widens, this mutant becomes observable and resurfaces as an
+unexcused survivor, which is the intended prompt to add tests for the new range."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__handle_worker_hello__mutmut_42"
+reason = """Legacy path: `_safe_int(msg.get("protocol_version"), 0)` -> default 1. A missing
+or bad version then gives _legacy_v == 1 instead of 0, and the next line maps
+both to `_client_min = 1` (`_legacy_v if _legacy_v >= 1 else 1`). Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
+the supported range widens, this mutant becomes observable and resurfaces as an
+unexcused survivor, which is the intended prompt to add tests for the new range."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__handle_worker_hello__mutmut_46"
+reason = """Legacy path: `_legacy_v if _legacy_v >= 1 else 1` -> `> 1`. The only input
+where the guards disagree is _legacy_v == 1, and both branches then yield 1. Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
+the supported range widens, this mutant becomes observable and resurfaces as an
+unexcused survivor, which is the intended prompt to add tests for the new range."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__handle_worker_hello__mutmut_47"
+reason = """Legacy path: `_legacy_v if _legacy_v >= 1 else 1` -> `>= 2`. Same as
+mutmut_46: at _legacy_v == 1 both branches yield 1. Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
+the supported range widens, this mutant becomes observable and resurfaces as an
+unexcused survivor, which is the intended prompt to add tests for the new range."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.websockets_worker.x__handle_worker_hello__mutmut_53"
+reason = """Legacy path, else-branch: `_client_max = 1` -> `2`. negotiate_protocol_version
+computes `hi = min(client_max, MAX_PROTOCOL_VERSION)`, so 2 and 1 both give 1;
+the branch's _client_min is a fixed 1, so the mismatch check cannot fire either. Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
+the supported range widens, this mutant becomes observable and resurfaces as an
+unexcused survivor, which is the intended prompt to add tests for the new range."""
