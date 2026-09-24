@@ -542,6 +542,11 @@ source_paths = [
     # disconnect. Generated 0 mutants until its handler bodies were moved out of
     # the @router.post closures (mutmut skips decorated functions; Wave 9).
     "src/provide/uterm/server/bridge/routes/rest_workerctl.py",
+    # bridge/routes/rest.py — the REST path to the hijack lease (acquire,
+    # heartbeat, snapshot, events, send, step, release). All seven endpoints were
+    # @router closures, so mutmut saw only three helpers; their bodies moved into
+    # undecorated _hijack_* functions. 919 mutants measured 2026-09-23, 461 survived.
+    "src/provide/uterm/server/bridge/routes/rest.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
     # Cross-language role/lease policy (spec/behavior.json).
@@ -862,6 +867,23 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/test_build_worker_frame_mutation_killing.py",
     "packages/provide-uterm-server/tests/bridge/test_worker_hello_and_dispatch_mutation_killing.py",
     "packages/provide-uterm-server/tests/bridge/test_rest_workerctl_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_hijack_acquire_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_hijack_send_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_hijack_step_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_hijack_release_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_hijack_lease_reads_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_routes.py",
+    "packages/provide-uterm-server/tests/bridge/test_routes_coverage.py",
+    "packages/provide-uterm-server/tests/bridge/test_routes_regression.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_lease_ownership.py",
+    "packages/provide-uterm-server/tests/bridge/test_acquire_atomic.py",
+    "packages/provide-uterm-server/tests/bridge/test_hub_routes_coverage.py",
+    "packages/provide-uterm-server/tests/bridge/test_owned_input_fencing.py",
+    "packages/provide-uterm-server/tests/bridge/test_shared_input.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_routes_coverage.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_security_audit.py",
+    "packages/provide-uterm-server/tests/server/test_route_coverage.py",
+    "packages/provide-uterm-server/tests/server/test_api_auth_part1.py",
     "packages/provide-uterm-server/tests/bridge/test_snapshot_ingest_counters.py",
     "packages/provide-uterm-server/tests/bridge/test_unsolicited_snapshot_integration.py",
     "packages/provide-uterm-server/tests/bridge/test_snapshot_event_correlation.py",
