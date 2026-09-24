@@ -669,11 +669,14 @@ async def test_fanout_send_defaults_missing_group_id_and_data_to_empty_strings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Kills mutmut_208/210/213 (``msg_b.get("group_id", ...)``'s default
-    mangled/dropped) and 216/218/221 (the same for ``"data"``): only visible
-    when both keys are genuinely absent from the message."""
+    mangled/dropped) via ``get_group``'s strict argument, and 216/218/221
+    (the same for ``"data"``) via ``send``'s -- ``group`` must be non-``None``
+    here so ``send`` is actually reached and ``_fo_data`` gets observed;
+    a ``None`` group returns before ``send`` and never exercises those ids."""
     principal = SimpleNamespace(subject_id="admin-2")
     authz = _Authz(admin_of=principal, ret=True)
-    ctrl = _FanOutCtrl(group_id="", subj="admin-2", data="", group=None, result=None)
+    result_obj = _fanout_result()
+    ctrl = _FanOutCtrl(group_id="", subj="admin-2", data="", group=object(), result=result_obj)
     hub = _Hub()
     hub.fan_out_controller = ctrl
     ws = _fanout_ws(principal, authz)
@@ -682,8 +685,8 @@ async def test_fanout_send_defaults_missing_group_id_and_data_to_empty_strings(
     dispatch_result = await _dispatch(hub, ws, SimpleNamespace(control=msg_b))
     assert dispatch_result == (ROLE_IN, CAN_HIJACK_IN, OWNED_IN)
     assert ctrl.get_group_calls == [("", "admin-2")]
-    # _fo_group is None here, so send() is never reached -- get_group alone proves the defaults.
-    assert ctrl.send_calls == []
+    assert ctrl.send_calls == [("", "", principal)]
+    assert ws.sent == [_expected_fanout_frame(result_obj)]
 
 
 async def test_fanout_send_rejects_the_anonymous_principal_without_touching_the_controller(
