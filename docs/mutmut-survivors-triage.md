@@ -846,3 +846,171 @@ previous run had removed the new suite from
 `pytest_add_cli_args_test_selection`. The mutants that "regressed" were exactly
 the ones that suite kills. Before believing a regression, diff the survivor
 sets and check the suite is still wired.
+
+## Wave 11 — `browser_handlers.py`'s dispatch surface closes, and the stub trap it exposed (2026-09-04 … closed 2026-09-23)
+
+`bridge/routes/browser_handlers.py` dispatches every browser WebSocket frame,
+including who holds the hijack lease. Measured 2026-09-04 at 1,119 mutants /
+668 survived; re-measured under mutmut 3.8 at 1,127 mutants and a score of
+38.33.
+
+Closed in three PRs: `#142` (`_try_reclaim_hijack`), `#144` (`_handle_input`
+318 survivors → 14 equivalents; `_handle_resume` 173 → 2), `#145` (the
+remaining handlers, then the perimeter entry). Final: `mutation_score=100.00`
+with 20 documented equivalents; the full-perimeter run on merge commit
+`269ffd6f` (run `35924935204`) passed all 47 legs.
+
+The kill-suites drive each handler directly against strict fakes that raise
+on any unexpected argument. The suites they replaced used
+`AsyncMock(return_value=...)` hubs, which answer whatever they are called
+with — they never asserted `_handle_input`'s return value or reached the
+policy-gate hold path, so even `request = None` and `ok, error = None`
+survived.
+
+### The stub trap
+
+Killing every handler's own survivors still left the file at 95.65% with the
+equivalents excused: 49 mutants were `no tests` — `_rollback_reclaimed_hijack`
+(29), `_handle_http_inspect_control` (14), `_handle_analyze_req` (6). Their
+callers' kill-suites monkeypatch them with strict stubs, so nothing in the
+selection ever called the real functions. Same blind spot as Wave 9's
+decorators: line coverage stays 100% while mutmut has no test for the
+function at all. A kill-suite that stubs a collaborator must be paired with
+one that drives the collaborator itself. Read the full state histogram
+(`mutmut results --all true`), not the survivor list — `no tests` is not in
+the gate's stats dict yet still drags `killed/total`.
+
+### `bridge/hub/resume.py` — the token store closes to 100%
+
+`resume.py` holds resume tokens: single-use credentials that restore a
+browser's session and role. Baseline: 234 mutants, 57 survived (score
+75.64%):
+
+- `ControlPlaneResumeStore.consume` — 27
+- `.get` — 12
+- `.revoke` — 5
+- `.create` — 4
+- `_make_resume_record` — 4
+- `InMemoryResumeStore` — 4
+- `_run_tx` — 1
+
+The expiry boundary (`>` vs `>=`), the monotonic-age ledger, and every record
+field were unasserted. Closed by two kill-suites to `mutation_score=100.00`
+with 1 documented equivalent (`secrets.token_urlsafe(32)` →
+`token_urlsafe(None)`: CPython maps `nbytes=None` to the same 32-byte
+default).
+
+### A flake found on the way
+
+`test_resume.py::test_cleanup_expired` failed ~1/100 under load (`assert 0 ==
+1`). `InMemoryResumeStore.create()` prunes expired tokens before storing; the
+test created a 1ms-TTL token then a second token on the real clock and pinned
+the clock only for the final `cleanup_expired()` call, so under load the
+second `create` pruned the first and the explicit cleanup found nothing left
+to remove. Fixed by pinning the clock across both creates (2/200 → 0/200
+under 8-way parallel load). It mattered beyond the one test because
+`test_resume.py` joined the bridge mutation selection, where one flake in
+mutmut's baseline run fails the gate for every bridge file.
+
+### The socket entry points and `rest_workerctl.py`
+
+The same PR closes the three bridge route files around the token store, each
+to `mutation_score=100.00`:
+
+- `bridge/routes/websockets_browser.py` — 323 mutants, 31.58 at baseline (194
+  survived, 27 timed out). The timeouts were mutants the old tests hung on;
+  they are not excusable, so the kill-suite replaces every collaborator
+  (`handle_browser_message`, `_handle_resume`, the rate buckets, the fan-out
+  controller) with strict recorders that fail in microseconds. 1 documented
+  equivalent (`_fo_is_admin` False → None, read only through `not`).
+- `bridge/routes/websockets_worker.py` — 375 mutants, 18.40 at baseline. All
+  135 of `_handle_worker_hello`'s mutants — the worker handshake — were
+  `no tests`. 33 documented equivalents: 23 `typing.cast()` type strings and 2
+  `bool()`-wrapped defaults in `_build_worker_frame`, and 8 protocol-version
+  clamps that are equivalent **only while `MIN_PROTOCOL_VERSION ==
+  MAX_PROTOCOL_VERSION == 1`**. Widening the supported range makes them
+  observable again; they then resurface as unexcused survivors, which is the
+  intended prompt to test the new range.
+- `bridge/routes/rest_workerctl.py` — generated **0 mutants**: both handlers'
+  bodies lived inside `@router.post` closures, which mutmut skips — the Wave 9
+  mechanism again, in a file that was never on the perimeter to regress. The
+  gate refuses a zero-mutant perimeter entry unless it is declared in
+  `KNOWN_ZERO_MUTANT_PATHS`, but declaring it would have enforced nothing.
+  Instead the bodies moved into undecorated `_set_input_mode` and
+  `_disconnect_worker` (the routes delegate), and the file now has 87 mutants,
+  all killed, 0 equivalents.
+
+- `bridge/routes/rest.py` — the REST path to the same hijack lease. All seven
+  endpoints (acquire, heartbeat, snapshot, events, send, step, release) were
+  `@router` closures, so before this wave mutmut saw only the three module
+  helpers; ~400 lines of lease logic were unmeasured. The bodies moved into
+  undecorated `_hijack_*` functions (verified as a pure move: every extracted
+  body is AST-identical to the original closure body, and each route keeps its
+  exact signature and decorator). That exposed 919 mutants at 49.84 (461
+  survived, 0 timeouts, 0 `no tests` — everything was executed, nothing was
+  pinned). Five kill-suites, one per endpoint group, close it to 100.00 with 4
+  documented equivalents (`None`/`False` flags read only through `not`/`if`,
+  a fallback dict key that misses either way, and an `owner=None` keyword that
+  equals the parameter's default).
+
+Two kill claims made by agents did not survive the real run and are worth the
+pattern: a "missing-data default" test that scripted `get_group` to return
+`None`, so the function returned before the default was ever read; and two
+hello mutants that failed fast out of band but reported `timeout` under
+mutmut on a machine at load ~17 — its CPU limit is `(estimated_test_time + 1)
+* 15s`, so a small-estimate mutant crosses it. Bounding every call in the
+suite with `asyncio.wait_for` and re-measuring at `--max-children 6` killed
+both. Always confirm an agent's kill map with a real measurement.
+
+### `websockets_impl.py` and the small hub modules (2026-09-24)
+
+- `bridge/routes/websockets_impl.py` — the two terminal sockets' connect,
+  receive loop and teardown. `ws_worker_term` and `ws_browser_term` were
+  `@router.websocket` closures, so the file's ~370 lines of socket handling
+  produced 0 mutants. Their bodies moved into `_ws_worker_term` /
+  `_ws_browser_term` (AST-identical pure move; the routes delegate), exposing
+  764 mutants, 369 surviving. Four kill-suites that call the coroutines
+  directly against fake sockets and hubs close it with 23 equivalents
+  (`cast()` type strings, `owner=None` defaults, `break` vs `return` as a
+  `while True:` loop's only exit, `False`/`None` flags read only for
+  truthiness, and one `.get()` default that the following ternary discards).
+- `hub/core_delegates_lease.py`, `core_delegates_connection.py`,
+  `semantics.py`, `redaction.py`, `redaction_defaults.py`, `core_helpers.py`,
+  `connections.py` — 469 mutants, 176 surviving; closed with 15 equivalents.
+  `snapshot_metrics.py` (module-level counters only) and `core.py` (a
+  re-export of the unlisted `core_impl.py`) generate nothing and stay off.
+
+Three findings:
+
+1. **A mutant that hangs is only killed if the bounded test runs first.**
+   Twelve `CommandSplitter.split` mutants turn the scan into an infinite loop
+   (`i += 1` -> `i = 1`). The kill-suite bounds every call in a daemon thread
+   and fails in under a second, yet all twelve still reported `timeout`.
+   mutmut hands pytest a mutant's covering tests from a *set*, with `-x`, so
+   the first test to run decides: when it was an ordinary test that also
+   calls `split()`, it spun until mutmut's CPU limit. The root `conftest.py`
+   now sorts kill-suites (`*kill*` in the file name) first whenever
+   `MUTANT_UNDER_TEST` is set; re-measured, all twelve are killed and the
+   file has 0 timeouts. This is not a case for the allowlist: a hang is a
+   detected mutant, not an equivalent one.
+2. **Dead code shows up as equivalents.** `split()` built a `shlex.shlex`
+   lexer and never read it; its 7 mutants were unkillable. The lexer was
+   deleted rather than allowlisted.
+3. **A single-event test can't tell `continue` from `break` inside a
+   per-batch loop.** `_ws_worker_term`'s drop path for a malformed frame
+   `continue`s through `for event in events:`. The first test sent the bad
+   frame and the good one in separate messages, which both variants handle
+   identically; putting both events in one decoded batch killed it. The same
+   file's agent also marked a `ts=time.time()` argument as equivalent to its
+   default, which is the `_build_worker_frame` clock trap above: pinning
+   `websockets_impl.time` and the frames module's `time` to different values
+   killed both mutants.
+
+### Process notes
+
+Measure a file with a local-only commit that wires it into
+`BRIDGE_HUB_SOURCE_PATHS` and its tests into `BRIDGE_HUB_MUTATION_TESTS`
+first — an unwired file falls back to the root selection, where its own tests
+may be absent from what mutmut binds. Split survivors per function and hand
+each to a separate agent writing its own test file; take one combined
+measurement at the end rather than per-agent.

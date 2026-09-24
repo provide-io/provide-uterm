@@ -118,11 +118,17 @@ class TestInMemoryResumeStore:
 
     def test_cleanup_expired(self) -> None:
         store = InMemoryResumeStore()
-        asyncio.run(store.create("w1", "admin", 0.001))
-        asyncio.run(store.create("w2", "viewer", 60))
+        # Both creates run at one pinned instant: create() prunes expired
+        # tokens first, so on a loaded machine more than w1's TTL could pass
+        # before w2's create, which then removed w1 itself and left
+        # cleanup_expired nothing to count.
+        start = _now()
+        with _clock_at(start):
+            asyncio.run(store.create("w1", "admin", 0.001))
+            asyncio.run(store.create("w2", "viewer", 60))
         # Pinned between the two expiries. A real sleep only separated them by
         # 10ms, so a stall past w2's 60s TTL removed both and failed the count.
-        with _clock_at(_now() + 1.0):
+        with _clock_at(start + 1.0):
             removed = store.cleanup_expired()
         assert removed == 1
         assert len(store) == 1

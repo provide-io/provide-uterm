@@ -42,6 +42,37 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+async def _set_input_mode(hub: TermHub, worker_id: str, input_mode: str) -> Any:
+    """Switch *worker_id* to *input_mode*; the body of ``POST /worker/{id}/input_mode``.
+
+    Kept out of the decorated route so mutmut, which skips decorated
+    functions, can mutate it (see docs/mutmut-survivors-triage.md Wave 9).
+    """
+    # input_mode is validated by Pydantic to be "hijack" or "open" via the
+    # regex pattern on InputModeRequest, so the cast is sound.
+    ok, err = await hub.set_input_mode(worker_id, input_mode)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
+    if not ok:
+        status = 404 if err == "not_found" else 409
+        error_msg = "No worker registered." if err == "not_found" else "Cannot switch to open while hijack is active."
+        logger.warning("rest_input_mode_error worker_id=%s mode=%s err=%s", worker_id, input_mode, err)
+        return JSONResponse({"error": error_msg}, status_code=status)
+    logger.info("rest_input_mode_ok worker_id=%s mode=%s", worker_id, input_mode)
+    return {"ok": True, "input_mode": input_mode, "worker_id": worker_id}
+
+
+async def _disconnect_worker(hub: TermHub, worker_id: str) -> Any:
+    """Drop *worker_id*'s connection; the body of ``POST /worker/{id}/disconnect_worker``.
+
+    Kept out of the decorated route for the same reason as :func:`_set_input_mode`.
+    """
+    ok = await hub.disconnect_worker(worker_id)
+    if not ok:
+        logger.warning("rest_disconnect_no_worker worker_id=%s", worker_id)
+        return JSONResponse({"error": "No worker connected."}, status_code=404)
+    logger.info("rest_disconnect_ok worker_id=%s", worker_id)
+    return {"ok": True, "worker_id": worker_id}
+
+
 def register_workerctl_routes(hub: TermHub, router: APIRouter) -> None:
     """Attach worker-control REST routes to *router*.
 
@@ -56,26 +87,10 @@ def register_workerctl_routes(hub: TermHub, router: APIRouter) -> None:
         worker_id: str = Path(pattern=r"^[\w\-]+$"),
         request: InputModeRequest = Body(...),  # noqa: B008
     ) -> Any:
-        # input_mode is validated by Pydantic to be "hijack" or "open" via the
-        # regex pattern on InputModeRequest, so the cast is sound.
-        ok, err = await hub.set_input_mode(worker_id, request.input_mode)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
-        if not ok:
-            status = 404 if err == "not_found" else 409
-            error_msg = (
-                "No worker registered." if err == "not_found" else "Cannot switch to open while hijack is active."
-            )
-            logger.warning("rest_input_mode_error worker_id=%s mode=%s err=%s", worker_id, request.input_mode, err)
-            return JSONResponse({"error": error_msg}, status_code=status)
-        logger.info("rest_input_mode_ok worker_id=%s mode=%s", worker_id, request.input_mode)
-        return {"ok": True, "input_mode": request.input_mode, "worker_id": worker_id}
+        return await _set_input_mode(hub, worker_id, request.input_mode)
 
     @router.post("/worker/{worker_id}/disconnect_worker")
     async def disconnect_worker(
         worker_id: str = Path(pattern=r"^[\w\-]+$"),
     ) -> Any:
-        ok = await hub.disconnect_worker(worker_id)
-        if not ok:
-            logger.warning("rest_disconnect_no_worker worker_id=%s", worker_id)
-            return JSONResponse({"error": "No worker connected."}, status_code=404)
-        logger.info("rest_disconnect_ok worker_id=%s", worker_id)
-        return {"ok": True, "worker_id": worker_id}
+        return await _disconnect_worker(hub, worker_id)
