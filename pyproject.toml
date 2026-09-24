@@ -525,6 +525,11 @@ source_paths = [
     # the hijack lease. 1,119 mutants measured 2026-09-04, 668 survived — the
     # perimeter is being closed function by function; _try_reclaim_hijack first.
     "src/provide/uterm/server/bridge/routes/browser_handlers.py",
+    # bridge/hub/resume.py — resume tokens are single-use credentials: presenting
+    # one restores a browser's session and role. 234 mutants measured 2026-09-23,
+    # 57 survived (consume's expiry boundary, the monotonic-age ledger, every
+    # record field); closed by the two resume kill-suites.
+    "src/provide/uterm/server/bridge/hub/resume.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
     # Cross-language role/lease policy (spec/behavior.json).
@@ -837,6 +842,9 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/test_browser_handlers_small_mutation_killing.py",
     "packages/provide-uterm-server/tests/bridge/test_rollback_reclaimed_hijack_mutation_killing.py",
     "packages/provide-uterm-server/tests/bridge/test_inspect_and_analyze_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_resume.py",
+    "packages/provide-uterm-server/tests/bridge/test_resume_consume_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_resume_control_plane_mutation_killing.py",
     "packages/provide-uterm-server/tests/server/test_gui_routes_integration.py",
     "packages/provide-uterm-server/tests/server/test_gui_principal_bind.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
