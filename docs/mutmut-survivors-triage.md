@@ -970,7 +970,7 @@ both. Always confirm an agent's kill map with a real measurement.
   produced 0 mutants. Their bodies moved into `_ws_worker_term` /
   `_ws_browser_term` (AST-identical pure move; the routes delegate), exposing
   764 mutants, 369 surviving. Four kill-suites that call the coroutines
-  directly against fake sockets and hubs close it with 25 equivalents
+  directly against fake sockets and hubs close it with 23 equivalents
   (`cast()` type strings, `owner=None` defaults, `break` vs `return` as a
   `while True:` loop's only exit, `False`/`None` flags read only for
   truthiness, and one `.get()` default that the following ternary discards).
