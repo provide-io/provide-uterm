@@ -547,6 +547,23 @@ source_paths = [
     # @router closures, so mutmut saw only three helpers; their bodies moved into
     # undecorated _hijack_* functions. 919 mutants measured 2026-09-23, 461 survived.
     "src/provide/uterm/server/bridge/routes/rest.py",
+    # bridge/routes/websockets_impl.py — the two terminal sockets' connect,
+    # receive loop and teardown. Both were @router.websocket closures (0 mutants)
+    # until their bodies moved into _ws_worker_term / _ws_browser_term. 764
+    # mutants measured 2026-09-24, 369 survived.
+    "src/provide/uterm/server/bridge/routes/websockets_impl.py",
+    # bridge/hub small modules — the TermHub facade's lease/connection delegates,
+    # command-chain splitting for command policy, stream redaction and its default
+    # rules, frame-encoding helpers, and background-task shutdown. 469 mutants
+    # measured 2026-09-24, 176 survived (12 of them infinite loops; see the
+    # kill-suites-first hook in the root conftest.py).
+    "src/provide/uterm/server/bridge/hub/core_delegates_lease.py",
+    "src/provide/uterm/server/bridge/hub/core_delegates_connection.py",
+    "src/provide/uterm/server/bridge/hub/semantics.py",
+    "src/provide/uterm/server/bridge/hub/redaction.py",
+    "src/provide/uterm/server/bridge/hub/redaction_defaults.py",
+    "src/provide/uterm/server/bridge/hub/core_helpers.py",
+    "src/provide/uterm/server/bridge/hub/connections.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
     # Cross-language role/lease policy (spec/behavior.json).
@@ -872,6 +889,29 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/test_rest_hijack_step_mutation_killing.py",
     "packages/provide-uterm-server/tests/bridge/test_rest_hijack_release_mutation_killing.py",
     "packages/provide-uterm-server/tests/bridge/test_rest_hijack_lease_reads_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_worker_term_early_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_worker_term_loop_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_browser_term_early_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_browser_term_loop_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_core_delegates_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_semantics_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_redaction_kill.py",
+    "packages/provide-uterm-server/tests/bridge/hub/test_core_helpers_kill.py",
+    "packages/provide-uterm-server/tests/bridge/test_bridge.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_browser.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_resume.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_resume_2.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_regression.py",
+    "packages/provide-uterm-server/tests/bridge/test_websockets_coverage.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_regression_disconnect.py",
+    "packages/provide-uterm-server/tests/bridge/test_worker_hello_protocol.py",
+    "packages/provide-uterm-server/tests/bridge/test_ws_exception_handling.py",
+    "packages/provide-uterm-server/tests/bridge/test_worker_frame_validation.py",
+    "packages/provide-uterm-server/tests/bridge/test_limits.py",
+    "packages/provide-uterm-server/tests/bridge/test_semantics.py",
+    "packages/provide-uterm-server/tests/bridge/test_redaction_defaults.py",
+    "packages/provide-uterm-server/tests/bridge/test_hub_mutation_killing.py",
     "packages/provide-uterm-server/tests/bridge/test_routes.py",
     "packages/provide-uterm-server/tests/bridge/test_routes_coverage.py",
     "packages/provide-uterm-server/tests/bridge/test_routes_regression.py",
