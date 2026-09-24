@@ -106,6 +106,7 @@ Documented equivalents (``_handle_worker_hello``, all given
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -117,6 +118,30 @@ from provide.uterm.server.bridge.routes.websockets_worker import (
     _dispatch_worker_frame,
     _handle_worker_hello,
 )
+
+# No test below may be allowed to hang, no matter what a mutant does to an
+# awaited chain it doesn't fully control (e.g. an argument-dropping mutation
+# reaching a different collaborator, or coverage-based test selection running
+# this body against a fake it wasn't written against). Every call to the two
+# functions under test is bounded by this timeout; it never fires in the
+# healthy case (it races a timer against an already-fast call), but it turns
+# any hypothetical hang into a fast, clearly-labelled failure instead of a
+# stalled mutation-gate leg.
+_CALL_TIMEOUT_S = 2.0
+
+
+async def _await_hello(hub: Any, ws: Any, worker_id: str, msg: dict[str, Any]) -> bool:
+    return await asyncio.wait_for(_handle_worker_hello(hub, ws, worker_id, msg), timeout=_CALL_TIMEOUT_S)
+
+
+async def _await_dispatch(
+    hub: Any, worker_id: str, mtype: str, frame: dict[str, Any], *, expected_worker: Any = None
+) -> None:
+    await asyncio.wait_for(
+        _dispatch_worker_frame(hub, worker_id, mtype, frame, expected_worker=expected_worker),
+        timeout=_CALL_TIMEOUT_S,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Shared fakes
@@ -228,7 +253,7 @@ async def test_hijack_mode_negotiates_default_protocol_and_broadcasts(fake_logge
     ws = _HelloWebSocket()
     msg = {"input_mode": "hijack"}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is False
     assert hub.hello_calls == [(WORKER, "hijack", 1)]
@@ -247,7 +272,7 @@ async def test_open_mode_is_the_other_half_of_the_membership_check(fake_logger: 
     ws = _HelloWebSocket()
     msg = {"input_mode": "open"}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is False
     assert hub.hello_calls == [(WORKER, "open", 1)]
@@ -267,7 +292,7 @@ async def test_an_unrecognised_mode_warns_and_never_touches_the_hub(fake_logger:
     ws = _HelloWebSocket()
     msg = {"input_mode": "bogus"}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is False
     assert (hub.hello_calls, hub.broadcasts) == ([], [])
@@ -293,7 +318,7 @@ async def test_an_explicit_protocol_block_above_range_is_a_mismatch(fake_logger:
     ws = _HelloWebSocket()
     msg = {"protocol": {"min": 5, "max": 5}}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is True
     assert (hub.hello_calls, hub.broadcasts) == ([], [])
@@ -317,7 +342,7 @@ async def test_protocol_max_alone_defaults_min_and_succeeds(fake_logger: _FakeLo
     ws = _HelloWebSocket()
     msg = {"protocol": {"max": 5}}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is False
     assert (hub.hello_calls, hub.broadcasts) == ([], [])
@@ -337,7 +362,7 @@ async def test_protocol_min_alone_defaults_max_and_mismatches(fake_logger: _Fake
     ws = _HelloWebSocket()
     msg = {"protocol": {"min": 5}}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is True
     assert fake_logger.warnings == [(_MISMATCH_WARNING_FMT, WORKER, 5, 1, MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION)]
@@ -360,7 +385,7 @@ async def test_a_low_protocol_max_is_not_floored_without_its_clamp(fake_logger: 
     ws = _HelloWebSocket()
     msg = {"protocol": {"min": 5, "max": 0}}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is True
     assert fake_logger.warnings == [(_MISMATCH_WARNING_FMT, WORKER, 5, 1, MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION)]
@@ -381,7 +406,7 @@ async def test_legacy_protocol_version_five_negotiates_and_mismatches(fake_logge
     ws = _HelloWebSocket()
     msg = {"protocol_version": 5}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is True
     assert (hub.hello_calls, hub.broadcasts) == ([], [])
@@ -401,7 +426,7 @@ async def test_legacy_protocol_version_zero_clamps_to_one_and_succeeds(fake_logg
     ws = _HelloWebSocket()
     msg = {"protocol_version": 0, "input_mode": "hijack"}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is False
     assert hub.hello_calls == [(WORKER, "hijack", 1)]
@@ -422,7 +447,7 @@ async def test_an_explicit_none_protocol_version_still_defaults_safely(fake_logg
     ws = _HelloWebSocket()
     msg = {"protocol_version": None}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is False
     assert (hub.hello_calls, hub.broadcasts) == ([], [])
@@ -444,7 +469,7 @@ async def test_suppress_exception_swallows_a_failed_send_and_skips_close(fake_lo
     ws = _HelloWebSocket(raise_on_send=RuntimeError("boom"))
     msg = {"protocol": {"min": 5, "max": 5}}
 
-    result = await _handle_worker_hello(hub, ws, WORKER, msg)
+    result = await _await_hello(hub, ws, WORKER, msg)
 
     assert result is True
     assert (ws.sent, ws.closes) == ([], [])
@@ -507,7 +532,7 @@ async def test_an_owned_snapshot_commit_broadcasts_with_the_fenced_seq() -> None
     frame = {"data": "owned-snapshot"}
     sentinel = object()
 
-    await _dispatch_worker_frame(hub, DWID, "snapshot", frame, expected_worker=sentinel)
+    await _await_dispatch(hub, DWID, "snapshot", frame, expected_worker=sentinel)
 
     assert hub.commit_calls == [(DWID, frame, sentinel)]
     assert hub.broadcast_calls == [(DWID, {"event_seq": 7, "marker": "committed"}, sentinel, 7)]
@@ -522,7 +547,7 @@ async def test_analysis_frames_are_broadcast_and_never_appended() -> None:
     hub = _DispatchHub()
     frame = {"formatted": "analysis output"}
 
-    await _dispatch_worker_frame(hub, DWID, "analysis", frame)
+    await _await_dispatch(hub, DWID, "analysis", frame)
 
     assert hub.commit_calls == []
     assert hub.broadcast_calls == [(DWID, frame, None, None)]
@@ -539,7 +564,7 @@ async def test_status_frames_are_broadcast_and_appended_as_worker_status() -> No
     hub = _DispatchHub()
     frame = {"cpu": 1}
 
-    await _dispatch_worker_frame(hub, DWID, "status", frame)
+    await _await_dispatch(hub, DWID, "status", frame)
 
     assert hub.commit_calls == []
     assert hub.broadcast_calls == [(DWID, frame, None, None)]
