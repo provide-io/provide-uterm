@@ -530,6 +530,18 @@ source_paths = [
     # 57 survived (consume's expiry boundary, the monotonic-age ledger, every
     # record field); closed by the two resume kill-suites.
     "src/provide/uterm/server/bridge/hub/resume.py",
+    # bridge/routes/websockets_browser.py — per-event entry of the browser socket
+    # loop (rate limits, resume, deckmux, fan-out) and the disconnect resume.
+    # 323 mutants measured 2026-09-23, 221 not killed (27 of them timeouts).
+    "src/provide/uterm/server/bridge/routes/websockets_browser.py",
+    # bridge/routes/websockets_worker.py — worker hello handshake (protocol
+    # negotiation) and the frame translation every worker message goes through.
+    # 375 mutants measured 2026-09-23; the hello's 135 had no test at all.
+    "src/provide/uterm/server/bridge/routes/websockets_worker.py",
+    # bridge/routes/rest_workerctl.py — input-mode switch and forced worker
+    # disconnect. Generated 0 mutants until its handler bodies were moved out of
+    # the @router.post closures (mutmut skips decorated functions; Wave 9).
+    "src/provide/uterm/server/bridge/routes/rest_workerctl.py",
     # Pydantic frame schemas — single source of truth for wire format.
     "src/provide/uterm/bridge/schemas.py",
     # Cross-language role/lease policy (spec/behavior.json).
@@ -845,6 +857,14 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/bridge/test_resume.py",
     "packages/provide-uterm-server/tests/bridge/test_resume_consume_mutation_killing.py",
     "packages/provide-uterm-server/tests/bridge/test_resume_control_plane_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_dispatch_browser_event_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_resume_worker_on_disconnect_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_build_worker_frame_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_worker_hello_and_dispatch_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_rest_workerctl_mutation_killing.py",
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_ingest_counters.py",
+    "packages/provide-uterm-server/tests/bridge/test_unsolicited_snapshot_integration.py",
+    "packages/provide-uterm-server/tests/bridge/test_snapshot_event_correlation.py",
     "packages/provide-uterm-server/tests/server/test_gui_routes_integration.py",
     "packages/provide-uterm-server/tests/server/test_gui_principal_bind.py",
     # config_schema.py kill-suite: binds the two undecorated module-level helpers
