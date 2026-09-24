@@ -1748,3 +1748,35 @@ computes `hi = min(client_max, MAX_PROTOCOL_VERSION)`, so 2 and 1 both give 1;
 the branch's _client_min is a fixed 1, so the mismatch check cannot fire either. Equivalent only while MIN_PROTOCOL_VERSION == MAX_PROTOCOL_VERSION == 1: if
 the supported range widens, this mutant becomes observable and resurfaces as an
 unexcused survivor, which is the intended prompt to add tests for the new range."""
+
+# ---------------------------------------------------------------------------
+# bridge/routes/rest.py — 4 equivalents, measured 2026-09-23 (mutmut 3.8)
+# ---------------------------------------------------------------------------
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest.x__hijack_acquire__mutmut_53"
+reason = """`session_committed = False` -> `None`. The flag is only ever reassigned to True
+and only ever read as `if not session_committed:` in the finally block, and
+`not None` is `not False`, so the compensating release runs in exactly the same
+cases."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest.x__hijack_acquire__mutmut_146"
+reason = """`error_msgs.get(err or "", str(err))` -> `err or "XXXX"`. The fallback key is
+used only when err is falsy, and neither "" nor "XXXX" is a key of error_msgs
+(no_worker / already_hijacked / open_mode), so both lookups miss and return the
+same default str(err)."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest.x__hijack_release__mutmut_52"
+reason = """`should_resume = False` in the still-hijacked re-check -> `None`.
+`should_resume` is only read afterwards as `if should_resume:`, never returned or
+passed on, so None and False are indistinguishable (the WebSocket twin's
+_do_resume equivalent, browser_handlers._handle_hijack_release mutmut_10)."""
+
+[[equivalent]]
+mutant = "provide.uterm.server.bridge.routes.rest.x__hijack_release__mutmut_77"
+reason = """`hub.notify_hijack_changed(worker_id, enabled=False, owner=None)` -> the
+`owner=None` keyword dropped. notify_hijack_changed declares `owner: str | None =
+None` (hub core_impl/store/lease and the TermHub protocol), so omitting it passes
+the same None."""
