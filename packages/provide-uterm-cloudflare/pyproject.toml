@@ -58,7 +58,7 @@ dev = [
   # ModuleNotFoundError: No module named 'starlette'. A test's direct import
   # belongs in its own package's dev extra rather than inherited by luck.
   "starlette>=0.40",
-  "httpx2>=2.10",
+  "httpx2>=2.13.1",
 ]
 
 [project.urls]
