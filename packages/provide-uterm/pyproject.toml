@@ -62,7 +62,7 @@ dev = [
     "bandit>=1.9",
     "codespell>=2.4.1",
     "detect-secrets>=1.5.0",
-    "fastapi>=0.110",
+    "fastapi>=0.142.2",
     "httpx2>=2.10",
     "hypothesis>=6.151.9",
     "memray>=1.0; sys_platform != 'win32'",
