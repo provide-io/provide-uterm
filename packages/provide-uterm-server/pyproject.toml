@@ -21,9 +21,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-server = ["fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=12.0"]
-cli = ["fastapi>=0.110", "uvicorn>=0.24", "websockets>=12.0", "textual>=0.50", "httpx2>=2.10"]
-tunnel = ["httpx2>=2.10", "uvicorn>=0.24", "websockets>=16.0", "fastapi>=0.110"]
+server = ["fastapi>=0.142.2", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=12.0"]
+cli = ["fastapi>=0.142.2", "uvicorn>=0.24", "websockets>=12.0", "textual>=0.50", "httpx2>=2.10"]
+tunnel = ["httpx2>=2.10", "uvicorn>=0.24", "websockets>=16.0", "fastapi>=0.142.2"]
 gateway = ["asyncssh>=2.24.0", "websockets>=16.0"]
 # Optional: PatternDetector + built-in rules + annotation models. Lives in the
 # separate provide-uterm-annotation package so deployments that don't need
@@ -31,7 +31,7 @@ gateway = ["asyncssh>=2.24.0", "websockets>=16.0"]
 # raises a friendly RuntimeError if it isn't installed.
 annotation = ["provide-uterm-annotation>=0.5.6"]
 all = [
-    "fastapi>=0.110", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=16.0",
+    "fastapi>=0.142.2", "uvicorn>=0.24", "pyjwt>=2.9", "websockets>=16.0",
     "textual>=0.50", "httpx2>=2.10", "asyncssh>=2.24.0",
     "provide-uterm-annotation>=0.5.6",
     # core's emulator dep — declared here so `uv sync --extra all` installs it
@@ -54,7 +54,7 @@ dev = [
     "pytest-textual-snapshot>=1.0.0",
     "mypy>=1.19",
     "ruff>=0.15",
-    "fastapi>=0.110",
+    "fastapi>=0.142.2",
     "uvicorn>=0.24",
     "pyjwt>=2.9",
     "websockets>=16.0",
