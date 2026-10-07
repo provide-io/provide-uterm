@@ -62,3 +62,17 @@ async def test_nothing_is_scanned_when_nothing_is_recorded() -> None:
     await runtime._send_outbound_frame(ws, {"type": "term", "data": _KEY})
 
     ws.send.assert_awaited_once()
+
+
+async def test_a_rendered_snapshot_is_read_through_its_colours() -> None:
+    # A capture connector's snapshot is the emulator's rendered screen: every
+    # row carries SGR codes and ends in a reset. Both the password-prompt check
+    # (which looks for a colon at the end of the screen) and read-path rules
+    # must see the text, not the codes.
+    runtime, logger = _runtime()
+    styled_rows = "\x1b[1mDROP \x1b[0mTABLE callers;\x1b[0m\n\x1b[33mPassword: \x1b[0m"
+
+    await runtime._log_snapshot({"type": "snapshot", "screen": styled_rows})
+
+    assert "SQL DROP statement detected: DROP TABLE" in _annotations(logger)
+    assert runtime._at_password_prompt is True

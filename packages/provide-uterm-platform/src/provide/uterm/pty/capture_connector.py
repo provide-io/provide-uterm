@@ -50,6 +50,20 @@ _VALID_CONFIG_KEYS = frozenset(
 )
 
 
+def _make_emulator(cols: int, rows: int) -> Any:
+    """A terminal emulator to render the captured stream into, if pyte is present.
+
+    The emulator is the ``provide-uterm[emulator]`` extra. Without it a capture
+    session still works and its snapshot falls back to the raw output tail.
+    """
+
+    try:
+        from provide.uterm.emulator import TerminalEmulator
+    except ImportError:
+        return None
+    return TerminalEmulator(cols, rows, receive_encoding="utf-8")
+
+
 def _register() -> None:
     try:
         from provide.uterm.server.connectors.registry import register_connector
@@ -86,6 +100,11 @@ class CaptureConnector:
 
         self._capture: CaptureSocket | None = None
         self._connected = False
+        # The screen the captured stream draws. The raw tail below is kept for
+        # deployments without the emulator, and is what the snapshot falls back
+        # to: as "the screen" it fails, because a program that redraws one line
+        # -- a blinking cursor -- fills 64 KiB with that line alone.
+        self._emulator = _make_emulator(self._cols, self._rows)
         self._buffer = ""
         self._pending = ""  # new bytes not yet streamed to the browser
         self._connect_log: list[str] = []
@@ -118,14 +137,7 @@ class CaptureConnector:
             if frame is None:
                 break
             if frame.channel == CHANNEL_STDOUT:
-                raw = frame.data.decode("utf-8", errors="replace")
-                # Normalize bare \n → \r\n: DYLD capture bypasses the PTY ONLCR
-                # driver, so xterm.js would advance cursor down without a CR.
-                text = raw.replace("\r\n", "\n").replace("\n", "\r\n")
-                self._buffer += text
-                if len(self._buffer) > 65536:
-                    self._buffer = self._buffer[-65536:]
-                self._pending += text
+                self._pending += self._ingest_stdout(frame.data)
                 changed = True
             elif frame.channel == CHANNEL_STDIN:
                 self._stdin_count += 1
@@ -143,6 +155,20 @@ class CaptureConnector:
             data, self._pending = self._pending, ""
             return [{"type": "term", "data": data}]
         return []
+
+    def _ingest_stdout(self, data: bytes) -> str:
+        """Take one chunk of captured output into the screen; return it for streaming."""
+
+        raw = data.decode("utf-8", errors="replace")
+        # Normalize bare \n → \r\n: DYLD capture bypasses the PTY ONLCR
+        # driver, so xterm.js would advance cursor down without a CR.
+        text = raw.replace("\r\n", "\n").replace("\n", "\r\n")
+        self._buffer += text
+        if len(self._buffer) > 65536:
+            self._buffer = self._buffer[-65536:]
+        if self._emulator is not None:
+            self._emulator.process(text.encode("utf-8"))
+        return text
 
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         if self._stdin_socket_path:
@@ -198,6 +224,8 @@ class CaptureConnector:
     async def clear(self) -> list[dict[str, Any]]:
         self._buffer = ""
         self._pending = ""
+        if self._emulator is not None:
+            self._emulator.reset()
         return [{"type": "term", "data": ""}]
 
     async def get_analysis(self) -> str:
@@ -211,13 +239,21 @@ class CaptureConnector:
         )
 
     def _snapshot(self) -> dict[str, Any]:
-        screen = self._buffer
+        cursor = {"x": 0, "y": 0}
+        if self._emulator is not None:
+            # The rendered screen, colours included: the browser element clears
+            # its terminal and writes this, so it must be a whole screen, not a
+            # stretch of the history that drew one.
+            screen = self._emulator.ansi_screen()
+            cursor = dict(self._emulator.get_snapshot()["cursor"])
+        else:
+            screen = self._buffer
         return {
             "type": "snapshot",
             "screen": screen,
             # x/y, not row/col: that is what the snapshot frame contract and
             # every other connector use, and what the terminal element reads.
-            "cursor": {"x": 0, "y": 0},
+            "cursor": cursor,
             "cols": self._cols,
             "rows": self._rows,
             # Non-cryptographic change-detection hash; `usedforsecurity=False`
