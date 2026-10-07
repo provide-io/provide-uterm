@@ -26,6 +26,12 @@ public sealed partial class UtermServer
     private readonly ConcurrentDictionary<string, Connectors.IConnector> _liveConnectors =
         new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The detector every session's annotator shares. It holds no state; the
+    /// chunk-bridging streams are per session and per direction.
+    /// </summary>
+    private readonly Annotation.PatternDetector _annotationDetector = new();
+
     /// <summary>Live worker links for sessions whose connector is bridged to the hub.</summary>
     private readonly ConcurrentDictionary<string, LocalWorkerLink> _workerLinks =
         new(StringComparer.Ordinal);
@@ -114,7 +120,11 @@ public sealed partial class UtermServer
             }
         }
 
-        var link = new LocalWorkerLink(_deps.Hub, sessionId, connector);
+        var annotator = new SessionAnnotator(
+            _annotationDetector,
+            () => _deps.Registry.TryGetStatus(sessionId, out var status) && status.RecordingEnabled,
+            data => RecordAnnotationAsync(sessionId, data));
+        var link = new LocalWorkerLink(_deps.Hub, sessionId, connector, annotator);
         if (await link.AttachAsync(def.InputMode, cancellationToken).ConfigureAwait(false))
         {
             _workerLinks[sessionId] = link;

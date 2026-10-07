@@ -34,12 +34,18 @@ namespace Provide.Uterm.Server;
 /// nothing there but the welcome frames (already drained at start-up) and
 /// animation frames, so this port answers input synchronously and leaves the
 /// loop out rather than run a thread per session for frames that do not come.</para>
+///
+/// <para>It is also where the reference's runtime annotates a recorded session
+/// (<c>_log_send</c>, <c>_log_snapshot</c>, <c>_scan_output</c>): input on its
+/// way to the connector, and every snapshot and <c>term</c> frame on its way
+/// out, pass the <see cref="SessionAnnotator"/> when one is given.</para>
 /// </summary>
 public sealed class LocalWorkerLink : IAbortableBrowserWs
 {
     private readonly TermHub _hub;
     private readonly string _workerId;
     private readonly UshellConnector _connector;
+    private readonly SessionAnnotator? _annotator;
     private readonly ControlFrameDecoder _decoder = new();
 
     /// <summary>Serialises decoder + connector, which the hub may reach concurrently.</summary>
@@ -49,10 +55,17 @@ public sealed class LocalWorkerLink : IAbortableBrowserWs
     internal Func<string, CancellationToken, Task>? SendOverride { get; set; }
 
     public LocalWorkerLink(TermHub hub, string workerId, UshellConnector connector)
+        : this(hub, workerId, connector, null)
+    {
+    }
+
+    internal LocalWorkerLink(
+        TermHub hub, string workerId, UshellConnector connector, SessionAnnotator? annotator)
     {
         _hub = hub;
         _workerId = workerId;
         _connector = connector;
+        _annotator = annotator;
     }
 
     /// <summary>
@@ -119,13 +132,30 @@ public sealed class LocalWorkerLink : IAbortableBrowserWs
     /// </summary>
     public Task SendTextAsync(string payload, CancellationToken cancellationToken = default) =>
         SendOverride?.Invoke(payload, cancellationToken)
-        ?? PublishAsync(Answer(payload), cancellationToken);
+        ?? AnswerAndPublishAsync(payload, cancellationToken);
+
+    /// <summary>
+    /// Answer one payload, record what its input matched, then publish the
+    /// replies: the reference logs (and annotates) a send before the frames it
+    /// produced go out.
+    /// </summary>
+    private async Task AnswerAndPublishAsync(string payload, CancellationToken cancellationToken)
+    {
+        var annotations = new List<Annotation.Annotation>();
+        var responses = Answer(payload, annotations);
+        if (_annotator is not null)
+        {
+            await _annotator.RecordAsync(annotations).ConfigureAwait(false);
+        }
+
+        await PublishAsync(responses, cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// What the connector answers to one inbound payload. Mirrors the
     /// reference's <c>_process_inbound</c> / <c>_process_control_msg</c>.
     /// </summary>
-    private List<Dictionary<string, object?>> Answer(string payload)
+    private List<Dictionary<string, object?>> Answer(string payload, List<Annotation.Annotation> annotations)
     {
         var responses = new List<Dictionary<string, object?>>();
         lock (_gate)
@@ -136,6 +166,7 @@ public sealed class LocalWorkerLink : IAbortableBrowserWs
                 switch (chunk)
                 {
                     case DataChunk data:
+                        if (_annotator is not null) annotations.AddRange(_annotator.ScanInput(data.Data));
                         responses.AddRange(_connector.HandleInput(data.Data));
                         break;
                     case ControlChunk control:
@@ -173,6 +204,22 @@ public sealed class LocalWorkerLink : IAbortableBrowserWs
     }
 
     /// <summary>
+    /// The reference's <c>_send_outbound_frame</c>: once a frame has gone out,
+    /// a snapshot's screen and a <c>term</c> frame's data are scanned as "read".
+    /// </summary>
+    private async Task AnnotateOutboundAsync(string type, Dictionary<string, object?> frame)
+    {
+        if (_annotator is null) return;
+        var annotations = type switch
+        {
+            "snapshot" => _annotator.ScanSnapshot(frame),
+            "term" => _annotator.ScanOutput(frame.TryGetValue("data", out var data) ? data?.ToString() ?? "" : ""),
+            _ => [],
+        };
+        await _annotator.RecordAsync(annotations).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// Put the worker's frames where a WebSocket worker's would have gone:
     /// snapshots become the hub's last snapshot, terminal output becomes a
     /// <c>term</c> event, and every frame is fanned out to the browsers —
@@ -200,6 +247,7 @@ public sealed class LocalWorkerLink : IAbortableBrowserWs
 
             if (!accepted) return;
             await _hub.Conn.BroadcastToBrowsersAsync(_workerId, frame, cancellationToken).ConfigureAwait(false);
+            await AnnotateOutboundAsync(type, frame).ConfigureAwait(false);
         }
     }
 }
