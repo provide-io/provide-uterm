@@ -28,14 +28,18 @@ func wrap(fn func(string, string, map[string]any) (*transportConnector, error)) 
 	}
 }
 
-// builtin holds the four canonical connector factories, keyed by connector_type.
-// Order note: network connectors modern→legacy, then local — matching the Python
-// _BUILTIN_CLASSES ordering.
+// builtin holds the connector factories Build always accepts, keyed by
+// connector_type. Order note: network connectors modern→legacy, then local —
+// matching the Python _BUILTIN_CLASSES ordering. "pty_capture" is last: Python
+// registers it from the platform package rather than listing it as a builtin,
+// but the PAM capture path creates sessions of that type, so a server that
+// cannot build one has a capture mode that never runs.
 var builtin = map[string]Factory{
-	"websocket": wrap(newWebSocket),
-	"ssh":       wrap(newSSH),
-	"telnet":    wrap(newTelnet),
-	"shell":     wrap(newShell),
+	"websocket":   wrap(newWebSocket),
+	"ssh":         wrap(newSSH),
+	"telnet":      wrap(newTelnet),
+	"shell":       wrap(newShell),
+	"pty_capture": wrap(newCapture),
 }
 
 var (

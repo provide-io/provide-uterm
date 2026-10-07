@@ -13,7 +13,7 @@ import (
 
 func TestRegisteredTypes(t *testing.T) {
 	got := RegisteredTypes()
-	want := []string{"shell", "ssh", "telnet", "websocket"}
+	want := []string{"pty_capture", "shell", "ssh", "telnet", "websocket"}
 	// want ⊆ got (custom registrations may add more).
 	set := map[string]bool{}
 	for _, g := range got {
