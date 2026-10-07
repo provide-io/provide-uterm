@@ -188,7 +188,12 @@ class CaptureConnector:
         return self._snapshot()
 
     async def set_mode(self, mode: str) -> list[dict[str, Any]]:
-        return [{"type": "worker_hello", "input_mode": "open"}]
+        # Announce the mode asked for. The hub applies the hello's mode, so
+        # answering "open" regardless overrode a session defined as hijack --
+        # left over from when a capture had no input path and the mode could
+        # not matter. With stdin_socket_path it has one, and hijack is what
+        # gives a single viewer the lease.
+        return [{"type": "worker_hello", "input_mode": mode}]
 
     async def clear(self) -> list[dict[str, Any]]:
         self._buffer = ""
