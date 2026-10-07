@@ -301,13 +301,19 @@ class HostedSessionRuntime:
 
     async def _log_snapshot(self, msg: dict[str, Any]) -> None:
         screen = str(msg.get("screen", ""))
-        self._at_password_prompt = bool(re.search(r"(?i)(?:password|passphrase)[^\n]*:\s*$", screen.rstrip()))
+        # Read as text. A rendered screen carries SGR codes and ends each row
+        # with a reset, which hides a trailing "Password:" from the prompt check
+        # and splits a styled match from the read-path rules.
+        from provide.uterm import strip_ansi
+
+        text = strip_ansi(screen)
+        self._at_password_prompt = bool(re.search(r"(?i)(?:password|passphrase)[^\n]*:\s*$", text.rstrip()))
         if self._logger is None:
             return
         await self._logger.log_screen(msg, screen.encode("cp437", errors="replace"))
         self._event_seq += 1
         if self._detector is not None:
-            for annotation in self._detector.detect("read", screen, seq=self._event_seq):
+            for annotation in self._detector.detect("read", text, seq=self._event_seq):
                 await self._logger.log_event("annotation", annotation.to_dict())
 
     async def _scan_output(self, data: str) -> None:
