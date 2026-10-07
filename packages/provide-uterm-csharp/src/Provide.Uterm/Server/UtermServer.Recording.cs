@@ -57,6 +57,19 @@ public sealed partial class UtermServer
             ["principal"] = p.SubjectId,
         };
 
+        var (ts, seq) = await RecordAnnotationAsync(sessionId, annotationData).ConfigureAwait(false);
+        return Results.Json(new { ts, seq }, JsonOpts);
+    }
+
+    /// <summary>
+    /// Write one annotation to a session: the hub's event ring (what a watcher
+    /// sees live) and the recording store. The operator's annotate route and the
+    /// detector (<see cref="SessionAnnotator"/>) both come through here, so an
+    /// automatic annotation lands exactly where a manual one does.
+    /// </summary>
+    private async Task<(double Ts, int Seq)> RecordAnnotationAsync(
+        string sessionId, Dictionary<string, object?> annotationData)
+    {
         var ts = _clock.Wall();
         var evt = _deps.Hub.AppendEventData(sessionId, "annotation", annotationData);
         var seq = 0;
@@ -84,8 +97,7 @@ public sealed partial class UtermServer
                 ["session_id"] = sessionId,
             },
         }).ConfigureAwait(false);
-
-        return Results.Json(new { ts, seq }, JsonOpts);
+        return (ts, seq);
     }
 
     private async Task<IResult> HandleRecordingMeta(HttpContext ctx, string sessionId)
