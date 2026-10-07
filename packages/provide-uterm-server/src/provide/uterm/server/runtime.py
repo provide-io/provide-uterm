@@ -89,10 +89,16 @@ class HostedSessionRuntime:
         # already receives the fully reassembled screen. Held per session so
         # carried text never bleeds between sessions (the detector is shared).
         self._send_stream: StreamingDetector | None = None
+        # And one for streamed output. The read path's snapshot is a whole screen
+        # for most connectors, but a capture connector's is the raw tail of the
+        # stream, which a blinking cursor can fill with redraws of a single line;
+        # text a rule should match then never reaches a snapshot at all.
+        self._read_stream: StreamingDetector | None = None
         if detector is not None:
             from provide.uterm.annotation import StreamingDetector
 
             self._send_stream = StreamingDetector(detector)
+            self._read_stream = StreamingDetector(detector)
         self._event_seq: int = 0
         self._at_password_prompt: bool = False
 
@@ -304,6 +310,19 @@ class HostedSessionRuntime:
             for annotation in self._detector.detect("read", screen, seq=self._event_seq):
                 await self._logger.log_event("annotation", annotation.to_dict())
 
+    async def _scan_output(self, data: str) -> None:
+        """Run read-path rules over streamed output, escape sequences removed.
+
+        Only while recording, as the snapshot path is: annotations are recording
+        entries, and with no recording there is nowhere for one to go.
+        """
+        if self._logger is None or self._read_stream is None or not data:
+            return
+        from provide.uterm import strip_ansi
+
+        for annotation in self._read_stream.detect("read", strip_ansi(data), seq=self._event_seq):
+            await self._logger.log_event("annotation", annotation.to_dict())
+
     async def _log_send(self, data: str) -> None:
         if self._logger is not None:
             if self._at_password_prompt:
@@ -341,6 +360,8 @@ class HostedSessionRuntime:
         await self._log_wire_send(payload, outbound)
         if outbound.get("type") == "snapshot":
             await self._log_snapshot(outbound)
+        elif outbound.get("type") == "term":
+            await self._scan_output(str(outbound.get("data") or ""))
 
     async def _process_control_msg(
         self,
