@@ -230,6 +230,21 @@ async def test_set_mode_returns_hello() -> None:
         await conn.stop()
 
 
+@pytest.mark.parametrize("mode", ["hijack", "open"])
+async def test_set_mode_announces_the_mode_it_was_given(mode: str) -> None:
+    # The runtime calls set_mode(definition.input_mode) on start, and the hub
+    # applies whatever the hello says. Answering "open" regardless meant a
+    # session defined as hijack ran open: anyone could type, and no viewer
+    # was ever offered the lease.
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td, stdin_socket_path=str(Path(td) / "in.sock"))
+        await conn.start()
+        msgs = await conn.set_mode(mode)
+        hello = next(m for m in msgs if m["type"] == "worker_hello")
+        assert hello["input_mode"] == mode
+        await conn.stop()
+
+
 async def test_get_analysis_contains_socket_path() -> None:
     with tempfile.TemporaryDirectory() as td:
         conn = _make_connector(td)
