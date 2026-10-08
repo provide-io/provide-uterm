@@ -68,6 +68,7 @@ func (b *TermBridge) sendLoop(ctx context.Context, cancel context.CancelFunc, co
 				b.logger.Warn("send_loop_network_error", "worker_id", b.workerID, "error", err.Error())
 				return
 			}
+			b.observer.FrameSent(payload, observedFrame(f))
 		}
 	}
 }
@@ -101,6 +102,7 @@ func (b *TermBridge) recvLoop(ctx context.Context, cancel context.CancelFunc, co
 		} else {
 			chunk = string(raw)
 		}
+		b.observer.WireReceived(chunk)
 		events, err := decoder.Feed(chunk)
 		if err != nil {
 			b.logger.Debug("recv_loop_bad_stream", "worker_id", b.workerID, "error", err.Error())
@@ -110,9 +112,11 @@ func (b *TermBridge) recvLoop(ctx context.Context, cancel context.CancelFunc, co
 			switch e := event.(type) {
 			case controlchannel.DataChunk:
 				if e.Data != "" {
+					b.observer.InputReceived(e.Data)
 					b.sendKeys(ctx, e.Data)
 				}
 			case controlchannel.ControlChunk:
+				b.observer.ControlReceived(e.Control)
 				b.dispatchControl(ctx, e.Control)
 			}
 		}
