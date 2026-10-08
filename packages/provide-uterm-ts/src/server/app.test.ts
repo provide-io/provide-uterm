@@ -193,6 +193,9 @@ describe("where this port answers differently, and why", () => {
       "sessions.get",
       "sessions.set_mode",
       "sessions.snapshot",
+      "sessions.recording",
+      "sessions.recording_entries",
+      "sessions.recording_download",
     ]);
   });
 

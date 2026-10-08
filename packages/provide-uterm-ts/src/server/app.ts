@@ -30,6 +30,7 @@
 
 import { API_ROUTE_REGISTRY, API_ROUTES, type RouteDef } from "../api-routes/index.ts";
 import type { InputMode } from "../hub/index.ts";
+import { NullRecordingStore } from "../recording/index.ts";
 import {
   ANONYMOUS_SUBJECT,
   type AuthSettings,
@@ -39,7 +40,8 @@ import {
 import { canMutateSession, canReadSession } from "./authorization.ts";
 import { healthReport, livenessReport, readinessReport } from "./health.ts";
 import { handleHijackRequest, INPUT_MODES, readJsonBody as readBody } from "./hijack-routes.ts";
-import { bindApiRoutes, type RouteHandler } from "./route-binding.ts";
+import { type RecordingAccess, recordingHandlers } from "./recording-routes.ts";
+import { bindApiRoutes, matchesShape, type RouteHandler } from "./route-binding.ts";
 import type { SessionHub } from "./session-hub.ts";
 import { filterSessions, type SessionListQuery, type SessionRegistry } from "./session-registry.ts";
 
@@ -55,6 +57,9 @@ export const SERVED_CAPABILITIES: readonly string[] = [
   "sessions.get",
   "sessions.snapshot",
   "sessions.set_mode",
+  "sessions.recording",
+  "sessions.recording_entries",
+  "sessions.recording_download",
 ];
 
 /** How a session's connector is reached, when one is running. */
@@ -71,6 +76,11 @@ export interface ServerAppOptions {
   hub: SessionHub;
   /** The running connectors, for the routes that change one. */
   connectors: ConnectorAccess;
+  /**
+   * Where recordings are read back from. The no-op store, which holds none,
+   * unless one is supplied: bootstrap supplies the runtimes.
+   */
+  recordings?: RecordingAccess | undefined;
   /** The version health reports. */
   version: string;
   /** Which store is behind the control plane, as health reports it. */
@@ -189,9 +199,7 @@ function boundedInteger(raw: string | null, fallback: number, low: number, high:
  * Porting that needs a polling method on the hub, which is a larger change than
  * this one and is deliberately not smuggled in here.
  */
-export function stampSnapshotFreshness(
-  snapshot: Record<string, unknown>,
-): Record<string, unknown> {
+export function stampSnapshotFreshness(snapshot: Record<string, unknown>): Record<string, unknown> {
   const ts = snapshot.ts;
   // `> 0` rejects the absent-timestamp default of 0, which is not 1970 but "not
   // set" — dating it would report every such snapshot as decades stale.
@@ -262,6 +270,11 @@ export const SERVED_ROUTES: readonly RouteDef[] = API_ROUTES.filter((route) =>
 /** Build the application. */
 export function createServerApp(options: ServerAppOptions): ServerApp {
   const app: BuiltApp = { options, ready: true };
+  const recordings: RecordingAccess = options.recordings ?? {
+    recordingStore: new NullRecordingStore(),
+    recordingDirectory: ".",
+    flushRecording: async () => {},
+  };
 
   /**
    * The handler map for one request.
@@ -338,6 +351,9 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       // Present, because its definition is.
       return Response.json(registry.status(sessionId) as object);
     });
+    for (const [capability, handler] of recordingHandlers({ registry, recordings, principal, request, url })) {
+      map.set(capability, handler);
+    }
     return map;
   }
 
@@ -412,7 +428,14 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
     // everyone, and second so that existence is never revealed to a caller
     // who has not identified themselves.
     const match = API_ROUTE_REGISTRY.match(method, path);
-    const served = match !== undefined && SERVED_ROUTES.includes(match.route);
+    // A path shaped like a served route whose parameters fail its grammar is
+    // still that route's, and still behind authentication: the reference
+    // refuses an anonymous caller before it validates anything, so the
+    // grammar of an id is not something an anonymous caller can probe.
+    const served =
+      (match !== undefined && SERVED_ROUTES.includes(match.route)) ||
+      (match === undefined &&
+        SERVED_ROUTES.some((route) => route.method === method && matchesShape(path, route.template)));
     if (served && !authenticated) {
       return unauthenticated();
     }

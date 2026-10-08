@@ -144,6 +144,11 @@ export class SessionRuntimes {
     this.#detector = options.detector;
   }
 
+  /** Where a local store writes, which a download must resolve inside. */
+  get recordingDirectory(): string {
+    return this.#recordingSettings.directory;
+  }
+
   /** The store sessions are recorded to, for whatever reads recordings back. */
   get recordingStore(): RecordingStore {
     return this.#recordingStore;
