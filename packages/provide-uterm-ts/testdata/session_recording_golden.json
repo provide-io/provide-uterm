@@ -1,0 +1,569 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_session_recording_golden.py",
+ "session_id": "rec",
+ "script": [
+  [
+   "event",
+   "runtime_started",
+   {
+    "session_id": "rec"
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "$ ",
+    "cursor": {
+     "x": 2,
+     "y": 0
+    },
+    "ts": 1.5
+   }
+  ],
+  [
+   "wire_recv",
+   "ls\r"
+  ],
+  [
+   "send",
+   "ls\r"
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "\u001b[1mfile\u001b[0m\r\n",
+    "ts": 2.25
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "login: tim\nPassword: ",
+    "ts": 3.5
+   }
+  ],
+  [
+   "send",
+   "hunter2\r"
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "Enter PASSPHRASE for key:\n\n",
+    "ts": 4.75
+   }
+  ],
+  [
+   "send",
+   "s3crét"
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "$ echo password=hunter2 done\n$ ",
+    "ts": 5.5
+   }
+  ],
+  [
+   "send",
+   "export AWS=AKIAIOSFODNN7EXAMPLE\r"
+  ],
+  [
+   "send",
+   "snow ☃\r"
+  ],
+  [
+   "control_recv",
+   {
+    "type": "snapshot_req"
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "hijack_state",
+    "enabled": true,
+    "owner": "ops"
+   }
+  ]
+ ],
+ "configs": {
+  "exclude": {},
+  "wire": {
+   "control_channel_mode": "wire"
+  },
+  "unredacted": {
+   "redact_sensitive": false
+  }
+ },
+ "recorded": {
+  "exclude": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "runtime_started",
+    "data": {
+     "session_id": "rec"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ ",
+     "cursor": {
+      "x": 2,
+      "y": 0
+     },
+     "ts": 1.5,
+     "raw": "$ ",
+     "raw_bytes_b64": "JCA="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "ls\r",
+     "bytes_b64": "bHMN"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "login: tim\nPassword: ",
+     "ts": 3.5,
+     "raw": "login: tim\nPassword: ",
+     "raw_bytes_b64": "bG9naW46IHRpbQpQYXNzd29yZDog"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 8
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "Enter PASSPHRASE for key:\n\n",
+     "ts": 4.75,
+     "raw": "Enter PASSPHRASE for key:\n\n",
+     "raw_bytes_b64": "RW50ZXIgUEFTU1BIUkFTRSBmb3Iga2V5OgoK"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 6
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ echo [PASSWORD_REDACTED] done\n$ ",
+     "ts": 5.5,
+     "raw": "$ echo [PASSWORD_REDACTED] done\n$ ",
+     "raw_bytes_b64": "JCBlY2hvIFtQQVNTV09SRF9SRURBQ1RFRF0gZG9uZQokIA=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "export AWS=[AWS_ACCESS_KEY_REDACTED]\r",
+     "bytes_b64": "ZXhwb3J0IEFXUz1bQVdTX0FDQ0VTU19LRVlfUkVEQUNURURdDQ=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "snow ☃\r",
+     "bytes_b64": "c25vdyA/DQ=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "rec"
+   }
+  ],
+  "wire": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "runtime_started",
+    "data": {
+     "session_id": "rec"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "wire_send",
+    "data": {
+     "text": "\u0010\u000200000041:{\"type\":\"snapshot\",\"screen\":\"$ \",\"cursor\":{\"x\":2,\"y\":0},\"ts\":1.5}",
+     "bytes_b64": "EAIwMDAwMDA0MTp7InR5cGUiOiJzbmFwc2hvdCIsInNjcmVlbiI6IiQgIiwiY3Vyc29yIjp7IngiOjIsInkiOjB9LCJ0cyI6MS41fQ=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "control_send",
+    "data": {
+     "control": {
+      "type": "snapshot",
+      "screen": "$ ",
+      "cursor": {
+       "x": 2,
+       "y": 0
+      },
+      "ts": 1.5
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ ",
+     "cursor": {
+      "x": 2,
+      "y": 0
+     },
+     "ts": 1.5,
+     "raw": "$ ",
+     "raw_bytes_b64": "JCA="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "wire_recv",
+    "data": {
+     "text": "ls\r",
+     "bytes_b64": "bHMN"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "ls\r",
+     "bytes_b64": "bHMN"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "wire_send",
+    "data": {
+     "text": "\u001b[1mfile\u001b[0m\r\n",
+     "bytes_b64": "G1sxbWZpbGUbWzBtDQo="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "wire_send",
+    "data": {
+     "text": "\u0010\u00020000003e:{\"type\":\"snapshot\",\"screen\":\"login: tim\\nPassword: \",\"ts\":3.5}",
+     "bytes_b64": "EAIwMDAwMDAzZTp7InR5cGUiOiJzbmFwc2hvdCIsInNjcmVlbiI6ImxvZ2luOiB0aW1cblBhc3N3b3JkOiAiLCJ0cyI6My41fQ=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "control_send",
+    "data": {
+     "control": {
+      "type": "snapshot",
+      "screen": "login: tim\nPassword: ",
+      "ts": 3.5
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "login: tim\nPassword: ",
+     "ts": 3.5,
+     "raw": "login: tim\nPassword: ",
+     "raw_bytes_b64": "bG9naW46IHRpbQpQYXNzd29yZDog"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 8
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "wire_send",
+    "data": {
+     "text": "\u0010\u000200000046:{\"type\":\"snapshot\",\"screen\":\"Enter PASSPHRASE for key:\\n\\n\",\"ts\":4.75}",
+     "bytes_b64": "EAIwMDAwMDA0Njp7InR5cGUiOiJzbmFwc2hvdCIsInNjcmVlbiI6IkVudGVyIFBBU1NQSFJBU0UgZm9yIGtleTpcblxuIiwidHMiOjQuNzV9"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "control_send",
+    "data": {
+     "control": {
+      "type": "snapshot",
+      "screen": "Enter PASSPHRASE for key:\n\n",
+      "ts": 4.75
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "Enter PASSPHRASE for key:\n\n",
+     "ts": 4.75,
+     "raw": "Enter PASSPHRASE for key:\n\n",
+     "raw_bytes_b64": "RW50ZXIgUEFTU1BIUkFTRSBmb3Iga2V5OgoK"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 6
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "wire_send",
+    "data": {
+     "text": "\u0010\u000200000048:{\"type\":\"snapshot\",\"screen\":\"$ echo [PASSWORD_REDACTED] done\\n$ \",\"ts\":5.5}",
+     "bytes_b64": "EAIwMDAwMDA0ODp7InR5cGUiOiJzbmFwc2hvdCIsInNjcmVlbiI6IiQgZWNobyBbUEFTU1dPUkRfUkVEQUNURURdIGRvbmVcbiQgIiwidHMiOjUuNX0="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "control_send",
+    "data": {
+     "control": {
+      "type": "snapshot",
+      "screen": "$ echo password=hunter2 done\n$ ",
+      "ts": 5.5
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ echo [PASSWORD_REDACTED] done\n$ ",
+     "ts": 5.5,
+     "raw": "$ echo [PASSWORD_REDACTED] done\n$ ",
+     "raw_bytes_b64": "JCBlY2hvIFtQQVNTV09SRF9SRURBQ1RFRF0gZG9uZQokIA=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "export AWS=[AWS_ACCESS_KEY_REDACTED]\r",
+     "bytes_b64": "ZXhwb3J0IEFXUz1bQVdTX0FDQ0VTU19LRVlfUkVEQUNURURdDQ=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "snow ☃\r",
+     "bytes_b64": "c25vdyA/DQ=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "control_recv",
+    "data": {
+     "control": {
+      "type": "snapshot_req"
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "wire_send",
+    "data": {
+     "text": "\u0010\u000200000034:{\"type\":\"hijack_state\",\"enabled\":true,\"owner\":\"ops\"}",
+     "bytes_b64": "EAIwMDAwMDAzNDp7InR5cGUiOiJoaWphY2tfc3RhdGUiLCJlbmFibGVkIjp0cnVlLCJvd25lciI6Im9wcyJ9"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "control_send",
+    "data": {
+     "control": {
+      "type": "hijack_state",
+      "enabled": true,
+      "owner": "ops"
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "rec"
+   }
+  ],
+  "unredacted": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "runtime_started",
+    "data": {
+     "session_id": "rec"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ ",
+     "cursor": {
+      "x": 2,
+      "y": 0
+     },
+     "ts": 1.5,
+     "raw": "$ ",
+     "raw_bytes_b64": "JCA="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "ls\r",
+     "bytes_b64": "bHMN"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "login: tim\nPassword: ",
+     "ts": 3.5,
+     "raw": "login: tim\nPassword: ",
+     "raw_bytes_b64": "bG9naW46IHRpbQpQYXNzd29yZDog"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 8
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "Enter PASSPHRASE for key:\n\n",
+     "ts": 4.75,
+     "raw": "Enter PASSPHRASE for key:\n\n",
+     "raw_bytes_b64": "RW50ZXIgUEFTU1BIUkFTRSBmb3Iga2V5OgoK"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 6
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ echo password=hunter2 done\n$ ",
+     "ts": 5.5,
+     "raw": "$ echo password=hunter2 done\n$ ",
+     "raw_bytes_b64": "JCBlY2hvIHBhc3N3b3JkPWh1bnRlcjIgZG9uZQokIA=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "export AWS=AKIAIOSFODNN7EXAMPLE\r",
+     "bytes_b64": "ZXhwb3J0IEFXUz1BS0lBSU9TRk9ETk43RVhBTVBMRQ0="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "snow ☃\r",
+     "bytes_b64": "c25vdyA/DQ=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "rec"
+   }
+  ]
+ }
+}

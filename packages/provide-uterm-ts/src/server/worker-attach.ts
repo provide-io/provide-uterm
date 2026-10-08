@@ -40,6 +40,7 @@ import { makeSnapshotFrame } from "../frames/index.ts";
 import { type InputMode, safeFloat, type WorkerSocket } from "../hub/index.ts";
 import { safeInt } from "../pycompat/index.ts";
 import type { SessionHub } from "./session-hub.ts";
+import type { SessionRecording } from "./session-recording.ts";
 
 /** Columns assumed when a connector's snapshot says nothing usable. */
 const DEFAULT_COLS = 80;
@@ -57,6 +58,15 @@ export interface AttachedWorker {
 export interface AttachOptions {
   /** Wall seconds, as every timestamp on this wire is in. */
   now?: (() => number) | undefined;
+  /**
+   * The session's recording, written to as traffic crosses the attachment.
+   *
+   * Where the reference's runtime logs: every frame the worker sends, every
+   * chunk it receives, and the start of the run. The recording decides for
+   * itself whether anything is written, so a session that does not record is
+   * handed one that is not open, or none.
+   */
+  recording?: SessionRecording | undefined;
 }
 
 /**
@@ -124,6 +134,7 @@ export async function attachConnector(
   options: AttachOptions = {},
 ): Promise<AttachedWorker> {
   const now = options.now ?? (() => Date.now() / 1000);
+  const recording = options.recording;
   /** The last screen the connector produced, for the link's synchronous read. */
   let lastSnapshot: WorkerMessage | undefined;
 
@@ -138,14 +149,17 @@ export async function attachConnector(
     for (const message of messages) {
       if (String(message.type ?? "") !== "snapshot") {
         await hub.router.broadcast(sessionId, message);
-        continue;
+      } else {
+        lastSnapshot = message;
+        const frame = workerSnapshotFrame(message, now());
+        const committed = await hub.commitSnapshotEvent(sessionId, frame, socket);
+        if (committed !== undefined) {
+          await hub.router.broadcast(sessionId, committed, socket, Number(committed.event_seq));
+        }
       }
-      lastSnapshot = message;
-      const frame = workerSnapshotFrame(message, now());
-      const committed = await hub.commitSnapshotEvent(sessionId, frame, socket);
-      if (committed !== undefined) {
-        await hub.router.broadcast(sessionId, committed, socket, Number(committed.event_seq));
-      }
+      // Logged once it has been handed over, as the reference logs a frame
+      // after its socket write: the worker's message, not the hub's frame.
+      await recording?.logOutbound(message);
     }
   }
 
@@ -191,10 +205,15 @@ export async function attachConnector(
    */
   const socket: WorkerSocket = {
     sendText: async (payload) => {
+      // Recorded as it arrives and before it is acted on, in the reference's
+      // order: the raw chunk, then each thing it decoded to.
+      await recording?.logWireRecv(payload);
       for (const chunk of decoder.feed(payload)) {
         if (chunk.kind === "data") {
+          await recording?.logSend(chunk.data);
           await link.handleData(chunk.data);
         } else {
+          await recording?.logControlRecv(chunk.control);
           await link.handleControl(chunk.control);
         }
       }
@@ -202,6 +221,9 @@ export async function attachConnector(
   };
 
   hub.registerWorker(sessionId, socket, mode);
+  // The reference's `runtime_started`, written as its worker connects and
+  // before the first screen it sends.
+  await recording?.logEvent("runtime_started", { session_id: sessionId });
   // The reference's worker sends a snapshot as soon as it connects, which is
   // why `GET /api/sessions/{id}/snapshot` answers with a screen before anybody
   // has typed anything. Sent through the same inbound path as every later one.

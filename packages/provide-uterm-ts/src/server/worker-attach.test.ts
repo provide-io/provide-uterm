@@ -17,7 +17,10 @@ import { describe, expect, it } from "vitest";
 import type { SessionConnector, WorkerMessage } from "../connectors/index.ts";
 import { ShellSessionConnector } from "../connectors/index.ts";
 import { ControlFrameDecoder, encodeControlFrame, encodeTerminalData } from "../control-channel/index.ts";
+import { InMemoryRecordingStore, type RecordingEvent } from "../recording/index.ts";
+import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { SessionHub } from "./session-hub.ts";
+import { recordingSettingsFrom, SessionRecording } from "./session-recording.ts";
 import { attachConnector, workerSnapshotFrame } from "./worker-attach.ts";
 
 /** The socket the hub is holding for a worker, for a test that writes to it. */
@@ -425,5 +428,111 @@ describe("detaching", () => {
     await attachment.detach();
 
     expect(hub.registry.contains("w1")).toBe(false);
+  });
+});
+
+/** An open recording over an in-memory store, flushed on every entry. */
+async function openRecording(overrides: Record<string, unknown> = {}) {
+  const store = new InMemoryRecordingStore();
+  const settings = recordingSettingsFrom({
+    ...(SERVER_CONFIG_DEFAULTS.recording as Record<string, unknown>),
+    flush_interval_s: 3600,
+    flush_batch_size: 1,
+    ...overrides,
+  });
+  const recording = new SessionRecording("w1", store, settings);
+  await recording.start(true);
+  return { store, recording };
+}
+
+/** Each entry as `event` plus the one field that tells entries apart. */
+function summarise(entries: readonly RecordingEvent[]): string[] {
+  return entries.map((entry) => {
+    const data = entry.data as Record<string, unknown>;
+    if (entry.event === "read") {
+      return `read:${String(data.screen)}`;
+    }
+    if (entry.event === "send") {
+      return `send:${String(data.keys)}`;
+    }
+    return String(entry.event);
+  });
+}
+
+describe("recording what crosses the attachment", () => {
+  it("opens with the runtime's start event, then the screen the worker seeded", async () => {
+    const hub = new SessionHub();
+    const { store, recording } = await openRecording();
+    await attachConnector(hub, "w1", new RecordingConnector(), "hijack", { now: () => 5, recording });
+    const entries = await store.getEntries("w1");
+    expect(summarise(entries)).toStrictEqual(["log_start", "runtime_started", "read:seed"]);
+    expect(entries[1]?.data).toStrictEqual({ session_id: "w1" });
+  });
+
+  it("records typed input, and the screen the connector answers it with", async () => {
+    const hub = new SessionHub();
+    const { store, recording } = await openRecording();
+    const connector = new RecordingConnector([{ type: "snapshot", screen: "$ ls", ts: 2 }]);
+    await attachConnector(hub, "w1", connector, "hijack", { now: () => 5, recording });
+
+    await socketOf(hub, "w1").sendText(encodeTerminalData("ls\r"));
+
+    expect(summarise(await store.getEntries("w1")).slice(3)).toStrictEqual(["send:ls\r", "read:$ ls"]);
+  });
+
+  it("masks what is typed at a password prompt the worker put on screen", async () => {
+    const hub = new SessionHub();
+    const { store, recording } = await openRecording();
+    const connector = new RecordingConnector([{ type: "snapshot", screen: "Password: ", ts: 2 }]);
+    await attachConnector(hub, "w1", connector, "hijack", { now: () => 5, recording });
+    const socket = socketOf(hub, "w1");
+
+    await socket.sendText(encodeTerminalData("su\r"));
+    await socket.sendText(encodeTerminalData("hunter2\r"));
+
+    const sends = await store.getEntries("w1", { event: "send" });
+    expect(sends.map((entry) => entry.data)).toStrictEqual([
+      { keys: "su\r", bytes_b64: "c3UN" },
+      { keys: "***", bytes_b64: "Kioq", masked: true, byte_count: 8 },
+    ]);
+  });
+
+  it("records the frames both ways in wire mode, as the reference's runtime does", async () => {
+    const hub = new SessionHub();
+    const { store, recording } = await openRecording({ control_channel_mode: "wire" });
+    const connector = new RecordingConnector([{ type: "term", data: "out" }]);
+    await attachConnector(hub, "w1", connector, "hijack", { now: () => 5, recording });
+    const socket = socketOf(hub, "w1");
+
+    await socket.sendText(encodeControlFrame({ type: "control", action: "pause" }));
+    // The link's acknowledgement goes out on its own turn, as a socket write
+    // would; let it land so the two exchanges do not interleave.
+    await new Promise((resolve) => setImmediate(resolve));
+    await socket.sendText(encodeTerminalData("x"));
+
+    const events = summarise(await store.getEntries("w1"));
+    expect(events.slice(5)).toStrictEqual([
+      // The pause: what arrived, what it decoded to, what the connector said,
+      // and the link's acknowledgement, which is a control frame.
+      "wire_recv",
+      "control_recv",
+      "wire_send",
+      "wire_send",
+      "control_send",
+      // The keystroke: what arrived, the input itself, and the output it made.
+      "wire_recv",
+      "send:x",
+      "wire_send",
+    ]);
+  });
+
+  it("writes nothing when the recording it was handed is not open", async () => {
+    const hub = new SessionHub();
+    const store = new InMemoryRecordingStore();
+    const settings = recordingSettingsFrom(SERVER_CONFIG_DEFAULTS.recording as Record<string, unknown>);
+    const recording = new SessionRecording("w1", store, settings);
+    await attachConnector(hub, "w1", new RecordingConnector(), "hijack", { now: () => 5, recording });
+    await socketOf(hub, "w1").sendText(encodeTerminalData("x"));
+    expect(await store.getEntries("w1")).toStrictEqual([]);
   });
 });
