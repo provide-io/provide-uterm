@@ -88,7 +88,7 @@ function groupCount(compiled: RegExp): number {
  * one-pass behaviour, which differs from applying each rule in turn.
  */
 export class StreamRedactor {
-  readonly #pattern: RegExp | undefined;
+  readonly #pattern: RegExp;
   /** The group number each rule's wrapping group has in the joined pattern. */
   readonly #ruleGroups: number[] = [];
   readonly #replacements: string[] = [];
@@ -109,7 +109,9 @@ export class StreamRedactor {
       this.#replacements.push(rule.replacement ?? DEFAULT_REPLACEMENT);
       group += 1 + groupCount(compiled);
     }
-    this.#pattern = sources.length === 0 ? undefined : new RegExp(sources.join("|"), "g");
+    // With no rules, a pattern that never matches: the redactor is then the
+    // identity without a branch of its own to say so.
+    this.#pattern = new RegExp(sources.length === 0 ? "(?!)" : sources.join("|"), "g");
   }
 
   /**
@@ -119,9 +121,6 @@ export class StreamRedactor {
    * bare function, as the reference passes `redactor.redact`.
    */
   readonly redact = (data: string): string => {
-    if (this.#pattern === undefined) {
-      return data;
-    }
     // Only one alternative can have matched, so exactly one rule's wrapping
     // group is set — the same rule the reference finds from `lastindex`.
     return data.replace(this.#pattern, (...args: unknown[]) => {
