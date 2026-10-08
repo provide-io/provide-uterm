@@ -48,6 +48,33 @@ const DEFAULT_COLS = 80;
 /** Rows assumed when a connector's snapshot says nothing usable. */
 const DEFAULT_ROWS = 25;
 
+/**
+ * How long to wait after a poll that found nothing, in milliseconds.
+ *
+ * The reference's run loop sleeps 0.05 s when `poll_messages()` comes back
+ * empty, so a connector with no wait of its own is not polled in a hot loop.
+ */
+export const POLL_IDLE_MS = 50;
+
+/**
+ * How long to wait after a poll that threw, in milliseconds, by how many have
+ * thrown in a row. The reference's run-loop backoff, `[0.25, 0.5, 1.0, 2.0,
+ * 5.0]` seconds, staying on the last step.
+ */
+export const POLL_ERROR_BACKOFF_MS: readonly number[] = [250, 500, 1000, 2000, 5000];
+
+/** Wait `ms` without holding the process open for it. */
+function idle(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms).unref();
+  });
+}
+
+/** What went wrong, as a recorded `runtime_error` carries it. */
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /** A connector attached to the hub, and the way to take it back off. */
 export interface AttachedWorker {
   /** Detach from the hub. The connector itself is the runtime's to stop. */
@@ -67,6 +94,8 @@ export interface AttachOptions {
    * handed one that is not open, or none.
    */
   recording?: SessionRecording | undefined;
+  /** How the poll loop waits. A real, unreferenced timer unless a test says otherwise. */
+  sleep?: ((ms: number) => Promise<void>) | undefined;
 }
 
 /**
@@ -135,6 +164,9 @@ export async function attachConnector(
 ): Promise<AttachedWorker> {
   const now = options.now ?? (() => Date.now() / 1000);
   const recording = options.recording;
+  const sleep = options.sleep ?? idle;
+  /** Set on detach. The poll loop checks it after every await. */
+  let detached = false;
   /** The last screen the connector produced, for the link's synchronous read. */
   let lastSnapshot: WorkerMessage | undefined;
 
@@ -229,8 +261,56 @@ export async function attachConnector(
   // has typed anything. Sent through the same inbound path as every later one.
   await inbound([await connector.getSnapshot()]);
 
+  /**
+   * Poll the connector for output it produced on its own.
+   *
+   * The reference's `_bridge_session` polls `poll_messages()` in its run loop
+   * beside the socket read, sends whatever comes back through the same path
+   * as every other frame — broadcast, recorded, annotated — and sleeps 50 ms
+   * when nothing did. Input reaches this worker through the socket's own
+   * handler, so the loop has nothing to multiplex with and simply waits for
+   * each poll: the reference's 0.5 s timeout exists only to get back to its
+   * socket read, and cancelling a poll here would lose whatever it had read.
+   *
+   * A poll that throws ends the reference's connection, which it records as a
+   * `runtime_error` and retries on its backoff. There is no connection here
+   * to drop, so the error is recorded and the poll retried on the same
+   * schedule; one that succeeds starts the schedule over.
+   *
+   * Detaching stops it. A poll still in flight then is not waited for — the
+   * reference cancels it — and what it returns afterwards is dropped.
+   */
+  async function poll(): Promise<void> {
+    let failures = 0;
+    while (!detached) {
+      let messages: WorkerMessage[];
+      try {
+        messages = await connector.pollMessages();
+      } catch (error) {
+        if (detached) {
+          return;
+        }
+        await recording?.logEvent("runtime_error", { error: errorText(error) });
+        await sleep(POLL_ERROR_BACKOFF_MS[Math.min(failures, POLL_ERROR_BACKOFF_MS.length - 1)] as number);
+        failures += 1;
+        continue;
+      }
+      failures = 0;
+      if (detached) {
+        return;
+      }
+      if (messages.length === 0) {
+        await sleep(POLL_IDLE_MS);
+        continue;
+      }
+      await inbound(messages);
+    }
+  }
+  void poll();
+
   return {
     detach: async () => {
+      detached = true;
       hub.connections.deregisterWorker(sessionId, socket);
       await hub.pruneIfIdle(sessionId);
     },
