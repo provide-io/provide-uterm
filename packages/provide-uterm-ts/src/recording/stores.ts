@@ -56,6 +56,18 @@ export interface RecordingStore {
   getPath(sessionId: string): Promise<string | null>;
 }
 
+/**
+ * How long CPython's `json.dumps` makes a record, as it will be stored.
+ *
+ * Default separators and ASCII escapes, which is what the reference measures
+ * sizes and quotas with. The record is first put through the same JSON
+ * round trip a store's write applies, so a field that is `undefined` is
+ * dropped rather than refused: it never reaches disk, so it has no size.
+ */
+export function pyJsonSize(record: unknown): number {
+  return pyJsonDumps(JSON.parse(JSON.stringify(record)), { sortKeys: false, separators: [", ", ": "] }).length;
+}
+
 /** Default page size when a caller passes zero. */
 const DEFAULT_LIMIT = 200;
 /** Hard ceiling on a page, for parity with the Go and C# stores. */
@@ -245,10 +257,7 @@ export class InMemoryRecordingStore implements RecordingStore {
    */
   recordingMeta(sessionId: string): Promise<RecordingMeta> {
     const events = this.#events.get(sessionId) ?? [];
-    const sizeBytes = events.reduce(
-      (total, event) => total + pyJsonDumps(event, { sortKeys: false, separators: [", ", ": "] }).length + 1,
-      0,
-    );
+    const sizeBytes = events.reduce((total, event) => total + pyJsonSize(event) + 1, 0);
     return Promise.resolve({ session_id: sessionId, exists: events.length > 0, size_bytes: sizeBytes });
   }
 
