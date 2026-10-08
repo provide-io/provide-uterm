@@ -1,0 +1,625 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_query_params_golden.py",
+ "int_1_500": [
+  {
+   "input": "5",
+   "value": 5
+  },
+  {
+   "input": "05",
+   "value": 5
+  },
+  {
+   "input": "00",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 1",
+    "input": "00",
+    "ctx": {
+     "ge": 1
+    }
+   }
+  },
+  {
+   "input": "-0",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 1",
+    "input": "-0",
+    "ctx": {
+     "ge": 1
+    }
+   }
+  },
+  {
+   "input": "+5",
+   "value": 5
+  },
+  {
+   "input": "-5",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 1",
+    "input": "-5",
+    "ctx": {
+     "ge": 1
+    }
+   }
+  },
+  {
+   "input": " 5",
+   "value": 5
+  },
+  {
+   "input": "5 ",
+   "value": 5
+  },
+  {
+   "input": "\t5\n",
+   "value": 5
+  },
+  {
+   "input": " 5",
+   "value": 5
+  },
+  {
+   "input": " 5",
+   "value": 5
+  },
+  {
+   "input": "　5",
+   "value": 5
+  },
+  {
+   "input": "5",
+   "value": 5
+  },
+  {
+   "input": "﻿5",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "﻿5"
+   }
+  },
+  {
+   "input": "5.0",
+   "value": 5
+  },
+  {
+   "input": "5.00",
+   "value": 5
+  },
+  {
+   "input": "5.000000000",
+   "value": 5
+  },
+  {
+   "input": "5.0 ",
+   "value": 5
+  },
+  {
+   "input": " 5.0",
+   "value": 5
+  },
+  {
+   "input": "1_0",
+   "value": 10
+  },
+  {
+   "input": "0_0",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 1",
+    "input": "0_0",
+    "ctx": {
+     "ge": 1
+    }
+   }
+  },
+  {
+   "input": "1_000.0",
+   "error": {
+    "type": "less_than_equal",
+    "msg": "Input should be less than or equal to 500",
+    "input": "1_000.0",
+    "ctx": {
+     "le": 500
+    }
+   }
+  },
+  {
+   "input": "",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": ""
+   }
+  },
+  {
+   "input": "-",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "-"
+   }
+  },
+  {
+   "input": ".0",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": ".0"
+   }
+  },
+  {
+   "input": "5.",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "5."
+   }
+  },
+  {
+   "input": "5.01",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "5.01"
+   }
+  },
+  {
+   "input": "1e2",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "1e2"
+   }
+  },
+  {
+   "input": "0x10",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "0x10"
+   }
+  },
+  {
+   "input": "1__0",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "1__0"
+   }
+  },
+  {
+   "input": "_1",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "_1"
+   }
+  },
+  {
+   "input": "1_",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "1_"
+   }
+  },
+  {
+   "input": "5.0_0",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "5.0_0"
+   }
+  },
+  {
+   "input": "+-5",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "+-5"
+   }
+  },
+  {
+   "input": "٥",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "٥"
+   }
+  },
+  {
+   "input": "ten",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "ten"
+   }
+  },
+  {
+   "input": "1.5",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "1.5"
+   }
+  },
+  {
+   "input": "0",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 1",
+    "input": "0",
+    "ctx": {
+     "ge": 1
+    }
+   }
+  },
+  {
+   "input": "1",
+   "value": 1
+  },
+  {
+   "input": "500",
+   "value": 500
+  },
+  {
+   "input": "501",
+   "error": {
+    "type": "less_than_equal",
+    "msg": "Input should be less than or equal to 500",
+    "input": "501",
+    "ctx": {
+     "le": 500
+    }
+   }
+  },
+  {
+   "input": "-1",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 1",
+    "input": "-1",
+    "ctx": {
+     "ge": 1
+    }
+   }
+  },
+  {
+   "input": "99999999999999999999",
+   "error": {
+    "type": "less_than_equal",
+    "msg": "Input should be less than or equal to 500",
+    "input": "99999999999999999999",
+    "ctx": {
+     "le": 500
+    }
+   }
+  },
+  {
+   "input": "-99999999999999999999",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 1",
+    "input": "-99999999999999999999",
+    "ctx": {
+     "ge": 1
+    }
+   }
+  }
+ ],
+ "int_ge_0": [
+  {
+   "input": "5",
+   "value": 5
+  },
+  {
+   "input": "05",
+   "value": 5
+  },
+  {
+   "input": "00",
+   "value": 0
+  },
+  {
+   "input": "-0",
+   "value": 0
+  },
+  {
+   "input": "+5",
+   "value": 5
+  },
+  {
+   "input": "-5",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 0",
+    "input": "-5",
+    "ctx": {
+     "ge": 0
+    }
+   }
+  },
+  {
+   "input": " 5",
+   "value": 5
+  },
+  {
+   "input": "5 ",
+   "value": 5
+  },
+  {
+   "input": "\t5\n",
+   "value": 5
+  },
+  {
+   "input": " 5",
+   "value": 5
+  },
+  {
+   "input": " 5",
+   "value": 5
+  },
+  {
+   "input": "　5",
+   "value": 5
+  },
+  {
+   "input": "5",
+   "value": 5
+  },
+  {
+   "input": "﻿5",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "﻿5"
+   }
+  },
+  {
+   "input": "5.0",
+   "value": 5
+  },
+  {
+   "input": "5.00",
+   "value": 5
+  },
+  {
+   "input": "5.000000000",
+   "value": 5
+  },
+  {
+   "input": "5.0 ",
+   "value": 5
+  },
+  {
+   "input": " 5.0",
+   "value": 5
+  },
+  {
+   "input": "1_0",
+   "value": 10
+  },
+  {
+   "input": "0_0",
+   "value": 0
+  },
+  {
+   "input": "1_000.0",
+   "value": 1000
+  },
+  {
+   "input": "",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": ""
+   }
+  },
+  {
+   "input": "-",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "-"
+   }
+  },
+  {
+   "input": ".0",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": ".0"
+   }
+  },
+  {
+   "input": "5.",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "5."
+   }
+  },
+  {
+   "input": "5.01",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "5.01"
+   }
+  },
+  {
+   "input": "1e2",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "1e2"
+   }
+  },
+  {
+   "input": "0x10",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "0x10"
+   }
+  },
+  {
+   "input": "1__0",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "1__0"
+   }
+  },
+  {
+   "input": "_1",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "_1"
+   }
+  },
+  {
+   "input": "1_",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "1_"
+   }
+  },
+  {
+   "input": "5.0_0",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "5.0_0"
+   }
+  },
+  {
+   "input": "+-5",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "+-5"
+   }
+  },
+  {
+   "input": "٥",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "٥"
+   }
+  },
+  {
+   "input": "ten",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "ten"
+   }
+  },
+  {
+   "input": "1.5",
+   "error": {
+    "type": "int_parsing",
+    "msg": "Input should be a valid integer, unable to parse string as an integer",
+    "input": "1.5"
+   }
+  },
+  {
+   "input": "0",
+   "value": 0
+  },
+  {
+   "input": "1",
+   "value": 1
+  },
+  {
+   "input": "500",
+   "value": 500
+  },
+  {
+   "input": "501",
+   "value": 501
+  },
+  {
+   "input": "-1",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 0",
+    "input": "-1",
+    "ctx": {
+     "ge": 0
+    }
+   }
+  },
+  {
+   "input": "99999999999999999999",
+   "value": 99999999999999999999
+  },
+  {
+   "input": "-99999999999999999999",
+   "error": {
+    "type": "greater_than_equal",
+    "msg": "Input should be greater than or equal to 0",
+    "input": "-99999999999999999999",
+    "ctx": {
+     "ge": 0
+    }
+   }
+  }
+ ],
+ "str_max_100": [
+  {
+   "input": "",
+   "value": ""
+  },
+  {
+   "input": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "value": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  {
+   "input": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+   "error": {
+    "type": "string_too_long",
+    "msg": "String should have at most 100 characters",
+    "input": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "ctx": {
+     "max_length": 100
+    }
+   }
+  },
+  {
+   "input": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+   "value": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+  },
+  {
+   "input": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+   "error": {
+    "type": "string_too_long",
+    "msg": "String should have at most 100 characters",
+    "input": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+    "ctx": {
+     "max_length": 100
+    }
+   }
+  },
+  {
+   "input": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+   "error": {
+    "type": "string_too_long",
+    "msg": "String should have at most 100 characters",
+    "input": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+    "ctx": {
+     "max_length": 100
+    }
+   }
+  }
+ ]
+}
