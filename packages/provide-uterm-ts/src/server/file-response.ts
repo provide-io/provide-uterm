@@ -112,7 +112,8 @@ function parseRanges(spec: string, size: number): Range[] {
     if (start === undefined || (endText !== "" && endValue === undefined)) {
       continue;
     }
-    ranges.push([start, endValue !== undefined && endValue < size ? endValue + 1 : size]);
+    // An end past the file is the file's end, as Starlette clamps it.
+    ranges.push([start, endValue === undefined ? size : Math.min(endValue + 1, size)]);
   }
   return ranges;
 }
@@ -138,7 +139,10 @@ function parseRangeHeader(header: string, size: number): Range[] {
   if (ranges.length === 0) {
     throw malformed("Range header: range must be requested");
   }
-  if (ranges.some(([start]) => !(start >= 0 && start < size))) {
+  // Starlette asks `0 <= start < file_size`. No start here can be negative —
+  // a written start cannot carry a minus sign past the dash it is split on,
+  // and a suffix's start is clamped at zero — so only the upper bound can fail.
+  if (ranges.some(([start]) => start >= size)) {
     throw new RangeRefusal(plainText("", 416, { "content-range": `bytes */${size}` }));
   }
   if (ranges.some(([start, end]) => start >= end)) {
