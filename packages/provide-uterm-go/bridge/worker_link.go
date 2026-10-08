@@ -110,6 +110,9 @@ type Config struct {
 	BearerToken string
 	// Logger is the structured logger; nil falls back to the telemetry logger.
 	Logger *slog.Logger
+	// Observer, when set, sees each connection's traffic (see Observer); a
+	// hosted session records itself through it.
+	Observer Observer
 }
 
 // defaultReconnectBackoff mirrors the Python _RECONNECT_BACKOFF tuple.
@@ -130,6 +133,7 @@ type TermBridge struct {
 	dialTimeout       time.Duration
 	bearerToken       string
 	logger            *slog.Logger
+	observer          Observer
 
 	// reconnectBackoff is the backoff schedule (overridable in tests).
 	reconnectBackoff []time.Duration
@@ -178,6 +182,10 @@ func New(cfg Config) *TermBridge {
 	if encoding == "" {
 		encoding = "cp437"
 	}
+	var observer Observer = nopObserver{}
+	if cfg.Observer != nil {
+		observer = cfg.Observer
+	}
 	return &TermBridge{
 		worker:            cfg.Worker,
 		workerID:          cfg.WorkerID,
@@ -190,6 +198,7 @@ func New(cfg Config) *TermBridge {
 		dialTimeout:       dialTimeout,
 		bearerToken:       cfg.BearerToken,
 		logger:            logger,
+		observer:          observer,
 		reconnectBackoff:  defaultReconnectBackoff,
 		sendQ:             make(chan queuedFrame, 2000),
 		resumeToken:       cfg.ResumeToken,
@@ -356,6 +365,7 @@ func (b *TermBridge) run(ctx context.Context) {
 // the URL is permanently malformed, so run can decide on backoff vs. give-up.
 // On a successful dial it resets *attempt to 0.
 func (b *TermBridge) dialAndServe(ctx context.Context, wsURL string, attempt *int) (status int, permanentURL bool) {
+	b.observer.AttemptStarted()
 	dialCtx, cancel := context.WithTimeout(ctx, b.dialTimeout)
 	defer cancel()
 	conn, resp, err := websocket.Dial(dialCtx, wsURL, b.dialOptions())
@@ -365,11 +375,18 @@ func (b *TermBridge) dialAndServe(ctx context.Context, wsURL string, attempt *in
 		}
 		permanentURL = isMalformedWSURL(wsURL)
 		b.logger.Warn("term_bridge_disconnected", "worker_id", b.workerID, "error", err.Error(), "attempt", *attempt)
+		// A dial abandoned because the bridge is stopping is not a failure.
+		if ctx.Err() != nil {
+			err = nil
+		}
+		b.observer.AttemptEnded(err)
 		return status, permanentURL
 	}
 	*attempt = 0
 	conn.SetReadLimit(int64(b.maxWSMessageBytes))
+	b.observer.Connected()
 	b.serveConnection(ctx, conn)
+	b.observer.AttemptEnded(nil)
 	return 0, false
 }
 
