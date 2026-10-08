@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
@@ -280,6 +283,88 @@ func TestRecordingStoreErrors500(t *testing.T) {
 		rec := ts.do("GET", path, "", adminHeaders())
 		if rec.Code != 500 {
 			t.Fatalf("%s: want 500, got %d", path, rec.Code)
+		}
+	}
+}
+
+// flushingRegistry is the fake registry plus a recording flush, counting the
+// flushes per session.
+type flushingRegistry struct {
+	*fakeRegistry
+	mu      sync.Mutex
+	flushed []string
+}
+
+func (r *flushingRegistry) FlushRecording(id string) {
+	r.mu.Lock()
+	r.flushed = append(r.flushed, id)
+	r.mu.Unlock()
+}
+
+// A registry that buffers recordings is flushed before the meta and entries
+// routes read the store, as the reference's registry flushes the session's
+// runtime first (_flush_runtime_recording) — otherwise a reader sees the
+// recording as it was up to one flush interval ago.
+func TestRecordingRoutesFlushTheSessionFirst(t *testing.T) {
+	var reg *flushingRegistry
+	ts := newTestServer(t, func(_ *serverconfig.UtermServerConfig, deps *Deps) {
+		deps.Recording = recording.NewInMemoryStore()
+		reg = &flushingRegistry{fakeRegistry: deps.Registry.(*fakeRegistry)}
+		deps.Registry = reg
+	})
+	ts.reg.add("s1", "admin1", "public")
+	for _, path := range []string{"/api/sessions/s1/recording", "/api/sessions/s1/recording/entries"} {
+		if rec := ts.do("GET", path, "", adminHeaders()); rec.Code != 200 {
+			t.Fatalf("%s: status=%d", path, rec.Code)
+		}
+	}
+	// A refused read flushes nothing.
+	_ = ts.do("GET", "/api/sessions/nope/recording/entries", "", adminHeaders())
+	reg.mu.Lock()
+	defer reg.mu.Unlock()
+	if !reflect.DeepEqual(reg.flushed, []string{"s1", "s1"}) {
+		t.Fatalf("flushed = %v, want one flush per read of s1", reg.flushed)
+	}
+}
+
+// The meta route answers the store's meta plus "enabled", the session's
+// recording_enabled, as the reference's registry.recording_meta does.
+func TestRecordingMetaCarriesEnabled(t *testing.T) {
+	ts := recServer(t, recording.NewInMemoryStore())
+	for _, enabled := range []bool{false, true} {
+		ts.reg.mu.Lock()
+		ts.reg.statuses["s1"].RecordingEnabled = enabled
+		ts.reg.mu.Unlock()
+		rec := ts.do("GET", "/api/sessions/s1/recording", "", adminHeaders())
+		var meta map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]any{"session_id": "s1", "exists": false, "size_bytes": float64(0), "enabled": enabled}
+		if !reflect.DeepEqual(meta, want) {
+			t.Fatalf("meta = %v, want %v", meta, want)
+		}
+	}
+}
+
+// The entries route validates its query as the reference's does —
+// limit 1..500, offset >= 0, event at most 100 characters — answering 422
+// rather than clamping a bad value into a good one.
+func TestRecordingEntriesValidatesItsQuery(t *testing.T) {
+	ts := recServer(t, recording.NewInMemoryStore())
+	for query, want := range map[string]int{
+		"?limit=1":                           200,
+		"?limit=500":                         200,
+		"?limit=0":                           422,
+		"?limit=501":                         422,
+		"?limit=x":                           422,
+		"?offset=0":                          200,
+		"?offset=-1":                         422,
+		"?event=" + strings.Repeat("e", 100): 200,
+		"?event=" + strings.Repeat("e", 101): 422,
+	} {
+		if rec := ts.do("GET", "/api/sessions/s1/recording/entries"+query, "", adminHeaders()); rec.Code != want {
+			t.Errorf("%s: status %d, want %d", query, rec.Code, want)
 		}
 	}
 }
