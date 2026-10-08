@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
@@ -40,7 +41,7 @@ func testRecordingConfig() serverconfig.RecordingConfig {
 func newTestRecorder(t *testing.T, cfg serverconfig.RecordingConfig) (*sessionRecorder, *recording.InMemoryStore) {
 	t.Helper()
 	store := recording.NewInMemoryStore()
-	rec := newSessionRecorder("s1", store, cfg, nil)
+	rec := newSessionRecorder("s1", store, cfg, nil, nil)
 	rec.setEnabled(true)
 	return rec, store
 }
@@ -240,7 +241,7 @@ func TestRecordingMatchesTheReferenceCorpus(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := goldenConfig(t, overrides)
 			store := recording.NewInMemoryStore()
-			rec := newSessionRecorder(g.SessionID, store, cfg, nil)
+			rec := newSessionRecorder(g.SessionID, store, cfg, nil, nil)
 			rec.setEnabled(true)
 			compareRecorded(t, name, replayScript(t, g, g.Script, rec, store), g.Recorded[name])
 		})
@@ -366,7 +367,7 @@ func TestRecordingHonoursMaxBytes(t *testing.T) {
 
 // A store that cannot open a recording leaves the session running unrecorded.
 func TestAStoreThatCannotStartLeavesTheSessionUnrecorded(t *testing.T) {
-	rec := newSessionRecorder("s1", brokenStore{}, testRecordingConfig(), nil)
+	rec := newSessionRecorder("s1", brokenStore{}, testRecordingConfig(), nil, nil)
 	rec.setEnabled(true)
 	rec.AttemptStarted()
 	rec.Connected()
@@ -395,7 +396,7 @@ func (failingWriteStore) EndSession(string) error { return errors.New("disk full
 func TestARecordingThatCannotBeWrittenDoesNotStopTheSession(t *testing.T) {
 	cfg := testRecordingConfig()
 	cfg.FlushBatchSize = 1
-	rec := newSessionRecorder("s1", failingWriteStore{}, cfg, nil)
+	rec := newSessionRecorder("s1", failingWriteStore{}, cfg, nil, nil)
 	rec.setEnabled(true)
 	rec.AttemptStarted()
 	rec.Connected()
@@ -435,7 +436,7 @@ func recordingRegistry(t *testing.T) (*SessionRegistryImpl, *recording.InMemoryS
 	t.Helper()
 	r := newTestRegistry(t)
 	store := recording.NewInMemoryStore()
-	r.SetRecording(store)
+	r.SetRecording(store, nil)
 	return r, store
 }
 
@@ -560,6 +561,7 @@ store_type = "memory"
 [[sessions]]
 session_id = "s-telnet"
 connector_type = "telnet"
+auto_start = false
 host = "127.0.0.1"
 port = 2323
 `
@@ -587,10 +589,14 @@ func TestHostedSessionRecordingIsReadableOverHTTP(t *testing.T) {
 	go func() { _ = bundle.srv.Serve(ctx, ln) }()
 	base := "http://" + ln.Addr().String()
 
+	// The session is not auto_start, so nothing else starts it; the fake
+	// connector is still swapped in under the lock the registry reads it with.
 	reg := bundle.registry
+	reg.mu.Lock()
 	reg.connect = func(context.Context, serverconfig.SessionDefinition) (connectors.Connector, error) {
 		return newFakeConnector(), nil
 	}
+	reg.mu.Unlock()
 	token := ""
 	if tok := bundle.hub.WorkerToken(); tok != nil {
 		token = *tok
@@ -641,5 +647,123 @@ func TestHostedSessionRecordingIsReadableOverHTTP(t *testing.T) {
 	get("/api/sessions/s-telnet/recording", &meta)
 	if meta["enabled"] != true || meta["exists"] != true || meta["session_id"] != "s-telnet" {
 		t.Fatalf("recording meta over HTTP = %v", meta)
+	}
+}
+
+// --- annotation -------------------------------------------------------------
+
+// The corpus's annotated script, recorded by a runtime given the reference's
+// PatternDetector: a send split mid-word, styled streamed output, a match
+// split across frames, an empty frame, a screen matching several categories,
+// and input masked at a prompt yet still annotated.
+func TestAnnotationMatchesTheReferenceCorpus(t *testing.T) {
+	g := loadSessionRecordingGolden(t)
+	store := recording.NewInMemoryStore()
+	rec := newSessionRecorder(g.SessionID, store, goldenConfig(t, nil), annotation.NewPatternDetector(nil), nil)
+	rec.setEnabled(true)
+	compareRecorded(t, "annotated", replayScript(t, g, g.AnnotatedScript, rec, store), g.Recorded["annotated"])
+}
+
+// annotatedRecorder is a recording recorder with the reference's detector.
+func annotatedRecorder(t *testing.T) (*sessionRecorder, *recording.InMemoryStore) {
+	t.Helper()
+	store := recording.NewInMemoryStore()
+	rec := newSessionRecorder("s1", store, testRecordingConfig(), annotation.NewPatternDetector(nil), nil)
+	rec.setEnabled(true)
+	return rec, store
+}
+
+func descriptions(t *testing.T, store recording.Store) []string {
+	t.Helper()
+	var out []string
+	for _, e := range entries(t, store, "annotation") {
+		out = append(out, e["data"].(map[string]any)["description"].(string))
+	}
+	return out
+}
+
+const testAWSKey = "AKIA0123456789AB" // pragma: allowlist secret
+
+// Mirrors tests/server/test_output_annotation.py: streamed output is scanned
+// through its escape sequences...
+func TestStreamedOutputIsScannedThroughItsEscapeSequences(t *testing.T) {
+	rec, store := annotatedRecorder(t)
+	rec.AttemptStarted()
+	sendFrame(t, rec, map[string]any{"type": "term", "data": "\x1b[12;5H\x1b[38;2;255;176;0m" + testAWSKey + "\x1b[0m"})
+	rec.AttemptEnded(nil)
+	if got := descriptions(t, store); !reflect.DeepEqual(got, []string{"AWS access key detected in read"}) {
+		t.Fatalf("annotations = %v", got)
+	}
+}
+
+// ...a match split across frames is found once...
+func TestAMatchSplitAcrossFramesIsFoundOnce(t *testing.T) {
+	rec, store := annotatedRecorder(t)
+	rec.AttemptStarted()
+	sendFrame(t, rec, map[string]any{"type": "term", "data": "DROP TA"})
+	sendFrame(t, rec, map[string]any{"type": "term", "data": "BLE callers;"})
+	rec.AttemptEnded(nil)
+	if got := descriptions(t, store); !reflect.DeepEqual(got, []string{"SQL DROP statement detected: DROP TABLE"}) {
+		t.Fatalf("annotations = %v", got)
+	}
+}
+
+// ...and nothing is scanned when nothing is recorded: annotations are
+// recording entries, with nowhere to go otherwise.
+func TestNothingIsScannedWhenNothingIsRecorded(t *testing.T) {
+	rec, store := annotatedRecorder(t)
+	rec.setEnabled(false)
+	rec.AttemptStarted()
+	sendFrame(t, rec, map[string]any{"type": "term", "data": "DROP TA"})
+	rec.setEnabled(true)
+	rec.AttemptEnded(nil)
+	rec.AttemptStarted()
+	// Had the unrecorded half been carried, this would complete it.
+	sendFrame(t, rec, map[string]any{"type": "term", "data": "BLE callers;"})
+	rec.AttemptEnded(nil)
+	if got := descriptions(t, store); len(got) != 0 {
+		t.Fatalf("unrecorded output was scanned: %v", got)
+	}
+}
+
+// The streams and the sequence last the runtime's life, as the reference keeps
+// them on HostedSessionRuntime: a partial match carried from one recording
+// completes in the next, once per direction, and spans carry on from the
+// sequence the first recording reached.
+func TestAnnotationStateOutlivesARecording(t *testing.T) {
+	rec, store := annotatedRecorder(t)
+	rec.AttemptStarted()
+	sendFrame(t, rec, snapshotFrame("$ "))
+	rec.InputReceived("DROP TA")
+	sendFrame(t, rec, map[string]any{"type": "term", "data": "DROP TA"})
+	rec.AttemptEnded(nil)
+
+	rec.AttemptStarted()
+	rec.InputReceived("BLE x;")
+	sendFrame(t, rec, map[string]any{"type": "term", "data": "BLE x;"})
+	rec.AttemptEnded(nil)
+
+	anns := entries(t, store, "annotation")
+	if len(anns) != 2 {
+		t.Fatalf("want one DROP TABLE per direction, got %v", anns)
+	}
+	for _, a := range anns {
+		span := a["data"].(map[string]any)["span"].(map[string]any)
+		if span["from_seq"] != float64(3) || span["to_seq"] != float64(3) {
+			t.Fatalf("span = %v, want seq 3 carried over the restart", span)
+		}
+	}
+}
+
+// A registry's sessions annotate with the detector it was given.
+func TestRegistryRecordersShareTheDetector(t *testing.T) {
+	r := newTestRegistry(t)
+	det := annotation.NewPatternDetector(nil)
+	r.SetRecording(recording.NewInMemoryStore(), det)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rec := r.recorderFor(r.entries["provide-shell"])
+	if rec.detector != det || rec.sendStream == nil || rec.readStream == nil || rec.sendStream == rec.readStream {
+		t.Fatal("a session's recorder uses the registry's detector with a stream per direction")
 	}
 }

@@ -16,6 +16,7 @@ import (
 
 	ptel "github.com/provide-io/provide-telemetry/go"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/bridge"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
@@ -62,13 +63,25 @@ func recordingRedactor(enabled bool) redaction.Redactor {
 // sessionRecorder records one hosted session. It lives as long as the
 // session's registry entry, across stops and restarts, as the reference's
 // runtime does, and so does what the reference keeps on the runtime: the event
-// sequence and the password-prompt flag. Each worker connection attempt gets
-// its own SessionLogger.
+// sequence, the password-prompt flag and the two streaming detectors. Each
+// worker connection attempt gets its own SessionLogger.
+//
+// With a detector, each match is recorded as an "annotation" entry carrying
+// Annotation.ToDict, while recording only, as the reference does: read-path
+// rules over each snapshot's screen as sent, and over streamed terminal
+// output with escape sequences removed; send-path rules over each chunk of
+// input, masked or not. The streams carry a partial match from one chunk to
+// the next, one per direction so input is never joined to output; the
+// detector itself is stateless and shared by every session.
 type sessionRecorder struct {
 	sessionID string
 	store     recording.Store
 	cfg       serverconfig.RecordingConfig
 	logger    *slog.Logger
+
+	detector   *annotation.PatternDetector
+	sendStream *annotation.StreamingDetector
+	readStream *annotation.StreamingDetector
 
 	mu               sync.Mutex
 	enabled          bool
@@ -79,11 +92,24 @@ type sessionRecorder struct {
 
 var _ bridge.Observer = (*sessionRecorder)(nil)
 
-func newSessionRecorder(sessionID string, store recording.Store, cfg serverconfig.RecordingConfig, logger *slog.Logger) *sessionRecorder {
+// newSessionRecorder builds a session's recorder. detector may be nil, for a
+// session that records without annotating.
+func newSessionRecorder(
+	sessionID string,
+	store recording.Store,
+	cfg serverconfig.RecordingConfig,
+	detector *annotation.PatternDetector,
+	logger *slog.Logger,
+) *sessionRecorder {
 	if logger == nil {
 		logger = ptel.GetLogger(context.Background(), "provide.uterm.server.runtime")
 	}
-	return &sessionRecorder{sessionID: sessionID, store: store, cfg: cfg, logger: logger}
+	s := &sessionRecorder{sessionID: sessionID, store: store, cfg: cfg, detector: detector, logger: logger}
+	if detector != nil {
+		s.sendStream = annotation.NewStreamingDetector(detector, 0)
+		s.readStream = annotation.NewStreamingDetector(detector, 0)
+	}
+	return s
 }
 
 // setEnabled records the session's resolved recording flag. It is set each
@@ -160,8 +186,12 @@ func (s *sessionRecorder) FrameSent(payload string, frame map[string]any) {
 			s.check(s.rec.LogControl("send", frame))
 		}
 	}
-	if mtype == "snapshot" {
+	switch mtype {
+	case "snapshot":
 		s.logSnapshot(frame)
+	case "term":
+		data, _ := frame["data"].(string)
+		s.scanOutput(data)
 	}
 }
 
@@ -176,6 +206,25 @@ func (s *sessionRecorder) logSnapshot(frame map[string]any) {
 	}
 	s.check(s.rec.LogScreenFrame(frame, screen.EncodeCP437(text)))
 	s.eventSeq++
+	if s.detector != nil {
+		s.annotate(s.detector.Detect("read", text, s.eventSeq))
+	}
+}
+
+// scanOutput is _scan_output: read-path rules over streamed output, escape
+// sequences removed, only while recording. Caller holds s.mu.
+func (s *sessionRecorder) scanOutput(data string) {
+	if s.rec == nil || s.readStream == nil || data == "" {
+		return
+	}
+	s.annotate(s.readStream.Detect("read", screen.StripANSI(data), s.eventSeq))
+}
+
+// annotate records each match as an annotation entry. Caller holds s.mu.
+func (s *sessionRecorder) annotate(anns []annotation.Annotation) {
+	for _, a := range anns {
+		s.logEvent("annotation", a.ToDict())
+	}
 }
 
 // WireReceived is _log_wire_recv.
@@ -210,6 +259,9 @@ func (s *sessionRecorder) InputReceived(data string) {
 		s.check(s.rec.LogSend(data))
 	}
 	s.eventSeq++
+	if s.sendStream != nil {
+		s.annotate(s.sendStream.Detect("send", data, s.eventSeq))
+	}
 }
 
 // flush is flush_recording: write out whatever the open recording has
@@ -239,13 +291,15 @@ func (s *sessionRecorder) check(err error) {
 }
 
 // SetRecording wires the store hosted sessions record into — the same store
-// the recording routes read, so what a session writes is what they serve. A
-// registry without one records nothing. Safe to call once, at server boot,
-// before anything is started.
-func (r *SessionRegistryImpl) SetRecording(store recording.Store) {
+// the recording routes read, so what a session writes is what they serve —
+// and the detector every session annotates its recording with (nil: none). A
+// registry without a store records nothing. Safe to call once, at server
+// boot, before anything is started.
+func (r *SessionRegistryImpl) SetRecording(store recording.Store, detector *annotation.PatternDetector) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.recording = store
+	r.detector = detector
 }
 
 // recorderFor returns the session's recorder, building it on first use, with
@@ -256,7 +310,7 @@ func (r *SessionRegistryImpl) recorderFor(e *sessionEntry) *sessionRecorder {
 		return nil
 	}
 	if e.recorder == nil {
-		e.recorder = newSessionRecorder(e.def.SessionID, r.recording, r.recCfg, nil)
+		e.recorder = newSessionRecorder(e.def.SessionID, r.recording, r.recCfg, r.detector, nil)
 	}
 	e.recorder.setEnabled(r.recordingEnabled(e.def))
 	return e.recorder
