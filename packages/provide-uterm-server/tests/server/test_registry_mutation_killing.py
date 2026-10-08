@@ -41,6 +41,7 @@ def runtime() -> MagicMock:
     rt.restart = AsyncMock(name="restart")
     rt.clear = AsyncMock(name="clear")
     rt.set_mode = AsyncMock(name="set_mode")
+    rt.reconfigure = AsyncMock(name="reconfigure")
     rt.analyze = AsyncMock(name="analyze", return_value="ANALYSIS-OUT")
     rt.flush_recording = AsyncMock(name="flush_recording")
     rt.set_tunnel_state = MagicMock(name="set_tunnel_state")
@@ -1091,6 +1092,17 @@ class TestKills:
         with patch("provide.uterm.server.egress.assert_session_egress_allowed", egress):
             await reg.update_session("a", {"connector_config": {"host": "h"}})
         egress.assert_awaited_once_with("shell", {"host": "h"}, block_private=True)
+
+    async def test_update_offers_the_validated_config_to_the_runtime(self, runtime: MagicMock) -> None:
+        reg = _make_registry([_session("a")])
+        with patch("provide.uterm.server.egress.assert_session_egress_allowed", AsyncMock()):
+            await reg.update_session("a", {"connector_config": {"host": "h"}})
+        runtime.reconfigure.assert_awaited_once_with({"host": "h"})
+
+    async def test_update_without_a_config_change_does_not_reconfigure(self, runtime: MagicMock) -> None:
+        reg = _make_registry([_session("a")])
+        await reg.update_session("a", {"tags": ["x"]})
+        runtime.reconfigure.assert_not_awaited()
 
     async def test_update_invalid_value_message_not_none(self) -> None:
         reg = _make_registry([_session("a")])

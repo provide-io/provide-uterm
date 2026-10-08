@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 import time
 from typing import Any
 
@@ -48,6 +49,23 @@ _VALID_CONFIG_KEYS = frozenset(
         "stdin_socket_path",
     }
 )
+
+
+# A full clear: erase display, switch to the alternate screen, or full reset.
+# A full-screen program begins every whole paint with one, so the output after
+# the last of them is what draws the current screen from nothing.
+_FULL_CLEAR = re.compile(r"\x1b\[2J|\x1b\[\?1049h|\x1bc")
+# Bound on that output. A program that never clears again would otherwise grow it
+# forever; past this, a replay starts mid-paint and settles at the next clear.
+_REPLAY_MAX = 512 * 1024
+
+
+def _validate_config(config: dict[str, Any]) -> None:
+    unknown = set(config) - _VALID_CONFIG_KEYS
+    if unknown:
+        raise ValueError(f"unknown config keys for CaptureConnector: {sorted(unknown)}")
+    if "socket_path" not in config:
+        raise ValueError("CaptureConnector requires 'socket_path' in connector_config")
 
 
 def _make_emulator(cols: int, rows: int) -> Any:
@@ -82,11 +100,7 @@ class CaptureConnector:
     """
 
     def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
-        unknown = set(config) - _VALID_CONFIG_KEYS
-        if unknown:
-            raise ValueError(f"unknown config keys for CaptureConnector: {sorted(unknown)}")
-        if "socket_path" not in config:
-            raise ValueError("CaptureConnector requires 'socket_path' in connector_config")
+        _validate_config(config)
 
         self._session_id = session_id
         self._display_name = display_name
@@ -105,6 +119,9 @@ class CaptureConnector:
         # to: as "the screen" it fails, because a program that redraws one line
         # -- a blinking cursor -- fills 64 KiB with that line alone.
         self._emulator = _make_emulator(self._cols, self._rows)
+        # Output since the last full clear, replayed into a new emulator when the
+        # size changes: see reconfigure.
+        self._since_clear = ""
         self._buffer = ""
         self._pending = ""  # new bytes not yet streamed to the browser
         self._connect_log: list[str] = []
@@ -156,6 +173,39 @@ class CaptureConnector:
             return [{"type": "term", "data": data}]
         return []
 
+    def reconfigure(self, config: dict[str, Any]) -> bool:
+        """Apply a new configuration to the running connector, if it can be.
+
+        Whoever creates a capture session (PAM) knows only the socket the shim
+        writes to; the keystroke socket and the terminal size arrive later, from
+        whoever owns the session. Those apply in place. A different capture
+        socket cannot: the program is writing to the one already bound, so that
+        answers False and is left for a restart.
+        """
+
+        _validate_config(config)
+        if str(config["socket_path"]) != self._socket_path:
+            return False
+        stdin_socket_path = str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
+        if stdin_socket_path != self._stdin_socket_path:
+            self._stdin_socket_path = stdin_socket_path
+            # The next keystroke connects to the new socket.
+            if self._stdin_writer is not None:
+                self._stdin_writer.close()
+                self._stdin_writer = None
+        cols, rows = int(config.get("cols", self._cols)), int(config.get("rows", self._rows))
+        if (cols, rows) != (self._cols, self._rows):
+            self._cols, self._rows = cols, rows
+            if self._emulator is not None:
+                # Not resize(): what was drawn for the real size and clipped by
+                # the old one is gone from the old screen. Redraw it from what the
+                # program sent since it last cleared -- PAM creates the session
+                # before anyone knows its size, so the screen starts at a default
+                # the program never drew for.
+                self._emulator = _make_emulator(cols, rows)
+                self._emulator.process(self._since_clear.encode("utf-8"))
+        return True
+
     def _ingest_stdout(self, data: bytes) -> str:
         """Take one chunk of captured output into the screen; return it for streaming."""
 
@@ -168,6 +218,11 @@ class CaptureConnector:
             self._buffer = self._buffer[-65536:]
         if self._emulator is not None:
             self._emulator.process(text.encode("utf-8"))
+        clears = list(_FULL_CLEAR.finditer(text))
+        if clears:
+            self._since_clear = text[clears[-1].start() :]
+        else:
+            self._since_clear = (self._since_clear + text)[-_REPLAY_MAX:]
         return text
 
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
@@ -224,6 +279,7 @@ class CaptureConnector:
     async def clear(self) -> list[dict[str, Any]]:
         self._buffer = ""
         self._pending = ""
+        self._since_clear = ""
         if self._emulator is not None:
             self._emulator.reset()
         return [{"type": "term", "data": ""}]

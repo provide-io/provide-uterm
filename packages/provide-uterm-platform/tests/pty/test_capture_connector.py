@@ -573,3 +573,114 @@ async def test_without_the_emulator_the_snapshot_falls_back_to_the_output_tail(m
         await conn.clear()
         assert (await conn.get_snapshot())["screen"] == ""
         await conn.stop()
+
+
+# ---------------------------------------------------------------------------
+# Reconfiguring a running capture session
+#
+# Who creates a capture session (PAM) knows only the socket the shim writes
+# to; the keystroke socket and the size come later, from whoever owns the
+# session. Applying them used to need a restart, and a restart closes the
+# capture socket under the program writing to it.
+# ---------------------------------------------------------------------------
+
+
+async def test_a_running_session_takes_its_keyboard_without_a_restart() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        stdin_sock_path = str(Path(td) / "stdin.sock")
+        received: list[bytes] = []
+        got = asyncio.Event()
+
+        async def _on_conn(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            received.append(await reader.read(64))
+            writer.close()
+            got.set()
+
+        server = await asyncio.start_unix_server(_on_conn, path=stdin_sock_path)
+        try:
+            conn = _make_connector(td)
+            await conn.start()
+            capture = conn._capture
+            assert conn.reconfigure(
+                {"socket_path": conn._socket_path, "stdin_socket_path": stdin_sock_path, "cols": 132, "rows": 40}
+            )
+            # Same capture socket: nothing was rebound under the writer.
+            assert conn._capture is capture
+            await conn.handle_input("w")
+            await asyncio.wait_for(got.wait(), 2.0)
+            snap = await conn.get_snapshot()
+            assert (snap["cols"], snap["rows"]) == (132, 40)
+            assert len(strip_ansi(snap["screen"]).split("\n")) == 40
+            await conn.stop()
+        finally:
+            server.close()
+            await server.wait_closed()
+        assert received == [b"w"]
+
+
+async def test_a_new_capture_socket_cannot_be_applied_live() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        assert conn.reconfigure({"socket_path": str(Path(td) / "other.sock")}) is False
+        assert conn._socket_path.endswith("cap.sock")
+        await conn.stop()
+
+
+def test_reconfigure_rejects_what_the_constructor_would() -> None:
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock"})
+    with pytest.raises(ValueError):
+        conn.reconfigure({"socket_path": "/tmp/cap.sock", "bogus": 1})
+
+
+def test_reconfigure_with_nothing_new_changes_nothing() -> None:
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/in.sock"})
+    writer = MagicMock()
+    conn._stdin_writer = writer
+    assert conn.reconfigure({"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/in.sock"})
+    # Same keystroke socket: the open connection to it is kept.
+    assert conn._stdin_writer is writer
+    writer.close.assert_not_called()
+
+
+def test_a_new_keystroke_socket_drops_the_connection_to_the_old_one() -> None:
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/old.sock"})
+    writer = MagicMock()
+    conn._stdin_writer = writer
+    assert conn.reconfigure({"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/new.sock"})
+    writer.close.assert_called_once()
+    assert conn._stdin_writer is None
+
+
+def test_a_resize_without_the_emulator_still_records_the_size(monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "provide.uterm.emulator", None)
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock"})
+    assert conn.reconfigure({"socket_path": "/tmp/cap.sock", "cols": 100, "rows": 30})
+    assert (conn._cols, conn._rows) == (100, 30)
+
+
+async def test_a_resize_redraws_what_the_program_drew_for_that_size() -> None:
+    # PAM creates the session before anyone knows its size, so the screen starts
+    # at the default 80x24 while the program draws for its real one. Resizing
+    # the emulator afterwards cannot recover what was clipped; replaying what was
+    # drawn since the last clear, at the right size, can.
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _feed(conn, b"\x1b[?1049h\x1b[2J\x1b[1;1HTOP OF THE DECK\x1b[30;90HDEEP IN THE DECK")
+        assert conn.reconfigure({"socket_path": conn._socket_path, "cols": 120, "rows": 40})
+        rows = strip_ansi((await conn.get_snapshot())["screen"]).split("\n")
+        assert rows[0].startswith("TOP OF THE DECK")
+        assert rows[29][89:].startswith("DEEP IN THE DECK")
+        await conn.stop()
+
+
+async def test_only_output_since_the_last_clear_is_replayed() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _feed(conn, b"\x1b[2J\x1b[1;1HOLD SCREEN", b"\x1b[2J\x1b[1;1HNEW SCREEN")
+        conn.reconfigure({"socket_path": conn._socket_path, "cols": 100, "rows": 30})
+        plain = strip_ansi((await conn.get_snapshot())["screen"])
+        assert "NEW SCREEN" in plain and "OLD SCREEN" not in plain
+        await conn.stop()

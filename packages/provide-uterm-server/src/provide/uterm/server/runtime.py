@@ -70,6 +70,7 @@ class HostedSessionRuntime:
             self._recording_store = recording_store
         self._worker_bearer_token = worker_bearer_token
         self._connector: SessionConnector | None = None
+        self._config_pending_restart = False
         self._on_metric = hub.metric if hub is not None else (lambda *_a, **_kw: None)
         self._task: asyncio.Task[None] | None = None
         self._queue: asyncio.Queue[dict[str, Any]] | None = None
@@ -129,6 +130,7 @@ class HostedSessionRuntime:
             visibility=self.definition.visibility,
             stopped_at=self._stopped_at,
             last_error=self._last_error,
+            config_pending_restart=self._config_pending_restart,
         )
 
     async def start(self) -> None:
@@ -232,19 +234,38 @@ class HostedSessionRuntime:
             self._queue_bytes += msg_len
             await self._queue.put(msg)
 
-    async def _start_connector(self) -> SessionConnector:
-        connector_config = {
-            **self.definition.connector_config,
-            "input_mode": self.definition.input_mode,
-        }
+    def _effective_connector_config(self, connector_config: dict[str, Any]) -> dict[str, Any]:
+        """The config a connector is actually given: the stored one, plus the mode."""
+        effective = {**connector_config, "input_mode": self.definition.input_mode}
         if self.definition.connector_type in {"ssh", "telnet", "websocket"}:
-            connector_config["block_private_connector_targets"] = self._block_private_connector_targets
+            effective["block_private_connector_targets"] = self._block_private_connector_targets
+        return effective
+
+    async def reconfigure(self, connector_config: dict[str, Any]) -> None:
+        """Offer a stored connector_config change to the running connector.
+
+        A connector with ``reconfigure`` may take it in place and answer True.
+        Anything else -- no such method, or a change it cannot apply live -- is
+        left for the next start, and the status says a restart is owed. A
+        session that is not running owes nothing: its next start builds from the
+        stored definition.
+        """
+        if self._connector is None:
+            return
+        apply = getattr(self._connector, "reconfigure", None)
+        applied = bool(apply(self._effective_connector_config(connector_config))) if callable(apply) else False
+        if not applied:
+            self._config_pending_restart = True
+
+    async def _start_connector(self) -> SessionConnector:
         connector = build_connector(
             self.definition.session_id,
             self.definition.display_name,
             self.definition.connector_type,
-            connector_config,
+            self._effective_connector_config(self.definition.connector_config),
         )
+        # Built from the stored definition, so nothing it holds is owed.
+        self._config_pending_restart = False
         await connector.start()
         if connector.is_connected():
             self._connected = True
