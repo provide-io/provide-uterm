@@ -56,7 +56,7 @@ func (r *SessionRegistryImpl) newWorkerBridge(e *sessionEntry) *bridge.TermBridg
 	if r.hub == nil || r.managerURL == "" || r.bridgeCtx == nil || e.conn == nil {
 		return nil
 	}
-	return bridge.New(bridge.Config{
+	cfg := bridge.Config{
 		Worker:      &sessionWorker{conn: e.conn},
 		WorkerID:    e.def.SessionID,
 		ManagerURL:  r.managerURL,
@@ -65,7 +65,13 @@ func (r *SessionRegistryImpl) newWorkerBridge(e *sessionEntry) *bridge.TermBridg
 		// The Go emulator decodes CP437 itself, so the bridge carries raw
 		// bytes through byte-faithfully rather than decoding them twice.
 		Encoding: "latin-1",
-	})
+	}
+	// Assigned only when there is one: a nil *sessionRecorder in the
+	// interface would be a non-nil Observer.
+	if rec := r.recorderFor(e); rec != nil {
+		cfg.Observer = rec
+	}
+	return bridge.New(cfg)
 }
 
 // startWorkerBridge attaches a started session to the hub. Caller holds r.mu:

@@ -213,6 +213,11 @@ func buildServerFromConfig(
 	// HostedSessionRuntime arrangement, and what gives the hijack routes a
 	// worker to lease.
 	registry.SetHubLink(ctx, h, cfg.Server.PublicBaseURL, workerBearerToken(cfg))
+	// One recording store, shared: the sessions write into the same instance
+	// the recording routes read from (for a memory store, the only way the
+	// routes can see anything at all).
+	recordings := buildRecordingStore(cfg)
+	registry.SetRecording(recordings)
 
 	// Runtime graphical targets live in the control plane, so a sqlite backend
 	// keeps them across restarts. A memory backend behaves as before.
@@ -238,7 +243,7 @@ func buildServerFromConfig(
 		Clock:            clock,
 		Version:          Version,
 		Logger:           logger,
-		Recording:        buildRecordingStore(cfg),
+		Recording:        recordings,
 		FrontendDir:      frontendDir,
 		// The one boot step: bring up the auto_start sessions once the socket is
 		// bound. Every way of starting this server goes through Serve, so no
