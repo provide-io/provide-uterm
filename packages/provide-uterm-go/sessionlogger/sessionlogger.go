@@ -13,7 +13,6 @@ package sessionlogger
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"log/slog"
 	"sync"
 	"time"
@@ -178,6 +177,24 @@ func (l *SessionLogger) LogScreen(snapshot session.Snapshot, raw []byte) error {
 	return l.writeEvent("read", data)
 }
 
+// LogScreenFrame logs a snapshot given as the wire frame (a decoded snapshot
+// control message) with its raw bytes. This is the reference's log_screen
+// exactly: every key of the frame is kept, string values redacted at any
+// depth, and "raw"/"raw_bytes_b64" added. LogScreen, which takes the emulator's
+// struct, writes that struct's own field set instead; a hosted session records
+// the frames it actually sent, so it uses this one.
+func (l *SessionLogger) LogScreenFrame(frame map[string]any, raw []byte) error {
+	rawText := l.redactText(screen.DecodeCP437(raw))
+	rawBytes := screen.EncodeCP437(rawText)
+	data := make(map[string]any, len(frame)+2)
+	for k, v := range frame {
+		data[k] = l.redactValue(v)
+	}
+	data["raw"] = rawText
+	data["raw_bytes_b64"] = base64.StdEncoding.EncodeToString(rawBytes)
+	return l.writeEvent("read", data)
+}
+
 // snapshotData converts a snapshot to the Python dict shape with redacted
 // string values.
 func (l *SessionLogger) snapshotData(snap session.Snapshot) map[string]any {
@@ -284,11 +301,13 @@ func (l *SessionLogger) writeEvent(event string, data map[string]any) error {
 	}
 
 	l.buffer = append(l.buffer, record)
-	line, err := json.Marshal(record)
+	// Counted as the reference counts it, len(json.dumps(record)) + 1 under
+	// CPython's defaults, so the quota runs out at the same entry.
+	size, err := recording.PyJSONSize(record)
 	if err != nil {
 		return err
 	}
-	l.bytesWritten += len(line) + 1
+	l.bytesWritten += size + 1
 
 	if len(l.buffer) >= l.batchSize {
 		return l.flushLocked()
