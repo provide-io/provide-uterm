@@ -30,7 +30,7 @@ wire-format, terminal, policy, hub, connector, gateway, authentication, and
 configuration libraries can be complete and fully tested without every one of
 them being reachable through the running server.
 
-The Node server currently binds these four shared HTTP capabilities:
+The Node server currently binds these seven shared HTTP capabilities:
 
 | Capability | Route |
 |---|---|
@@ -38,6 +38,9 @@ The Node server currently binds these four shared HTTP capabilities:
 | `sessions.get` | `GET /api/sessions/{session_id}` |
 | `sessions.snapshot` | `GET /api/sessions/{session_id}/snapshot` |
 | `sessions.set_mode` | `POST /api/sessions/{session_id}/mode` |
+| `sessions.recording` | `GET /api/sessions/{session_id}/recording` |
+| `sessions.recording_entries` | `GET /api/sessions/{session_id}/recording/entries` |
+| `sessions.recording_download` | `GET /api/sessions/{session_id}/recording/download` |
 
 It also serves `/api/health`, `/healthz`, and `/readyz`, plus the REST hijack
 lease operations (`acquire`, `heartbeat`, `snapshot`, `send`, `step`, and

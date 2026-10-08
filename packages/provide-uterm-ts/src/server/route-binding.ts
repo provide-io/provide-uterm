@@ -179,7 +179,7 @@ export function bindApiRoutes(
  * from the operation not existing: one sends a client to fix its request, the
  * other sends it looking for a different endpoint.
  */
-function matchesShape(path: string, template: string): boolean {
+export function matchesShape(path: string, template: string): boolean {
   const pathSegments = path.split("/").slice(1);
   const templateSegments = template.split("/").slice(1);
   if (pathSegments.length !== templateSegments.length) {
