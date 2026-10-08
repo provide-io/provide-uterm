@@ -168,14 +168,22 @@ describe("annotating what is recorded", () => {
     expect(await descriptions(store)).toStrictEqual([]);
   });
 
-  it("starts each recording with nothing carried from the last", async () => {
+  it("carries a partial match and the sequence across recordings, as the reference's runtime does", async () => {
+    // The reference holds its streams and `_event_seq` on the runtime object,
+    // which outlives each worker connection and the recording opened for it.
     const { store, recording } = await annotating();
+    await recording.logOutbound({ type: "snapshot", screen: "$ " });
     await recording.logOutbound({ type: "term", data: "DROP TA" });
     await recording.stop();
     await recording.start(true);
     await recording.logOutbound({ type: "term", data: "BLE callers;" });
+    await recording.logSend("sudo");
     await recording.flush();
-    expect(await descriptions(store)).toStrictEqual([]);
+    const annotations = await store.getEntries("s1", { event: "annotation" });
+    expect(annotations.map((entry) => entry.data)).toMatchObject([
+      { description: "SQL DROP statement detected: DROP TABLE", span: { from_seq: 1, to_seq: 1 } },
+      { description: "sudo command detected: sudo", span: { from_seq: 2, to_seq: 2 } },
+    ]);
   });
 });
 
