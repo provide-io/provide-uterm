@@ -310,6 +310,10 @@ class SessionRegistry:
         if "input_mode" in updates:
             await runtime.set_mode(validated.input_mode)
             await self._hub.set_input_mode(session_id, validated.input_mode)
+        if "connector_config" in updates:
+            # Offered to the running connector, which may take it in place; the
+            # status reports whether a restart is still owed.
+            await runtime.reconfigure(validated.connector_config)
         return runtime.status()
 
     async def delete_session(self, session_id: str) -> None:

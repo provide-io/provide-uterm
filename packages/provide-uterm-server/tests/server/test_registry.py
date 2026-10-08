@@ -353,6 +353,19 @@ class TestTransactionalModeChanges:
             defn = reg._require_session("s1")
         assert defn.input_mode == "hijack", "input_mode must not change on connector failure"
 
+    async def test_update_session_offers_a_config_change_to_the_running_connector(self) -> None:
+        """A PATCHed connector_config reaches the live connector; no restart is owed."""
+        reg = _make_registry([_session("s1")])
+        runtime = await self._get_runtime(reg, "s1")
+        runtime._connector = MagicMock()
+        runtime._connector.reconfigure = MagicMock(return_value=True)
+
+        status = await reg.update_session("s1", {"connector_config": {"cols": 132}})
+
+        runtime._connector.reconfigure.assert_called_once()
+        assert runtime._connector.reconfigure.call_args.args[0]["cols"] == 132
+        assert status.config_pending_restart is False
+
     async def test_set_mode_rollback_on_connector_failure(self) -> None:
         """set_mode must not persist input_mode when runtime.set_mode raises."""
         reg = _make_registry([_session("s1")])
