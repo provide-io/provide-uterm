@@ -62,6 +62,13 @@ describe("StreamRedactor", () => {
     expect(new StreamRedactor().redact(input)).toBe(output);
   });
 
+  it("treats text that looks like a missing rule as text", () => {
+    // Neither an absent rule list nor a real one may smuggle in an
+    // alternative of its own.
+    expect(new StreamRedactor().redact("undefined")).toBe("undefined");
+    expect(new StreamRedactor([{ pattern: "x" }]).redact("Stryker was here")).toBe("Stryker was here");
+  });
+
   it("defaults a rule's replacement to the reference's marker", () => {
     expect(new StreamRedactor([{ pattern: "secret" }]).redact("a secret")).toBe("a [REDACTED]");
   });
