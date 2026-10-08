@@ -131,10 +131,17 @@ export class SessionRecording {
   /**
    * One stream per direction, so a partial match carried across chunks of
    * input is never joined to output, and nothing bleeds between sessions.
+   *
+   * Built once, with the object, and kept across every recording it opens:
+   * the reference holds both on the runtime, which outlives each worker
+   * connection, so a match straddling a reconnect is still found.
    */
-  #sendStream: StreamingDetector | undefined;
-  #readStream: StreamingDetector | undefined;
-  /** The reference's `_event_seq`: one per screen and per chunk of input. */
+  readonly #sendStream: StreamingDetector | undefined;
+  readonly #readStream: StreamingDetector | undefined;
+  /**
+   * The reference's `_event_seq`: one per screen and per chunk of input,
+   * counted across recordings for the same reason.
+   */
   #eventSeq = 0;
 
   constructor(
@@ -147,6 +154,10 @@ export class SessionRecording {
     this.#store = store;
     this.#settings = settings;
     this.#detector = options.detector;
+    if (options.detector !== undefined) {
+      this.#sendStream = new StreamingDetector(options.detector);
+      this.#readStream = new StreamingDetector(options.detector);
+    }
   }
 
   /** Whether a recording is open. */
@@ -176,12 +187,6 @@ export class SessionRecording {
     });
     await logger.start(this.#sessionId);
     this.#logger = logger;
-    // Fresh streams with each recording: a tail carried from a connection that
-    // ended must not complete a match in the next one.
-    if (this.#detector !== undefined) {
-      this.#sendStream = new StreamingDetector(this.#detector);
-      this.#readStream = new StreamingDetector(this.#detector);
-    }
   }
 
   /** Close the recording, writing what is buffered and the closing entry. */

@@ -23,8 +23,8 @@ import { InMemoryRecordingStore, NullRecordingStore } from "../recording/index.t
 import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { loadGolden } from "../testing/golden.ts";
 import { SessionHub } from "./session-hub.ts";
-import { SessionRegistry } from "./session-registry.ts";
 import { type RecordingSettings, recordingSettingsFrom } from "./session-recording.ts";
+import { SessionRegistry } from "./session-registry.ts";
 import { SessionRuntimes } from "./session-runtime.ts";
 import { type SessionLifecycle, sessionDefinitionFrom } from "./session-status.ts";
 
@@ -690,5 +690,45 @@ describe("annotating a recorded session", () => {
       },
     ]);
     await runtimes.stopAll();
+  });
+});
+
+/** A connector whose input comes back as terminal output, the way a shell echoes. */
+class EchoConnector extends ScreenConnector {
+  // Optional only because the base class's override takes nothing.
+  override async handleInput(data?: string): Promise<WorkerMessage[]> {
+    return [{ type: "term", data }];
+  }
+}
+
+describe("a session's recording across a stop and a restart", () => {
+  it("keeps the sequence and a partial match, as the reference's runtime object does", async () => {
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const store = new InMemoryRecordingStore();
+    const hub = new SessionHub();
+    const runtimes = new SessionRuntimes(registry, hub, {
+      build: () => new EchoConnector(),
+      recordingStore: store,
+      recordingSettings: recordingSettings(),
+      detector: new PatternDetector(),
+    });
+    const type = async (text: string) => {
+      await hub.registry.get("one")?.workerWs?.sendText(encodeTerminalData(text));
+    };
+
+    await runtimes.start("one");
+    await type("echo DROP TA");
+    await runtimes.stopAll();
+    await runtimes.start("one");
+    await type("BLE x;");
+    await runtimes.stopAll();
+
+    const annotations = await store.getEntries("one", { event: "annotation" });
+    // Seeded screen 1, input 2, stop; seeded screen 3, input 4. The DROP that
+    // straddled the restart is found once, on the output that completed it.
+    expect(annotations.map((entry) => entry.data)).toMatchObject([
+      { description: "SQL DROP statement detected: DROP TABLE", span: { from_seq: 4, to_seq: 4 } },
+      { description: "SQL DROP statement detected: DROP TABLE", span: { from_seq: 4, to_seq: 4 } },
+    ]);
   });
 });
