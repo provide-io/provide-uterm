@@ -60,6 +60,7 @@
  * loop, so it never assigns it.
  */
 
+import type { PatternDetector } from "../annotation/index.ts";
 import { buildConnector, type SessionConnector } from "../connectors/index.ts";
 import type { InputMode } from "../hub/index.ts";
 import { NullRecordingStore, type RecordingStore } from "../recording/index.ts";
@@ -91,6 +92,11 @@ export interface SessionRuntimeOptions {
   recordingStore?: RecordingStore | undefined;
   /** How sessions are recorded. The configuration defaults unless supplied. */
   recordingSettings?: RecordingSettings | undefined;
+  /**
+   * What annotates recordings. None unless supplied: bootstrap supplies the
+   * reference's built-in rules, as its server factory does for every runtime.
+   */
+  detector?: PatternDetector | undefined;
 }
 
 /** What went wrong, as `last_error` carries it. */
@@ -119,6 +125,7 @@ export class SessionRuntimes {
   readonly #recordings = new Map<string, SessionRecording>();
   readonly #recordingStore: RecordingStore;
   readonly #recordingSettings: RecordingSettings;
+  readonly #detector: PatternDetector | undefined;
 
   constructor(registry: SessionRegistry, hub: SessionHub, options: SessionRuntimeOptions = {}) {
     this.#registry = registry;
@@ -128,6 +135,7 @@ export class SessionRuntimes {
     this.#recordingStore = options.recordingStore ?? new NullRecordingStore();
     this.#recordingSettings =
       options.recordingSettings ?? recordingSettingsFrom(SERVER_CONFIG_DEFAULTS.recording as Record<string, unknown>);
+    this.#detector = options.detector;
   }
 
   /** The store sessions are recorded to, for whatever reads recordings back. */
@@ -210,7 +218,9 @@ export class SessionRuntimes {
       // connection. Whether it records is read off the session's own status,
       // so the `recording_enabled` a client is shown and what is actually
       // written can never be two different answers.
-      recording = new SessionRecording(sessionId, this.#recordingStore, this.#recordingSettings);
+      recording = new SessionRecording(sessionId, this.#recordingStore, this.#recordingSettings, {
+        detector: this.#detector,
+      });
       await recording.start((this.#registry.status(sessionId) as SessionRuntimeStatus).recording_enabled);
       this.#recordings.set(sessionId, recording);
       // Attached to the hub as a worker, which is what makes the session

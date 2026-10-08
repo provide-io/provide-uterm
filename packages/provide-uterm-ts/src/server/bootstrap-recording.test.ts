@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { encodeTerminalData } from "../control-channel/index.ts";
 import { InMemoryRecordingStore, LocalFileRecordingStore } from "../recording/index.ts";
 import { bootstrapServer, ServerBootstrapError } from "./bootstrap.ts";
 
@@ -53,6 +54,19 @@ describe("recording from the configuration", () => {
     await runtimes.stopAll();
     expect(registry.status("one")?.recording_enabled).toBe(false);
     expect(await runtimes.recordingStore.getEntries("one")).toStrictEqual([]);
+  });
+
+  it("annotates what it records, as the reference's factory does for every runtime", async () => {
+    const { runtimes, hub } = bootstrapServer({
+      authMode: "jwt",
+      document: { sessions: [SESSION], recording: { enabled_by_default: true, store_type: "memory" } },
+    });
+    await runtimes.startAutoStart();
+    await hub.registry.get("one")?.workerWs?.sendText(encodeTerminalData("sudo ls\r"));
+    await runtimes.flushRecording("one");
+    const annotations = await runtimes.recordingStore.getEntries("one", { event: "annotation" });
+    expect(annotations.map((entry) => (entry.data as Record<string, unknown>).label)).toContain("privilege_escalation");
+    await runtimes.stopAll();
   });
 
   it("refuses to start with a webhook store it cannot deliver to", () => {

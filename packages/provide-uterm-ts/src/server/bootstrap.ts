@@ -18,6 +18,7 @@
  * nobody reads until afterwards.
  */
 
+import { PatternDetector } from "../annotation/index.ts";
 import { effectiveAllowLoopbackDestinations, type WebhookEgressConfig } from "../egress/index.ts";
 import { type AuthSettings, applyCfAccessTeamDomain, type DevIdpAuthConfig, setupDevIdp } from "../serverauth/index.ts";
 import { deepMerge, normalizeDocument, SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
@@ -249,6 +250,9 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
     now: options.now,
     recordingStore,
     recordingSettings: recording,
+    // One detector for every session, as the reference's factory builds it:
+    // it is stateless, and each recording wraps it in streams of its own.
+    detector: new PatternDetector(),
   });
   const app = createServerApp({
     registry,

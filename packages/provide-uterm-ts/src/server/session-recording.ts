@@ -19,6 +19,7 @@
  * failing test rather than a recording a reader cannot parse.
  */
 
+import { type Annotation, annotationToWire, type PatternDetector, StreamingDetector } from "../annotation/index.ts";
 import type { WorkerMessage } from "../connectors/index.ts";
 import { encodeControlFrame, encodeTerminalData } from "../control-channel/index.ts";
 import {
@@ -28,7 +29,7 @@ import {
   type RecordingStore,
 } from "../recording/index.ts";
 import { defaultRedactionRules, type Redactor, StreamRedactor } from "../redaction/index.ts";
-import { encodeCp437 } from "../screen/index.ts";
+import { encodeCp437, stripAnsi } from "../screen/index.ts";
 import { type ControlChannelMode, SessionLogger } from "../session-logger/index.ts";
 
 /** The `[recording]` section, as the runtime reads it. */
@@ -103,6 +104,15 @@ export function atPasswordPrompt(screen: string): boolean {
   return PASSWORD_PROMPT.test(screen.replace(PY_TRAILING_SPACE, ""));
 }
 
+/** What a recording is built with beyond its store and settings. */
+export interface SessionRecordingOptions {
+  /**
+   * The detector that annotates what is recorded. Shared across sessions: it
+   * is stateless, and each recording wraps it in streams of its own.
+   */
+  detector?: PatternDetector | undefined;
+}
+
 /**
  * A session's recording, across one worker attachment.
  *
@@ -117,11 +127,26 @@ export class SessionRecording {
   #logger: SessionLogger | undefined;
   /** Tracked whether or not anything is recorded, as the reference does. */
   #atPasswordPrompt = false;
+  readonly #detector: PatternDetector | undefined;
+  /**
+   * One stream per direction, so a partial match carried across chunks of
+   * input is never joined to output, and nothing bleeds between sessions.
+   */
+  #sendStream: StreamingDetector | undefined;
+  #readStream: StreamingDetector | undefined;
+  /** The reference's `_event_seq`: one per screen and per chunk of input. */
+  #eventSeq = 0;
 
-  constructor(sessionId: string, store: RecordingStore, settings: RecordingSettings) {
+  constructor(
+    sessionId: string,
+    store: RecordingStore,
+    settings: RecordingSettings,
+    options: SessionRecordingOptions = {},
+  ) {
     this.#sessionId = sessionId;
     this.#store = store;
     this.#settings = settings;
+    this.#detector = options.detector;
   }
 
   /** Whether a recording is open. */
@@ -151,6 +176,12 @@ export class SessionRecording {
     });
     await logger.start(this.#sessionId);
     this.#logger = logger;
+    // Fresh streams with each recording: a tail carried from a connection that
+    // ended must not complete a match in the next one.
+    if (this.#detector !== undefined) {
+      this.#sendStream = new StreamingDetector(this.#detector);
+      this.#readStream = new StreamingDetector(this.#detector);
+    }
   }
 
   /** Close the recording, writing what is buffered and the closing entry. */
@@ -180,8 +211,7 @@ export class SessionRecording {
     const type = String(message.type ?? "");
     const logger = this.#logger;
     if (logger !== undefined) {
-      const payload =
-        type === "term" ? encodeTerminalData(String(message.data ?? "")) : encodeControlFrame(message);
+      const payload = type === "term" ? encodeTerminalData(String(message.data ?? "")) : encodeControlFrame(message);
       await logger.logWire("send", payload);
       if (type !== "term") {
         await logger.logControl("send", message);
@@ -189,6 +219,8 @@ export class SessionRecording {
     }
     if (type === "snapshot") {
       await this.#logSnapshot(message);
+    } else if (type === "term") {
+      await this.#scanOutput(String(message.data ?? ""));
     }
   }
 
@@ -213,12 +245,46 @@ export class SessionRecording {
     } else {
       await logger.logSend(data);
     }
+    this.#eventSeq += 1;
+    // The input itself is scanned, masked or not, as the reference scans it.
+    await this.#annotate(logger, this.#sendStream?.detect("send", data, this.#eventSeq));
   }
 
   /** The reference's `_log_snapshot`: note the prompt, then record the screen. */
   async #logSnapshot(message: WorkerMessage): Promise<void> {
     const screen = String(message.screen ?? "");
     this.#atPasswordPrompt = atPasswordPrompt(screen);
-    await this.#logger?.logScreen(message, encodeCp437(screen));
+    const logger = this.#logger;
+    if (logger === undefined) {
+      return;
+    }
+    await logger.logScreen(message, encodeCp437(screen));
+    this.#eventSeq += 1;
+    // The screen as it is, not stripped: the reference's snapshot path hands
+    // the detector the screen text unchanged.
+    await this.#annotate(logger, this.#detector?.detect("read", screen, this.#eventSeq));
+  }
+
+  /**
+   * The reference's `_scan_output`: read-path rules over streamed output, with
+   * escape sequences removed, and only while recording.
+   *
+   * Streamed output here is a `term` message the connector produced — the
+   * frame the reference's runtime sends its hub and scans on the way. This
+   * server has no worker socket, so it is the message as `inbound` hands it on.
+   */
+  async #scanOutput(data: string): Promise<void> {
+    const logger = this.#logger;
+    if (logger === undefined || data === "") {
+      return;
+    }
+    await this.#annotate(logger, this.#readStream?.detect("read", stripAnsi(data), this.#eventSeq));
+  }
+
+  /** Record each annotation, in the reference's `to_dict` shape. */
+  async #annotate(logger: SessionLogger, annotations: readonly Annotation[] | undefined): Promise<void> {
+    for (const annotation of annotations ?? []) {
+      await logger.logEvent("annotation", annotationToWire(annotation));
+    }
   }
 }
