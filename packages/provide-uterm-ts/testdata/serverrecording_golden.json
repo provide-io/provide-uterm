@@ -1671,6 +1671,54 @@
       }
     },
     {
+      "id": "wrong_method_malformed_id",
+      "method": "PUT",
+      "path": "/api/sessions/bad.id/recording",
+      "auth": "token",
+      "request_headers": {},
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "GET",
+        "content-length": "31"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
+      "id": "wrong_method_malformed_id_anonymous",
+      "method": "PUT",
+      "path": "/api/sessions/bad.id/recording",
+      "auth": "none",
+      "request_headers": {},
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "GET",
+        "content-length": "31"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
+      "id": "wrong_method_anonymous",
+      "method": "PUT",
+      "path": "/api/sessions/recorded/recording",
+      "auth": "none",
+      "request_headers": {},
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "GET",
+        "content-length": "31"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
       "id": "bare_meta",
       "method": "GET",
       "path": "/api/sessions/unrecorded/recording",
