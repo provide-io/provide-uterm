@@ -15,7 +15,13 @@ through one fixed script under each recording configuration that changes what
 is written, and records every entry the store received.
 
 The script is written into the corpus, so the port replays exactly these
-steps rather than a restatement of them. Every ``ts`` in the script has a
+steps rather than a restatement of them.
+
+A second script runs with the reference's ``PatternDetector`` attached, which
+is how the server factory builds every runtime: each match is an
+``annotation`` entry. Read-path rules run on each snapshot's screen, on each
+streamed ``term`` frame with escape sequences removed (carrying a partial
+match across frames), and send-path rules on typed input (carrying likewise). Every ``ts`` in the script has a
 fractional part: an integral float is ``4.0`` on CPython's wire and ``4`` on
 JavaScript's, a difference in number models rather than in recording, and a
 connector's stamps are never integral anyway. Wall-clock ``ts`` fields and the
@@ -33,6 +39,8 @@ import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
+
+from provide.uterm.annotation import PatternDetector
 
 from provide.uterm.recording import InMemoryRecordingStore
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
@@ -64,6 +72,30 @@ SCRIPT: list[list[Any]] = [
     ["outbound", {"type": "hijack_state", "enabled": True, "owner": "ops"}],
 ]
 
+_KEY = "AKIA0123456789AB"  # pragma: allowlist secret
+
+# Every path a rule can match on, and the ones it must not.
+ANNOTATED_SCRIPT: list[list[Any]] = [
+    ["event", "runtime_started", {"session_id": SESSION_ID}],
+    ["outbound", {"type": "snapshot", "screen": "$ ", "ts": 1.5}],
+    # Typed input split mid-word still matches once, on the chunk completing it.
+    ["send", "sud"],
+    ["send", "o -i\r"],
+    # Styled streamed output is scanned through its escape sequences.
+    ["outbound", {"type": "term", "data": f"\x1b[12;5H\x1b[38;2;255;176;0m{_KEY}\x1b[0m", "ts": 2.25}],
+    # And a match split across frames is found once.
+    ["outbound", {"type": "term", "data": "DROP TA", "ts": 2.5}],
+    ["outbound", {"type": "term", "data": "BLE callers;", "ts": 2.75}],
+    ["outbound", {"type": "term", "data": "", "ts": 2.8}],
+    # A whole screen is scanned on its own, several categories at once.
+    ["outbound", {"type": "snapshot", "screen": f"# rm -rf /tmp/x\n# echo {_KEY}\n# ", "ts": 3.5}],
+    ["outbound", {"type": "snapshot", "screen": "Password: ", "ts": 4.5}],
+    # Masked in the recording, and still annotated: the reference scans the
+    # input itself, not what it wrote.
+    ["send", "shutdown now\r"],
+    ["outbound", {"type": "hijack_state", "enabled": True, "owner": "ops"}],
+]
+
 CONFIGS: dict[str, dict[str, Any]] = {
     "exclude": {},
     "wire": {"control_channel_mode": "wire"},
@@ -83,18 +115,21 @@ def _strip(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return cleaned
 
 
-async def _drive(overrides: dict[str, Any]) -> list[dict[str, Any]]:
-    """Run the script through one runtime and return what was recorded."""
+async def _drive(
+    overrides: dict[str, Any], script: list[list[Any]] = SCRIPT, *, annotated: bool = False
+) -> list[dict[str, Any]]:
+    """Run a script through one runtime and return what was recorded."""
     store = InMemoryRecordingStore()
     runtime = HostedSessionRuntime(
         SessionDefinition(session_id=SESSION_ID, display_name="Rec", connector_type="shell", auto_start=False),
         public_base_url="http://127.0.0.1:1",
         recording=RecordingConfig.model_validate({"enabled_by_default": True, "flush_interval_s": 3600, **overrides}),
         recording_store=store,
+        detector=PatternDetector() if annotated else None,
     )
     await runtime._start_recording()
     ws = AsyncMock()
-    for kind, *args in SCRIPT:
+    for kind, *args in script:
         if kind == "outbound":
             await runtime._send_outbound_frame(ws, args[0])
         elif kind == "send":
@@ -111,7 +146,9 @@ async def _drive(overrides: dict[str, Any]) -> list[dict[str, Any]]:
 
 async def _run() -> dict[str, Any]:
     """Build every section of the corpus."""
-    return {name: await _drive(overrides) for name, overrides in CONFIGS.items()}
+    recorded = {name: await _drive(overrides) for name, overrides in CONFIGS.items()}
+    recorded["annotated"] = await _drive({}, ANNOTATED_SCRIPT, annotated=True)
+    return recorded
 
 
 def main() -> int:
@@ -121,6 +158,7 @@ def main() -> int:
         "generator": "packages/provide-uterm-ts/testdata/gen_session_recording_golden.py",
         "session_id": SESSION_ID,
         "script": SCRIPT,
+        "annotated_script": ANNOTATED_SCRIPT,
         "configs": CONFIGS,
         "recorded": recorded,
     }
