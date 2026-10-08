@@ -31,6 +31,23 @@ type Meta struct {
 	Exists    bool   `json:"exists"`
 	SizeBytes int64  `json:"size_bytes"`
 	Path      string `json:"path,omitempty"`
+	// fileBacked marks a store that always reports a path, null when there
+	// is no file, as the reference's LocalFileRecordingStore does.
+	fileBacked bool
+}
+
+// MarshalJSON writes the meta the way the reference's store returns it: a
+// file-backed store's meta always carries "path", null for a missing file;
+// the others never do.
+func (m Meta) MarshalJSON() ([]byte, error) {
+	out := map[string]any{"session_id": m.SessionID, "exists": m.Exists, "size_bytes": m.SizeBytes}
+	switch {
+	case m.Path != "":
+		out["path"] = m.Path
+	case m.fileBacked:
+		out["path"] = nil
+	}
+	return json.Marshal(out)
 }
 
 // Query selects entries from a recording. Limit is clamped to 1..500 (zero
@@ -159,9 +176,9 @@ func (s *LocalFileStore) RecordingMeta(sessionID string) (Meta, error) {
 	path := s.path(sessionID)
 	info, err := os.Stat(path)
 	if err != nil {
-		return Meta{SessionID: sessionID}, nil //nolint:nilerr // absent file == exists:false, like Python
+		return Meta{SessionID: sessionID, fileBacked: true}, nil //nolint:nilerr // absent file == exists:false, like Python
 	}
-	return Meta{SessionID: sessionID, Exists: true, Path: path, SizeBytes: info.Size()}, nil
+	return Meta{SessionID: sessionID, Exists: true, Path: path, SizeBytes: info.Size(), fileBacked: true}, nil
 }
 
 // GetEntries reads paginated events from the JSONL file. Malformed lines are
@@ -266,13 +283,15 @@ func (s *InMemoryStore) RecordingMeta(sessionID string) (Meta, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	events := s.events[sessionID]
+	// Measured as the reference's store measures it, len(json.dumps(e)) + 1:
+	// a logger starts its byte quota from this figure.
 	var size int64
 	for _, e := range events {
-		line, err := json.Marshal(e)
+		n, err := PyJSONSize(e)
 		if err != nil {
 			return Meta{}, err
 		}
-		size += int64(len(line)) + 1
+		size += int64(n) + 1
 	}
 	return Meta{SessionID: sessionID, Exists: len(events) > 0, SizeBytes: size}, nil
 }
