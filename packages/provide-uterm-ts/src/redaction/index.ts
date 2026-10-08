@@ -4,3 +4,5 @@
 //
 
 export * from "./redaction.ts";
+
+export * from "./stream.ts";

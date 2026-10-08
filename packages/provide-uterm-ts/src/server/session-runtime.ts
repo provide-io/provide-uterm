@@ -62,8 +62,12 @@
 
 import { buildConnector, type SessionConnector } from "../connectors/index.ts";
 import type { InputMode } from "../hub/index.ts";
+import { NullRecordingStore, type RecordingStore } from "../recording/index.ts";
+import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import type { SessionHub } from "./session-hub.ts";
+import { type RecordingSettings, recordingSettingsFrom, SessionRecording } from "./session-recording.ts";
 import type { SessionRegistry } from "./session-registry.ts";
+import type { SessionRuntimeStatus } from "./session-status.ts";
 import { type AttachedWorker, attachConnector } from "./worker-attach.ts";
 
 /** How a connector is built for one session. The connector registry's shape. */
@@ -80,6 +84,13 @@ export interface SessionRuntimeOptions {
   build?: ConnectorBuilder | undefined;
   /** The clock, in seconds — the unit every instant on this wire is in. */
   now?: (() => number) | undefined;
+  /**
+   * Where sessions are recorded. The no-op store unless one is supplied:
+   * bootstrap supplies the one the configuration names.
+   */
+  recordingStore?: RecordingStore | undefined;
+  /** How sessions are recorded. The configuration defaults unless supplied. */
+  recordingSettings?: RecordingSettings | undefined;
 }
 
 /** What went wrong, as `last_error` carries it. */
@@ -104,12 +115,35 @@ export class SessionRuntimes {
   readonly #connectors = new Map<string, SessionConnector>();
   /** The hub attachment for each running session, for taking it back off. */
   readonly #attached = new Map<string, AttachedWorker>();
+  /** Each running session's recording, open or not. */
+  readonly #recordings = new Map<string, SessionRecording>();
+  readonly #recordingStore: RecordingStore;
+  readonly #recordingSettings: RecordingSettings;
 
   constructor(registry: SessionRegistry, hub: SessionHub, options: SessionRuntimeOptions = {}) {
     this.#registry = registry;
     this.#hub = hub;
     this.#build = options.build ?? buildConnector;
     this.#now = options.now ?? (() => Date.now() / 1000);
+    this.#recordingStore = options.recordingStore ?? new NullRecordingStore();
+    this.#recordingSettings =
+      options.recordingSettings ?? recordingSettingsFrom(SERVER_CONFIG_DEFAULTS.recording as Record<string, unknown>);
+  }
+
+  /** The store sessions are recorded to, for whatever reads recordings back. */
+  get recordingStore(): RecordingStore {
+    return this.#recordingStore;
+  }
+
+  /**
+   * Write out what a session's recording has buffered.
+   *
+   * The reference's `flush_recording`: a reader that wants what was just
+   * typed calls this first. A session that is not up, or does not record, has
+   * nothing buffered.
+   */
+  async flushRecording(sessionId: string): Promise<void> {
+    await this.#recordings.get(sessionId)?.flush();
   }
 
   /** The live connector for a session, or nothing when it is not up. */
@@ -157,6 +191,7 @@ export class SessionRuntimes {
       last_error: null,
     });
 
+    let recording: SessionRecording | undefined;
     try {
       const connector = this.#build(
         sessionId,
@@ -170,15 +205,28 @@ export class SessionRuntimes {
       // Recorded only once it is up, so nothing is ever left holding a
       // connector that threw on the way.
       this.#connectors.set(sessionId, connector);
+      // Opened once the connector is up and before the worker attaches, which
+      // is where the reference opens it: a recording spans one worker
+      // connection. Whether it records is read off the session's own status,
+      // so the `recording_enabled` a client is shown and what is actually
+      // written can never be two different answers.
+      recording = new SessionRecording(sessionId, this.#recordingStore, this.#recordingSettings);
+      await recording.start((this.#registry.status(sessionId) as SessionRuntimeStatus).recording_enabled);
+      this.#recordings.set(sessionId, recording);
       // Attached to the hub as a worker, which is what makes the session
       // leasable: the hub arbitrates over workers, and one that had merely
       // been started would be refused every acquire with `no_worker`.
       this.#attached.set(
         sessionId,
-        await attachConnector(this.#hub, sessionId, connector, definition.input_mode, { now: this.#now }),
+        await attachConnector(this.#hub, sessionId, connector, definition.input_mode, { now: this.#now, recording }),
       );
       this.#registry.setState(sessionId, { lifecycle_state: "running", connected: true });
     } catch (error) {
+      // The recording belongs to the connection that just failed, as the
+      // reference's `finally` closes it. A store that cannot close it either
+      // must not turn a reported failure into a thrown one.
+      this.#recordings.delete(sessionId);
+      await recording?.stop().catch(() => undefined);
       // `stopped`, with the reason and the instant — where the reference's run
       // loop comes to rest when it gives up. See the note on `error` above.
       this.#registry.setState(sessionId, {
@@ -220,10 +268,14 @@ export class SessionRuntimes {
       // Detached before it is stopped, so nothing can take a lease on a
       // worker whose connector is on its way down.
       await this.#attached.get(sessionId)?.detach();
+      // Closed before the connector, as the reference closes the recording
+      // with the worker connection and only then stops the connector.
+      await this.#recordings.get(sessionId)?.stop();
       await connector.stop();
       this.#registry.setState(sessionId, { lifecycle_state: "stopped", connected: false, stopped_at: this.#now() });
     }
     this.#attached.clear();
+    this.#recordings.clear();
     this.#connectors.clear();
   }
 }
