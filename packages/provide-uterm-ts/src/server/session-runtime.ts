@@ -299,7 +299,8 @@ export class SessionRuntimes {
       await this.#attached.get(sessionId)?.detach();
       // Closed before the connector, as the reference closes the recording
       // with the worker connection and only then stops the connector.
-      await this.#recordings.get(sessionId)?.stop();
+      // Present: a session's recording is made before its connector is held.
+      await (this.#recordings.get(sessionId) as SessionRecording).stop();
       await connector.stop();
       this.#registry.setState(sessionId, { lifecycle_state: "stopped", connected: false, stopped_at: this.#now() });
     }

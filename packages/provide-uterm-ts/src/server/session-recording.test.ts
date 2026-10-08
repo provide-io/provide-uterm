@@ -148,6 +148,13 @@ describe("annotating what is recorded", () => {
     expect(await descriptions(store)).toStrictEqual(["SQL DROP statement detected: DROP TABLE"]);
   });
 
+  it("scans only terminal output, not data another message happens to carry", async () => {
+    const { store, recording } = await annotating();
+    await recording.logOutbound({ type: "analysis", data: "DROP TABLE x;" });
+    await recording.flush();
+    expect(await descriptions(store)).toStrictEqual([]);
+  });
+
   it("scans nothing when nothing is recorded", async () => {
     const { store, recording } = await annotating(false);
     await recording.logOutbound({ type: "term", data: KEY });
@@ -241,6 +248,18 @@ describe("a session that does not record", () => {
   });
 });
 
+describe("masking input", () => {
+  it("records input before any screen in the clear: nothing has asked for a password yet", async () => {
+    const store = new InMemoryRecordingStore();
+    const recording = new SessionRecording("s1", store, settings());
+    await recording.start(true);
+    await recording.logSend("ls");
+    await recording.stop();
+    const sends = await store.getEntries("s1", { event: "send" });
+    expect(sends.map((entry) => entry.data)).toStrictEqual([{ keys: "ls", bytes_b64: "bHM=" }]);
+  });
+});
+
 describe("the recording's lifetime", () => {
   it("opens once, however many times it is started", async () => {
     const store = new InMemoryRecordingStore();
@@ -329,6 +348,12 @@ describe("choosing a store", () => {
     ["null", NullRecordingStore],
   ] as const)("builds the %s store when asked for it", (storeType, kind) => {
     expect(buildRecordingStore(settings({ store_type: storeType }))).toBeInstanceOf(kind);
+  });
+
+  it("ignores a webhook address configured for a store that is not a webhook", () => {
+    expect(
+      buildRecordingStore(settings({ store_type: "memory", webhook_url: "https://hooks.example/r" })),
+    ).toBeInstanceOf(InMemoryRecordingStore);
   });
 
   it("falls back to files for a webhook store with nowhere to send, as the reference does", () => {

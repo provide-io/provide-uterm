@@ -32,7 +32,7 @@ export interface SessionLoggerOptions {
   /** Whether to record raw wire and decoded control frames. */
   controlChannelMode?: ControlChannelMode;
   /** Applied to every logged string before it is written. */
-  redactor?: Redactor;
+  redactor?: Redactor | undefined;
   /** Seconds between periodic flushes. */
   flushIntervalS?: number;
   /** Entries buffered before a flush is forced. */

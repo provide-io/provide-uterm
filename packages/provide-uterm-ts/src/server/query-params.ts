@@ -78,13 +78,13 @@ function refuse(type: string, name: string, msg: string, raw: string, ctx?: Reco
   return { ok: false, error };
 }
 
-/** An integer parameter with inclusive bounds. */
-export function checkInt(name: string, raw: string, bounds: { ge?: number; le?: number }): Checked<number> {
+/** An integer parameter with an inclusive lower bound, and an upper one if given. */
+export function checkInt(name: string, raw: string, bounds: { ge: number; le?: number }): Checked<number> {
   const value = parsePyInt(raw);
   if (value === undefined) {
     return refuse("int_parsing", name, "Input should be a valid integer, unable to parse string as an integer", raw);
   }
-  if (bounds.ge !== undefined && value < BigInt(bounds.ge)) {
+  if (value < BigInt(bounds.ge)) {
     return refuse("greater_than_equal", name, `Input should be greater than or equal to ${bounds.ge}`, raw, {
       ge: bounds.ge,
     });

@@ -159,6 +159,54 @@ describe("the parts of the port no reference probe reaches", () => {
     expect(response.headers.get("content-range")).toBe(`bytes 0-5/${whole.headers["content-length"]}`);
   });
 
+  // Expected ranges below are Starlette's own, from FileResponse._parse_range_header
+  // on an 888-byte file, recorded with `uv run python`.
+  it.each([
+    ["bytes=x0-1,0-1x,3-4", "bytes 3-4/888"],
+    ["bytes=1_0-2_0", "bytes 10-20/888"],
+    ["bytes=" + Array(100).fill("0-0").join(","), "bytes 0-0/888"],
+    ["bytes=10-11,0-20", "bytes 0-20/888"],
+  ])("serves %j as the one range Starlette serves", (range, contentRange) => {
+    const response = fileResponse(fixture, {
+      filename: "recorded.jsonl",
+      mediaType: "application/json",
+      requestHeaders: new Headers({ range }),
+    });
+    expect(response.status).toBe(206);
+    expect(response.headers.get("content-range")).toBe(contentRange);
+  });
+
+  it("reads a suffix written after a space, as stripping each part allows", async () => {
+    const response = fileResponse(fixture, {
+      filename: "recorded.jsonl",
+      mediaType: "application/json",
+      requestHeaders: new Headers({ range: "bytes=0-1, -5" }),
+      boundary: () => BOUNDARY,
+    });
+    const body = await response.text();
+    expect(body).toContain("Content-Range: bytes 0-1/888");
+    expect(body).toContain("Content-Range: bytes 883-887/888");
+  });
+
+  it.each(["bytes=888-", "bytes=0-1,5000-"])("refuses %j as unsatisfiable", (range) => {
+    const response = fileResponse(fixture, {
+      filename: "recorded.jsonl",
+      mediaType: "application/json",
+      requestHeaders: new Headers({ range }),
+    });
+    expect(response.status).toBe(416);
+  });
+
+  it.each(["bytes=2--3", "bytes=3-2", "bytes=0-1,5-2"])("refuses %j as a start not before its end", async (range) => {
+    const response = fileResponse(fixture, {
+      filename: "recorded.jsonl",
+      mediaType: "application/json",
+      requestHeaders: new Headers({ range }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe("Range header: start must be less than end");
+  });
+
   it("caps the number of ranges where Starlette does", () => {
     expect(MAX_RANGES).toBe(100);
   });

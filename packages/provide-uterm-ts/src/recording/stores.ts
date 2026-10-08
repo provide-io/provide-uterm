@@ -65,7 +65,9 @@ export interface RecordingStore {
  * dropped rather than refused: it never reaches disk, so it has no size.
  */
 export function pyJsonSize(record: unknown): number {
-  return pyJsonDumps(JSON.parse(JSON.stringify(record)), { sortKeys: false, separators: [", ", ": "] }).length;
+  // Key order cannot change a length, so the sort pyJsonDumps defaults to is
+  // left in place.
+  return pyJsonDumps(JSON.parse(JSON.stringify(record)), { separators: [", ", ": "] }).length;
 }
 
 /** Default page size when a caller passes zero. */

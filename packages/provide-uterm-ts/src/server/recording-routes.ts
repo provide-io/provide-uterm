@@ -24,7 +24,7 @@
  * just typed rather than what the last batch happened to hold.
  */
 
-import { existsSync, realpathSync } from "node:fs";
+import { realpathSync } from "node:fs";
 import { basename, relative, sep } from "node:path";
 import type { RecordingStore } from "../recording/index.ts";
 import type { ServerPrincipal } from "../serverauth/index.ts";
@@ -67,6 +67,9 @@ function refusal(status: number, detail: string): Response {
   return Response.json({ detail }, { status });
 }
 
+/** The page size when none is asked for, the reference's `Query` default. */
+export const DEFAULT_ENTRIES_LIMIT = 200;
+
 /** The entries query, or every way it fails. */
 interface EntriesQuery {
   limit: number;
@@ -82,7 +85,7 @@ interface EntriesQuery {
  */
 export function parseEntriesQuery(parameters: URLSearchParams): EntriesQuery | QueryError[] {
   const errors: QueryError[] = [];
-  const query: EntriesQuery = { limit: 200, offset: null, event: null };
+  const query: EntriesQuery = { limit: DEFAULT_ENTRIES_LIMIT, offset: null, event: null };
   const limit = lastQueryValue(parameters, "limit");
   if (limit !== null) {
     const checked = checkInt("limit", limit, { ge: 1, le: 500 });
@@ -115,12 +118,18 @@ export function parseEntriesQuery(parameters: URLSearchParams): EntriesQuery | Q
   return errors.length > 0 ? errors : query;
 }
 
-/** Whether `path` resolves inside `directory`, symbolic links followed. */
-function resolvesInside(path: string, directory: string): boolean {
+/**
+ * Whether `path` exists and resolves inside `directory`, symbolic links
+ * followed. A path that does not resolve — missing, or no path at all — is
+ * not inside anything.
+ */
+function resolvesInside(path: string | null, directory: string): boolean {
   let real: string;
   let root: string;
   try {
-    real = realpathSync(path);
+    // No path at all becomes one no filesystem accepts — a NUL byte — rather
+    // than "", which Node resolves to the working directory.
+    real = realpathSync(path ?? "\0");
     root = realpathSync(directory);
   } catch {
     return false;
@@ -189,11 +198,11 @@ export function recordingHandlers(deps: RecordingRouteDeps): ReadonlyMap<string,
         const path = await recordings.recordingStore.getPath(sessionId);
         // A file that has gone, and one that resolves outside the recording
         // directory — a symbolic link planted there — are the same answer.
-        if (path === null || !existsSync(path) || !resolvesInside(path, recordings.recordingDirectory)) {
+        if (!resolvesInside(path, recordings.recordingDirectory)) {
           return refusal(404, "recording not available");
         }
-        return fileResponse(path, {
-          filename: basename(path),
+        return fileResponse(path as string, {
+          filename: basename(path as string),
           mediaType: "application/json",
           requestHeaders: request.headers,
         });

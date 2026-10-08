@@ -175,11 +175,10 @@ export class SessionRecording {
     if (this.#logger !== undefined || !enabled) {
       return;
     }
-    const redactor = recordingRedactor(this.#settings.redactSensitive);
     const logger = new SessionLogger(this.#store, {
       maxBytes: this.#settings.maxBytes,
       controlChannelMode: this.#settings.controlChannelMode,
-      ...(redactor === undefined ? {} : { redactor }),
+      redactor: recordingRedactor(this.#settings.redactSensitive),
       // Both flush knobs, under the logger's own names. The reference once
       // dropped these and recorded every session at the logger's defaults.
       flushIntervalS: this.#settings.flushIntervalS,
@@ -213,10 +212,12 @@ export class SessionRecording {
    * terminal output; then, for a snapshot, the screen.
    */
   async logOutbound(message: WorkerMessage): Promise<void> {
-    const type = String(message.type ?? "");
+    const type = message.type;
+    // One reading of the data, for the wire entry and the scan alike.
+    const data = String(message.data ?? "");
     const logger = this.#logger;
     if (logger !== undefined) {
-      const payload = type === "term" ? encodeTerminalData(String(message.data ?? "")) : encodeControlFrame(message);
+      const payload = type === "term" ? encodeTerminalData(data) : encodeControlFrame(message);
       await logger.logWire("send", payload);
       if (type !== "term") {
         await logger.logControl("send", message);
@@ -225,7 +226,7 @@ export class SessionRecording {
     if (type === "snapshot") {
       await this.#logSnapshot(message);
     } else if (type === "term") {
-      await this.#scanOutput(String(message.data ?? ""));
+      await this.#scanOutput(data);
     }
   }
 
@@ -280,7 +281,8 @@ export class SessionRecording {
    */
   async #scanOutput(data: string): Promise<void> {
     const logger = this.#logger;
-    if (logger === undefined || data === "") {
+    // An empty frame needs no case of its own: the stream skips empty text.
+    if (logger === undefined) {
       return;
     }
     await this.#annotate(logger, this.#readStream?.detect("read", stripAnsi(data), this.#eventSeq));

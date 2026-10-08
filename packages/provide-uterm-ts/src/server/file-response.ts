@@ -87,14 +87,20 @@ function pyInt(text: string): number | undefined {
 function parseRanges(spec: string, size: number): Range[] {
   const ranges: Range[] = [];
   for (const raw of spec.split(",")) {
+    // Stripped as a whole, which is what lets a suffix written ` -5` count.
+    // The halves need no stripping of their own: `pyInt` allows the space a
+    // half can still carry, and an empty half can only come from the dash
+    // sitting at an end of the stripped part. An empty part and a lone `-`
+    // need no case either: the first has no dash, and the second's halves
+    // are both empty, so it is skipped below.
     const part = raw.trim();
-    if (part === "" || part === "-" || !part.includes("-")) {
+    const dash = part.indexOf("-");
+    if (dash === -1) {
       continue;
     }
-    const dash = part.indexOf("-");
-    const startText = part.slice(0, dash).trim();
-    const endText = part.slice(dash + 1).trim();
-    const endValue = endText === "" ? undefined : pyInt(endText);
+    const startText = part.slice(0, dash);
+    const endText = part.slice(dash + 1);
+    const endValue = pyInt(endText);
     if (startText === "") {
       if (endValue === undefined) {
         continue;
@@ -138,15 +144,16 @@ function parseRangeHeader(header: string, size: number): Range[] {
   if (ranges.some(([start, end]) => start >= end)) {
     throw malformed("Range header: start must be less than end");
   }
-  if (ranges.length === 1) {
-    return ranges;
-  }
-  ranges.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const merged: Range[] = [ranges[0] as Range];
-  for (const [start, end] of ranges.slice(1)) {
-    const last = merged[merged.length - 1] as Range;
-    if (start <= last[1]) {
-      last[1] = Math.max(last[1], end);
+  // Starlette returns a single range as it is and merges several. Merging one
+  // range is that range, so both go through the merge. Sorted by start alone:
+  // where two starts tie, the merge keeps the larger end whichever comes
+  // first, so the tuple order Starlette sorts by changes nothing.
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged: Range[] = [];
+  for (const [start, end] of ranges) {
+    const last = merged[merged.length - 1];
+    if (merged.length > 0 && start <= (last as Range)[1]) {
+      (last as Range)[1] = Math.max((last as Range)[1], end);
     } else {
       merged.push([start, end]);
     }
@@ -223,13 +230,15 @@ export function fileResponse(path: string, options: FileResponseOptions): Respon
     parts.push(
       Buffer.from(
         `--${boundary}\r\nContent-Type: ${options.mediaType}\r\nContent-Range: bytes ${start}-${end - 1}/${size}\r\n\r\n`,
-        "latin1",
       ),
       body.subarray(start, end),
-      Buffer.from("\r\n", "latin1"),
+      Buffer.from("\r\n"),
     );
   }
-  parts.push(Buffer.from(`--${boundary}--`, "latin1"));
+  // Starlette encodes these as latin-1. Every character in them is ASCII — a
+  // hex boundary, digits, and this server's own media type — so the default
+  // encoding writes the same bytes.
+  parts.push(Buffer.from(`--${boundary}--`));
   const multipart = Buffer.concat(parts);
   return new Response(multipart, {
     status: 206,

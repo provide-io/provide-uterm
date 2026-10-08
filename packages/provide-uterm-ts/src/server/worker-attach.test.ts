@@ -724,6 +724,21 @@ describe("output a connector produces on its own", () => {
     ]);
   });
 
+  it("keeps polling after a failure when nothing records it", async () => {
+    let polls = 0;
+    const connector = new RecordingConnector();
+    connector.pollMessages = async () => {
+      polls += 1;
+      throw new Error("read failed");
+    };
+    const { waits, done, sleep } = countingSleep((seen) => seen.length === 2);
+    const attachment = await attachConnector(new SessionHub(), "w1", connector, "hijack", { now: () => 5, sleep });
+    await done;
+    await attachment.detach();
+    expect(waits.slice(0, 2)).toStrictEqual([250, 500]);
+    expect(polls).toBeGreaterThanOrEqual(2);
+  });
+
   it("caps the backoff at its last step, whatever was thrown", async () => {
     const connector = new RecordingConnector();
     connector.pollMessages = async () => {
