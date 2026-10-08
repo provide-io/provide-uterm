@@ -259,6 +259,7 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
     auth,
     hub,
     connectors: runtimes,
+    recordings: runtimes,
     version: SERVER_VERSION,
     controlPlaneBackend: String(section(config, "control_plane").backend),
     startupTime: (options.now ?? (() => Date.now() / 1000))(),
