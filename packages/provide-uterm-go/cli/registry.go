@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/bridge"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
@@ -63,6 +64,7 @@ type SessionRegistryImpl struct {
 	// SetRecording; see session_recording.go.
 	recCfg    serverconfig.RecordingConfig
 	recording recording.Store
+	detector  *annotation.PatternDetector
 	// connect builds the live connector; overridable in tests with a fake.
 	connect connectFn
 	// egress is the SSRF / connector-target guard; blockPrivate carries

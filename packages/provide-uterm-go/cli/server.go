@@ -17,6 +17,7 @@ import (
 
 	ptel "github.com/provide-io/provide-telemetry/go"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane/bootstrap"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
@@ -216,8 +217,10 @@ func buildServerFromConfig(
 	// One recording store, shared: the sessions write into the same instance
 	// the recording routes read from (for a memory store, the only way the
 	// routes can see anything at all).
+	// And one detector: the reference's factory hands every hosted session
+	// the same PatternDetector, which is stateless.
 	recordings := buildRecordingStore(cfg)
-	registry.SetRecording(recordings)
+	registry.SetRecording(recordings, annotation.NewPatternDetector(nil))
 
 	// Runtime graphical targets live in the control plane, so a sqlite backend
 	// keeps them across restarts. A memory backend behaves as before.
