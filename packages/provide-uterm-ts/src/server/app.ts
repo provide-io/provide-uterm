@@ -28,9 +28,8 @@
  *   message for either is an oracle for whether a guess was well-formed.
  */
 
-import { API_ROUTE_REGISTRY, API_ROUTES, type RouteDef } from "../api-routes/index.ts";
+import { API_ROUTES, type RouteDef } from "../api-routes/index.ts";
 import type { InputMode } from "../hub/index.ts";
-import { NullRecordingStore } from "../recording/index.ts";
 import {
   ANONYMOUS_SUBJECT,
   type AuthSettings,
@@ -76,11 +75,8 @@ export interface ServerAppOptions {
   hub: SessionHub;
   /** The running connectors, for the routes that change one. */
   connectors: ConnectorAccess;
-  /**
-   * Where recordings are read back from. The no-op store, which holds none,
-   * unless one is supplied: bootstrap supplies the runtimes.
-   */
-  recordings?: RecordingAccess | undefined;
+  /** Where recordings are read back from: bootstrap supplies the runtimes. */
+  recordings: RecordingAccess;
   /** The version health reports. */
   version: string;
   /** Which store is behind the control plane, as health reports it. */
@@ -270,11 +266,7 @@ export const SERVED_ROUTES: readonly RouteDef[] = API_ROUTES.filter((route) =>
 /** Build the application. */
 export function createServerApp(options: ServerAppOptions): ServerApp {
   const app: BuiltApp = { options, ready: true };
-  const recordings: RecordingAccess = options.recordings ?? {
-    recordingStore: new NullRecordingStore(),
-    recordingDirectory: ".",
-    flushRecording: async () => {},
-  };
+  const recordings = options.recordings;
 
   /**
    * The handler map for one request.
@@ -423,19 +415,15 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       return lease;
     }
 
-    // A route matched is a route whose caller has to have authenticated. The
-    // match happens first so that a path nobody routes stays a 404 for
-    // everyone, and second so that existence is never revealed to a caller
-    // who has not identified themselves.
-    const match = API_ROUTE_REGISTRY.match(method, path);
-    // A path shaped like a served route whose parameters fail its grammar is
-    // still that route's, and still behind authentication: the reference
-    // refuses an anonymous caller before it validates anything, so the
-    // grammar of an id is not something an anonymous caller can probe.
-    const served =
-      (match !== undefined && SERVED_ROUTES.includes(match.route)) ||
-      (match === undefined &&
-        SERVED_ROUTES.some((route) => route.method === method && matchesShape(path, route.template)));
+    // A request for a served route is one whose caller has to have
+    // authenticated. Matched by method and shape, so that a path nobody routes
+    // stays a 404 for everyone and a wrong verb a 405, as in the reference;
+    // that existence is never revealed to a caller who has not identified
+    // themselves; and that a path whose id fails the route's grammar is still
+    // that route's — the reference refuses an anonymous caller before it
+    // validates anything, so the grammar of an id is not something an
+    // anonymous caller can probe.
+    const served = SERVED_ROUTES.some((route) => route.method === method && matchesShape(path, route.template));
     if (served && !authenticated) {
       return unauthenticated();
     }

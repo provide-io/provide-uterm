@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BAD_TOKEN } from "../conformance/transport.ts";
+import { NullRecordingStore } from "../recording/index.ts";
 import { encodeJwt } from "../serverauth/index.ts";
 import {
   createServerApp,
@@ -46,6 +47,15 @@ import { sessionDefinitionFrom } from "./session-status.ts";
 const noConnectors = {
   setMode: async () => {
     // Nothing is running, so there is nothing to tell.
+  },
+};
+
+/** No recordings: the no-op store, which holds none. */
+const noRecordings = {
+  recordingStore: new NullRecordingStore(),
+  recordingDirectory: ".",
+  flushRecording: async () => {
+    // Nothing is recording, so there is nothing buffered.
   },
 };
 
@@ -292,6 +302,7 @@ describe("listing sessions", () => {
       auth,
       hub: new SessionHub(),
       connectors: noConnectors,
+      recordings: noRecordings,
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 1,
@@ -349,6 +360,7 @@ describe("listing sessions", () => {
       auth: shared.auth,
       hub: new SessionHub(),
       connectors: noConnectors,
+      recordings: noRecordings,
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 1,
@@ -427,6 +439,7 @@ describe("fetching one session", () => {
       auth,
       hub: new SessionHub(),
       connectors: noConnectors,
+      recordings: noRecordings,
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 0,
@@ -454,6 +467,7 @@ describe("fetching one session", () => {
       auth,
       hub: new SessionHub(),
       connectors: noConnectors,
+      recordings: noRecordings,
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 0,

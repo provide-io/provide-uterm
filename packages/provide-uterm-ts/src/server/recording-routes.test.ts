@@ -162,7 +162,7 @@ function headersOf(response: Response, names: readonly string[]): Record<string,
 
 describe("the reference's own answers, probe by probe", () => {
   it("covers every probe the reference recorded", () => {
-    expect(golden.probes.length).toBe(69);
+    expect(golden.probes.length).toBe(72);
   });
 
   for (const probe of golden.probes) {
@@ -241,21 +241,26 @@ describe("what the reference's probes cannot reach", () => {
     expect(download.status).toBe(404);
   });
 
-  it("answers from the no-op store when an app is built without recordings", async () => {
+  it("asks the store for the reference's defaults when the query names none", async () => {
     const registry = new SessionRegistry([sessionDefinitionFrom(SESSIONS[0] as Record<string, unknown>, "x")], false);
     const { tokens, auth } = server();
+    const store = new InMemoryRecordingStore();
+    const asked: unknown[] = [];
+    store.getEntries = async (sessionId, options) => {
+      asked.push([sessionId, options]);
+      return [];
+    };
     const app = createServerApp({
       registry,
       auth,
       hub: new SessionHub(),
       connectors: { setMode: async () => {} },
+      recordings: { recordingStore: store, recordingDirectory: recordings, flushRecording: async () => {} },
       version: "0.0.0",
       controlPlaneBackend: "memory",
       startupTime: 1,
     });
-    const meta = await app.handle(request({ ...whole, path: "/api/sessions/recorded/recording" }, tokens));
-    expect(await meta.json()).toStrictEqual({ session_id: "recorded", exists: false, size_bytes: 0, enabled: true });
-    const download = await app.handle(request({ ...whole, request_headers: {} }, tokens));
-    expect(download.status).toBe(404);
+    await app.handle(request({ ...whole, path: "/api/sessions/recorded/recording/entries" }, tokens));
+    expect(asked).toStrictEqual([["recorded", { limit: 200, offset: null, event: null }]]);
   });
 });
