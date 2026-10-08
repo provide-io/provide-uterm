@@ -13,7 +13,8 @@
  * granted over something that never pauses.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { PatternDetector } from "../annotation/index.ts";
 import type { SessionConnector, WorkerMessage } from "../connectors/index.ts";
 import { ShellSessionConnector } from "../connectors/index.ts";
 import { ControlFrameDecoder, encodeControlFrame, encodeTerminalData } from "../control-channel/index.ts";
@@ -21,7 +22,7 @@ import { InMemoryRecordingStore, type RecordingEvent } from "../recording/index.
 import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { SessionHub } from "./session-hub.ts";
 import { recordingSettingsFrom, SessionRecording } from "./session-recording.ts";
-import { attachConnector, workerSnapshotFrame } from "./worker-attach.ts";
+import { attachConnector, POLL_ERROR_BACKOFF_MS, POLL_IDLE_MS, workerSnapshotFrame } from "./worker-attach.ts";
 
 /** The socket the hub is holding for a worker, for a test that writes to it. */
 function socketOf(hub: SessionHub, workerId: string) {
@@ -534,5 +535,211 @@ describe("recording what crosses the attachment", () => {
     await attachConnector(hub, "w1", new RecordingConnector(), "hijack", { now: () => 5, recording });
     await socketOf(hub, "w1").sendText(encodeTerminalData("x"));
     expect(await store.getEntries("w1")).toStrictEqual([]);
+  });
+});
+
+/** A connector that produces output on its own, handed out one poll at a time. */
+class EmittingConnector extends RecordingConnector {
+  readonly pending: WorkerMessage[][] = [];
+  polls = 0;
+  override async pollMessages(): Promise<WorkerMessage[]> {
+    this.polls += 1;
+    return this.pending.shift() ?? [];
+  }
+}
+
+/** A browser that keeps the terminal output it is sent, not only control frames. */
+class OutputBrowser {
+  readonly output: string[] = [];
+  readonly #decoder = new ControlFrameDecoder();
+
+  async sendText(payload: string): Promise<void> {
+    for (const chunk of this.#decoder.feed(payload)) {
+      if (chunk.kind === "data") {
+        this.output.push(chunk.data);
+      }
+    }
+  }
+}
+
+/** An open recording, flushed on every entry, with or without a detector. */
+async function pollRecording(detector?: PatternDetector) {
+  const store = new InMemoryRecordingStore();
+  const settings = recordingSettingsFrom({
+    ...(SERVER_CONFIG_DEFAULTS.recording as Record<string, unknown>),
+    flush_interval_s: 3600,
+    flush_batch_size: 1,
+  });
+  const recording = new SessionRecording("w1", store, settings, { detector });
+  await recording.start(true);
+  return { store, recording };
+}
+
+/** A sleep that records each wait, yields a turn, and says when it has seen enough. */
+function countingSleep(enough: (waits: readonly number[]) => boolean) {
+  const waits: number[] = [];
+  let release: () => void = () => {};
+  const done = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const sleep = async (ms: number) => {
+    waits.push(ms);
+    if (enough(waits)) {
+      release();
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  };
+  return { waits, done, sleep };
+}
+
+describe("output a connector produces on its own", () => {
+  it("is polled for, broadcast to the hub, and recorded and annotated like any other", async () => {
+    const hub = new SessionHub();
+    const { store, recording } = await pollRecording(new PatternDetector());
+    const connector = new EmittingConnector();
+    const attachment = await attachConnector(hub, "w1", connector, "hijack", { now: () => 5, recording });
+    const browser = new OutputBrowser();
+    await hub.connections.registerBrowser("w1", browser, "viewer", { deferBroadcast: true });
+    hub.connections.activateBrowserBroadcasts("w1", browser);
+
+    connector.pending.push([
+      { type: "term", data: "DROP TABLE users;" },
+      { type: "snapshot", screen: "polled", ts: 6 },
+    ]);
+
+    await vi.waitFor(async () => {
+      expect((await hub.getLastSnapshot("w1"))?.screen).toBe("polled");
+    });
+    await attachment.detach();
+    expect(browser.output).toContain("DROP TABLE users;");
+    expect(summarise(await store.getEntries("w1"))).toStrictEqual([
+      "log_start",
+      "runtime_started",
+      "read:seed",
+      "annotation",
+      "read:polled",
+    ]);
+    const [annotation] = await store.getEntries("w1", { event: "annotation" });
+    expect(annotation?.data).toMatchObject({ description: "SQL DROP statement detected: DROP TABLE" });
+  });
+
+  it("waits the reference's 50 ms between polls that found nothing", async () => {
+    const { waits, done, sleep } = countingSleep((seen) => seen.length === 3);
+    const attachment = await attachConnector(new SessionHub(), "w1", new EmittingConnector(), "hijack", {
+      now: () => 5,
+      sleep,
+    });
+    await done;
+    await attachment.detach();
+    expect(POLL_IDLE_MS).toBe(50);
+    expect(waits.slice(0, 3)).toStrictEqual([POLL_IDLE_MS, POLL_IDLE_MS, POLL_IDLE_MS]);
+  });
+
+  it("polls again at once after a poll that found something", async () => {
+    const connector = new EmittingConnector();
+    connector.pending.push([{ type: "term", data: "a" }], [{ type: "term", data: "b" }]);
+    const { waits, done, sleep } = countingSleep(() => true);
+    const attachment = await attachConnector(new SessionHub(), "w1", connector, "hijack", { now: () => 5, sleep });
+    await done;
+    await attachment.detach();
+    // Two polls with output and no wait between them; the first wait comes
+    // after the third poll, the first to find nothing.
+    expect(connector.polls).toBe(3);
+    expect(waits).toStrictEqual([POLL_IDLE_MS]);
+  });
+
+  it("stops polling once detached, and drops what an in-flight poll returns after", async () => {
+    const hub = new SessionHub();
+    const { store, recording } = await pollRecording();
+    let answer: (messages: WorkerMessage[]) => void = () => {};
+    let polls = 0;
+    const connector = new RecordingConnector();
+    connector.pollMessages = () => {
+      polls += 1;
+      return new Promise<WorkerMessage[]>((resolve) => {
+        answer = resolve;
+      });
+    };
+    const attachment = await attachConnector(hub, "w1", connector, "hijack", { now: () => 5, recording });
+    await vi.waitFor(() => expect(polls).toBe(1));
+
+    await attachment.detach();
+    answer([{ type: "snapshot", screen: "late", ts: 7 }]);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    expect(polls).toBe(1);
+    expect(summarise(await store.getEntries("w1"))).toStrictEqual(["log_start", "runtime_started", "read:seed"]);
+  });
+
+  it("drops a failure an in-flight poll reports after it was detached", async () => {
+    const hub = new SessionHub();
+    const { store, recording } = await pollRecording();
+    let fail: (error: Error) => void = () => {};
+    const connector = new RecordingConnector();
+    connector.pollMessages = () =>
+      new Promise<WorkerMessage[]>((_resolve, reject) => {
+        fail = reject;
+      });
+    const attachment = await attachConnector(hub, "w1", connector, "hijack", { now: () => 5, recording });
+    await attachment.detach();
+    fail(new Error("socket closed"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await store.getEntries("w1", { event: "runtime_error" })).toStrictEqual([]);
+  });
+
+  it("records a poll that fails and retries it on the reference's backoff", async () => {
+    const { store, recording } = await pollRecording();
+    const outcomes: Array<WorkerMessage[] | Error> = [
+      new Error("read failed"),
+      new Error("read failed again"),
+      [{ type: "term", data: "back" }],
+      new Error("and again"),
+    ];
+    const connector = new RecordingConnector();
+    connector.pollMessages = async () => {
+      const next = outcomes.shift() ?? [];
+      if (next instanceof Error) {
+        throw next;
+      }
+      return next;
+    };
+    const { waits, done, sleep } = countingSleep(() => outcomes.length === 0);
+    const attachment = await attachConnector(new SessionHub(), "w1", connector, "hijack", {
+      now: () => 5,
+      recording,
+      sleep,
+    });
+    await done;
+    await attachment.detach();
+
+    // Failures in a row back off further each time; a poll that works starts
+    // the schedule over.
+    expect(POLL_ERROR_BACKOFF_MS).toStrictEqual([250, 500, 1000, 2000, 5000]);
+    expect(waits.slice(0, 3)).toStrictEqual([250, 500, 250]);
+    const errors = await store.getEntries("w1", { event: "runtime_error" });
+    expect(errors.map((entry) => entry.data)).toStrictEqual([
+      { error: "read failed" },
+      { error: "read failed again" },
+      { error: "and again" },
+    ]);
+  });
+
+  it("caps the backoff at its last step, whatever was thrown", async () => {
+    const connector = new RecordingConnector();
+    connector.pollMessages = async () => {
+      throw "not even an Error";
+    };
+    const { store, recording } = await pollRecording();
+    const { waits, done, sleep } = countingSleep((seen) => seen.length === 7);
+    const attachment = await attachConnector(new SessionHub(), "w1", connector, "hijack", {
+      now: () => 5,
+      recording,
+      sleep,
+    });
+    await done;
+    await attachment.detach();
+    expect(waits.slice(0, 7)).toStrictEqual([250, 500, 1000, 2000, 5000, 5000, 5000]);
+    const [first] = await store.getEntries("w1", { event: "runtime_error" });
+    expect(first?.data).toStrictEqual({ error: "not even an Error" });
   });
 });
