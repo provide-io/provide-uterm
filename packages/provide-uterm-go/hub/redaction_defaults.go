@@ -11,13 +11,10 @@ package hub
 // formats with anchored prefixes / canonical lengths to keep the false-positive
 // rate low.
 //
-// RE2 note: three of these rules (generic password / api_key / token) use a
-// `(?=...)` lookahead that Go's RE2 rejects. NewStreamRedactor skips them at
-// build time (Python re.error parity), so under Go the built-in defaults redact
-// the cloud/token/PEM/Authorization shapes but NOT the three lookahead-based
-// generic shapes. They are retained here verbatim so the rule set stays a
-// faithful mirror of the Python source and so a future RE2-compatible rewrite is
-// a local edit.
+// RE2 note: three of these rules (generic password / api_key / token) end in
+// a `(?=...)` lookahead, which RE2 has no syntax for. NewStreamRedactor
+// honours a lookahead in that tail position itself (see StreamRedactor), so
+// all of the defaults redact under Go as they do under Python.
 
 // Cloud-provider credentials.
 const (
