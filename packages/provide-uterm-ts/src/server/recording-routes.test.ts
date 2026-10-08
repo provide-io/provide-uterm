@@ -17,7 +17,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { InMemoryRecordingStore } from "../recording/index.ts";
+import { InMemoryRecordingStore, NullRecordingStore } from "../recording/index.ts";
 import { encodeJwt } from "../serverauth/index.ts";
 import { loadGolden } from "../testing/golden.ts";
 import { createServerApp } from "./app.ts";
@@ -239,6 +239,26 @@ describe("what the reference's probes cannot reach", () => {
     });
     const download = await app.handle(request({ ...whole, request_headers: {} }, tokens));
     expect(download.status).toBe(404);
+  });
+
+  it("has no file to serve when the store has no path, even rooted at the working directory", async () => {
+    // A store with no file must not resolve to the directory a server runs
+    // in, which a recording directory of "." would then contain.
+    const registry = new SessionRegistry([sessionDefinitionFrom(SESSIONS[0] as Record<string, unknown>, "x")], false);
+    const { tokens, auth } = server();
+    const app = createServerApp({
+      registry,
+      auth,
+      hub: new SessionHub(),
+      connectors: { setMode: async () => {} },
+      recordings: { recordingStore: new NullRecordingStore(), recordingDirectory: ".", flushRecording: async () => {} },
+      version: "0.0.0",
+      controlPlaneBackend: "memory",
+      startupTime: 1,
+    });
+    const download = await app.handle(request({ ...whole, request_headers: {} }, tokens));
+    expect(download.status).toBe(404);
+    expect(await download.json()).toStrictEqual({ detail: "recording not available" });
   });
 
   it("asks the store for the reference's defaults when the query names none", async () => {

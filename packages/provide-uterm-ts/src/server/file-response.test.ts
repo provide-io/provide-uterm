@@ -166,6 +166,7 @@ describe("the parts of the port no reference probe reaches", () => {
     ["bytes=1_0-2_0", "bytes 10-20/888"],
     ["bytes=" + Array(100).fill("0-0").join(","), "bytes 0-0/888"],
     ["bytes=10-11,0-20", "bytes 0-20/888"],
+    ["bytes=0-888", "bytes 0-887/888"],
   ])("serves %j as the one range Starlette serves", (range, contentRange) => {
     const response = fileResponse(fixture, {
       filename: "recorded.jsonl",
@@ -188,7 +189,7 @@ describe("the parts of the port no reference probe reaches", () => {
     expect(body).toContain("Content-Range: bytes 883-887/888");
   });
 
-  it.each(["bytes=888-", "bytes=0-1,5000-"])("refuses %j as unsatisfiable", (range) => {
+  it.each(["bytes=888-", "bytes=0-1,5000-", "bytes=--5"])("refuses %j as unsatisfiable", (range) => {
     const response = fileResponse(fixture, {
       filename: "recorded.jsonl",
       mediaType: "application/json",
