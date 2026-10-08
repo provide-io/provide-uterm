@@ -15,8 +15,10 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { PatternDetector } from "../annotation/index.ts";
 import { SESSION_LIFECYCLES } from "../bridge/index.ts";
 import type { SessionConnector, WorkerMessage } from "../connectors/index.ts";
+import { encodeTerminalData } from "../control-channel/index.ts";
 import { InMemoryRecordingStore, NullRecordingStore } from "../recording/index.ts";
 import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { loadGolden } from "../testing/golden.ts";
@@ -657,5 +659,36 @@ describe("recording a session", () => {
     await runtimes.start("one");
     await runtimes.stopAll();
     expect(runtimes.recordingStore).toBeInstanceOf(NullRecordingStore);
+  });
+});
+
+describe("annotating a recorded session", () => {
+  it("annotates input with the detector it was given", async () => {
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const store = new InMemoryRecordingStore();
+    const hub = new SessionHub();
+    const runtimes = new SessionRuntimes(registry, hub, {
+      build: () => new ScreenConnector(),
+      recordingStore: store,
+      recordingSettings: recordingSettings(),
+      detector: new PatternDetector(),
+    });
+    await runtimes.start("one");
+
+    await hub.registry.get("one")?.workerWs?.sendText(encodeTerminalData("sudo ls\r"));
+    await runtimes.flushRecording("one");
+
+    const annotations = await store.getEntries("one", { event: "annotation" });
+    expect(annotations.map((entry) => entry.data)).toStrictEqual([
+      {
+        label: "privilege_escalation",
+        description: "sudo command detected: sudo",
+        severity: "high",
+        source: "detector",
+        principal: "system",
+        span: { from_seq: 2, to_seq: 2 },
+      },
+    ]);
+    await runtimes.stopAll();
   });
 });

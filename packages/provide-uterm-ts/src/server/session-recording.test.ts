@@ -16,6 +16,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { PatternDetector } from "../annotation/index.ts";
 import type { WorkerMessage } from "../connectors/index.ts";
 import {
   InMemoryRecordingStore,
@@ -45,6 +46,7 @@ type Step =
 interface RecordingGolden {
   session_id: string;
   script: Step[];
+  annotated_script: Step[];
   configs: Record<string, Record<string, unknown>>;
   recorded: Record<string, RecordingEvent[]>;
 }
@@ -99,6 +101,81 @@ describe("replaying the reference's script", () => {
     }
     await recording.stop();
     expect(strip(await store.getEntries(golden.session_id, { limit: 500 }))).toStrictEqual(golden.recorded[name]);
+  });
+});
+
+describe("annotating what is recorded", () => {
+  const KEY = "AKIA0123456789AB"; // pragma: allowlist secret
+
+  /** An open, annotating recording over an in-memory store. */
+  async function annotating(enabled = true) {
+    const store = new InMemoryRecordingStore();
+    const recording = new SessionRecording("s1", store, settings(), { detector: new PatternDetector() });
+    await recording.start(enabled);
+    return { store, recording };
+  }
+
+  /** The descriptions of every annotation recorded. */
+  async function descriptions(store: InMemoryRecordingStore): Promise<string[]> {
+    const entries = await store.getEntries("s1", { event: "annotation" });
+    return entries.map((entry) => String((entry.data as Record<string, unknown>).description));
+  }
+
+  it("annotates as the reference does on every path a rule can match", async () => {
+    const store = new InMemoryRecordingStore();
+    const recording = new SessionRecording(golden.session_id, store, settings(), { detector: new PatternDetector() });
+    await recording.start(true);
+    for (const step of golden.annotated_script) {
+      await replay(recording, step);
+    }
+    await recording.stop();
+    expect(strip(await store.getEntries(golden.session_id, { limit: 500 }))).toStrictEqual(golden.recorded.annotated);
+  });
+
+  // The three below mirror the reference's tests/server/test_output_annotation.py.
+  it("scans streamed output through its escape sequences", async () => {
+    const { store, recording } = await annotating();
+    await recording.logOutbound({ type: "term", data: `\x1b[12;5H\x1b[38;2;255;176;0m${KEY}\x1b[0m` });
+    await recording.flush();
+    expect(await descriptions(store)).toStrictEqual(["AWS access key detected in read"]);
+  });
+
+  it("finds a match split across frames once", async () => {
+    const { store, recording } = await annotating();
+    await recording.logOutbound({ type: "term", data: "DROP TA" });
+    await recording.logOutbound({ type: "term", data: "BLE callers;" });
+    await recording.flush();
+    expect(await descriptions(store)).toStrictEqual(["SQL DROP statement detected: DROP TABLE"]);
+  });
+
+  it("scans nothing when nothing is recorded", async () => {
+    const { store, recording } = await annotating(false);
+    await recording.logOutbound({ type: "term", data: KEY });
+    await recording.logOutbound({ type: "snapshot", screen: KEY });
+    await recording.logSend(KEY);
+    await recording.flush();
+    expect(await store.getEntries("s1")).toStrictEqual([]);
+  });
+
+  it("annotates nothing without a detector, as a runtime built without one does", async () => {
+    const store = new InMemoryRecordingStore();
+    const recording = new SessionRecording("s1", store, settings());
+    await recording.start(true);
+    await recording.logOutbound({ type: "term", data: KEY });
+    await recording.logOutbound({ type: "snapshot", screen: KEY });
+    await recording.logSend(KEY);
+    await recording.flush();
+    expect(await descriptions(store)).toStrictEqual([]);
+  });
+
+  it("starts each recording with nothing carried from the last", async () => {
+    const { store, recording } = await annotating();
+    await recording.logOutbound({ type: "term", data: "DROP TA" });
+    await recording.stop();
+    await recording.start(true);
+    await recording.logOutbound({ type: "term", data: "BLE callers;" });
+    await recording.flush();
+    expect(await descriptions(store)).toStrictEqual([]);
   });
 });
 
@@ -251,9 +328,9 @@ describe("choosing a store", () => {
   });
 
   it("refuses a webhook store it cannot deliver to, rather than recording nowhere", () => {
-    expect(() => buildRecordingStore(settings({ store_type: "webhook", webhook_url: "https://hooks.example/r" }))).toThrow(
-      /webhook/,
-    );
+    expect(() =>
+      buildRecordingStore(settings({ store_type: "webhook", webhook_url: "https://hooks.example/r" })),
+    ).toThrow(/webhook/);
   });
 });
 
