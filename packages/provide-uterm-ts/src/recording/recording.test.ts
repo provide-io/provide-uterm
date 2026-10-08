@@ -89,6 +89,14 @@ describe("normalizeLimit", () => {
 });
 
 describe("InMemoryRecordingStore", () => {
+  it("sizes an event holding an undefined field as the event without it", async () => {
+    const withHole = new InMemoryRecordingStore();
+    await withHole.appendEvents("s1", [{ event: "read", data: { a: 1, gone: undefined } }]);
+    const without = new InMemoryRecordingStore();
+    await without.appendEvents("s1", [{ event: "read", data: { a: 1 } }]);
+    expect((await withHole.recordingMeta("s1")).size_bytes).toBe((await without.recordingMeta("s1")).size_bytes);
+  });
+
   it("records an opening event when a session starts", async () => {
     const store = new InMemoryRecordingStore();
     await store.startSession("s1", { kind: "test" });

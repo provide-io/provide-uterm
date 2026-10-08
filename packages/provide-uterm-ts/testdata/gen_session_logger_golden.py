@@ -75,6 +75,41 @@ async def _quota_record() -> dict[str, Any]:
     return {"entries": _strip(await store.get_entries("s1", limit=500))}
 
 
+# Entries whose compact and CPython-default JSON differ by far more than a
+# timestamp's digits can: a separator per list element, and two characters
+# ``ensure_ascii`` writes as escapes. A port that measured entries any other
+# way than ``len(json.dumps(record)) + 1`` stops at a different entry.
+BOUNDARY_PAYLOAD: dict[str, Any] = {"v": [0] * 100, "s": "caf\u00e9 \u2603"}
+
+
+async def _quota_boundary_record() -> dict[str, Any]:
+    """A byte quota that runs out partway through the third entry."""
+    import time
+
+    sample = {"ts": time.time(), "event": "e", "data": BOUNDARY_PAYLOAD, "session_id": "s1"}
+    size = len(json.dumps(sample)) + 1
+    probe = InMemoryRecordingStore()
+    await probe.start_session("s1", {"started_at": time.time()})
+    start = int((await probe.recording_meta("s1"))["size_bytes"])
+    # Two entries fit with half an entry to spare, so the third is written and
+    # the fourth is not. Half an entry is far wider than a timestamp's spread.
+    max_bytes = start + 2 * size + size // 2
+
+    store = InMemoryRecordingStore()
+    logger = SessionLogger(store, max_bytes=max_bytes, flush_interval_s=3600)
+    await logger.start("s1")
+    for _ in range(6):
+        await logger.log_event("e", BOUNDARY_PAYLOAD)
+    await logger.stop()
+    entries = await store.get_entries("s1", limit=500)
+    return {
+        "max_bytes": max_bytes,
+        "payload": BOUNDARY_PAYLOAD,
+        "attempts": 6,
+        "written": sum(1 for entry in entries if entry["event"] == "e"),
+    }
+
+
 async def _batch_record() -> dict[str, Any]:
     """A full batch flushes without waiting for the interval."""
     store = InMemoryRecordingStore()
@@ -96,6 +131,7 @@ async def _run() -> dict[str, Any]:
         "wire_mode": await _drive(control_channel_mode="wire"),
         "redacted": await _drive(control_channel_mode="wire", redactor=redactor),
         "quota": await _quota_record(),
+        "quota_boundary": await _quota_boundary_record(),
         "batch": await _batch_record(),
     }
 
