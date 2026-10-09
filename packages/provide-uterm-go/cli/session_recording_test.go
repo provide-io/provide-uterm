@@ -820,3 +820,17 @@ func TestOperatorAnnotationWriteFailureIsAnError(t *testing.T) {
 		t.Fatal("a failed recording write was not reported")
 	}
 }
+
+// A served connection that ends on an error records it as runtime_error
+// before the recording closes, as the reference's run loop records the
+// exception that ended _bridge_session.
+func TestAConnectionEndRecordsTheError(t *testing.T) {
+	rec, store := newTestRecorder(t, testRecordingConfig())
+	rec.AttemptStarted()
+	rec.Connected()
+	rec.AttemptEnded(errors.New("failed to read frame header: EOF"))
+	want := []string{"log_start", "runtime_started", "runtime_error", "log_stop"}
+	if got := eventNames(t, store); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+}

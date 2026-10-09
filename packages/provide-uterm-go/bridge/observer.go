@@ -35,7 +35,8 @@ type Observer interface {
 	// the terminal), before it is delivered.
 	InputReceived(data string)
 	// AttemptEnded is called when an attempt is over: err is the dial error,
-	// or nil when a connection was served or the bridge is stopping.
+	// or the error that ended a served connection (a failed read or write, or
+	// a stream the decoder rejected); nil when the bridge is stopping.
 	AttemptEnded(err error)
 }
 

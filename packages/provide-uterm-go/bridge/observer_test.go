@@ -7,6 +7,7 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -198,5 +199,97 @@ func TestDefaultObserverIgnoresEverything(t *testing.T) {
 	o.AttemptEnded(nil)
 	if _, ok := o.(nopObserver); !ok {
 		t.Fatalf("default observer = %T", o)
+	}
+}
+
+// endedWith is an observer that also keeps the error each attempt ended with.
+type endedWith struct {
+	recordingObserver
+	errs []error
+}
+
+func (o *endedWith) AttemptEnded(err error) {
+	o.mu.Lock()
+	o.errs = append(o.errs, err)
+	o.mu.Unlock()
+	o.recordingObserver.AttemptEnded(err)
+}
+
+func (o *endedWith) firstErr() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if len(o.errs) == 0 {
+		return nil
+	}
+	return o.errs[0]
+}
+
+// A served connection that the far end drops ends its attempt with the error
+// that ended it, as the reference's run loop catches the socket's exception
+// and records it as runtime_error.
+func TestObserverSeesAConnectionEnd(t *testing.T) {
+	hub := newFakeHub(t)
+	obs := &endedWith{}
+	b := New(Config{Worker: &mockWorker{session: &mockSession{}}, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs})
+	b.reconnectBackoff = []time.Duration{time.Hour}
+	b.Start(context.Background())
+	defer b.Stop()
+	conn := hub.awaitConn(t)
+	hub.awaitControl(t, "worker_hello")
+	_ = conn.Close(websocket.StatusNormalClosure, "bye")
+	waitFor(t, "the attempt to end", func() bool { return obs.has("ended error") })
+	if err := obs.firstErr(); err == nil || !strings.Contains(err.Error(), "bye") {
+		t.Fatalf("attempt ended with %v, want the close", err)
+	}
+}
+
+// A stream the decoder rejects ends the attempt with the reference's
+// "invalid control channel" error.
+func TestObserverSeesAnInvalidControlChannel(t *testing.T) {
+	hub := newFakeHub(t)
+	obs := &endedWith{}
+	b := New(Config{Worker: &mockWorker{session: &mockSession{}}, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs})
+	b.reconnectBackoff = []time.Duration{time.Hour}
+	b.Start(context.Background())
+	defer b.Stop()
+	conn := hub.awaitConn(t)
+	if err := conn.Write(context.Background(), websocket.MessageText, []byte{0x10, 0x03}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the attempt to end", func() bool { return obs.has("ended error") })
+	if err := obs.firstErr(); err == nil || !strings.HasPrefix(err.Error(), "invalid control channel: ") {
+		t.Fatalf("attempt ended with %v", err)
+	}
+}
+
+// The first loop to fail names the end; the other's resulting cancellation
+// does not overwrite it, and a new connection starts with a clean slate.
+func TestConnectionEndKeepsTheFirstError(t *testing.T) {
+	b := newBridge(&mockWorker{})
+	b.resetConnErr()
+	b.setConnErr(nil)
+	b.setConnErr(errors.New("first"))
+	b.setConnErr(errors.New("second"))
+	if err := b.connErr(); err == nil || err.Error() != "first" {
+		t.Fatalf("connErr = %v, want first", err)
+	}
+	b.resetConnErr()
+	if err := b.connErr(); err != nil {
+		t.Fatalf("connErr after reset = %v", err)
+	}
+}
+
+// A write the socket refuses ends the connection with that error.
+func TestSendLoopRecordsAWriteFailure(t *testing.T) {
+	client, _ := dialPair(t)
+	_ = client.CloseNow()
+	b := newBridge(&mockWorker{})
+	b.resetConnErr()
+	b.sendQ <- queuedFrame{control: map[string]any{"type": "ping"}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	b.sendLoop(ctx, cancel, client)
+	if b.connErr() == nil {
+		t.Fatal("a failed write did not name the connection's end")
 	}
 }
