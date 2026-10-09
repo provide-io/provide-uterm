@@ -370,20 +370,29 @@ func (r *SessionRegistryImpl) WatchSessionEvents(ctx context.Context, id string,
 }
 
 // AnnotateSession records an operator annotation, returning (ts, seq). A session
-// with no live runtime → ErrNoRuntime.
-func (r *SessionRegistryImpl) AnnotateSession(_ context.Context, id string, _ server.Annotation) (float64, int, error) {
+// with no live runtime → ErrNoRuntime. While the session's recording is open
+// the annotation is written into it, as the reference's annotate_session logs
+// annotation_data through the runtime's logger; a failed write is returned.
+func (r *SessionRegistryImpl) AnnotateSession(_ context.Context, id string, ann server.Annotation) (float64, int, error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	e, ok := r.entries[id]
 	if !ok {
+		r.mu.Unlock()
 		return 0, 0, server.ErrSessionNotFound
 	}
 	if e.conn == nil {
+		r.mu.Unlock()
 		return 0, 0, server.ErrNoRuntime
 	}
 	e.annSeq++
-	ts := float64(time.Now().UnixNano()) / 1e9
-	return ts, e.annSeq, nil
+	seq, rec := e.annSeq, e.recorder
+	r.mu.Unlock()
+	if rec != nil {
+		if err := rec.recordAnnotation(ann.Data()); err != nil {
+			return 0, 0, err
+		}
+	}
+	return float64(time.Now().UnixNano()) / 1e9, seq, nil
 }
 
 // defaultConnect builds the real connector for a session definition from the

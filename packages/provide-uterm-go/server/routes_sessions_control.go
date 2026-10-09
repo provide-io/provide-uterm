@@ -6,6 +6,7 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -218,13 +219,23 @@ func (s *Server) handleAnnotateSession(w http.ResponseWriter, r *http.Request) {
 		Severity:    severity,
 		Principal:   principalOf(r).SubjectID,
 	}
-	ts, seq, err := s.deps.Registry.AnnotateSession(r.Context(), id, ann)
-	if err != nil {
+	// Recorded first — the registry writes it into the session's recording
+	// while one is open — then published on the hub's event ring for live
+	// observers, as the reference's annotate_session does, which answers with
+	// that event's seq.
+	ts, _, err := s.deps.Registry.AnnotateSession(r.Context(), id, ann)
+	if errors.Is(err, ErrNoRuntime) {
 		detailError(w, http.StatusNotFound, "no active runtime for session: "+id)
 		return
 	}
-	s.audit(r, "session.annotate", map[string]any{"session_id": id, "label": label})
-	writeJSON(w, http.StatusOK, map[string]any{"ts": ts, "seq": seq})
+	if err != nil {
+		detailError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	data := ann.Data()
+	evt, _ := s.deps.Hub.AppendEventData(r.Context(), id, "annotation", data) // never fails
+	s.audit(r, "session.annotate", map[string]any{"session_id": id, "annotation": data})
+	writeJSON(w, http.StatusOK, map[string]any{"ts": ts, "seq": evt["seq"]})
 }
 
 // stringField reads a string field, tolerating a missing/non-string value.
