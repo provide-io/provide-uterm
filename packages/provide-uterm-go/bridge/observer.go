@@ -16,24 +16,29 @@ package bridge
 // run, send and receive goroutines, so an implementation must be safe for
 // concurrent use; it must also not block, since it runs inline on the socket
 // path.
+//
+// A method that returns an error ends the connection, with that error as
+// what ended it, as an exception from a _log_* call ends the reference's
+// _bridge_session. The reference logs before it acts, so an inbound message,
+// control message or input chunk whose observation failed is not acted on.
 type Observer interface {
 	// AttemptStarted is called before each dial.
 	AttemptStarted()
 	// Connected is called once the socket is open, before any frame flows.
-	Connected()
+	Connected() error
 	// FrameSent is called after a frame has been written. payload is the
 	// encoded wire text; frame is the message: a control frame as sent, or
 	// {"type": "term", "data": ...} for terminal output.
-	FrameSent(payload string, frame map[string]any)
+	FrameSent(payload string, frame map[string]any) error
 	// WireReceived is called with each inbound message, as the text fed to
 	// the control-channel decoder, before it is decoded.
-	WireReceived(text string)
+	WireReceived(text string) error
 	// ControlReceived is called with each decoded inbound control message,
 	// before it is dispatched.
-	ControlReceived(msg map[string]any)
+	ControlReceived(msg map[string]any) error
 	// InputReceived is called with each decoded inbound data chunk (input for
 	// the terminal), before it is delivered.
-	InputReceived(data string)
+	InputReceived(data string) error
 	// AttemptEnded is called when an attempt is over: err is the dial error,
 	// or the error that ended a served connection (a failed read or write, or
 	// a stream the decoder rejected); nil when the bridge is stopping.
@@ -43,13 +48,13 @@ type Observer interface {
 // nopObserver is the Observer of a bridge configured without one.
 type nopObserver struct{}
 
-func (nopObserver) AttemptStarted()                  {}
-func (nopObserver) Connected()                       {}
-func (nopObserver) FrameSent(string, map[string]any) {}
-func (nopObserver) WireReceived(string)              {}
-func (nopObserver) ControlReceived(map[string]any)   {}
-func (nopObserver) InputReceived(string)             {}
-func (nopObserver) AttemptEnded(error)               {}
+func (nopObserver) AttemptStarted()                        {}
+func (nopObserver) Connected() error                       { return nil }
+func (nopObserver) FrameSent(string, map[string]any) error { return nil }
+func (nopObserver) WireReceived(string) error              { return nil }
+func (nopObserver) ControlReceived(map[string]any) error   { return nil }
+func (nopObserver) InputReceived(string) error             { return nil }
+func (nopObserver) AttemptEnded(error)                     {}
 
 // observedFrame is the message form of a queued frame, as Observer.FrameSent
 // reports it.

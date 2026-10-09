@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
@@ -96,14 +97,14 @@ func sendFrame(t *testing.T, rec *sessionRecorder, frame map[string]any) {
 	t.Helper()
 	if frame["type"] == "term" {
 		data, _ := frame["data"].(string)
-		rec.FrameSent(controlchannel.EncodeTerminalData(data), frame)
+		must(t, rec.FrameSent(controlchannel.EncodeTerminalData(data), frame))
 		return
 	}
 	payload, err := controlchannel.EncodeControlFrame(frame)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec.FrameSent(payload, frame)
+	must(t, rec.FrameSent(payload, frame))
 }
 
 // --- the CPython corpus ----------------------------------------------------
@@ -145,15 +146,15 @@ func replayScript(t *testing.T, g sessionRecordingGolden, script [][]any, rec *s
 			if step[1] != "runtime_started" {
 				t.Fatalf("unexpected script event %v", step[1])
 			}
-			rec.Connected()
+			must(t, rec.Connected())
 		case "outbound":
 			sendFrame(t, rec, step[1].(map[string]any))
 		case "send":
-			rec.InputReceived(step[1].(string))
+			must(t, rec.InputReceived(step[1].(string)))
 		case "wire_recv":
-			rec.WireReceived(step[1].(string))
+			must(t, rec.WireReceived(step[1].(string)))
 		case "control_recv":
-			rec.ControlReceived(step[1].(map[string]any))
+			must(t, rec.ControlReceived(step[1].(map[string]any)))
 		default:
 			t.Fatalf("unknown script step %v", step)
 		}
@@ -271,13 +272,13 @@ func TestADisabledRecorderWritesNothing(t *testing.T) {
 	rec, store := newTestRecorder(t, testRecordingConfig())
 	rec.setEnabled(false)
 	rec.AttemptStarted()
-	rec.Connected()
+	must(t, rec.Connected())
 	sendFrame(t, rec, snapshotFrame("Password:"))
 	sendFrame(t, rec, map[string]any{"type": "term", "data": "x"})
-	rec.InputReceived("x")
-	rec.WireReceived("x")
-	rec.ControlReceived(map[string]any{"type": "snapshot_req"})
-	rec.flush()
+	must(t, rec.InputReceived("x"))
+	must(t, rec.WireReceived("x"))
+	must(t, rec.ControlReceived(map[string]any{"type": "snapshot_req"}))
+	must(t, rec.flush())
 	rec.AttemptEnded(errors.New("boom"))
 	if got := entries(t, store, ""); len(got) != 0 {
 		t.Fatalf("a disabled recorder wrote %v", got)
@@ -292,7 +293,7 @@ func TestThePasswordPromptIsTrackedWhileUnrecorded(t *testing.T) {
 	sendFrame(t, rec, snapshotFrame("Password: "))
 	rec.setEnabled(true)
 	rec.AttemptStarted()
-	rec.InputReceived("hunter2")
+	must(t, rec.InputReceived("hunter2"))
 	rec.AttemptEnded(nil)
 	if got := entries(t, store, "send")[0]["data"].(map[string]any); got["masked"] != true {
 		t.Fatalf("input at a prompt seen before the recording opened was not masked: %v", got)
@@ -324,7 +325,7 @@ func TestRecordingHonoursTheFlushBatchSize(t *testing.T) {
 	cfg.FlushBatchSize = 1
 	rec, store := newTestRecorder(t, cfg)
 	rec.AttemptStarted()
-	rec.Connected()
+	must(t, rec.Connected())
 	if got := eventNames(t, store); !reflect.DeepEqual(got, []string{"log_start", "runtime_started"}) {
 		t.Fatalf("a batch of one is flushed at once, got %v", got)
 	}
@@ -332,11 +333,11 @@ func TestRecordingHonoursTheFlushBatchSize(t *testing.T) {
 
 	rec, store = newTestRecorder(t, testRecordingConfig())
 	rec.AttemptStarted()
-	rec.Connected()
+	must(t, rec.Connected())
 	if got := eventNames(t, store); !reflect.DeepEqual(got, []string{"log_start"}) {
 		t.Fatalf("a partial batch waits for a flush, got %v", got)
 	}
-	rec.flush()
+	must(t, rec.flush())
 	if got := eventNames(t, store); !reflect.DeepEqual(got, []string{"log_start", "runtime_started"}) {
 		t.Fatalf("flush writes the buffered batch, got %v", got)
 	}
@@ -349,7 +350,7 @@ func TestRecordingHonoursTheFlushInterval(t *testing.T) {
 	rec, store := newTestRecorder(t, cfg)
 	rec.AttemptStarted()
 	defer rec.AttemptEnded(nil)
-	rec.Connected()
+	must(t, rec.Connected())
 	waitFor(t, "the periodic flush", func() bool { return len(eventNames(t, store)) == 2 })
 }
 
@@ -359,7 +360,7 @@ func TestRecordingHonoursMaxBytes(t *testing.T) {
 	cfg.MaxBytes = 1
 	rec, store := newTestRecorder(t, cfg)
 	rec.AttemptStarted()
-	rec.Connected()
+	must(t, rec.Connected())
 	rec.AttemptEnded(nil)
 	if got := eventNames(t, store); !reflect.DeepEqual(got, []string{"log_start", "log_stop"}) {
 		t.Fatalf("events = %v, want only the lifecycle pair", got)
@@ -371,8 +372,8 @@ func TestAStoreThatCannotStartLeavesTheSessionUnrecorded(t *testing.T) {
 	rec := newSessionRecorder("s1", brokenStore{}, testRecordingConfig(), nil, nil)
 	rec.setEnabled(true)
 	rec.AttemptStarted()
-	rec.Connected()
-	rec.InputReceived("x")
+	must(t, rec.Connected())
+	must(t, rec.InputReceived("x"))
 	rec.AttemptEnded(nil)
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
@@ -400,7 +401,7 @@ func TestARecordingThatCannotBeWrittenDoesNotStopTheSession(t *testing.T) {
 	rec := newSessionRecorder("s1", failingWriteStore{}, cfg, nil, nil)
 	rec.setEnabled(true)
 	rec.AttemptStarted()
-	rec.Connected()
+	_ = rec.Connected() // fails: the store takes no writes
 	rec.AttemptEnded(nil)
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
@@ -415,10 +416,10 @@ func TestTheEventSequenceOutlivesARecording(t *testing.T) {
 	rec, _ := newTestRecorder(t, testRecordingConfig())
 	rec.AttemptStarted()
 	sendFrame(t, rec, snapshotFrame("$ "))
-	rec.InputReceived("a")
+	must(t, rec.InputReceived("a"))
 	rec.AttemptEnded(nil)
 	rec.AttemptStarted()
-	rec.InputReceived("b")
+	must(t, rec.InputReceived("b"))
 	rec.AttemptEnded(nil)
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
@@ -538,8 +539,8 @@ func TestNoStoreNoRecorder(t *testing.T) {
 	if built != nil {
 		t.Fatal("a registry with no recording store built a recorder")
 	}
-	r.FlushRecording("provide-shell")
-	r.FlushRecording("nosuch")
+	must(t, r.FlushRecording("provide-shell"))
+	must(t, r.FlushRecording("nosuch"))
 }
 
 // writeRecordingConfig writes a loopback server config whose one session
@@ -735,12 +736,12 @@ func TestAnnotationStateOutlivesARecording(t *testing.T) {
 	rec, store := annotatedRecorder(t)
 	rec.AttemptStarted()
 	sendFrame(t, rec, snapshotFrame("$ "))
-	rec.InputReceived("DROP TA")
+	must(t, rec.InputReceived("DROP TA"))
 	sendFrame(t, rec, map[string]any{"type": "term", "data": "DROP TA"})
 	rec.AttemptEnded(nil)
 
 	rec.AttemptStarted()
-	rec.InputReceived("BLE x;")
+	must(t, rec.InputReceived("BLE x;"))
 	sendFrame(t, rec, map[string]any{"type": "term", "data": "BLE x;"})
 	rec.AttemptEnded(nil)
 
@@ -827,10 +828,114 @@ func TestOperatorAnnotationWriteFailureIsAnError(t *testing.T) {
 func TestAConnectionEndRecordsTheError(t *testing.T) {
 	rec, store := newTestRecorder(t, testRecordingConfig())
 	rec.AttemptStarted()
-	rec.Connected()
+	must(t, rec.Connected())
 	rec.AttemptEnded(errors.New("failed to read frame header: EOF"))
 	want := []string{"log_start", "runtime_started", "runtime_error", "log_stop"}
 	if got := eventNames(t, store); !reflect.DeepEqual(got, want) {
 		t.Fatalf("events = %v, want %v", got, want)
+	}
+}
+
+// A recording write that fails is handed back to the bridge, which ends the
+// connection on it; the attempt's end then tries to record runtime_error and
+// closes the recording either way. Every observed point reports it.
+func TestRecordingWriteFailuresAreReturned(t *testing.T) {
+	cfg := testRecordingConfig()
+	cfg.FlushBatchSize = 1
+	cfg.ControlChannelMode = "wire"
+	rec := newSessionRecorder("s1", failingWriteStore{}, cfg, annotation.NewPatternDetector(nil), nil)
+	rec.setEnabled(true)
+	rec.AttemptStarted()
+	steps := map[string]func() error{
+		"Connected":       rec.Connected,
+		"FrameSent":       func() error { return rec.FrameSent("x", snapshotFrame("$ ")) },
+		"WireReceived":    func() error { return rec.WireReceived("x") },
+		"ControlReceived": func() error { return rec.ControlReceived(map[string]any{"type": "snapshot_req"}) },
+		"InputReceived":   func() error { return rec.InputReceived("x") },
+		"flush":           rec.flush,
+	}
+	for name, step := range steps {
+		if err := step(); err == nil {
+			t.Errorf("%s: a failed write was not returned", name)
+		}
+	}
+	rec.AttemptEnded(errors.New("disk full"))
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.rec != nil {
+		t.Fatal("the failed attempt's recording was not released")
+	}
+}
+
+// Each later write in one observed step is skipped once one fails, and the
+// sequence is not advanced for a write that did not happen — the first
+// raising call ends the reference's method.
+func TestAFailedWriteStopsTheStep(t *testing.T) {
+	for name, cfg := range map[string]func(*serverconfig.RecordingConfig){
+		"snapshot": func(*serverconfig.RecordingConfig) {},
+		"wire":     func(c *serverconfig.RecordingConfig) { c.ControlChannelMode = "wire" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := testRecordingConfig()
+			c.FlushBatchSize = 1
+			cfg(&c)
+			rec := newSessionRecorder("s1", failingWriteStore{}, c, annotation.NewPatternDetector(nil), nil)
+			rec.setEnabled(true)
+			rec.AttemptStarted()
+			defer rec.AttemptEnded(nil)
+			if rec.FrameSent("x", snapshotFrame("DROP TABLE x;")) == nil {
+				t.Fatal("no error")
+			}
+			if rec.InputReceived("DROP TABLE y;") == nil {
+				t.Fatal("no error")
+			}
+			if err := rec.FrameSent("x", map[string]any{"type": "term", "data": "DROP TABLE z;"}); err == nil && name == "wire" {
+				t.Fatal("no error")
+			}
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			if rec.eventSeq != 0 {
+				t.Fatalf("eventSeq = %d after writes that failed", rec.eventSeq)
+			}
+		})
+	}
+}
+
+// A store that takes the read but not the annotation still ends the step.
+func TestAFailedAnnotationWriteIsReturned(t *testing.T) {
+	store := &failAfter{InMemoryStore: recording.NewInMemoryStore(), ok: 1}
+	cfg := testRecordingConfig()
+	cfg.FlushBatchSize = 1
+	rec := newSessionRecorder("s1", store, cfg, annotation.NewPatternDetector(nil), nil)
+	rec.setEnabled(true)
+	rec.AttemptStarted()
+	defer rec.AttemptEnded(nil)
+	if rec.InputReceived("sudo -i\r") == nil {
+		t.Fatal("a failed annotation write was not returned")
+	}
+}
+
+// failAfter accepts ok appends, then fails every one after.
+type failAfter struct {
+	*recording.InMemoryStore
+	mu sync.Mutex
+	ok int
+}
+
+func (f *failAfter) AppendEvents(id string, events []recording.Event) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ok == 0 {
+		return errors.New("disk full")
+	}
+	f.ok--
+	return f.InMemoryStore.AppendEvents(id, events)
+}
+
+// must fails the test on an unexpected recording error.
+func must(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
 	}
 }
