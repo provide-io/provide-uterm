@@ -264,6 +264,17 @@ func (s *sessionRecorder) InputReceived(data string) {
 	}
 }
 
+// recordAnnotation writes an operator annotation into the open recording, if
+// there is one, returning a failed write.
+func (s *sessionRecorder) recordAnnotation(data map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.rec == nil {
+		return nil
+	}
+	return s.rec.LogEvent("annotation", data)
+}
+
 // flush is flush_recording: write out whatever the open recording has
 // buffered, so a reader sees it now rather than at the next interval.
 func (s *sessionRecorder) flush() {

@@ -23,6 +23,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
@@ -765,5 +766,57 @@ func TestRegistryRecordersShareTheDetector(t *testing.T) {
 	rec := r.recorderFor(r.entries["provide-shell"])
 	if rec.detector != det || rec.sendStream == nil || rec.readStream == nil || rec.sendStream == rec.readStream {
 		t.Fatal("a session's recorder uses the registry's detector with a stream per direction")
+	}
+}
+
+// --- operator annotations --------------------------------------------------
+
+// An operator annotation lands in the session's open recording as an
+// "annotation" entry carrying the reference's annotation_data; with no
+// recording open it is not recorded, and the call still succeeds.
+func TestOperatorAnnotationsAreRecorded(t *testing.T) {
+	ctx := context.Background()
+	r, store := recordingRegistry(t)
+	if _, err := r.StartSession(ctx, "provide-shell"); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	rec := r.recorderFor(r.entries["provide-shell"])
+	r.mu.Unlock()
+	ann := server.Annotation{Label: "note", Description: "why", Severity: "high", Principal: "ops"}
+
+	// Not yet recording: accepted, nothing written.
+	if _, _, err := r.AnnotateSession(ctx, "provide-shell", ann); err != nil {
+		t.Fatal(err)
+	}
+	rec.AttemptStarted()
+	if _, _, err := r.AnnotateSession(ctx, "provide-shell", ann); err != nil {
+		t.Fatal(err)
+	}
+	rec.AttemptEnded(nil)
+	got := entriesOf(t, store, "provide-shell", "annotation")
+	want := map[string]any{"label": "note", "description": "why", "severity": "high", "source": "agent", "principal": "ops"}
+	if len(got) != 1 || !reflect.DeepEqual(got[0]["data"], want) {
+		t.Fatalf("annotation entries = %v", got)
+	}
+}
+
+// A recording write that fails is reported, as the reference lets the
+// logger's error out of annotate_session.
+func TestOperatorAnnotationWriteFailureIsAnError(t *testing.T) {
+	ctx := context.Background()
+	r := newTestRegistry(t)
+	r.SetRecording(failingWriteStore{}, nil)
+	r.recCfg.FlushBatchSize = 1
+	if _, err := r.StartSession(ctx, "provide-shell"); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	rec := r.recorderFor(r.entries["provide-shell"])
+	r.mu.Unlock()
+	rec.AttemptStarted()
+	defer rec.AttemptEnded(nil)
+	if _, _, err := r.AnnotateSession(ctx, "provide-shell", server.Annotation{Label: "x"}); err == nil {
+		t.Fatal("a failed recording write was not reported")
 	}
 }

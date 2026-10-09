@@ -59,6 +59,18 @@ type Annotation struct {
 	Principal   string
 }
 
+// Data is the annotation as the reference records and publishes it: the
+// annotation_data dict of annotate_session, whose source is always "agent".
+func (a Annotation) Data() map[string]any {
+	return map[string]any{
+		"label":       a.Label,
+		"description": a.Description,
+		"severity":    a.Severity,
+		"source":      "agent",
+		"principal":   a.Principal,
+	}
+}
+
 // SessionValidationError maps to HTTP 422 — a session-definition payload failed
 // validation (Python SessionValidationError).
 type SessionValidationError struct{ Msg string }
