@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -324,17 +325,27 @@ func workerBearerToken(cfg *serverconfig.UtermServerConfig) string {
 	return *cfg.Auth.WorkerBearerToken
 }
 
-// buildRecordingStore selects the recording store from config. Port of the
-// factory's recording-store selection: a local JSONL store rooted at the
-// configured directory, an in-memory store, or a no-op NullStore.
+// buildRecordingStore selects the recording store from config, as the
+// reference's build_recording_store does: a webhook store when store_type is
+// "webhook" and there is a URL to deliver to, an in-memory store, a NullStore
+// for "null", and otherwise — including "webhook" with no URL — the local JSONL
+// store rooted at the configured directory.
 func buildRecordingStore(cfg *serverconfig.UtermServerConfig) recording.Store {
-	switch cfg.Recording.StoreType {
-	case "local":
-		return recording.NewLocalFileStore(cfg.Recording.Directory)
-	case "memory":
+	rc := cfg.Recording
+	switch {
+	case rc.StoreType == "webhook" && rc.WebhookURL != nil && *rc.WebhookURL != "":
+		secret := ""
+		if rc.WebhookSecret != nil {
+			secret = *rc.WebhookSecret
+		}
+		timeout := time.Duration(rc.WebhookTimeoutS * float64(time.Second))
+		return server.NewWebhookRecordingStore(*rc.WebhookURL, secret, timeout, server.NewEgressGuard(nil, nil))
+	case rc.StoreType == "memory":
 		return recording.NewInMemoryStore()
-	default:
+	case rc.StoreType == "null":
 		return recording.NullStore{}
+	default:
+		return recording.NewLocalFileStore(rc.Directory)
 	}
 }
 

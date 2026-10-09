@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
@@ -31,9 +32,37 @@ func TestBuildRecordingStore(t *testing.T) {
 		t.Errorf("memory → want *InMemoryStore, got %T", buildRecordingStore(cfg))
 	}
 
-	cfg.Recording.StoreType = "none"
+	cfg.Recording.StoreType = "null"
 	if _, ok := buildRecordingStore(cfg).(recording.NullStore); !ok {
-		t.Errorf("default → want NullStore, got %T", buildRecordingStore(cfg))
+		t.Errorf("null → want NullStore, got %T", buildRecordingStore(cfg))
+	}
+
+	// A webhook store with somewhere to deliver is one; without a URL the
+	// reference falls back to the local file store, never to recording
+	// nothing.
+	cfg.Recording.StoreType = "webhook"
+	if _, ok := buildRecordingStore(cfg).(*recording.LocalFileStore); !ok {
+		t.Errorf("webhook without a url → want *LocalFileStore, got %T", buildRecordingStore(cfg))
+	}
+	empty := ""
+	cfg.Recording.WebhookURL = &empty
+	if _, ok := buildRecordingStore(cfg).(*recording.LocalFileStore); !ok {
+		t.Errorf("webhook with an empty url → want *LocalFileStore, got %T", buildRecordingStore(cfg))
+	}
+	url, secret := "https://recorder.example/rec", "s3cret" //nolint:gosec // test fixture
+	cfg.Recording.WebhookURL, cfg.Recording.WebhookSecret = &url, &secret
+	ws, ok := buildRecordingStore(cfg).(*server.WebhookRecordingStore)
+	if !ok {
+		t.Fatalf("webhook with a url → want *server.WebhookRecordingStore, got %T", buildRecordingStore(cfg))
+	}
+	if ws.URL != url || ws.Secret != secret || ws.Timeout != 2*time.Second {
+		t.Errorf("webhook store = %+v", ws)
+	}
+
+	// Any other value is the reference's last branch: the local file store.
+	cfg.Recording.StoreType = "none"
+	if _, ok := buildRecordingStore(cfg).(*recording.LocalFileStore); !ok {
+		t.Errorf("default → want *LocalFileStore, got %T", buildRecordingStore(cfg))
 	}
 }
 
