@@ -387,7 +387,11 @@ func (b *TermBridge) dialAndServe(ctx context.Context, wsURL string, attempt *in
 	}
 	*attempt = 0
 	conn.SetReadLimit(int64(b.maxWSMessageBytes))
-	b.observer.Connected()
+	if err := b.observer.Connected(); err != nil {
+		_ = conn.CloseNow()
+		b.observer.AttemptEnded(err)
+		return 0, false
+	}
 	b.observer.AttemptEnded(b.serveConnection(ctx, conn))
 	return 0, false
 }
