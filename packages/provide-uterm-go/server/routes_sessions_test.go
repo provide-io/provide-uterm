@@ -163,8 +163,10 @@ func TestSessionAnnotate(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("annotate: %d %s", rec.Code, rec.Body.String())
 	}
+	// seq is the hub event's; with no worker state in the hub there is no
+	// ring to append to, and the reference answers 0 too.
 	body := decode(t, rec.Body.Bytes())
-	if body["seq"] != float64(7) {
+	if body["seq"] != float64(0) {
 		t.Fatalf("annotate seq: %v", body)
 	}
 	// Missing label → 400.
