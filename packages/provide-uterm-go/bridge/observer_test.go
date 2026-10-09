@@ -19,10 +19,23 @@ import (
 	"github.com/coder/websocket"
 )
 
-// recordingObserver logs every Observer call as one line, in order.
+// recordingObserver logs every Observer call as one line, in order. failOn
+// names a method that fails, as a recording whose store has gone away does.
 type recordingObserver struct {
-	mu    sync.Mutex
-	calls []string
+	mu     sync.Mutex
+	calls  []string
+	failOn string
+}
+
+var errObserver = errors.New("recording store down")
+
+func (o *recordingObserver) fail(method string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.failOn == method {
+		return errObserver
+	}
+	return nil
 }
 
 func (o *recordingObserver) add(format string, args ...any) {
@@ -32,17 +45,30 @@ func (o *recordingObserver) add(format string, args ...any) {
 }
 
 func (o *recordingObserver) AttemptStarted() { o.add("attempt") }
-func (o *recordingObserver) Connected()      { o.add("connected") }
-func (o *recordingObserver) FrameSent(payload string, frame map[string]any) {
+func (o *recordingObserver) Connected() error {
+	o.add("connected")
+	return o.fail("Connected")
+}
+func (o *recordingObserver) FrameSent(payload string, frame map[string]any) error {
 	if frame["type"] == "term" {
 		o.add("sent term %q payload=%t", frame["data"], strings.Contains(payload, frame["data"].(string)))
-		return
+	} else {
+		o.add("sent %v", frame["type"])
 	}
-	o.add("sent %v", frame["type"])
+	return o.fail("FrameSent")
 }
-func (o *recordingObserver) WireReceived(text string)           { o.add("wire %q", text) }
-func (o *recordingObserver) ControlReceived(msg map[string]any) { o.add("control %v", msg["type"]) }
-func (o *recordingObserver) InputReceived(data string)          { o.add("input %q", data) }
+func (o *recordingObserver) WireReceived(text string) error {
+	o.add("wire %q", text)
+	return o.fail("WireReceived")
+}
+func (o *recordingObserver) ControlReceived(msg map[string]any) error {
+	o.add("control %v", msg["type"])
+	return o.fail("ControlReceived")
+}
+func (o *recordingObserver) InputReceived(data string) error {
+	o.add("input %q", data)
+	return o.fail("InputReceived")
+}
 func (o *recordingObserver) AttemptEnded(err error) {
 	if err != nil {
 		o.add("ended error")
@@ -191,12 +217,19 @@ func TestDefaultObserverIgnoresEverything(t *testing.T) {
 	b := New(Config{Worker: &mockWorker{}, WorkerID: "w", ManagerURL: "http://x"})
 	o := b.observer
 	o.AttemptStarted()
-	o.Connected()
-	o.FrameSent("p", map[string]any{})
-	o.WireReceived("w")
-	o.ControlReceived(map[string]any{})
-	o.InputReceived("i")
+	errs := []error{
+		o.Connected(),
+		o.FrameSent("p", map[string]any{}),
+		o.WireReceived("w"),
+		o.ControlReceived(map[string]any{}),
+		o.InputReceived("i"),
+	}
 	o.AttemptEnded(nil)
+	for _, err := range errs {
+		if err != nil {
+			t.Fatalf("the default observer failed: %v", err)
+		}
+	}
 	if _, ok := o.(nopObserver); !ok {
 		t.Fatalf("default observer = %T", o)
 	}
@@ -291,5 +324,72 @@ func TestSendLoopRecordsAWriteFailure(t *testing.T) {
 	b.sendLoop(ctx, cancel, client)
 	if b.connErr() == nil {
 		t.Fatal("a failed write did not name the connection's end")
+	}
+}
+
+// An observer that fails ends the connection, as a recording write that
+// raises ends the reference's _bridge_session; what it failed on is the
+// attempt's end. The reference logs before it acts, so input or a control
+// message whose logging failed is not acted on.
+func TestAFailingObserverEndsTheConnection(t *testing.T) {
+	for _, tc := range []struct {
+		method string
+		drive  func(t *testing.T, hub *fakeHub, conn *websocket.Conn, session *mockSession)
+		check  func(t *testing.T, worker *mockWorker, session *mockSession)
+	}{
+		{method: "Connected"},
+		{method: "FrameSent"},
+		{
+			method: "WireReceived",
+			drive:  func(t *testing.T, hub *fakeHub, c *websocket.Conn, _ *mockSession) { hub.writeData(t, c, "ls\r") },
+			check: func(t *testing.T, _ *mockWorker, s *mockSession) {
+				if len(s.sentKeys()) != 0 {
+					t.Fatal("input was decoded and delivered after its logging failed")
+				}
+			},
+		},
+		{
+			method: "InputReceived",
+			drive:  func(t *testing.T, hub *fakeHub, c *websocket.Conn, _ *mockSession) { hub.writeData(t, c, "ls\r") },
+			check: func(t *testing.T, _ *mockWorker, s *mockSession) {
+				if len(s.sentKeys()) != 0 {
+					t.Fatal("input was delivered after its logging failed")
+				}
+			},
+		},
+		{
+			method: "ControlReceived",
+			drive: func(t *testing.T, hub *fakeHub, c *websocket.Conn, _ *mockSession) {
+				hub.writeControl(t, c, map[string]any{"type": "control", "action": "step"})
+			},
+			check: func(t *testing.T, w *mockWorker, _ *mockSession) {
+				if w.steps() != 0 {
+					t.Fatal("a control message was dispatched after its logging failed")
+				}
+			},
+		},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			hub := newFakeHub(t)
+			obs := &endedWith{}
+			obs.failOn = tc.method
+			session := &mockSession{}
+			worker := &mockWorker{session: session}
+			b := New(Config{Worker: worker, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs})
+			b.reconnectBackoff = []time.Duration{time.Hour}
+			b.Start(context.Background())
+			defer b.Stop()
+			conn := hub.awaitConn(t)
+			if tc.drive != nil {
+				tc.drive(t, hub, conn, session)
+			}
+			waitFor(t, "the attempt to end", func() bool { return obs.has("ended error") })
+			if err := obs.firstErr(); !errors.Is(err, errObserver) {
+				t.Fatalf("attempt ended with %v, want the observer's error", err)
+			}
+			if tc.check != nil {
+				tc.check(t, worker, session)
+			}
+		})
 	}
 }

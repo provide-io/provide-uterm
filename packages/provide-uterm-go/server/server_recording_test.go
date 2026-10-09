@@ -7,6 +7,8 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -293,12 +295,14 @@ type flushingRegistry struct {
 	*fakeRegistry
 	mu      sync.Mutex
 	flushed []string
+	err     error
 }
 
-func (r *flushingRegistry) FlushRecording(id string) {
+func (r *flushingRegistry) FlushRecording(id string) error {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.flushed = append(r.flushed, id)
-	r.mu.Unlock()
+	return r.err
 }
 
 // A registry that buffers recordings is flushed before the meta and entries
@@ -365,6 +369,20 @@ func TestRecordingEntriesValidatesItsQuery(t *testing.T) {
 	} {
 		if rec := ts.do("GET", "/api/sessions/s1/recording/entries"+query, "", adminHeaders()); rec.Code != want {
 			t.Errorf("%s: status %d, want %d", query, rec.Code, want)
+		}
+	}
+}
+
+// A flush that fails is a 500 rather than a stale read.
+func TestRecordingRoutesFailOnAFailedFlush(t *testing.T) {
+	ts := newTestServer(t, func(_ *serverconfig.UtermServerConfig, deps *Deps) {
+		deps.Recording = recording.NewInMemoryStore()
+		deps.Registry = &flushingRegistry{fakeRegistry: deps.Registry.(*fakeRegistry), err: errors.New("disk full")}
+	})
+	ts.reg.add("s1", "admin1", "public")
+	for _, path := range []string{"/api/sessions/s1/recording", "/api/sessions/s1/recording/entries"} {
+		if rec := ts.do("GET", path, "", adminHeaders()); rec.Code != http.StatusInternalServerError {
+			t.Fatalf("%s: status=%d, want 500", path, rec.Code)
 		}
 	}
 }

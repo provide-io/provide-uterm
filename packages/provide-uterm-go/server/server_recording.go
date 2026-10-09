@@ -31,14 +31,22 @@ func (s *Server) registerRecordingRoutes(mux *http.ServeMux) {
 // (_flush_runtime_recording); without it a reader sees the recording as it
 // stood up to one flush interval ago.
 type RecordingFlusher interface {
-	FlushRecording(sessionID string)
+	FlushRecording(sessionID string) error
 }
 
-// flushRecording flushes id's buffered recording when the registry buffers.
-func (s *Server) flushRecording(id string) {
-	if f, ok := s.deps.Registry.(RecordingFlusher); ok {
-		f.FlushRecording(id)
+// flushRecording flushes id's buffered recording when the registry buffers. A
+// flush that fails is a 500, as the reference lets the flush's error out of
+// the route.
+func (s *Server) flushRecording(w http.ResponseWriter, id string) bool {
+	f, ok := s.deps.Registry.(RecordingFlusher)
+	if !ok {
+		return true
 	}
+	if err := f.FlushRecording(id); err != nil {
+		detailError(w, http.StatusInternalServerError, err.Error())
+		return false
+	}
+	return true
 }
 
 // recordingGate resolves the session, enforces CanReadRecording, and returns the
@@ -65,7 +73,9 @@ func (s *Server) handleRecordingMeta(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.flushRecording(id)
+	if !s.flushRecording(w, id) {
+		return
+	}
 	meta, err := s.deps.Recording.RecordingMeta(id)
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
@@ -115,7 +125,9 @@ func (s *Server) handleRecordingEntries(w http.ResponseWriter, r *http.Request) 
 		}
 		q.Offset = &off
 	}
-	s.flushRecording(id)
+	if !s.flushRecording(w, id) {
+		return
+	}
 	entries, err := s.deps.Recording.GetEntries(id, q)
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
