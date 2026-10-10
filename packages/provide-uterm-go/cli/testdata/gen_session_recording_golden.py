@@ -19,9 +19,11 @@ steps rather than a restatement of them.
 
 A second script runs with the reference's ``PatternDetector`` attached, which
 is how the server factory builds every runtime: each match is an
-``annotation`` entry. Read-path rules run on each snapshot's screen, on each
-streamed ``term`` frame with escape sequences removed (carrying a partial
-match across frames), and send-path rules on typed input (carrying likewise). Every ``ts`` in the script has a
+``annotation`` entry. Read-path rules run on each snapshot's screen and on each
+streamed ``term`` frame, both with escape sequences removed (the stream
+carrying a partial match, and an unterminated escape sequence, across frames),
+and send-path rules on typed input (carrying likewise). The snapshot path skips
+a read-path match the recording already holds; the stream path never does. Every ``ts`` in the script has a
 fractional part: an integral float is ``4.0`` on CPython's wire and ``4`` once
 decoded into a Go float64 and re-encoded, a difference in number models rather than in recording, and a
 connector's stamps are never integral anyway. Wall-clock ``ts`` fields and the
@@ -63,6 +65,10 @@ SCRIPT: list[list[Any]] = [
     ["outbound", {"type": "snapshot", "screen": "Enter PASSPHRASE for key:\n\n", "ts": 4.75}],
     # Masked by length in cp437, where an accented letter is one byte.
     ["send", "s3crét"],
+    # A styled prompt is still a prompt: the screen is read with its escape
+    # sequences removed, so the trailing reset does not hide the colon.
+    ["outbound", {"type": "snapshot", "screen": "login: tim\n\x1b[1mPassword:\x1b[0m", "ts": 5.25}],
+    ["send", "hunter3\r"],
     # Not a prompt: the colon is not at the end of what is on screen.
     ["outbound", {"type": "snapshot", "screen": "$ echo password=hunter2 done\n$ ", "ts": 5.5}],
     ["send", "export AWS=AKIAIOSFODNN7EXAMPLE\r"],
@@ -93,6 +99,17 @@ ANNOTATED_SCRIPT: list[list[Any]] = [
     # Masked in the recording, and still annotated: the reference scans the
     # input itself, not what it wrote.
     ["send", "shutdown now\r"],
+    # A styled screen is scanned as text: sudo is found through its SGR codes.
+    # The rm -rf on it was already recorded from the earlier screen, so the
+    # snapshot path skips it (rule + matched text is the dedupe key).
+    ["outbound", {"type": "snapshot", "screen": "# \x1b[1msudo\x1b[0m rm -rf /tmp/x\n# ", "ts": 5.5}],
+    # An escape sequence split across frames is carried, so the second frame
+    # does not leave "msudo" behind; the stream path never suppresses a match,
+    # so this sudo is recorded although the snapshot already recorded one.
+    ["outbound", {"type": "term", "data": "ok \x1b[1", "ts": 6.25}],
+    ["outbound", {"type": "term", "data": "msudo reboot\x1b[0m\r\n", "ts": 6.5}],
+    # The same screen again records nothing new: every match on it is known.
+    ["outbound", {"type": "snapshot", "screen": "# \x1b[1msudo\x1b[0m rm -rf /tmp/x\n# ", "ts": 6.75}],
     ["outbound", {"type": "hijack_state", "enabled": True, "owner": "ops"}],
 ]
 
