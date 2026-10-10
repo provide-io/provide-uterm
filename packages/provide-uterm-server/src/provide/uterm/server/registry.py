@@ -169,8 +169,17 @@ class SessionRegistry:
                 await self.start_session(session.session_id)
 
     async def shutdown(self) -> None:
+        # Every runtime is stopped even when one fails (a final recording flush
+        # that raised): the others' connectors must not outlive the server.
+        # The first failure is raised once all of them are down.
+        failure: Exception | None = None
         for runtime in list(self._runtimes.values()):
-            await runtime.stop()
+            try:
+                await runtime.stop()
+            except Exception as exc:
+                failure = failure or exc
+        if failure is not None:
+            raise failure
 
     async def list_sessions(self) -> list[SessionRuntimeStatus]:
         async with self._lock:
