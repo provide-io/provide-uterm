@@ -22,7 +22,7 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { type BigIntStats, closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { floatRepr } from "../pycompat/index.ts";
 
 /** The most ranges one request may name before the header is ignored. */
@@ -179,8 +179,23 @@ export interface FileResponseOptions {
 
 /** Serve the file at `path`. It must exist and be a regular file. */
 export function fileResponse(path: string, options: FileResponseOptions): Response {
-  const stat = statSync(path, { bigint: true });
-  const size = Number(stat.size);
+  // One descriptor for both the stat and the read, so the headers describe
+  // the file whose bytes are sent: a path stat'd and then read by name can
+  // be swapped for another file in between. The length comes from the bytes
+  // actually read, not `st_size`, so a file that grows or shrinks under the
+  // read still gets a Content-Length, ETag and ranges that match its body.
+  // A missing path still throws ENOENT (from the open) and a directory
+  // EISDIR (from the read), as the stat-then-read did.
+  const fd = openSync(path, "r");
+  let stat: BigIntStats;
+  let body: Buffer<ArrayBuffer>;
+  try {
+    stat = fstatSync(fd, { bigint: true });
+    body = readFileSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  const size = body.length;
   const mtime = pyMtime(stat.mtimeNs);
   const encoded = encodeURIComponent(options.filename);
   const headers: Record<string, string> = {
@@ -199,7 +214,6 @@ export function fileResponse(path: string, options: FileResponseOptions): Respon
       .update(`${floatRepr(mtime)}-${size}`)
       .digest("hex")}"`,
   };
-  const body = readFileSync(path);
 
   const range = options.requestHeaders.get("range");
   const ifRange = options.requestHeaders.get("if-range");

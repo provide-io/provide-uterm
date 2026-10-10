@@ -12,7 +12,7 @@
  * time is pinned. The same fixture, at the same instant, is served here.
  */
 
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -206,6 +206,24 @@ describe("the parts of the port no reference probe reaches", () => {
     });
     expect(response.status).toBe(400);
     expect(await response.text()).toBe("Range header: start must be less than end");
+  });
+
+  it("throws ENOENT for a path that is not there and EISDIR for a directory", () => {
+    const options = { filename: "x", mediaType: "application/json", requestHeaders: new Headers() };
+    expect(() => fileResponse(join(directory, "missing.jsonl"), options)).toThrow(
+      expect.objectContaining({ code: "ENOENT" }),
+    );
+    expect(() => fileResponse(directory, options)).toThrow(expect.objectContaining({ code: "EISDIR" }));
+  });
+
+  it.skipIf(!existsSync("/proc/self/fd"))("closes the descriptor it opened, whether the read succeeds or fails", () => {
+    const options = { filename: "x", mediaType: "application/json", requestHeaders: new Headers() };
+    const before = readdirSync("/proc/self/fd").length;
+    for (let i = 0; i < 20; i++) {
+      fileResponse(fixture, options);
+      expect(() => fileResponse(directory, options)).toThrow();
+    }
+    expect(readdirSync("/proc/self/fd").length).toBe(before);
   });
 
   it("caps the number of ranges where Starlette does", () => {
