@@ -1,0 +1,286 @@
+{
+ "generator": "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/gen_read_path_golden.py",
+ "max_escape_carry": 64,
+ "max_read_annotation_keys": 1024,
+ "split": [
+  {
+   "input": "",
+   "complete": "",
+   "carry": ""
+  },
+  {
+   "input": "plain",
+   "complete": "plain",
+   "carry": ""
+  },
+  {
+   "input": "a\u001b",
+   "complete": "a",
+   "carry": "\u001b"
+  },
+  {
+   "input": "a\u001b[",
+   "complete": "a",
+   "carry": "\u001b["
+  },
+  {
+   "input": "a\u001b[38;2;255",
+   "complete": "a",
+   "carry": "\u001b[38;2;255"
+  },
+  {
+   "input": "a\u001b[1 ",
+   "complete": "a",
+   "carry": "\u001b[1 "
+  },
+  {
+   "input": "a\u001b[1mb",
+   "complete": "a\u001b[1mb",
+   "carry": ""
+  },
+  {
+   "input": "a\u001b[1m",
+   "complete": "a\u001b[1m",
+   "carry": ""
+  },
+  {
+   "input": "a\u001bc",
+   "complete": "a\u001bc",
+   "carry": ""
+  },
+  {
+   "input": "a\u001b]0;title",
+   "complete": "a\u001b]0;title",
+   "carry": ""
+  },
+  {
+   "input": "\u001b[1m\u001b[3",
+   "complete": "\u001b[1m",
+   "carry": "\u001b[3"
+  },
+  {
+   "input": "\u001b[?25",
+   "complete": "",
+   "carry": "\u001b[?25"
+  },
+  {
+   "input": "\u001b[11111111111111111111111111111111111111111111111111111111111111",
+   "complete": "",
+   "carry": "\u001b[11111111111111111111111111111111111111111111111111111111111111"
+  },
+  {
+   "input": "\u001b[111111111111111111111111111111111111111111111111111111111111111",
+   "complete": "\u001b[111111111111111111111111111111111111111111111111111111111111111",
+   "carry": ""
+  },
+  {
+   "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\u001b[11111111111111111111111111111111111111111111111111111111111111",
+   "complete": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "carry": "\u001b[11111111111111111111111111111111111111111111111111111111111111"
+  },
+  {
+   "input": "\u001b[1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;",
+   "complete": "\u001b[1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;",
+   "carry": ""
+  }
+ ],
+ "scenarios": {
+  "escape_split_across_chunks": {
+   "steps": [
+    [
+     "term",
+     "$ \u001b[1"
+    ],
+    [
+     "term",
+     "msudo rm -rf /\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    },
+    {
+     "label": "destructive_command",
+     "description": "Recursive force-remove detected: rm -rf"
+    }
+   ],
+   "carry": ""
+  },
+  "bare_esc_carried": {
+   "steps": [
+    [
+     "term",
+     "$ \u001b"
+    ],
+    [
+     "term",
+     "[1msudo ls\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": ""
+  },
+  "carry_left_at_end": {
+   "steps": [
+    [
+     "term",
+     "$ sudo ls\r\n\u001b[1"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": "\u001b[1"
+  },
+  "overlong_sequence_released": {
+   "steps": [
+    [
+     "term",
+     "\u001b[1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;"
+    ]
+   ],
+   "annotations": [],
+   "carry": ""
+  },
+  "snapshot_after_stream_deduped": {
+   "steps": [
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ],
+    [
+     "snapshot",
+     "$ sudo ls\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": ""
+  },
+  "identical_snapshots_once": {
+   "steps": [
+    [
+     "snapshot",
+     "$ rm -rf build\n"
+    ],
+    [
+     "snapshot",
+     "$ rm -rf build\n"
+    ],
+    [
+     "snapshot",
+     "$ rm -rf build\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "destructive_command",
+     "description": "Recursive force-remove detected: rm -rf"
+    }
+   ],
+   "carry": ""
+  },
+  "stream_twice_annotated_twice": {
+   "steps": [
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ],
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ],
+    [
+     "snapshot",
+     "$ sudo ls\n$ sudo ls\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    },
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": ""
+  },
+  "snapshot_records_what_stream_missed": {
+   "steps": [
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ],
+    [
+     "snapshot",
+     "$ sudo ls\n$ rm -rf build\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    },
+    {
+     "label": "destructive_command",
+     "description": "Recursive force-remove detected: rm -rf"
+    }
+   ],
+   "carry": ""
+  },
+  "styled_snapshot_is_stripped": {
+   "steps": [
+    [
+     "snapshot",
+     "\u001b[1m$ \u001b[31msu\u001b[0mdo\u001b[0m ls\u001b[0m\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": ""
+  },
+  "different_matches_same_rule_not_deduped": {
+   "steps": [
+    [
+     "term",
+     "$ ssh alice@alpha\r\n"
+    ],
+    [
+     "snapshot",
+     "$ ssh bob@bravo\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "outbound_connection",
+     "description": "SSH connection detected: ssh alice@"
+    },
+    {
+     "label": "outbound_connection",
+     "description": "SSH connection detected: ssh bob@"
+    }
+   ],
+   "carry": ""
+  }
+ }
+}
