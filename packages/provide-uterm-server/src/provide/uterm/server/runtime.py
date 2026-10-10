@@ -24,12 +24,15 @@ from provide.uterm.server.models import RecordingConfig, SessionDefinition, Sess
 # Re-exported so the public import surface of ``runtime`` is unchanged: tests
 # and callers import these helpers directly from ``provide.uterm.server.runtime``.
 from provide.uterm.server.runtime_helpers import (
+    _MAX_READ_ANNOTATION_KEYS,
     RunOutcome,  # noqa: F401 — re-export
     _await_task_completion,
     _build_recording_redactor,
     _cancel_and_wait,
     _classify_run_error,
     _encode_runtime_frame,
+    _read_annotation_key,
+    _split_incomplete_escape,
 )
 from provide.uterm.session_logger import SessionLogger
 
@@ -100,6 +103,15 @@ class HostedSessionRuntime:
 
             self._send_stream = StreamingDetector(detector)
             self._read_stream = StreamingDetector(detector)
+        # An escape sequence the last streamed chunk ended inside of, held back
+        # and prepended to the next chunk before strip_ansi: see _scan_output.
+        self._escape_carry = ""
+        # Read-path rules run twice over the same output -- once over each
+        # streamed `term` chunk, once over each snapshot screen -- so every
+        # read-path annotation recorded is remembered here (by
+        # _read_annotation_key) and the snapshot path skips one already in it.
+        # Both are scoped to one recording and reset with it: see _stop_recording.
+        self._read_annotation_keys: set[str] = set()
         self._event_seq: int = 0
         self._at_password_prompt: bool = False
 
@@ -254,8 +266,12 @@ class HostedSessionRuntime:
             return
         apply = getattr(self._connector, "reconfigure", None)
         applied = bool(apply(self._effective_connector_config(connector_config))) if callable(apply) else False
-        if not applied:
-            self._config_pending_restart = True
+        # True means the running connector now matches the WHOLE effective
+        # config it was given -- the full stored config, not a delta -- so
+        # nothing earlier is still owed either: a socket change that was pending
+        # and has since been reverted is settled by this one. False leaves (or
+        # makes) a restart owed.
+        self._config_pending_restart = not applied
 
     async def _start_connector(self) -> SessionConnector:
         connector = build_connector(
@@ -302,6 +318,10 @@ class HostedSessionRuntime:
             await self._logger.stop()
             self._logger = None
         self._recording_path = None
+        # Both belong to the recording that just ended: the next one annotates
+        # what it sees afresh, and does not begin with a stale half-sequence.
+        self._escape_carry = ""
+        self._read_annotation_keys.clear()
 
     async def _discard_connector(self) -> None:
         """Drop the connector alone, leaving the recording where it is.
@@ -335,19 +355,44 @@ class HostedSessionRuntime:
         self._event_seq += 1
         if self._detector is not None:
             for annotation in self._detector.detect("read", text, seq=self._event_seq):
+                # The snapshot path DEDUPES: a match the stream (or an earlier
+                # snapshot of the same screen) already recorded is skipped, so
+                # neither a stream+snapshot pair nor a run of identical
+                # snapshots records it twice.
+                key = _read_annotation_key(annotation)
+                if key in self._read_annotation_keys:
+                    continue
+                self._remember_read_annotation(key)
                 await self._logger.log_event("annotation", annotation.to_dict())
+
+    def _remember_read_annotation(self, key: str) -> None:
+        """Add *key* to the bounded read-path set, clearing it first when full."""
+        if len(self._read_annotation_keys) >= _MAX_READ_ANNOTATION_KEYS:
+            self._read_annotation_keys.clear()
+        self._read_annotation_keys.add(key)
 
     async def _scan_output(self, data: str) -> None:
         """Run read-path rules over streamed output, escape sequences removed.
 
         Only while recording, as the snapshot path is: annotations are recording
         entries, and with no recording there is nowhere for one to go.
+
+        An escape sequence split across chunks (``...\\x1b[1`` | ``msudo ...``)
+        would leave ``msudo`` behind if each chunk were stripped alone, so an
+        unterminated trailing sequence is held back in ``_escape_carry`` and
+        prepended to the next chunk (bounded by ``_MAX_ESCAPE_CARRY``).
+
+        The stream path NEVER suppresses a match -- a command run twice is
+        annotated twice -- but remembers each one so the snapshot path, which
+        sees the same text again, does not record it a second time.
         """
         if self._logger is None or self._read_stream is None or not data:
             return
         from provide.uterm import strip_ansi
 
-        for annotation in self._read_stream.detect("read", strip_ansi(data), seq=self._event_seq):
+        text, self._escape_carry = _split_incomplete_escape(self._escape_carry + data)
+        for annotation in self._read_stream.detect("read", strip_ansi(text), seq=self._event_seq):
+            self._remember_read_annotation(_read_annotation_key(annotation))
             await self._logger.log_event("annotation", annotation.to_dict())
 
     async def _log_send(self, data: str) -> None:

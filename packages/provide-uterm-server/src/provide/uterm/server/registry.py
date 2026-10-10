@@ -300,20 +300,35 @@ class SessionRegistry:
                     )
                 except EgressBlockedError as exc:
                     raise SessionValidationError(str(exc)) from exc
-                # Apply non-mode fields immediately; input_mode is deferred
-                # to runtime.set_mode() so it only commits after the
-                # connector-side change succeeds.
-                for field in updates:
-                    if field != "input_mode":
-                        setattr(session, field, getattr(validated, field))
             runtime = self._runtime_for(session)
+            if "connector_config" in updates:
+                # Offered to the running connector BEFORE anything is committed,
+                # which may take it in place; the status reports whether a
+                # restart is still owed. The connector is the only thing that
+                # knows its own config schema, and it rejects a config it cannot
+                # use (an unknown key, `"cols": "wide"`) with a bare ValueError
+                # or TypeError. Raised here, that rejection leaves the stored
+                # definition exactly as it was -- had the config been committed
+                # first, the next start() would build from it and fail -- and
+                # surfaces as SessionValidationError, i.e. a 422, not a 500.
+                # A connector must therefore validate the whole config before it
+                # changes any of its own state. A stopped session has no
+                # connector and validates nothing here.
+                # The connector sees the session's CURRENT input_mode; a mode
+                # change in the same PATCH reaches it through set_mode() below.
+                try:
+                    await runtime.reconfigure(validated.connector_config)
+                except (ValueError, TypeError) as exc:
+                    raise SessionValidationError(f"connector_config rejected: {exc}") from exc
+            # Apply non-mode fields immediately; input_mode is deferred
+            # to runtime.set_mode() so it only commits after the
+            # connector-side change succeeds.
+            for field in updates:
+                if field != "input_mode":
+                    setattr(session, field, getattr(validated, field))
         if "input_mode" in updates:
             await runtime.set_mode(validated.input_mode)
             await self._hub.set_input_mode(session_id, validated.input_mode)
-        if "connector_config" in updates:
-            # Offered to the running connector, which may take it in place; the
-            # status reports whether a restart is still owed.
-            await runtime.reconfigure(validated.connector_config)
         return runtime.status()
 
     async def delete_session(self, session_id: str) -> None:

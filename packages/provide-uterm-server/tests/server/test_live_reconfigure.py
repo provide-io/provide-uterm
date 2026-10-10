@@ -79,3 +79,69 @@ async def test_starting_a_connector_settles_what_was_owed(monkeypatch) -> None:
     await runtime._start_connector()
 
     assert runtime.status().config_pending_restart is False
+
+
+async def test_a_later_live_change_settles_an_owed_restart() -> None:
+    # The connector answers for the WHOLE stored config, so True after an
+    # earlier False means the running connector matches it again.
+    runtime = _runtime()
+    connector = MagicMock()
+    connector.reconfigure = MagicMock(side_effect=[False, True])
+    runtime._connector = connector
+
+    await runtime.reconfigure({"socket_path": "/run/other.sock"})
+    assert runtime.status().config_pending_restart is True
+    await runtime.reconfigure({"socket_path": "/run/cap.sock", "cols": 132})
+    assert runtime.status().config_pending_restart is False
+
+
+async def test_a_reverted_capture_socket_settles_the_owed_restart(tmp_path) -> None:
+    # The real connector: a socket change is owed, reverting it is not.
+    from provide.uterm.pty.capture_connector import CaptureConnector
+
+    runtime = _runtime()
+    runtime._connector = CaptureConnector("cap-1", "Capture", {"socket_path": str(tmp_path / "cap.sock")})
+
+    await runtime.reconfigure({"socket_path": str(tmp_path / "other.sock")})
+    assert runtime.status().config_pending_restart is True
+    await runtime.reconfigure({"socket_path": str(tmp_path / "cap.sock"), "cols": 132})
+    assert runtime.status().config_pending_restart is False
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"cols": "wide"},  # int("wide") -> ValueError
+        {"rows": None},  # int(None) -> TypeError
+        {"bogus": 1},  # unknown key
+    ],
+)
+def test_a_bad_patch_is_a_422_and_leaves_the_definition_alone(tmp_path, bad: dict[str, object]) -> None:
+    from fastapi.testclient import TestClient
+
+    from provide.uterm.pty.capture_connector import CaptureConnector
+    from provide.uterm.server import create_server_app, default_server_config
+
+    config = default_server_config()
+    config.auth.mode = "header"
+    config.auth.header_mode_acknowledged = True
+    config.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+    config.recording.directory = tmp_path
+    socket_path = str(tmp_path / "cap.sock")
+    with TestClient(create_server_app(config)) as client:
+        assert client.post("/api/sessions", json={"session_id": "cap-1", "connector_type": "shell"}).status_code < 300
+        registry = client.app.state.uterm_registry  # type: ignore[attr-defined]
+        runtime = registry._runtimes["cap-1"]
+        runtime._connector = CaptureConnector("cap-1", "Capture", {"socket_path": socket_path})
+        before = client.get("/api/sessions/cap-1").json()
+
+        r = client.patch(
+            "/api/sessions/cap-1",
+            json={"display_name": "Renamed", "connector_config": {"socket_path": socket_path, **bad}},
+        )
+
+        assert r.status_code == 422
+        assert r.json()["detail"].startswith("connector_config rejected: ")
+        assert registry._sessions["cap-1"].connector_config == {}
+        assert client.get("/api/sessions/cap-1").json() == before
+        runtime._connector = None

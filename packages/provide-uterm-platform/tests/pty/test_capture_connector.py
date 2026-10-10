@@ -633,6 +633,35 @@ def test_reconfigure_rejects_what_the_constructor_would() -> None:
         conn.reconfigure({"socket_path": "/tmp/cap.sock", "bogus": 1})
 
 
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"cols": "wide"},
+        {"rows": None},
+        {"connect_timeout_s": "soon"},
+    ],
+)
+def test_a_rejected_reconfigure_changes_nothing(bad: dict[str, object]) -> None:
+    # Every check runs before any state changes: a value the connector cannot
+    # parse leaves the keystroke socket, its open connection and the size alone.
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/old.sock"})
+    writer = MagicMock()
+    conn._stdin_writer = writer
+    with pytest.raises((ValueError, TypeError)):
+        conn.reconfigure({"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/new.sock", **bad})
+    assert conn._stdin_socket_path == "/tmp/old.sock"
+    assert conn._stdin_writer is writer
+    writer.close.assert_not_called()
+    assert (conn._cols, conn._rows) == (80, 24)
+
+
+def test_a_bad_size_is_rejected_even_with_a_new_capture_socket() -> None:
+    # Answering False would store a config the next start() cannot build from.
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock"})
+    with pytest.raises(ValueError):
+        conn.reconfigure({"socket_path": "/tmp/other.sock", "cols": "wide"})
+
+
 def test_reconfigure_with_nothing_new_changes_nothing() -> None:
     conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/in.sock"})
     writer = MagicMock()
