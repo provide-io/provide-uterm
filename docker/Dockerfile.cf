@@ -104,6 +104,9 @@ ENV UV_FROZEN=1
 # memory), fixed in 6.27.0; CVE-2026-15157/16728/16729 (MEDIUM), fixed in 6.28.0.
 # The override pins undici to >=6.28.1,<7 across the
 # dependency tree (Trivy's HIGH/CRITICAL gate flags the bundled 6.26.0).
+# miniflare also pins sharp to an exact 0.35.4 — GHSA-wq5f-xc86-pv6w (HIGH),
+# fixed in 0.35.5 — so a second override lifts sharp to >=0.35.5,<0.36 until a
+# wrangler release ships a miniflare that depends on it directly.
 #
 # The wrangler version is the exact one the repo's package.json pins, read from
 # that file at build time. It was `wrangler@latest`, which made each image build
@@ -121,7 +124,7 @@ ENV UV_FROZEN=1
 COPY package.json /tmp/repo-package.json
 RUN mkdir -p /opt/wrangler \
     && cd /opt/wrangler \
-    && printf '{"name":"wrangler-host","private":true,"overrides":{"undici":"^6.28.1"}}\n' > package.json \
+    && printf '{"name":"wrangler-host","private":true,"overrides":{"undici":"^6.28.1","sharp":"^0.35.5"}}\n' > package.json \
     && WRANGLER_VERSION="$(node -p 'require("/tmp/repo-package.json").devDependencies.wrangler')" \
     && npm install --no-audit --no-fund "wrangler@${WRANGLER_VERSION}" \
     && rm /tmp/repo-package.json \
@@ -141,13 +144,20 @@ RUN mkdir -p /opt/wrangler \
 #                                       DOWNGRADE that re-introduced all three.
 #                                       Pinned to current 6.x latest; the swap must
 #                                       never go below what the base bundles.)
-#   brace-expansion  5.0.6  -> 5.0.9    CVE-2026-13149 HIGH     exponential-time
+#   brace-expansion  5.0.9  -> 5.0.12   CVE-2026-13149 HIGH     exponential-time
 #                                       CVE-2026-14257 HIGH     (needs >= 5.0.8)
 #                                       CVE-2026-69152 HIGH     unbounded arrays
 #                                       (needs >= 5.0.9; this one landed after
 #                                       the 5.0.8 pin, with no commit of ours in
 #                                       between — Trivy's database updates daily,
 #                                       so a pinned image goes red on its own)
+#                                       CVE-2026-102276 HIGH    (needs >= 5.0.10)
+#                                       CVE-2026-102278 HIGH    (needs >= 5.0.11;
+#                                       both landed after the 5.0.9 pin. Pinned
+#                                       to current 5.x latest, as ip-address
+#                                       below is. Its one dependency,
+#                                       balanced-match ^4.0.2, is already in
+#                                       npm's bundled tree.)
 #   ip-address       10.2.0 -> 10.5.0   CVE-2026-69192 HIGH     inconsistent
 #                                       parsing -> SSRF (needs >= 10.3.1; pinned
 #                                       to the current latest rather than the
@@ -173,7 +183,7 @@ RUN mkdir -p /opt/wrangler \
 RUN set -e \
     && NM=/usr/local/lib/node_modules/npm/node_modules \
     && t="$(mktemp -d)" && cd "$t" \
-    && npm pack undici@6.28.1 brace-expansion@5.0.9 ip-address@10.5.0 tar@7.5.22 >/dev/null \
+    && npm pack undici@6.28.1 brace-expansion@5.0.12 ip-address@10.5.0 tar@7.5.22 >/dev/null \
     && for pkg in undici brace-expansion ip-address tar; do \
          mkdir -p "unpack-$pkg" \
          && tar xzf "$pkg"-*.tgz -C "unpack-$pkg" \
