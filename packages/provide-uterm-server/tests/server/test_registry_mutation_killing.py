@@ -419,6 +419,22 @@ class TestUpdateSession:
         await reg.update_session("a", {"display_name": "x"})
         runtime.set_mode.assert_not_awaited()
 
+    async def test_nothing_mutable_reports_status_and_touches_nothing(self, runtime: MagicMock) -> None:
+        """Kills the early return's ``return None`` and ``not updates`` mutants: a
+        payload with no mutable field returns the runtime's status without the
+        egress check, a reconfigure, a mode change, or any change to the session."""
+        reg = _make_registry([_session("a")])
+        before = reg._sessions["a"].model_dump()
+        egress = AsyncMock()
+        with patch("provide.uterm.server.egress.assert_session_egress_allowed", egress):
+            status = await reg.update_session("a", {"not_a_real_field": 42})
+        assert status is runtime.status.return_value
+        egress.assert_not_awaited()
+        runtime.reconfigure.assert_not_awaited()
+        runtime.set_mode.assert_not_awaited()
+        reg._hub.set_input_mode.assert_not_awaited()
+        assert reg._sessions["a"].model_dump() == before
+
     async def test_unknown_session_raises(self) -> None:
         reg = _make_registry()
         with pytest.raises(KeyError):
