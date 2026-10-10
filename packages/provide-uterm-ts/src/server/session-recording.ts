@@ -99,9 +99,78 @@ const PY_TRAILING_SPACE = /[\t-\r\x1c-\x20\x85\xa0\u1680\u2000-\u200a\u2028\u202
 /** The reference's prompt test, applied to the right-stripped screen. */
 const PASSWORD_PROMPT = /(?:password|passphrase)[^\n]*:\s*$/i;
 
-/** Whether a screen ends at a password or passphrase prompt. */
+/**
+ * Whether a screen ends at a password or passphrase prompt.
+ *
+ * Takes the screen as *text*: the caller strips escape codes first, as the
+ * reference's `_log_snapshot` does, because a rendered row ends in a reset
+ * that would otherwise sit after the colon and hide the prompt.
+ */
 export function atPasswordPrompt(screen: string): boolean {
   return PASSWORD_PROMPT.test(screen.replace(PY_TRAILING_SPACE, ""));
+}
+
+/**
+ * An escape sequence cut off at the end of a streamed chunk: a bare ESC, or a
+ * CSI (ESC [) whose parameter/intermediate bytes have not yet reached a final
+ * byte. The reference's `_INCOMPLETE_ESCAPE_TAIL` (runtime_helpers.py), whose
+ * grammar is exactly that of `strip_ansi`'s `_ANSI_ESCAPE_RE`: anything that
+ * pattern would strip once complete, and nothing else, is held back.
+ */
+const INCOMPLETE_ESCAPE_TAIL = /\x1b(?:\[[0-?]*[ -/]*)?$/;
+
+/**
+ * Longest tail held back between chunks, in characters, ESC included. The
+ * reference's `_MAX_ESCAPE_CARRY`: a real sequence is a handful of bytes, and
+ * past this the "sequence" is not one (or is hostile), so it is released into
+ * the text rather than carried forever.
+ */
+export const MAX_ESCAPE_CARRY = 64;
+
+/**
+ * Split `text` into `[complete, carry]`, where `carry` is an unterminated
+ * trailing escape sequence. The reference's `_split_incomplete_escape`.
+ *
+ * `stripAnsi` sees one chunk at a time, so `"\x1b[1"` + `"msudo"` would strip
+ * to `"\x1b[1"` (no final byte, left alone) and `"msudo"`, and `\bsudo\b`
+ * would miss. The caller prepends the carry to the next chunk.
+ *
+ * The reference finds the last ESC with `rfind` and `fullmatch`es the pattern
+ * from there. Searching for the end-anchored pattern is the same test: only
+ * the LAST ESC can start a match that reaches the end, because CSI parameter
+ * and intermediate bytes never include ESC — so the match, when there is one,
+ * starts exactly where `rfind` would have. And the tail it measures is all
+ * ASCII, so its length is the same in UTF-16 units as in the reference's code
+ * points.
+ */
+export function splitIncompleteEscape(text: string): [string, string] {
+  const match = INCOMPLETE_ESCAPE_TAIL.exec(text);
+  if (match === null || text.length - match.index > MAX_ESCAPE_CARRY) {
+    return [text, ""];
+  }
+  return [text.slice(0, match.index), text.slice(match.index)];
+}
+
+/**
+ * Bound on the per-recording set of read-path annotation keys. The
+ * reference's `_MAX_READ_ANNOTATION_KEYS`: past it the set is cleared and
+ * starts over, and the worst case is that a snapshot repeats an annotation the
+ * stream already recorded once more than 1024 distinct read-path matches ago.
+ */
+export const MAX_READ_ANNOTATION_KEYS = 1024;
+
+/**
+ * Identity of a read-path annotation for snapshot dedupe: rule + matched text.
+ * The reference's `_read_annotation_key`.
+ *
+ * An annotation carries no rule id; `label` is the rule's category label and
+ * `description` is the rule's own template formatted with the match (cut at
+ * 80 characters). So the pair names the rule and, for every rule whose
+ * template embeds `{match}`, the matched text. Credential rules deliberately
+ * never embed the match, so for them the key is the rule alone.
+ */
+export function readAnnotationKey(annotation: Annotation): string {
+  return `${annotation.label}\x00${annotation.description}`;
 }
 
 /** What a recording is built with beyond its store and settings. */
@@ -143,6 +212,24 @@ export class SessionRecording {
    * counted across recordings for the same reason.
    */
   #eventSeq = 0;
+  /**
+   * An escape sequence the last streamed chunk ended inside of, held back and
+   * prepended to the next chunk before `stripAnsi`: see {@link #scanOutput}.
+   * The reference's `_escape_carry`.
+   */
+  #escapeCarry = "";
+  /**
+   * Read-path rules run twice over the same output — once over each streamed
+   * `term` chunk, once over each snapshot screen — so every read-path
+   * annotation recorded is remembered here (by {@link readAnnotationKey}) and
+   * the snapshot path skips one already in it. The reference's
+   * `_read_annotation_keys`.
+   *
+   * This and {@link #escapeCarry} are scoped to one recording and reset with
+   * it, in {@link stop} — unlike the streams and the sequence above, which the
+   * reference keeps across recordings.
+   */
+  readonly #readAnnotationKeys = new Set<string>();
 
   constructor(
     sessionId: string,
@@ -188,10 +275,20 @@ export class SessionRecording {
     this.#logger = logger;
   }
 
-  /** Close the recording, writing what is buffered and the closing entry. */
+  /**
+   * Close the recording, writing what is buffered and the closing entry.
+   *
+   * The escape carry and the read-path keys belong to the recording that just
+   * ended, as the reference's `_stop_recording` resets them: the next one
+   * annotates what it sees afresh, and does not begin with a stale
+   * half-sequence. Reset before the final write, so a store that fails it
+   * still leaves the next recording clean.
+   */
   async stop(): Promise<void> {
     const logger = this.#logger;
     this.#logger = undefined;
+    this.#escapeCarry = "";
+    this.#readAnnotationKeys.clear();
     await logger?.stop();
   }
 
@@ -259,16 +356,38 @@ export class SessionRecording {
   /** The reference's `_log_snapshot`: note the prompt, then record the screen. */
   async #logSnapshot(message: WorkerMessage): Promise<void> {
     const screen = String(message.screen ?? "");
-    this.#atPasswordPrompt = atPasswordPrompt(screen);
+    // Read as text, as the reference now does. A rendered screen carries SGR
+    // codes and ends each row with a reset, which hides a trailing
+    // "Password:" from the prompt check — so the next thing typed would be
+    // recorded in the clear — and splits a styled match from the read-path
+    // rules. The screen itself is still recorded as it was sent.
+    const text = stripAnsi(screen);
+    this.#atPasswordPrompt = atPasswordPrompt(text);
     const logger = this.#logger;
     if (logger === undefined) {
       return;
     }
     await logger.logScreen(message, encodeCp437(screen));
     this.#eventSeq += 1;
-    // The screen as it is, not stripped: the reference's snapshot path hands
-    // the detector the screen text unchanged.
-    await this.#annotate(logger, this.#detector?.detect("read", screen, this.#eventSeq));
+    for (const annotation of this.#detector?.detect("read", text, this.#eventSeq) ?? []) {
+      // The snapshot path DEDUPES: a match the stream (or an earlier snapshot
+      // of the same screen) already recorded is skipped, so neither a
+      // stream+snapshot pair nor a run of identical snapshots records it twice.
+      const key = readAnnotationKey(annotation);
+      if (this.#readAnnotationKeys.has(key)) {
+        continue;
+      }
+      this.#rememberReadAnnotation(key);
+      await logger.logEvent("annotation", annotationToWire(annotation));
+    }
+  }
+
+  /** Add `key` to the bounded read-path set, clearing it first when full. */
+  #rememberReadAnnotation(key: string): void {
+    if (this.#readAnnotationKeys.size >= MAX_READ_ANNOTATION_KEYS) {
+      this.#readAnnotationKeys.clear();
+    }
+    this.#readAnnotationKeys.add(key);
   }
 
   /**
@@ -278,14 +397,31 @@ export class SessionRecording {
    * Streamed output here is a `term` message the connector produced — the
    * frame the reference's runtime sends its hub and scans on the way. This
    * server has no worker socket, so it is the message as `inbound` hands it on.
+   *
+   * An escape sequence split across chunks (`...\x1b[1` | `msudo ...`) would
+   * leave `msudo` behind if each chunk were stripped alone, so an
+   * unterminated trailing sequence is held back in {@link #escapeCarry} and
+   * prepended to the next chunk (bounded by {@link MAX_ESCAPE_CARRY}).
+   *
+   * The stream path NEVER suppresses a match — a command run twice is
+   * annotated twice — but remembers each one so the snapshot path, which sees
+   * the same text again, does not record it a second time.
    */
   async #scanOutput(data: string): Promise<void> {
     const logger = this.#logger;
-    // An empty frame needs no case of its own: the stream skips empty text.
-    if (logger === undefined) {
+    const stream = this.#readStream;
+    // The reference also returns on an empty frame. That needs no case of its
+    // own here: an empty chunk leaves the carry as it was (the split hands the
+    // same tail back) and the stream skips empty text.
+    if (logger === undefined || stream === undefined) {
       return;
     }
-    await this.#annotate(logger, this.#readStream?.detect("read", stripAnsi(data), this.#eventSeq));
+    const [text, carry] = splitIncompleteEscape(this.#escapeCarry + data);
+    this.#escapeCarry = carry;
+    for (const annotation of stream.detect("read", stripAnsi(text), this.#eventSeq)) {
+      this.#rememberReadAnnotation(readAnnotationKey(annotation));
+      await logger.logEvent("annotation", annotationToWire(annotation));
+    }
   }
 
   /** Record each annotation, in the reference's `to_dict` shape. */

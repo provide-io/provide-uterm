@@ -65,6 +65,18 @@
    "outbound",
    {
     "type": "snapshot",
+    "screen": "\u001b[1msudo\u001b[0m password for tim: \u001b[0m",
+    "ts": 5.25
+   }
+  ],
+  [
+   "send",
+   "pw\r"
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
     "screen": "$ echo password=hunter2 done\n$ ",
     "ts": 5.5
    }
@@ -160,7 +172,55 @@
    "outbound",
    {
     "type": "snapshot",
-    "screen": "Password: ",
+    "screen": "# rm -rf /tmp/x\n# echo AKIA0123456789AB\n# ",
+    "ts": 3.75
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "$ \u001b[1",
+    "ts": 4.0
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "msudo\u001b[0m rm x\r\n",
+    "ts": 4.1
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "$ \u001b[1msudo\u001b[0m rm x\n$ ",
+    "ts": 4.2
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "\u001b[1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;",
+    "ts": 4.3
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "mDROP TABLE t;",
+    "ts": 4.4
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "Password: \u001b[0m",
     "ts": 4.5
    }
   ],
@@ -264,6 +324,27 @@
      "bytes_b64": "Kioq",
      "masked": true,
      "byte_count": 6
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "\u001b[1msudo\u001b[0m password for tim: \u001b[0m",
+     "ts": 5.25,
+     "raw": "\u001b[1msudo\u001b[0m password for tim: \u001b[0m",
+     "raw_bytes_b64": "G1sxbXN1ZG8bWzBtIHBhc3N3b3JkIGZvciB0aW06IBtbMG0="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 3
     },
     "session_id": "rec"
    },
@@ -460,6 +541,46 @@
    {
     "event": "wire_send",
     "data": {
+     "text": "\u0010\u00020000005b:{\"type\":\"snapshot\",\"screen\":\"\\u001b[1msudo\\u001b[0m password for tim: \\u001b[0m\",\"ts\":5.25}",
+     "bytes_b64": "EAIwMDAwMDA1Yjp7InR5cGUiOiJzbmFwc2hvdCIsInNjcmVlbiI6Ilx1MDAxYlsxbXN1ZG9cdTAwMWJbMG0gcGFzc3dvcmQgZm9yIHRpbTogXHUwMDFiWzBtIiwidHMiOjUuMjV9"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "control_send",
+    "data": {
+     "control": {
+      "type": "snapshot",
+      "screen": "\u001b[1msudo\u001b[0m password for tim: \u001b[0m",
+      "ts": 5.25
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "\u001b[1msudo\u001b[0m password for tim: \u001b[0m",
+     "ts": 5.25,
+     "raw": "\u001b[1msudo\u001b[0m password for tim: \u001b[0m",
+     "raw_bytes_b64": "G1sxbXN1ZG8bWzBtIHBhc3N3b3JkIGZvciB0aW06IBtbMG0="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 3
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "wire_send",
+    "data": {
      "text": "\u0010\u000200000048:{\"type\":\"snapshot\",\"screen\":\"$ echo [PASSWORD_REDACTED] done\\n$ \",\"ts\":5.5}",
      "bytes_b64": "EAIwMDAwMDA0ODp7InR5cGUiOiJzbmFwc2hvdCIsInNjcmVlbiI6IiQgZWNobyBbUEFTU1dPUkRfUkVEQUNURURdIGRvbmVcbiQgIiwidHMiOjUuNX0="
     },
@@ -621,6 +742,27 @@
     "event": "read",
     "data": {
      "type": "snapshot",
+     "screen": "\u001b[1msudo\u001b[0m password for tim: \u001b[0m",
+     "ts": 5.25,
+     "raw": "\u001b[1msudo\u001b[0m password for tim: \u001b[0m",
+     "raw_bytes_b64": "G1sxbXN1ZG8bWzBtIHBhc3N3b3JkIGZvciB0aW06IBtbMG0="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "***",
+     "bytes_b64": "Kioq",
+     "masked": true,
+     "byte_count": 3
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
      "screen": "$ echo password=hunter2 done\n$ ",
      "ts": 5.5,
      "raw": "$ echo password=hunter2 done\n$ ",
@@ -751,21 +893,6 @@
    {
     "event": "annotation",
     "data": {
-     "label": "credential_exposure",
-     "description": "AWS access key detected in read",
-     "severity": "high",
-     "source": "detector",
-     "principal": "system",
-     "span": {
-      "from_seq": 4,
-      "to_seq": 4
-     }
-    },
-    "session_id": "rec"
-   },
-   {
-    "event": "annotation",
-    "data": {
      "label": "destructive_command",
      "description": "Recursive force-remove detected: rm -rf",
      "severity": "critical",
@@ -782,10 +909,47 @@
     "event": "read",
     "data": {
      "type": "snapshot",
-     "screen": "Password: ",
+     "screen": "# rm -rf /tmp/x\n# echo AKIA0123456789AB\n# ",
+     "ts": 3.75,
+     "raw": "# rm -rf /tmp/x\n# echo AKIA0123456789AB\n# ",
+     "raw_bytes_b64": "IyBybSAtcmYgL3RtcC94CiMgZWNobyBBS0lBMDEyMzQ1Njc4OUFCCiMg"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 5,
+      "to_seq": 5
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ \u001b[1msudo\u001b[0m rm x\n$ ",
+     "ts": 4.2,
+     "raw": "$ \u001b[1msudo\u001b[0m rm x\n$ ",
+     "raw_bytes_b64": "JCAbWzFtc3VkbxtbMG0gcm0geAokIA=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "[PASSWORD_REDACTED]",
      "ts": 4.5,
-     "raw": "Password: ",
-     "raw_bytes_b64": "UGFzc3dvcmQ6IA=="
+     "raw": "[PASSWORD_REDACTED]",
+     "raw_bytes_b64": "W1BBU1NXT1JEX1JFREFDVEVEXQ=="
     },
     "session_id": "rec"
    },
@@ -798,8 +962,8 @@
      "source": "detector",
      "principal": "system",
      "span": {
-      "from_seq": 5,
-      "to_seq": 5
+      "from_seq": 7,
+      "to_seq": 7
      }
     },
     "session_id": "rec"
@@ -823,8 +987,8 @@
      "source": "detector",
      "principal": "system",
      "span": {
-      "from_seq": 6,
-      "to_seq": 6
+      "from_seq": 8,
+      "to_seq": 8
      }
     },
     "session_id": "rec"

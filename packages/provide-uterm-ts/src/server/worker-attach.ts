@@ -39,6 +39,7 @@ import { ControlFrameDecoder } from "../control-channel/index.ts";
 import { makeSnapshotFrame } from "../frames/index.ts";
 import { type InputMode, safeFloat, type WorkerSocket } from "../hub/index.ts";
 import { safeInt } from "../pycompat/index.ts";
+import { getLogger, type Logger } from "../telemetry/index.ts";
 import type { SessionHub } from "./session-hub.ts";
 import type { SessionRecording } from "./session-recording.ts";
 
@@ -96,6 +97,18 @@ export interface AttachOptions {
   recording?: SessionRecording | undefined;
   /** How the poll loop waits. A real, unreferenced timer unless a test says otherwise. */
   sleep?: ((ms: number) => Promise<void>) | undefined;
+  /**
+   * Told the text of every failure the attachment survives — a poll that
+   * threw, or traffic the hub or the recording could not take. The
+   * reference's run loop stores the same text as the runtime's `_last_error`.
+   */
+  onError?: ((error: string) => void) | undefined;
+  /**
+   * Where those failures are logged. The reference's runtime module logger
+   * unless a test says otherwise: a failure nobody can see is how a recording
+   * that stopped writing goes unnoticed.
+   */
+  logger?: Logger | undefined;
 }
 
 /**
@@ -165,6 +178,7 @@ export async function attachConnector(
   const now = options.now ?? (() => Date.now() / 1000);
   const recording = options.recording;
   const sleep = options.sleep ?? idle;
+  const logger = options.logger ?? getLogger("provide.uterm.server.runtime");
   /** Set on detach. The poll loop checks it after every await. */
   let detached = false;
   /** The last screen the connector produced, for the link's synchronous read. */
@@ -220,11 +234,37 @@ export async function attachConnector(
     getSnapshot: () => lastSnapshot as Record<string, unknown> | undefined,
   };
 
+  /**
+   * Report a failure the attachment carries on past. Never throws.
+   *
+   * The reference's run loop catches whatever ended its connection — a poll,
+   * a socket write, a recording store that could not write (disk full,
+   * EACCES) — logs `hosted_session_runtime_failed`, keeps the text as
+   * `_last_error`, and records a `runtime_error`. Here, where nothing is
+   * awaiting the work that failed, a rejection that escaped would be an
+   * unhandled one, and Node exits on those: a full disk would take every
+   * session down with it. So the same three things are done, and the
+   * `runtime_error` entry is best-effort — the store that just failed is the
+   * one it would be written to, and its failing again is logged, not thrown.
+   */
+  async function report(error: unknown): Promise<void> {
+    const text = errorText(error);
+    logger.warn({ session_id: sessionId, error: text }, "hosted_session_runtime_failed");
+    options.onError?.(text);
+    try {
+      await recording?.logEvent("runtime_error", { error: text });
+    } catch (recordError) {
+      logger.warn({ session_id: sessionId, error: errorText(recordError) }, "hosted_session_recording_failed");
+    }
+  }
+
   const link = new WorkerLink({ workerId: sessionId, managerUrl: "http://in-process", worker: target, now });
   // What the link decides to send back travels the same path a worker's own
-  // socket write would: straight into the hub's inbound handling.
+  // socket write would: straight into the hub's inbound handling. Nothing
+  // awaits it, so a failure on the way is reported here rather than left to
+  // become an unhandled rejection.
   link.onSend((message) => {
-    void inbound([message]);
+    void inbound([message]).catch(report);
   });
 
   const decoder = new ControlFrameDecoder();
@@ -274,8 +314,11 @@ export async function attachConnector(
    *
    * A poll that throws ends the reference's connection, which it records as a
    * `runtime_error` and retries on its backoff. There is no connection here
-   * to drop, so the error is recorded and the poll retried on the same
-   * schedule; one that succeeds starts the schedule over.
+   * to drop, so the error is reported and the poll retried on the same
+   * schedule; one that succeeds starts the schedule over. Handing what a poll
+   * returned on — the hub's broadcast, the recording's write — fails the same
+   * way and is treated the same way: in the reference both run inside the
+   * one `try` its run loop catches.
    *
    * Detaching stops it. A poll still in flight then is not waited for — the
    * reference cancels it — and what it returns afterwards is dropped.
@@ -283,27 +326,25 @@ export async function attachConnector(
   async function poll(): Promise<void> {
     let failures = 0;
     while (!detached) {
-      let messages: WorkerMessage[];
       try {
-        messages = await connector.pollMessages();
+        const messages = await connector.pollMessages();
+        failures = 0;
+        if (detached) {
+          return;
+        }
+        if (messages.length === 0) {
+          await sleep(POLL_IDLE_MS);
+          continue;
+        }
+        await inbound(messages);
       } catch (error) {
         if (detached) {
           return;
         }
-        await recording?.logEvent("runtime_error", { error: errorText(error) });
+        await report(error);
         await sleep(POLL_ERROR_BACKOFF_MS[Math.min(failures, POLL_ERROR_BACKOFF_MS.length - 1)] as number);
         failures += 1;
-        continue;
       }
-      failures = 0;
-      if (detached) {
-        return;
-      }
-      if (messages.length === 0) {
-        await sleep(POLL_IDLE_MS);
-        continue;
-      }
-      await inbound(messages);
     }
   }
   void poll();
