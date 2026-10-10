@@ -12,11 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	ptel "github.com/provide-io/provide-telemetry/go"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane/bootstrap"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
@@ -213,6 +215,13 @@ func buildServerFromConfig(
 	// HostedSessionRuntime arrangement, and what gives the hijack routes a
 	// worker to lease.
 	registry.SetHubLink(ctx, h, cfg.Server.PublicBaseURL, workerBearerToken(cfg))
+	// One recording store, shared: the sessions write into the same instance
+	// the recording routes read from (for a memory store, the only way the
+	// routes can see anything at all).
+	// And one detector: the reference's factory hands every hosted session
+	// the same PatternDetector, which is stateless.
+	recordings := buildRecordingStore(cfg)
+	registry.SetRecording(recordings, annotation.NewPatternDetector(nil))
 
 	// Runtime graphical targets live in the control plane, so a sqlite backend
 	// keeps them across restarts. A memory backend behaves as before.
@@ -238,7 +247,7 @@ func buildServerFromConfig(
 		Clock:            clock,
 		Version:          Version,
 		Logger:           logger,
-		Recording:        buildRecordingStore(cfg),
+		Recording:        recordings,
 		FrontendDir:      frontendDir,
 		// The one boot step: bring up the auto_start sessions once the socket is
 		// bound. Every way of starting this server goes through Serve, so no
@@ -316,17 +325,27 @@ func workerBearerToken(cfg *serverconfig.UtermServerConfig) string {
 	return *cfg.Auth.WorkerBearerToken
 }
 
-// buildRecordingStore selects the recording store from config. Port of the
-// factory's recording-store selection: a local JSONL store rooted at the
-// configured directory, an in-memory store, or a no-op NullStore.
+// buildRecordingStore selects the recording store from config, as the
+// reference's build_recording_store does: a webhook store when store_type is
+// "webhook" and there is a URL to deliver to, an in-memory store, a NullStore
+// for "null", and otherwise — including "webhook" with no URL — the local JSONL
+// store rooted at the configured directory.
 func buildRecordingStore(cfg *serverconfig.UtermServerConfig) recording.Store {
-	switch cfg.Recording.StoreType {
-	case "local":
-		return recording.NewLocalFileStore(cfg.Recording.Directory)
-	case "memory":
+	rc := cfg.Recording
+	switch {
+	case rc.StoreType == "webhook" && rc.WebhookURL != nil && *rc.WebhookURL != "":
+		secret := ""
+		if rc.WebhookSecret != nil {
+			secret = *rc.WebhookSecret
+		}
+		timeout := time.Duration(rc.WebhookTimeoutS * float64(time.Second))
+		return server.NewWebhookRecordingStore(*rc.WebhookURL, secret, timeout, server.NewEgressGuard(nil, nil))
+	case rc.StoreType == "memory":
 		return recording.NewInMemoryStore()
-	default:
+	case rc.StoreType == "null":
 		return recording.NullStore{}
+	default:
+		return recording.NewLocalFileStore(rc.Directory)
 	}
 }
 

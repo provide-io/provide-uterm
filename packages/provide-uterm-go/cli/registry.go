@@ -10,9 +10,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/bridge"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
@@ -35,6 +37,10 @@ type sessionEntry struct {
 	stoppedAt *float64
 	createdAt string
 	annSeq    int
+	// recorder records the session's worker connections (nil until the
+	// session first starts with a recording store wired). Kept across
+	// restarts, as the reference keeps its runtime. See session_recording.go.
+	recorder *sessionRecorder
 }
 
 // connectFn opens a live connector for a session definition. It returns
@@ -53,6 +59,12 @@ type SessionRegistryImpl struct {
 	order    []string
 	entries  map[string]*sessionEntry
 	recDeflt bool
+	// recCfg is the recording section sessions record under, and recording
+	// the store they record into (nil: nothing is recorded). Wired by
+	// SetRecording; see session_recording.go.
+	recCfg    serverconfig.RecordingConfig
+	recording recording.Store
+	detector  *annotation.PatternDetector
 	// connect builds the live connector; overridable in tests with a fake.
 	connect connectFn
 	// egress is the SSRF / connector-target guard; blockPrivate carries
@@ -83,6 +95,7 @@ func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImp
 	r := &SessionRegistryImpl{
 		entries:      map[string]*sessionEntry{},
 		recDeflt:     cfg.Recording.EnabledByDefault,
+		recCfg:       cfg.Recording,
 		connect:      defaultConnect,
 		egress:       server.NewEgressGuard(nil, nil),
 		blockPrivate: cfg.Security.BlockPrivateConnectorTargets,
@@ -142,17 +155,19 @@ func (r *SessionRegistryImpl) snapshotStatus(e *sessionEntry) *server.SessionSta
 		tags = []string{}
 	}
 	return &server.SessionStatus{
-		SessionID:          e.def.SessionID,
-		DisplayName:        e.def.DisplayName,
-		CreatedAt:          e.createdAt,
-		ConnectorType:      e.def.ConnectorType,
-		LifecycleState:     e.lifecycle,
-		InputMode:          e.inputMode,
-		Connected:          connected,
-		AutoStart:          e.def.AutoStart,
-		Tags:               tags,
-		RecordingEnabled:   r.recordingEnabled(e.def),
-		RecordingAvailable: false,
+		SessionID:        e.def.SessionID,
+		DisplayName:      e.def.DisplayName,
+		CreatedAt:        e.createdAt,
+		ConnectorType:    e.def.ConnectorType,
+		LifecycleState:   e.lifecycle,
+		InputMode:        e.inputMode,
+		Connected:        connected,
+		AutoStart:        e.def.AutoStart,
+		Tags:             tags,
+		RecordingEnabled: r.recordingEnabled(e.def),
+		// As the reference reports it: available whenever enabled — provided
+		// there is a store to record into.
+		RecordingAvailable: r.recording != nil && r.recordingEnabled(e.def),
 		Owner:              e.def.Owner,
 		Visibility:         e.def.Visibility,
 		StoppedAt:          e.stoppedAt,
@@ -334,6 +349,11 @@ func definitionFromPayload(payload map[string]any) (serverconfig.SessionDefiniti
 		Visibility:      visibility,
 		Tags:            []string{},
 		CreatedAt:       time.Now().UTC(),
+	}
+	// Per-session override of recording.enabled_by_default; absent means
+	// "use the default", as the reference's recording_enabled: bool | None.
+	if v, ok := payload["recording_enabled"].(bool); ok {
+		def.RecordingEnabled = &v
 	}
 	return def, nil
 }

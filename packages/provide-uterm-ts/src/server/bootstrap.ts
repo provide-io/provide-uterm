@@ -18,12 +18,14 @@
  * nobody reads until afterwards.
  */
 
+import { PatternDetector } from "../annotation/index.ts";
 import { effectiveAllowLoopbackDestinations, type WebhookEgressConfig } from "../egress/index.ts";
 import { type AuthSettings, applyCfAccessTeamDomain, type DevIdpAuthConfig, setupDevIdp } from "../serverauth/index.ts";
 import { deepMerge, normalizeDocument, SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import type { Logger } from "../telemetry/index.ts";
 import { createServerApp, type ServerApp } from "./app.ts";
 import { SessionHub } from "./session-hub.ts";
+import { buildRecordingStore, recordingSettingsFrom } from "./session-recording.ts";
 import { SessionRegistry } from "./session-registry.ts";
 import { SessionRuntimes } from "./session-runtime.ts";
 import { sessionDefinitionFrom } from "./session-status.ts";
@@ -201,11 +203,21 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
     );
   }
 
+  // Read, and the store chosen, before anything is built: a store this server
+  // cannot provide is a configuration it refuses, like an auth mode it cannot.
+  const recording = recordingSettingsFrom(section(config, "recording"));
+  let recordingStore: ReturnType<typeof buildRecordingStore>;
+  try {
+    recordingStore = buildRecordingStore(recording);
+  } catch (error) {
+    throw new ServerBootstrapError((error as Error).message);
+  }
+
   const createdAt = new Date(Math.trunc((options.now ?? (() => Date.now() / 1000))() * 1000)).toISOString();
   const entries = config.sessions as Readonly<Record<string, unknown>>[];
   const registry = new SessionRegistry(
     entries.map((entry) => sessionDefinitionFrom(entry, createdAt)),
-    Boolean(section(config, "recording").enabled_by_default),
+    recording.enabledByDefault,
   );
 
   // The hub is built before the application and the runtimes because both hold
@@ -233,12 +245,21 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
     },
     onHijackChanged: options.onHijackChanged,
   });
-  const runtimes = new SessionRuntimes(registry, hub, { now: options.now });
+  // The runtimes record: the store the configuration chose, and its knobs.
+  const runtimes = new SessionRuntimes(registry, hub, {
+    now: options.now,
+    recordingStore,
+    recordingSettings: recording,
+    // One detector for every session, as the reference's factory builds it:
+    // it is stateless, and each recording wraps it in streams of its own.
+    detector: new PatternDetector(),
+  });
   const app = createServerApp({
     registry,
     auth,
     hub,
     connectors: runtimes,
+    recordings: runtimes,
     version: SERVER_VERSION,
     controlPlaneBackend: String(section(config, "control_plane").backend),
     startupTime: (options.now ?? (() => Date.now() / 1000))(),

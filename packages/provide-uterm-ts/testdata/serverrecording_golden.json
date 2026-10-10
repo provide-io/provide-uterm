@@ -1,0 +1,1769 @@
+{
+  "note": "Recorded from the reference FastAPI server on an ephemeral port, in dev_token mode, serving a fixture recording. Values that differ between runs are masked with '<volatile>'.",
+  "volatile": "<volatile>",
+  "fixture": [
+    "{\"ts\": 1700000000.25, \"event\": \"log_start\", \"data\": {\"started_at\": 1700000000.25}, \"session_id\": \"recorded\"}",
+    "{\"ts\": 1700000000.5, \"event\": \"runtime_started\", \"data\": {\"session_id\": \"recorded\"}, \"session_id\": \"recorded\"}",
+    "{\"ts\": 1700000001.0, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ \", \"raw\": \"$ \", \"raw_bytes_b64\": \"JCA=\"}, \"session_id\": \"recorded\"}",
+    "{\"ts\": 1700000002.0, \"event\": \"send\", \"data\": {\"keys\": \"ls\\r\", \"bytes_b64\": \"bHMN\"}, \"session_id\": \"recorded\"}",
+    "{\"ts\": 1700000002.5, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ ls\\nfile\", \"raw\": \"$ ls\\nfile\", \"raw_bytes_b64\": \"JCBscwpmaWxl\"}, \"session_id\": \"recorded\"}",
+    "{\"ts\": 1700000003.0, \"event\": \"annot",
+    "{\"ts\": 1700000003.5, \"event\": \"send\", \"data\": {\"keys\": \"caf\\u00e9\", \"bytes_b64\": \"Y2Fmgg==\"}, \"session_id\": \"recorded\"}",
+    "{\"ts\": 1700000004.0, \"event\": \"log_stop\", \"data\": {}, \"session_id\": \"recorded\"}"
+  ],
+  "fixture_mtime_ns": 1700000000500000000,
+  "boundary": "<boundary>",
+  "probes": [
+    {
+      "id": "meta",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "<volatile>"
+      },
+      "body": {
+        "session_id": "recorded",
+        "exists": true,
+        "path": "<volatile>",
+        "size_bytes": 888,
+        "enabled": true
+      }
+    },
+    {
+      "id": "meta_viewer",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording",
+      "auth": "viewer",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "<volatile>"
+      },
+      "body": {
+        "session_id": "recorded",
+        "exists": true,
+        "path": "<volatile>",
+        "size_bytes": 888,
+        "enabled": true
+      }
+    },
+    {
+      "id": "meta_no_recording_scope",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording",
+      "auth": "no_recording",
+      "request_headers": {},
+      "status": 403,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "insufficient privileges"
+      }
+    },
+    {
+      "id": "meta_anonymous",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording",
+      "auth": "none",
+      "request_headers": {},
+      "status": 401,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "meta_unknown",
+      "method": "GET",
+      "path": "/api/sessions/no-such-session/recording",
+      "auth": "token",
+      "request_headers": {},
+      "status": 404,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "45"
+      },
+      "body": {
+        "detail": "unknown session: no-such-session"
+      }
+    },
+    {
+      "id": "meta_wrong_method",
+      "method": "POST",
+      "path": "/api/sessions/recorded/recording",
+      "auth": "token",
+      "request_headers": {},
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "GET",
+        "content-length": "31"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
+      "id": "entries",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "777"
+      },
+      "body": [
+        {
+          "ts": 1700000000.25,
+          "event": "log_start",
+          "data": {
+            "started_at": 1700000000.25
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000000.5,
+          "event": "runtime_started",
+          "data": {
+            "session_id": "recorded"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000001.0,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ",
+            "raw": "$ ",
+            "raw_bytes_b64": "JCA="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.0,
+          "event": "send",
+          "data": {
+            "keys": "ls\r",
+            "bytes_b64": "bHMN"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.5,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ls\nfile",
+            "raw": "$ ls\nfile",
+            "raw_bytes_b64": "JCBscwpmaWxl"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000003.5,
+          "event": "send",
+          "data": {
+            "keys": "caf\u00e9",
+            "bytes_b64": "Y2Fmgg=="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_limit",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=1",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "74"
+      },
+      "body": [
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_offset",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?offset=1&limit=1",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "104"
+      },
+      "body": [
+        {
+          "ts": 1700000000.5,
+          "event": "runtime_started",
+          "data": {
+            "session_id": "recorded"
+          },
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_offset_zero",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?offset=0",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "777"
+      },
+      "body": [
+        {
+          "ts": 1700000000.25,
+          "event": "log_start",
+          "data": {
+            "started_at": 1700000000.25
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000000.5,
+          "event": "runtime_started",
+          "data": {
+            "session_id": "recorded"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000001.0,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ",
+            "raw": "$ ",
+            "raw_bytes_b64": "JCA="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.0,
+          "event": "send",
+          "data": {
+            "keys": "ls\r",
+            "bytes_b64": "bHMN"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.5,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ls\nfile",
+            "raw": "$ ls\nfile",
+            "raw_bytes_b64": "JCBscwpmaWxl"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000003.5,
+          "event": "send",
+          "data": {
+            "keys": "caf\u00e9",
+            "bytes_b64": "Y2Fmgg=="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_offset_past",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?offset=1000",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "2"
+      },
+      "body": []
+    },
+    {
+      "id": "entries_event",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?event=read",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "293"
+      },
+      "body": [
+        {
+          "ts": 1700000001.0,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ",
+            "raw": "$ ",
+            "raw_bytes_b64": "JCA="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.5,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ls\nfile",
+            "raw": "$ ls\nfile",
+            "raw_bytes_b64": "JCBscwpmaWxl"
+          },
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_event_none",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?event=nosuch",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "2"
+      },
+      "body": []
+    },
+    {
+      "id": "entries_event_empty",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?event=",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "777"
+      },
+      "body": [
+        {
+          "ts": 1700000000.25,
+          "event": "log_start",
+          "data": {
+            "started_at": 1700000000.25
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000000.5,
+          "event": "runtime_started",
+          "data": {
+            "session_id": "recorded"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000001.0,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ",
+            "raw": "$ ",
+            "raw_bytes_b64": "JCA="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.0,
+          "event": "send",
+          "data": {
+            "keys": "ls\r",
+            "bytes_b64": "bHMN"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.5,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ls\nfile",
+            "raw": "$ ls\nfile",
+            "raw_bytes_b64": "JCBscwpmaWxl"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000003.5,
+          "event": "send",
+          "data": {
+            "keys": "caf\u00e9",
+            "bytes_b64": "Y2Fmgg=="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_limit_max",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=500",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "777"
+      },
+      "body": [
+        {
+          "ts": 1700000000.25,
+          "event": "log_start",
+          "data": {
+            "started_at": 1700000000.25
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000000.5,
+          "event": "runtime_started",
+          "data": {
+            "session_id": "recorded"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000001.0,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ",
+            "raw": "$ ",
+            "raw_bytes_b64": "JCA="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.0,
+          "event": "send",
+          "data": {
+            "keys": "ls\r",
+            "bytes_b64": "bHMN"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.5,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ls\nfile",
+            "raw": "$ ls\nfile",
+            "raw_bytes_b64": "JCBscwpmaWxl"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000003.5,
+          "event": "send",
+          "data": {
+            "keys": "caf\u00e9",
+            "bytes_b64": "Y2Fmgg=="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_limit_zero",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=0",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "144"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "greater_than_equal",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be greater than or equal to 1",
+            "input": "0",
+            "ctx": {
+              "ge": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_limit_over",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=501",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "144"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "less_than_equal",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be less than or equal to 500",
+            "input": "501",
+            "ctx": {
+              "le": 500
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_limit_text",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=ten",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "151"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "int_parsing",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be a valid integer, unable to parse string as an integer",
+            "input": "ten"
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_limit_float",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=1.5",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "151"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "int_parsing",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be a valid integer, unable to parse string as an integer",
+            "input": "1.5"
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_offset_negative",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?offset=-1",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "146"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "greater_than_equal",
+            "loc": [
+              "query",
+              "offset"
+            ],
+            "msg": "Input should be greater than or equal to 0",
+            "input": "-1",
+            "ctx": {
+              "ge": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_event_long",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?event=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "250"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "string_too_long",
+            "loc": [
+              "query",
+              "event"
+            ],
+            "msg": "String should have at most 100 characters",
+            "input": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "ctx": {
+              "max_length": 100
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_event_max",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?event=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "2"
+      },
+      "body": []
+    },
+    {
+      "id": "entries_limit_repeated",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=1&limit=2",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "180"
+      },
+      "body": [
+        {
+          "ts": 1700000003.5,
+          "event": "send",
+          "data": {
+            "keys": "caf\u00e9",
+            "bytes_b64": "Y2Fmgg=="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_limit_padded",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=%205.0%0A",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "573"
+      },
+      "body": [
+        {
+          "ts": 1700000001.0,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ",
+            "raw": "$ ",
+            "raw_bytes_b64": "JCA="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.0,
+          "event": "send",
+          "data": {
+            "keys": "ls\r",
+            "bytes_b64": "bHMN"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.5,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ls\nfile",
+            "raw": "$ ls\nfile",
+            "raw_bytes_b64": "JCBscwpmaWxl"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000003.5,
+          "event": "send",
+          "data": {
+            "keys": "caf\u00e9",
+            "bytes_b64": "Y2Fmgg=="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_limit_underscore",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=1_0",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "777"
+      },
+      "body": [
+        {
+          "ts": 1700000000.25,
+          "event": "log_start",
+          "data": {
+            "started_at": 1700000000.25
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000000.5,
+          "event": "runtime_started",
+          "data": {
+            "session_id": "recorded"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000001.0,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ",
+            "raw": "$ ",
+            "raw_bytes_b64": "JCA="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.0,
+          "event": "send",
+          "data": {
+            "keys": "ls\r",
+            "bytes_b64": "bHMN"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000002.5,
+          "event": "read",
+          "data": {
+            "type": "snapshot",
+            "screen": "$ ls\nfile",
+            "raw": "$ ls\nfile",
+            "raw_bytes_b64": "JCBscwpmaWxl"
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000003.5,
+          "event": "send",
+          "data": {
+            "keys": "caf\u00e9",
+            "bytes_b64": "Y2Fmgg=="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_limit_signed",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=%2B2",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "180"
+      },
+      "body": [
+        {
+          "ts": 1700000003.5,
+          "event": "send",
+          "data": {
+            "keys": "caf\u00e9",
+            "bytes_b64": "Y2Fmgg=="
+          },
+          "session_id": "recorded"
+        },
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_limit_empty",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "148"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "int_parsing",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be a valid integer, unable to parse string as an integer",
+            "input": ""
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_limit_huge",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=99999999999999999999",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "161"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "less_than_equal",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be less than or equal to 500",
+            "input": "99999999999999999999",
+            "ctx": {
+              "le": 500
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_limit_fraction",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=5.",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "150"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "int_parsing",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be a valid integer, unable to parse string as an integer",
+            "input": "5."
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_every_error",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?event=eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee&offset=-1&limit=0",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "516"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "greater_than_equal",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be greater than or equal to 1",
+            "input": "0",
+            "ctx": {
+              "ge": 1
+            }
+          },
+          {
+            "type": "greater_than_equal",
+            "loc": [
+              "query",
+              "offset"
+            ],
+            "msg": "Input should be greater than or equal to 0",
+            "input": "-1",
+            "ctx": {
+              "ge": 0
+            }
+          },
+          {
+            "type": "string_too_long",
+            "loc": [
+              "query",
+              "event"
+            ],
+            "msg": "String should have at most 100 characters",
+            "input": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "ctx": {
+              "max_length": 100
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_event_astral",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?event=%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "2"
+      },
+      "body": []
+    },
+    {
+      "id": "entries_event_astral_long",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?event=%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80%F0%9F%98%80",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "553"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "string_too_long",
+            "loc": [
+              "query",
+              "event"
+            ],
+            "msg": "String should have at most 100 characters",
+            "input": "\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00",
+            "ctx": {
+              "max_length": 100
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_anonymous_bad_query",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=0",
+      "auth": "none",
+      "request_headers": {},
+      "status": 401,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "entries_no_recording_scope_bad_query",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=0",
+      "auth": "no_recording",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "144"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "greater_than_equal",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be greater than or equal to 1",
+            "input": "0",
+            "ctx": {
+              "ge": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "entries_viewer",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries?limit=1",
+      "auth": "viewer",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "74"
+      },
+      "body": [
+        {
+          "ts": 1700000004.0,
+          "event": "log_stop",
+          "data": {},
+          "session_id": "recorded"
+        }
+      ]
+    },
+    {
+      "id": "entries_no_recording_scope",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries",
+      "auth": "no_recording",
+      "request_headers": {},
+      "status": 403,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "insufficient privileges"
+      }
+    },
+    {
+      "id": "entries_anonymous",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/entries",
+      "auth": "none",
+      "request_headers": {},
+      "status": 401,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "entries_unknown",
+      "method": "GET",
+      "path": "/api/sessions/no-such-session/recording/entries",
+      "auth": "token",
+      "request_headers": {},
+      "status": 404,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "45"
+      },
+      "body": {
+        "detail": "unknown session: no-such-session"
+      }
+    },
+    {
+      "id": "entries_unknown_bad_query",
+      "method": "GET",
+      "path": "/api/sessions/no-such-session/recording/entries?limit=0",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "144"
+      },
+      "body": {
+        "detail": [
+          {
+            "type": "greater_than_equal",
+            "loc": [
+              "query",
+              "limit"
+            ],
+            "msg": "Input should be greater than or equal to 1",
+            "input": "0",
+            "ctx": {
+              "ge": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "download",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "888",
+        "accept-ranges": "bytes",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "{\"ts\": 1700000000.25, \"event\": \"log_start\", \"data\": {\"started_at\": 1700000000.25}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000000.5, \"event\": \"runtime_started\", \"data\": {\"session_id\": \"recorded\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000001.0, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ \", \"raw\": \"$ \", \"raw_bytes_b64\": \"JCA=\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000002.0, \"event\": \"send\", \"data\": {\"keys\": \"ls\\r\", \"bytes_b64\": \"bHMN\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000002.5, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ ls\\nfile\", \"raw\": \"$ ls\\nfile\", \"raw_bytes_b64\": \"JCBscwpmaWxl\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000003.0, \"event\": \"annot\n{\"ts\": 1700000003.5, \"event\": \"send\", \"data\": {\"keys\": \"caf\\u00e9\", \"bytes_b64\": \"Y2Fmgg==\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000004.0, \"event\": \"log_stop\", \"data\": {}, \"session_id\": \"recorded\"}\n"
+    },
+    {
+      "id": "download_range",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=0-9"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "10",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 0-9/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "{\"ts\": 170"
+    },
+    {
+      "id": "download_range_suffix",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=-10"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "10",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 878-887/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "ecorded\"}\n"
+    },
+    {
+      "id": "download_range_open",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=880-"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "8",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 880-887/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "orded\"}\n"
+    },
+    {
+      "id": "download_range_past_end",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=880-5000"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "8",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 880-887/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "orded\"}\n"
+    },
+    {
+      "id": "download_range_suffix_whole",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=-5000"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "888",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 0-887/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "{\"ts\": 1700000000.25, \"event\": \"log_start\", \"data\": {\"started_at\": 1700000000.25}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000000.5, \"event\": \"runtime_started\", \"data\": {\"session_id\": \"recorded\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000001.0, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ \", \"raw\": \"$ \", \"raw_bytes_b64\": \"JCA=\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000002.0, \"event\": \"send\", \"data\": {\"keys\": \"ls\\r\", \"bytes_b64\": \"bHMN\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000002.5, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ ls\\nfile\", \"raw\": \"$ ls\\nfile\", \"raw_bytes_b64\": \"JCBscwpmaWxl\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000003.0, \"event\": \"annot\n{\"ts\": 1700000003.5, \"event\": \"send\", \"data\": {\"keys\": \"caf\\u00e9\", \"bytes_b64\": \"Y2Fmgg==\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000004.0, \"event\": \"log_stop\", \"data\": {}, \"session_id\": \"recorded\"}\n"
+    },
+    {
+      "id": "download_range_padded",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "BYTES = 1 - 2"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "2",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 1-2/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "\"t"
+    },
+    {
+      "id": "download_ranges",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=20-29,0-4"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "multipart/byteranges; boundary=<boundary>",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "239",
+        "accept-ranges": "bytes",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "--<boundary>\r\nContent-Type: application/json\r\nContent-Range: bytes 0-4/888\r\n\r\n{\"ts\"\r\n--<boundary>\r\nContent-Type: application/json\r\nContent-Range: bytes 20-29/888\r\n\r\n, \"event\":\r\n--<boundary>--"
+    },
+    {
+      "id": "download_ranges_overlap",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=0-5,3-9,10-12"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "13",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 0-12/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "{\"ts\": 170000"
+    },
+    {
+      "id": "download_ranges_skipped",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=,-,7,a-b,2-3"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "2",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 2-3/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "ts"
+    },
+    {
+      "id": "download_ranges_too_many",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0,0-0"
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "888",
+        "accept-ranges": "bytes",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "{\"ts\": 1700000000.25, \"event\": \"log_start\", \"data\": {\"started_at\": 1700000000.25}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000000.5, \"event\": \"runtime_started\", \"data\": {\"session_id\": \"recorded\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000001.0, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ \", \"raw\": \"$ \", \"raw_bytes_b64\": \"JCA=\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000002.0, \"event\": \"send\", \"data\": {\"keys\": \"ls\\r\", \"bytes_b64\": \"bHMN\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000002.5, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ ls\\nfile\", \"raw\": \"$ ls\\nfile\", \"raw_bytes_b64\": \"JCBscwpmaWxl\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000003.0, \"event\": \"annot\n{\"ts\": 1700000003.5, \"event\": \"send\", \"data\": {\"keys\": \"caf\\u00e9\", \"bytes_b64\": \"Y2Fmgg==\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000004.0, \"event\": \"log_stop\", \"data\": {}, \"session_id\": \"recorded\"}\n"
+    },
+    {
+      "id": "download_range_unsatisfiable",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=5000-"
+      },
+      "status": 416,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "0",
+        "content-range": "bytes */888"
+      },
+      "body": ""
+    },
+    {
+      "id": "download_range_backwards",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=5-2"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "41"
+      },
+      "body": "Range header: start must be less than end"
+    },
+    {
+      "id": "download_range_units",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "items=0-1"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "24"
+      },
+      "body": "Only support bytes range"
+    },
+    {
+      "id": "download_range_no_equals",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes"
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "23"
+      },
+      "body": "Malformed range header."
+    },
+    {
+      "id": "download_range_empty",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes="
+      },
+      "status": 400,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "content-length": "37"
+      },
+      "body": "Range header: range must be requested"
+    },
+    {
+      "id": "download_if_range_etag",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=0-9",
+        "If-Range": "<etag>"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "10",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 0-9/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "{\"ts\": 170"
+    },
+    {
+      "id": "download_if_range_date",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=0-9",
+        "If-Range": "<last-modified>"
+      },
+      "status": 206,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "10",
+        "accept-ranges": "bytes",
+        "content-range": "bytes 0-9/888",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "{\"ts\": 170"
+    },
+    {
+      "id": "download_if_range_stale",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "token",
+      "request_headers": {
+        "Range": "bytes=0-9",
+        "If-Range": "\"stale\""
+      },
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-disposition": "attachment; filename=\"recorded.jsonl\"",
+        "content-length": "888",
+        "accept-ranges": "bytes",
+        "etag": "\"1ab18a46b041bc6728c07a0addfa4934\"",
+        "last-modified": "Tue, 14 Nov 2023 22:13:20 GMT"
+      },
+      "body": "{\"ts\": 1700000000.25, \"event\": \"log_start\", \"data\": {\"started_at\": 1700000000.25}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000000.5, \"event\": \"runtime_started\", \"data\": {\"session_id\": \"recorded\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000001.0, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ \", \"raw\": \"$ \", \"raw_bytes_b64\": \"JCA=\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000002.0, \"event\": \"send\", \"data\": {\"keys\": \"ls\\r\", \"bytes_b64\": \"bHMN\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000002.5, \"event\": \"read\", \"data\": {\"type\": \"snapshot\", \"screen\": \"$ ls\\nfile\", \"raw\": \"$ ls\\nfile\", \"raw_bytes_b64\": \"JCBscwpmaWxl\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000003.0, \"event\": \"annot\n{\"ts\": 1700000003.5, \"event\": \"send\", \"data\": {\"keys\": \"caf\\u00e9\", \"bytes_b64\": \"Y2Fmgg==\"}, \"session_id\": \"recorded\"}\n{\"ts\": 1700000004.0, \"event\": \"log_stop\", \"data\": {}, \"session_id\": \"recorded\"}\n"
+    },
+    {
+      "id": "download_no_recording_scope",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "no_recording",
+      "request_headers": {},
+      "status": 403,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "insufficient privileges"
+      }
+    },
+    {
+      "id": "download_anonymous",
+      "method": "GET",
+      "path": "/api/sessions/recorded/recording/download",
+      "auth": "none",
+      "request_headers": {},
+      "status": 401,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "download_unknown",
+      "method": "GET",
+      "path": "/api/sessions/no-such-session/recording/download",
+      "auth": "token",
+      "request_headers": {},
+      "status": 404,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "45"
+      },
+      "body": {
+        "detail": "unknown session: no-such-session"
+      }
+    },
+    {
+      "id": "meta_malformed_id",
+      "method": "GET",
+      "path": "/api/sessions/bad.id/recording",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "42"
+      },
+      "body": {
+        "detail": "invalid route path parameters"
+      }
+    },
+    {
+      "id": "meta_unicode_id",
+      "method": "GET",
+      "path": "/api/sessions/caf%C3%A9-2/recording",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "42"
+      },
+      "body": {
+        "detail": "invalid route path parameters"
+      }
+    },
+    {
+      "id": "entries_malformed_id_bad_query",
+      "method": "GET",
+      "path": "/api/sessions/a%20b/recording/entries?limit=0",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "42"
+      },
+      "body": {
+        "detail": "invalid route path parameters"
+      }
+    },
+    {
+      "id": "download_malformed_id",
+      "method": "GET",
+      "path": "/api/sessions/bad.id/recording/download",
+      "auth": "token",
+      "request_headers": {},
+      "status": 422,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "42"
+      },
+      "body": {
+        "detail": "invalid route path parameters"
+      }
+    },
+    {
+      "id": "meta_malformed_id_anonymous",
+      "method": "GET",
+      "path": "/api/sessions/bad.id/recording",
+      "auth": "none",
+      "request_headers": {},
+      "status": 401,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "authentication required"
+      }
+    },
+    {
+      "id": "wrong_method_malformed_id",
+      "method": "PUT",
+      "path": "/api/sessions/bad.id/recording",
+      "auth": "token",
+      "request_headers": {},
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "GET",
+        "content-length": "31"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
+      "id": "wrong_method_malformed_id_anonymous",
+      "method": "PUT",
+      "path": "/api/sessions/bad.id/recording",
+      "auth": "none",
+      "request_headers": {},
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "GET",
+        "content-length": "31"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
+      "id": "wrong_method_anonymous",
+      "method": "PUT",
+      "path": "/api/sessions/recorded/recording",
+      "auth": "none",
+      "request_headers": {},
+      "status": 405,
+      "headers": {
+        "content-type": "application/json",
+        "allow": "GET",
+        "content-length": "31"
+      },
+      "body": {
+        "detail": "Method Not Allowed"
+      }
+    },
+    {
+      "id": "bare_meta",
+      "method": "GET",
+      "path": "/api/sessions/unrecorded/recording",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "85"
+      },
+      "body": {
+        "session_id": "unrecorded",
+        "exists": false,
+        "path": null,
+        "size_bytes": 0,
+        "enabled": false
+      }
+    },
+    {
+      "id": "bare_entries",
+      "method": "GET",
+      "path": "/api/sessions/unrecorded/recording/entries",
+      "auth": "token",
+      "request_headers": {},
+      "status": 200,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "2"
+      },
+      "body": []
+    },
+    {
+      "id": "bare_download",
+      "method": "GET",
+      "path": "/api/sessions/unrecorded/recording/download",
+      "auth": "token",
+      "request_headers": {},
+      "status": 404,
+      "headers": {
+        "content-type": "application/json",
+        "content-length": "36"
+      },
+      "body": {
+        "detail": "recording not available"
+      }
+    }
+  ]
+}

@@ -218,10 +218,11 @@ func (c *CaptureConnector) GetSnapshot() Frame {
 	return c.snapshotLocked()
 }
 
-// SetMode re-advertises the (always-open) input mode. Port of
-// CaptureConnector.set_mode.
+// SetMode announces the input mode it is given. Port of
+// CaptureConnector.set_mode. The hub applies the hello's mode, so a constant
+// "open" here overrode a session defined as hijack.
 func (c *CaptureConnector) SetMode(mode string) []Frame {
-	return []Frame{{"type": "worker_hello", "input_mode": "open"}}
+	return []Frame{{"type": "worker_hello", "input_mode": mode}}
 }
 
 // Clear resets buffer + pending and returns an empty term frame. Port of

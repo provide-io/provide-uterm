@@ -39,13 +39,42 @@ import { ControlFrameDecoder } from "../control-channel/index.ts";
 import { makeSnapshotFrame } from "../frames/index.ts";
 import { type InputMode, safeFloat, type WorkerSocket } from "../hub/index.ts";
 import { safeInt } from "../pycompat/index.ts";
+import { getLogger, type Logger } from "../telemetry/index.ts";
 import type { SessionHub } from "./session-hub.ts";
+import type { SessionRecording } from "./session-recording.ts";
 
 /** Columns assumed when a connector's snapshot says nothing usable. */
 const DEFAULT_COLS = 80;
 
 /** Rows assumed when a connector's snapshot says nothing usable. */
 const DEFAULT_ROWS = 25;
+
+/**
+ * How long to wait after a poll that found nothing, in milliseconds.
+ *
+ * The reference's run loop sleeps 0.05 s when `poll_messages()` comes back
+ * empty, so a connector with no wait of its own is not polled in a hot loop.
+ */
+export const POLL_IDLE_MS = 50;
+
+/**
+ * How long to wait after a poll that threw, in milliseconds, by how many have
+ * thrown in a row. The reference's run-loop backoff, `[0.25, 0.5, 1.0, 2.0,
+ * 5.0]` seconds, staying on the last step.
+ */
+export const POLL_ERROR_BACKOFF_MS: readonly number[] = [250, 500, 1000, 2000, 5000];
+
+/** Wait `ms` without holding the process open for it. */
+function idle(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms).unref();
+  });
+}
+
+/** What went wrong, as a recorded `runtime_error` carries it. */
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /** A connector attached to the hub, and the way to take it back off. */
 export interface AttachedWorker {
@@ -57,6 +86,29 @@ export interface AttachedWorker {
 export interface AttachOptions {
   /** Wall seconds, as every timestamp on this wire is in. */
   now?: (() => number) | undefined;
+  /**
+   * The session's recording, written to as traffic crosses the attachment.
+   *
+   * Where the reference's runtime logs: every frame the worker sends, every
+   * chunk it receives, and the start of the run. The recording decides for
+   * itself whether anything is written, so a session that does not record is
+   * handed one that is not open, or none.
+   */
+  recording?: SessionRecording | undefined;
+  /** How the poll loop waits. A real, unreferenced timer unless a test says otherwise. */
+  sleep?: ((ms: number) => Promise<void>) | undefined;
+  /**
+   * Told the text of every failure the attachment survives — a poll that
+   * threw, or traffic the hub or the recording could not take. The
+   * reference's run loop stores the same text as the runtime's `_last_error`.
+   */
+  onError?: ((error: string) => void) | undefined;
+  /**
+   * Where those failures are logged. The reference's runtime module logger
+   * unless a test says otherwise: a failure nobody can see is how a recording
+   * that stopped writing goes unnoticed.
+   */
+  logger?: Logger | undefined;
 }
 
 /**
@@ -124,6 +176,11 @@ export async function attachConnector(
   options: AttachOptions = {},
 ): Promise<AttachedWorker> {
   const now = options.now ?? (() => Date.now() / 1000);
+  const recording = options.recording;
+  const sleep = options.sleep ?? idle;
+  const logger = options.logger ?? getLogger("provide.uterm.server.runtime");
+  /** Set on detach. The poll loop checks it after every await. */
+  let detached = false;
   /** The last screen the connector produced, for the link's synchronous read. */
   let lastSnapshot: WorkerMessage | undefined;
 
@@ -138,14 +195,17 @@ export async function attachConnector(
     for (const message of messages) {
       if (String(message.type ?? "") !== "snapshot") {
         await hub.router.broadcast(sessionId, message);
-        continue;
+      } else {
+        lastSnapshot = message;
+        const frame = workerSnapshotFrame(message, now());
+        const committed = await hub.commitSnapshotEvent(sessionId, frame, socket);
+        if (committed !== undefined) {
+          await hub.router.broadcast(sessionId, committed, socket, Number(committed.event_seq));
+        }
       }
-      lastSnapshot = message;
-      const frame = workerSnapshotFrame(message, now());
-      const committed = await hub.commitSnapshotEvent(sessionId, frame, socket);
-      if (committed !== undefined) {
-        await hub.router.broadcast(sessionId, committed, socket, Number(committed.event_seq));
-      }
+      // Logged once it has been handed over, as the reference logs a frame
+      // after its socket write: the worker's message, not the hub's frame.
+      await recording?.logOutbound(message);
     }
   }
 
@@ -174,11 +234,37 @@ export async function attachConnector(
     getSnapshot: () => lastSnapshot as Record<string, unknown> | undefined,
   };
 
+  /**
+   * Report a failure the attachment carries on past. Never throws.
+   *
+   * The reference's run loop catches whatever ended its connection — a poll,
+   * a socket write, a recording store that could not write (disk full,
+   * EACCES) — logs `hosted_session_runtime_failed`, keeps the text as
+   * `_last_error`, and records a `runtime_error`. Here, where nothing is
+   * awaiting the work that failed, a rejection that escaped would be an
+   * unhandled one, and Node exits on those: a full disk would take every
+   * session down with it. So the same three things are done, and the
+   * `runtime_error` entry is best-effort — the store that just failed is the
+   * one it would be written to, and its failing again is logged, not thrown.
+   */
+  async function report(error: unknown): Promise<void> {
+    const text = errorText(error);
+    logger.warn({ session_id: sessionId, error: text }, "hosted_session_runtime_failed");
+    options.onError?.(text);
+    try {
+      await recording?.logEvent("runtime_error", { error: text });
+    } catch (recordError) {
+      logger.warn({ session_id: sessionId, error: errorText(recordError) }, "hosted_session_recording_failed");
+    }
+  }
+
   const link = new WorkerLink({ workerId: sessionId, managerUrl: "http://in-process", worker: target, now });
   // What the link decides to send back travels the same path a worker's own
-  // socket write would: straight into the hub's inbound handling.
+  // socket write would: straight into the hub's inbound handling. Nothing
+  // awaits it, so a failure on the way is reported here rather than left to
+  // become an unhandled rejection.
   link.onSend((message) => {
-    void inbound([message]);
+    void inbound([message]).catch(report);
   });
 
   const decoder = new ControlFrameDecoder();
@@ -191,10 +277,15 @@ export async function attachConnector(
    */
   const socket: WorkerSocket = {
     sendText: async (payload) => {
+      // Recorded as it arrives and before it is acted on, in the reference's
+      // order: the raw chunk, then each thing it decoded to.
+      await recording?.logWireRecv(payload);
       for (const chunk of decoder.feed(payload)) {
         if (chunk.kind === "data") {
+          await recording?.logSend(chunk.data);
           await link.handleData(chunk.data);
         } else {
+          await recording?.logControlRecv(chunk.control);
           await link.handleControl(chunk.control);
         }
       }
@@ -202,13 +293,65 @@ export async function attachConnector(
   };
 
   hub.registerWorker(sessionId, socket, mode);
+  // The reference's `runtime_started`, written as its worker connects and
+  // before the first screen it sends.
+  await recording?.logEvent("runtime_started", { session_id: sessionId });
   // The reference's worker sends a snapshot as soon as it connects, which is
   // why `GET /api/sessions/{id}/snapshot` answers with a screen before anybody
   // has typed anything. Sent through the same inbound path as every later one.
   await inbound([await connector.getSnapshot()]);
 
+  /**
+   * Poll the connector for output it produced on its own.
+   *
+   * The reference's `_bridge_session` polls `poll_messages()` in its run loop
+   * beside the socket read, sends whatever comes back through the same path
+   * as every other frame — broadcast, recorded, annotated — and sleeps 50 ms
+   * when nothing did. Input reaches this worker through the socket's own
+   * handler, so the loop has nothing to multiplex with and simply waits for
+   * each poll: the reference's 0.5 s timeout exists only to get back to its
+   * socket read, and cancelling a poll here would lose whatever it had read.
+   *
+   * A poll that throws ends the reference's connection, which it records as a
+   * `runtime_error` and retries on its backoff. There is no connection here
+   * to drop, so the error is reported and the poll retried on the same
+   * schedule; one that succeeds starts the schedule over. Handing what a poll
+   * returned on — the hub's broadcast, the recording's write — fails the same
+   * way and is treated the same way: in the reference both run inside the
+   * one `try` its run loop catches.
+   *
+   * Detaching stops it. A poll still in flight then is not waited for — the
+   * reference cancels it — and what it returns afterwards is dropped.
+   */
+  async function poll(): Promise<void> {
+    let failures = 0;
+    while (!detached) {
+      try {
+        const messages = await connector.pollMessages();
+        failures = 0;
+        if (detached) {
+          return;
+        }
+        if (messages.length === 0) {
+          await sleep(POLL_IDLE_MS);
+          continue;
+        }
+        await inbound(messages);
+      } catch (error) {
+        if (detached) {
+          return;
+        }
+        await report(error);
+        await sleep(POLL_ERROR_BACKOFF_MS[Math.min(failures, POLL_ERROR_BACKOFF_MS.length - 1)] as number);
+        failures += 1;
+      }
+    }
+  }
+  void poll();
+
   return {
     detach: async () => {
+      detached = true;
       hub.connections.deregisterWorker(sessionId, socket);
       await hub.pruneIfIdle(sessionId);
     },

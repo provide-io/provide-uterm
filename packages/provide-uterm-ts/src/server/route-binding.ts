@@ -120,15 +120,17 @@ export function bindApiRoutes(
     throw new RouteBindingError("role_authorizer is required for routes with required roles");
   }
 
-  /** The methods this binding accepts for one path, sorted for the header. */
+  /**
+   * The methods this binding accepts for a path of this shape, sorted for the
+   * header.
+   *
+   * By shape rather than by full match, so a path whose id fails a route's
+   * grammar still has the route's methods: the reference matches the method
+   * before it validates a parameter, and answers a wrong verb on a malformed
+   * id with 405 and its `Allow`, not with 422.
+   */
   const allowedFor = (path: string): HttpMethod[] =>
-    [
-      ...new Set(
-        selected
-          .filter((route) => API_ROUTE_REGISTRY.match(route.method, path)?.route === route)
-          .map((route) => route.method),
-      ),
-    ].sort();
+    [...new Set(selected.filter((route) => matchesShape(path, route.template)).map((route) => route.method))].sort();
 
   return {
     routes: selected,
@@ -141,13 +143,15 @@ export function bindApiRoutes(
         // router that advertised operations it cannot serve would send a
         // client to a verb that 404s.
         const allowed = allowedFor(path);
+        // The right verb on a path whose parameters fail the route's grammar
+        // is a bad request, not an unknown one or a wrong verb.
+        if (allowed.includes(method as HttpMethod)) {
+          return refusal(422, "invalid route path parameters");
+        }
         if (allowed.length > 0) {
           return refusal(405, "Method Not Allowed", { Allow: allowed.join(", ") });
         }
-        // The path might still belong to a route whose grammar it fails, in
-        // which case it is a bad request rather than an unknown one.
-        const known = selected.some((entry) => matchesShape(path, entry.template));
-        return known ? refusal(422, "invalid route path parameters") : refusal(404, "Not Found");
+        return refusal(404, "Not Found");
       }
 
       const context: RouteContext = { method, path, params: match.params, route };
@@ -179,7 +183,7 @@ export function bindApiRoutes(
  * from the operation not existing: one sends a client to fix its request, the
  * other sends it looking for a different endpoint.
  */
-function matchesShape(path: string, template: string): boolean {
+export function matchesShape(path: string, template: string): boolean {
   const pathSegments = path.split("/").slice(1);
   const templateSegments = template.split("/").slice(1);
   if (pathSegments.length !== templateSegments.length) {

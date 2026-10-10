@@ -7,6 +7,7 @@ package bridge
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/coder/websocket"
@@ -66,6 +67,11 @@ func (b *TermBridge) sendLoop(ctx context.Context, cancel context.CancelFunc, co
 			}
 			if err := conn.Write(ctx, websocket.MessageText, []byte(payload)); err != nil {
 				b.logger.Warn("send_loop_network_error", "worker_id", b.workerID, "error", err.Error())
+				b.setConnErr(err)
+				return
+			}
+			if err := b.observer.FrameSent(payload, observedFrame(f)); err != nil {
+				b.setConnErr(err)
 				return
 			}
 		}
@@ -93,6 +99,7 @@ func (b *TermBridge) recvLoop(ctx context.Context, cancel context.CancelFunc, co
 		msgType, raw, err := conn.Read(ctx)
 		if err != nil {
 			b.logger.Debug("recv_loop_read_error", "worker_id", b.workerID, "error", err.Error())
+			b.setConnErr(err)
 			return
 		}
 		var chunk string
@@ -101,18 +108,32 @@ func (b *TermBridge) recvLoop(ctx context.Context, cancel context.CancelFunc, co
 		} else {
 			chunk = string(raw)
 		}
+		if err := b.observer.WireReceived(chunk); err != nil {
+			b.setConnErr(err)
+			return
+		}
 		events, err := decoder.Feed(chunk)
 		if err != nil {
 			b.logger.Debug("recv_loop_bad_stream", "worker_id", b.workerID, "error", err.Error())
+			// The reference raises RuntimeError(f"invalid control channel: {exc}").
+			b.setConnErr(fmt.Errorf("invalid control channel: %w", err))
 			return
 		}
 		for _, event := range events {
 			switch e := event.(type) {
 			case controlchannel.DataChunk:
 				if e.Data != "" {
+					if err := b.observer.InputReceived(e.Data); err != nil {
+						b.setConnErr(err)
+						return
+					}
 					b.sendKeys(ctx, e.Data)
 				}
 			case controlchannel.ControlChunk:
+				if err := b.observer.ControlReceived(e.Control); err != nil {
+					b.setConnErr(err)
+					return
+				}
 				b.dispatchControl(ctx, e.Control)
 			}
 		}

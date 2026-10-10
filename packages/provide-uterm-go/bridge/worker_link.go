@@ -110,6 +110,9 @@ type Config struct {
 	BearerToken string
 	// Logger is the structured logger; nil falls back to the telemetry logger.
 	Logger *slog.Logger
+	// Observer, when set, sees each connection's traffic (see Observer); a
+	// hosted session records itself through it.
+	Observer Observer
 }
 
 // defaultReconnectBackoff mirrors the Python _RECONNECT_BACKOFF tuple.
@@ -130,6 +133,7 @@ type TermBridge struct {
 	dialTimeout       time.Duration
 	bearerToken       string
 	logger            *slog.Logger
+	observer          Observer
 
 	// reconnectBackoff is the backoff schedule (overridable in tests).
 	reconnectBackoff []time.Duration
@@ -144,6 +148,9 @@ type TermBridge struct {
 	latestSnapshot  map[string]any
 	resumeToken     string
 	customHandlers  map[string]MessageHandler
+	// endErr is what ended the current connection: the first error a send or
+	// receive loop stopped on. See setConnErr.
+	endErr error
 }
 
 // queuedFrame is one pending outbound message. isTerm selects raw terminal data
@@ -178,6 +185,10 @@ func New(cfg Config) *TermBridge {
 	if encoding == "" {
 		encoding = "cp437"
 	}
+	var observer Observer = nopObserver{}
+	if cfg.Observer != nil {
+		observer = cfg.Observer
+	}
 	return &TermBridge{
 		worker:            cfg.Worker,
 		workerID:          cfg.WorkerID,
@@ -190,6 +201,7 @@ func New(cfg Config) *TermBridge {
 		dialTimeout:       dialTimeout,
 		bearerToken:       cfg.BearerToken,
 		logger:            logger,
+		observer:          observer,
 		reconnectBackoff:  defaultReconnectBackoff,
 		sendQ:             make(chan queuedFrame, 2000),
 		resumeToken:       cfg.ResumeToken,
@@ -356,6 +368,7 @@ func (b *TermBridge) run(ctx context.Context) {
 // the URL is permanently malformed, so run can decide on backoff vs. give-up.
 // On a successful dial it resets *attempt to 0.
 func (b *TermBridge) dialAndServe(ctx context.Context, wsURL string, attempt *int) (status int, permanentURL bool) {
+	b.observer.AttemptStarted()
 	dialCtx, cancel := context.WithTimeout(ctx, b.dialTimeout)
 	defer cancel()
 	conn, resp, err := websocket.Dial(dialCtx, wsURL, b.dialOptions())
@@ -365,11 +378,21 @@ func (b *TermBridge) dialAndServe(ctx context.Context, wsURL string, attempt *in
 		}
 		permanentURL = isMalformedWSURL(wsURL)
 		b.logger.Warn("term_bridge_disconnected", "worker_id", b.workerID, "error", err.Error(), "attempt", *attempt)
+		// A dial abandoned because the bridge is stopping is not a failure.
+		if ctx.Err() != nil {
+			err = nil
+		}
+		b.observer.AttemptEnded(err)
 		return status, permanentURL
 	}
 	*attempt = 0
 	conn.SetReadLimit(int64(b.maxWSMessageBytes))
-	b.serveConnection(ctx, conn)
+	if err := b.observer.Connected(); err != nil {
+		_ = conn.CloseNow()
+		b.observer.AttemptEnded(err)
+		return 0, false
+	}
+	b.observer.AttemptEnded(b.serveConnection(ctx, conn))
 	return 0, false
 }
 
@@ -413,8 +436,12 @@ func (b *TermBridge) handlePermanentError(status int, permanentURL bool) bool {
 
 // serveConnection runs one connection lifetime: emit the handshake, then run
 // the send + recv (+ optional heartbeat) goroutines until any of them exits.
-// Port of _handle_connection.
-func (b *TermBridge) serveConnection(ctx context.Context, conn *websocket.Conn) {
+// Port of _handle_connection. It returns what ended the connection — the
+// first read, write or stream error — or nil when the bridge is stopping, as
+// the reference's run loop records the exception that ended a session and
+// nothing for a cancellation.
+func (b *TermBridge) serveConnection(ctx context.Context, conn *websocket.Conn) error {
+	b.resetConnErr()
 	connCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer func() { _ = conn.CloseNow() }()
@@ -434,4 +461,33 @@ func (b *TermBridge) serveConnection(ctx context.Context, conn *websocket.Conn) 
 		go func() { defer wg.Done(); b.heartbeatLoop(connCtx, cancel) }()
 	}
 	wg.Wait()
+	if ctx.Err() != nil {
+		return nil
+	}
+	return b.connErr()
+}
+
+// resetConnErr clears the end error for a new connection.
+func (b *TermBridge) resetConnErr() {
+	b.mu.Lock()
+	b.endErr = nil
+	b.mu.Unlock()
+}
+
+// setConnErr records err as what ended the connection, unless something
+// already did: the loop that fails first names the end, and the other loop's
+// resulting cancellation does not overwrite it.
+func (b *TermBridge) setConnErr(err error) {
+	b.mu.Lock()
+	if b.endErr == nil {
+		b.endErr = err
+	}
+	b.mu.Unlock()
+}
+
+// connErr is what ended the current connection, or nil.
+func (b *TermBridge) connErr() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.endErr
 }

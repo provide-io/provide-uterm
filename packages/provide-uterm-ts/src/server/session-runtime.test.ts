@@ -15,10 +15,15 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { PatternDetector } from "../annotation/index.ts";
 import { SESSION_LIFECYCLES } from "../bridge/index.ts";
 import type { SessionConnector, WorkerMessage } from "../connectors/index.ts";
+import { encodeTerminalData } from "../control-channel/index.ts";
+import { InMemoryRecordingStore, NullRecordingStore } from "../recording/index.ts";
+import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { loadGolden } from "../testing/golden.ts";
 import { SessionHub } from "./session-hub.ts";
+import { type RecordingSettings, recordingSettingsFrom } from "./session-recording.ts";
 import { SessionRegistry } from "./session-registry.ts";
 import { SessionRuntimes } from "./session-runtime.ts";
 import { type SessionLifecycle, sessionDefinitionFrom } from "./session-status.ts";
@@ -518,5 +523,212 @@ describe("the vocabulary a session's state is named in", () => {
       return registry.status("one")?.lifecycle_state;
     });
     expect(held).toEqual(golden.lifecycles);
+  });
+});
+
+/** Recording settings over the defaults, with the periodic flush out of the way. */
+function recordingSettings(overrides: Record<string, unknown> = {}): RecordingSettings {
+  return recordingSettingsFrom({
+    ...(SERVER_CONFIG_DEFAULTS.recording as Record<string, unknown>),
+    flush_interval_s: 3600,
+    ...overrides,
+  });
+}
+
+/** A connector whose first screen says something, so a recording has a `read`. */
+class ScreenConnector extends FakeConnector {
+  override async getSnapshot(): Promise<WorkerMessage> {
+    return { type: "snapshot", screen: "hello", ts: 1.5 };
+  }
+}
+
+/** The events a session's recording holds, in order. */
+async function recorded(store: InMemoryRecordingStore, sessionId: string): Promise<string[]> {
+  return (await store.getEntries(sessionId)).map((entry) => String(entry.event));
+}
+
+describe("recording a session", () => {
+  it("records from the moment the worker attaches until the session is brought down", async () => {
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const store = new InMemoryRecordingStore();
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
+      build: () => new ScreenConnector(),
+      recordingStore: store,
+      recordingSettings: recordingSettings({ enabled_by_default: true }),
+    });
+
+    await runtimes.start("one");
+    await runtimes.flushRecording("one");
+    expect(await recorded(store, "one")).toStrictEqual(["log_start", "runtime_started", "read"]);
+
+    await runtimes.stopAll();
+    expect(await recorded(store, "one")).toStrictEqual(["log_start", "runtime_started", "read", "log_stop"]);
+  });
+
+  it.each([
+    // [deployment default, the session's own setting, whether it records]
+    [false, null, false],
+    [true, null, true],
+    [true, false, false],
+    [false, true, true],
+  ] as const)("with the default %s and the session saying %s, records: %s", async (byDefault, own, records) => {
+    const registry = new SessionRegistry(
+      [sessionDefinitionFrom({ session_id: "one", recording_enabled: own }, CREATED)],
+      byDefault,
+    );
+    const store = new InMemoryRecordingStore();
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
+      build: () => new ScreenConnector(),
+      recordingStore: store,
+      recordingSettings: recordingSettings({ enabled_by_default: byDefault }),
+    });
+
+    await runtimes.start("one");
+    await runtimes.stopAll();
+
+    // What the status claims and what was written are the same answer.
+    expect(registry.status("one")?.recording_enabled).toBe(records);
+    expect(registry.status("one")?.recording_available).toBe(records);
+    expect((await store.getEntries("one")).length > 0).toBe(records);
+  });
+
+  it("closes the recording it opened when the worker cannot attach", async () => {
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const store = new InMemoryRecordingStore();
+    const connector = new FakeConnector();
+    connector.getSnapshot = async () => {
+      throw new Error("no screen");
+    };
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
+      build: () => connector,
+      recordingStore: store,
+      recordingSettings: recordingSettings(),
+    });
+
+    await runtimes.start("one");
+
+    expect(observe(registry, "one")).toMatchObject({ lifecycle_state: "stopped", last_error: "no screen" });
+    expect(await recorded(store, "one")).toStrictEqual(["log_start", "runtime_started", "log_stop"]);
+  });
+
+  it("still never throws when the recording cannot be closed either", async () => {
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const store = new InMemoryRecordingStore();
+    store.endSession = async () => {
+      throw new Error("store gone");
+    };
+    const connector = new FakeConnector();
+    connector.getSnapshot = async () => {
+      throw new Error("no screen");
+    };
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
+      build: () => connector,
+      recordingStore: store,
+      recordingSettings: recordingSettings(),
+    });
+
+    await expect(runtimes.start("one")).resolves.toBeUndefined();
+    // The failure the session reports is the one that stopped it.
+    expect(observe(registry, "one")).toMatchObject({ lifecycle_state: "stopped", last_error: "no screen" });
+  });
+
+  it("opens no recording for a connector that never started", async () => {
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const store = new InMemoryRecordingStore();
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
+      build: () => new FakeConnector({ failWith: "refused" }),
+      recordingStore: store,
+      recordingSettings: recordingSettings(),
+    });
+
+    await runtimes.start("one");
+
+    expect(await store.getEntries("one")).toStrictEqual([]);
+  });
+
+  it("has nothing to flush for a session that is not up", async () => {
+    const runtimes = new SessionRuntimes(registryOf({ session_id: "one" }), new SessionHub());
+    await expect(runtimes.flushRecording("one")).resolves.toBeUndefined();
+  });
+
+  it("records nowhere when it was given nowhere to record", async () => {
+    // A hand-built runtime has the no-op store: bootstrap is what supplies the
+    // configured one.
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), { build: () => new ScreenConnector() });
+    await runtimes.start("one");
+    await runtimes.stopAll();
+    expect(runtimes.recordingStore).toBeInstanceOf(NullRecordingStore);
+  });
+});
+
+describe("annotating a recorded session", () => {
+  it("annotates input with the detector it was given", async () => {
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const store = new InMemoryRecordingStore();
+    const hub = new SessionHub();
+    const runtimes = new SessionRuntimes(registry, hub, {
+      build: () => new ScreenConnector(),
+      recordingStore: store,
+      recordingSettings: recordingSettings(),
+      detector: new PatternDetector(),
+    });
+    await runtimes.start("one");
+
+    await hub.registry.get("one")?.workerWs?.sendText(encodeTerminalData("sudo ls\r"));
+    await runtimes.flushRecording("one");
+
+    const annotations = await store.getEntries("one", { event: "annotation" });
+    expect(annotations.map((entry) => entry.data)).toStrictEqual([
+      {
+        label: "privilege_escalation",
+        description: "sudo command detected: sudo",
+        severity: "high",
+        source: "detector",
+        principal: "system",
+        span: { from_seq: 2, to_seq: 2 },
+      },
+    ]);
+    await runtimes.stopAll();
+  });
+});
+
+/** A connector whose input comes back as terminal output, the way a shell echoes. */
+class EchoConnector extends ScreenConnector {
+  // Optional only because the base class's override takes nothing.
+  override async handleInput(data?: string): Promise<WorkerMessage[]> {
+    return [{ type: "term", data }];
+  }
+}
+
+describe("a session's recording across a stop and a restart", () => {
+  it("keeps the sequence and a partial match, as the reference's runtime object does", async () => {
+    const registry = new SessionRegistry([sessionDefinitionFrom({ session_id: "one" }, CREATED)], true);
+    const store = new InMemoryRecordingStore();
+    const hub = new SessionHub();
+    const runtimes = new SessionRuntimes(registry, hub, {
+      build: () => new EchoConnector(),
+      recordingStore: store,
+      recordingSettings: recordingSettings(),
+      detector: new PatternDetector(),
+    });
+    const type = async (text: string) => {
+      await hub.registry.get("one")?.workerWs?.sendText(encodeTerminalData(text));
+    };
+
+    await runtimes.start("one");
+    await type("echo DROP TA");
+    await runtimes.stopAll();
+    await runtimes.start("one");
+    await type("BLE x;");
+    await runtimes.stopAll();
+
+    const annotations = await store.getEntries("one", { event: "annotation" });
+    // Seeded screen 1, input 2, stop; seeded screen 3, input 4. The DROP that
+    // straddled the restart is found once, on the output that completed it.
+    expect(annotations.map((entry) => entry.data)).toMatchObject([
+      { description: "SQL DROP statement detected: DROP TABLE", span: { from_seq: 4, to_seq: 4 } },
+      { description: "SQL DROP statement detected: DROP TABLE", span: { from_seq: 4, to_seq: 4 } },
+    ]);
   });
 });

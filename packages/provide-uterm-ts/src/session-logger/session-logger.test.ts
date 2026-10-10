@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-import { describe, expect, it } from "vitest";
-import { InMemoryRecordingStore, type RecordingEvent, type RecordingStore } from "../recording/index.ts";
+import { describe, expect, it, vi } from "vitest";
+import { InMemoryRecordingStore, pyJsonSize, type RecordingEvent, type RecordingStore } from "../recording/index.ts";
 import { makeRedactor } from "../redaction/index.ts";
 import { noopLogger } from "../telemetry/index.ts";
 import { loadGolden, must } from "../testing/golden.ts";
@@ -15,6 +15,7 @@ interface SessionLoggerGolden {
   wire_mode: RecordingEvent[];
   redacted: RecordingEvent[];
   quota: { entries: RecordingEvent[] };
+  quota_boundary: { max_bytes: number; payload: Record<string, unknown>; attempts: number; written: number };
   batch: { after_one: number; after_two: number };
 }
 
@@ -301,6 +302,20 @@ describe("SessionLogger defaults", () => {
 });
 
 describe("SessionLogger quota", () => {
+  it("stops at the entry the reference stops at, measuring each as CPython's json.dumps does", async () => {
+    // Compact JSON would measure these entries a quarter shorter and let a
+    // fourth one through; the reference writes three.
+    const { max_bytes: maxBytes, payload, attempts, written } = golden.quota_boundary;
+    const store = new InMemoryRecordingStore();
+    const logger = new SessionLogger(store, { maxBytes, flushIntervalS: 3600, logger: noopLogger });
+    await logger.start("s1");
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      await logger.logEvent("e", payload);
+    }
+    await logger.stop();
+    expect(await store.getEntries("s1", { event: "e", limit: 500 })).toHaveLength(written);
+  });
+
   it("suppresses writes past the byte budget and warns once", async () => {
     const warnings: string[] = [];
     const store = new InMemoryRecordingStore();
@@ -315,6 +330,43 @@ describe("SessionLogger quota", () => {
     await logger.stop();
     expect(strip(await store.getEntries("s1", { limit: 500 }))).toStrictEqual(golden.quota.entries);
     expect(warnings).toStrictEqual(["session_logger_quota_reached"]);
+  });
+
+  it("counts each entry's newline, so a budget of exactly two entries holds two", async () => {
+    // The clock is pinned so every entry measures the same; the measure is the
+    // reference's `len(json.dumps(record)) + 1`.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(1_700_000_000_250);
+    try {
+      const probe = new InMemoryRecordingStore();
+      await probe.startSession("s1", { started_at: Date.now() / 1000 });
+      const opening = (await probe.recordingMeta("s1")).size_bytes;
+      const entry = pyJsonSize({ ts: Date.now() / 1000, event: "e", data: { a: 1 }, session_id: "s1" }) + 1;
+
+      const store = new InMemoryRecordingStore();
+      const logger = new SessionLogger(store, {
+        maxBytes: opening + 2 * entry,
+        flushIntervalS: 3600,
+        logger: noopLogger,
+      });
+      await logger.start("s1");
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await logger.logEvent("e", { a: 1 });
+      }
+      await logger.stop();
+      expect(await store.getEntries("s1", { event: "e" })).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("measures an entry holding an undefined field rather than refusing it", async () => {
+    const store = new InMemoryRecordingStore();
+    const logger = new SessionLogger(store, { maxBytes: 10_000, flushIntervalS: 3600, logger: noopLogger });
+    await logger.start("s1");
+    await logger.logEvent("e", { prompt_detected: undefined });
+    await logger.stop();
+    expect(await store.getEntries("s1", { event: "e" })).toHaveLength(1);
   });
 
   it("writes without limit when no budget is set", async () => {

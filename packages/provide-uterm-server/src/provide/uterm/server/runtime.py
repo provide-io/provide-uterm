@@ -24,12 +24,15 @@ from provide.uterm.server.models import RecordingConfig, SessionDefinition, Sess
 # Re-exported so the public import surface of ``runtime`` is unchanged: tests
 # and callers import these helpers directly from ``provide.uterm.server.runtime``.
 from provide.uterm.server.runtime_helpers import (
+    _MAX_READ_ANNOTATION_KEYS,
     RunOutcome,  # noqa: F401 — re-export
     _await_task_completion,
     _build_recording_redactor,
     _cancel_and_wait,
     _classify_run_error,
     _encode_runtime_frame,
+    _read_annotation_key,
+    _split_incomplete_escape,
 )
 from provide.uterm.session_logger import SessionLogger
 
@@ -70,6 +73,7 @@ class HostedSessionRuntime:
             self._recording_store = recording_store
         self._worker_bearer_token = worker_bearer_token
         self._connector: SessionConnector | None = None
+        self._config_pending_restart = False
         self._on_metric = hub.metric if hub is not None else (lambda *_a, **_kw: None)
         self._task: asyncio.Task[None] | None = None
         self._queue: asyncio.Queue[dict[str, Any]] | None = None
@@ -89,10 +93,25 @@ class HostedSessionRuntime:
         # already receives the fully reassembled screen. Held per session so
         # carried text never bleeds between sessions (the detector is shared).
         self._send_stream: StreamingDetector | None = None
+        # And one for streamed output. The read path's snapshot is a whole screen
+        # for most connectors, but a capture connector's is the raw tail of the
+        # stream, which a blinking cursor can fill with redraws of a single line;
+        # text a rule should match then never reaches a snapshot at all.
+        self._read_stream: StreamingDetector | None = None
         if detector is not None:
             from provide.uterm.annotation import StreamingDetector
 
             self._send_stream = StreamingDetector(detector)
+            self._read_stream = StreamingDetector(detector)
+        # An escape sequence the last streamed chunk ended inside of, held back
+        # and prepended to the next chunk before strip_ansi: see _scan_output.
+        self._escape_carry = ""
+        # Read-path rules run twice over the same output -- once over each
+        # streamed `term` chunk, once over each snapshot screen -- so every
+        # read-path annotation recorded is remembered here (by
+        # _read_annotation_key) and the snapshot path skips one already in it.
+        # Both are scoped to one recording and reset with it: see _stop_recording.
+        self._read_annotation_keys: set[str] = set()
         self._event_seq: int = 0
         self._at_password_prompt: bool = False
 
@@ -123,6 +142,7 @@ class HostedSessionRuntime:
             visibility=self.definition.visibility,
             stopped_at=self._stopped_at,
             last_error=self._last_error,
+            config_pending_restart=self._config_pending_restart,
         )
 
     async def start(self) -> None:
@@ -136,29 +156,57 @@ class HostedSessionRuntime:
         self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
+        """Stop the run loop, close the recording, release the connector.
+
+        Every step runs even when an earlier one fails. A final recording flush
+        that raises (disk full, EACCES) used to skip the connector and the state
+        update, leaking the connector's process while the status still read
+        running/connected. Now the first failure is kept, the connector is
+        discarded and the state is set to stopped regardless, the failure is
+        recorded in ``_last_error``, and only then is it re-raised to the caller.
+        """
         self._stop.set()
-        task = self._task
-        if task is not None:
-            if task.done():
-                with contextlib.suppress(asyncio.CancelledError):
-                    task.result()
-            else:
-                running_loop = asyncio.get_running_loop()
-                task_loop = task.get_loop()
-                if task_loop is running_loop:
-                    task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await task
-                else:
-                    task_loop.call_soon_threadsafe(task.cancel)
-                    future = asyncio.run_coroutine_threadsafe(_await_task_completion(task), task_loop)
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await asyncio.wrap_future(future)
+        failure: Exception | None = None
+        try:
+            await self._finish_run_task()
+        except Exception as exc:
+            failure = exc
+        try:
+            await self._stop_recording()
+        except Exception as exc:
+            failure = failure or exc
         self._task = None
-        await self._stop_connector()
+        await self._discard_connector()
         self._state = "stopped"
         self._stopped_at = time.time()
         self._connected = False
+        if failure is not None:
+            self._last_error = str(failure)
+            raise failure
+
+    async def _finish_run_task(self) -> None:
+        """Cancel the run loop (if still running) and wait for it to end.
+
+        Raises whatever the task itself failed with, other than cancellation.
+        """
+        task = self._task
+        if task is None:
+            return
+        if task.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                task.result()
+            return
+        running_loop = asyncio.get_running_loop()
+        task_loop = task.get_loop()
+        if task_loop is running_loop:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        else:
+            task_loop.call_soon_threadsafe(task.cancel)
+            future = asyncio.run_coroutine_threadsafe(_await_task_completion(task), task_loop)
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.wrap_future(future)
 
     async def restart(self) -> None:
         await self.stop()
@@ -226,19 +274,42 @@ class HostedSessionRuntime:
             self._queue_bytes += msg_len
             await self._queue.put(msg)
 
-    async def _start_connector(self) -> SessionConnector:
-        connector_config = {
-            **self.definition.connector_config,
-            "input_mode": self.definition.input_mode,
-        }
+    def _effective_connector_config(self, connector_config: dict[str, Any]) -> dict[str, Any]:
+        """The config a connector is actually given: the stored one, plus the mode."""
+        effective = {**connector_config, "input_mode": self.definition.input_mode}
         if self.definition.connector_type in {"ssh", "telnet", "websocket"}:
-            connector_config["block_private_connector_targets"] = self._block_private_connector_targets
+            effective["block_private_connector_targets"] = self._block_private_connector_targets
+        return effective
+
+    async def reconfigure(self, connector_config: dict[str, Any]) -> None:
+        """Offer a stored connector_config change to the running connector.
+
+        A connector with ``reconfigure`` may take it in place and answer True.
+        Anything else -- no such method, or a change it cannot apply live -- is
+        left for the next start, and the status says a restart is owed. A
+        session that is not running owes nothing: its next start builds from the
+        stored definition.
+        """
+        if self._connector is None:
+            return
+        apply = getattr(self._connector, "reconfigure", None)
+        applied = bool(apply(self._effective_connector_config(connector_config))) if callable(apply) else False
+        # True means the running connector now matches the WHOLE effective
+        # config it was given -- the full stored config, not a delta -- so
+        # nothing earlier is still owed either: a socket change that was pending
+        # and has since been reverted is settled by this one. False leaves (or
+        # makes) a restart owed.
+        self._config_pending_restart = not applied
+
+    async def _start_connector(self) -> SessionConnector:
         connector = build_connector(
             self.definition.session_id,
             self.definition.display_name,
             self.definition.connector_type,
-            connector_config,
+            self._effective_connector_config(self.definition.connector_config),
         )
+        # Built from the stored definition, so nothing it holds is owed.
+        self._config_pending_restart = False
         await connector.start()
         if connector.is_connected():
             self._connected = True
@@ -271,10 +342,19 @@ class HostedSessionRuntime:
             self._recording_path = await self._recording_store.get_path(self.definition.session_id)
 
     async def _stop_recording(self) -> None:
-        if self._logger is not None:
-            await self._logger.stop()
+        # try/finally: a logger whose stop() raises (its final flush failed) is
+        # still dropped, along with everything scoped to its recording, so a
+        # failed close never leaves a half-closed logger behind.
+        try:
+            if self._logger is not None:
+                await self._logger.stop()
+        finally:
             self._logger = None
-        self._recording_path = None
+            self._recording_path = None
+            # Both belong to the recording that just ended: the next one annotates
+            # what it sees afresh, and does not begin with a stale half-sequence.
+            self._escape_carry = ""
+            self._read_annotation_keys.clear()
 
     async def _discard_connector(self) -> None:
         """Drop the connector alone, leaving the recording where it is.
@@ -290,19 +370,66 @@ class HostedSessionRuntime:
                 await connector.stop()
 
     async def _stop_connector(self) -> None:
-        await self._stop_recording()
-        await self._discard_connector()
+        # The connector goes even when closing the recording fails.
+        try:
+            await self._stop_recording()
+        finally:
+            await self._discard_connector()
 
     async def _log_snapshot(self, msg: dict[str, Any]) -> None:
         screen = str(msg.get("screen", ""))
-        self._at_password_prompt = bool(re.search(r"(?i)(?:password|passphrase)[^\n]*:\s*$", screen.rstrip()))
+        # Read as text. A rendered screen carries SGR codes and ends each row
+        # with a reset, which hides a trailing "Password:" from the prompt check
+        # and splits a styled match from the read-path rules.
+        from provide.uterm import strip_ansi
+
+        text = strip_ansi(screen)
+        self._at_password_prompt = bool(re.search(r"(?i)(?:password|passphrase)[^\n]*:\s*$", text.rstrip()))
         if self._logger is None:
             return
         await self._logger.log_screen(msg, screen.encode("cp437", errors="replace"))
         self._event_seq += 1
         if self._detector is not None:
-            for annotation in self._detector.detect("read", screen, seq=self._event_seq):
+            for annotation in self._detector.detect("read", text, seq=self._event_seq):
+                # The snapshot path DEDUPES: a match the stream (or an earlier
+                # snapshot of the same screen) already recorded is skipped, so
+                # neither a stream+snapshot pair nor a run of identical
+                # snapshots records it twice.
+                key = _read_annotation_key(annotation)
+                if key in self._read_annotation_keys:
+                    continue
+                self._remember_read_annotation(key)
                 await self._logger.log_event("annotation", annotation.to_dict())
+
+    def _remember_read_annotation(self, key: str) -> None:
+        """Add *key* to the bounded read-path set, clearing it first when full."""
+        if len(self._read_annotation_keys) >= _MAX_READ_ANNOTATION_KEYS:
+            self._read_annotation_keys.clear()
+        self._read_annotation_keys.add(key)
+
+    async def _scan_output(self, data: str) -> None:
+        """Run read-path rules over streamed output, escape sequences removed.
+
+        Only while recording, as the snapshot path is: annotations are recording
+        entries, and with no recording there is nowhere for one to go.
+
+        An escape sequence split across chunks (``...\\x1b[1`` | ``msudo ...``)
+        would leave ``msudo`` behind if each chunk were stripped alone, so an
+        unterminated trailing sequence is held back in ``_escape_carry`` and
+        prepended to the next chunk (bounded by ``_MAX_ESCAPE_CARRY``).
+
+        The stream path NEVER suppresses a match -- a command run twice is
+        annotated twice -- but remembers each one so the snapshot path, which
+        sees the same text again, does not record it a second time.
+        """
+        if self._logger is None or self._read_stream is None or not data:
+            return
+        from provide.uterm import strip_ansi
+
+        text, self._escape_carry = _split_incomplete_escape(self._escape_carry + data)
+        for annotation in self._read_stream.detect("read", strip_ansi(text), seq=self._event_seq):
+            self._remember_read_annotation(_read_annotation_key(annotation))
+            await self._logger.log_event("annotation", annotation.to_dict())
 
     async def _log_send(self, data: str) -> None:
         if self._logger is not None:
@@ -341,6 +468,8 @@ class HostedSessionRuntime:
         await self._log_wire_send(payload, outbound)
         if outbound.get("type") == "snapshot":
             await self._log_snapshot(outbound)
+        elif outbound.get("type") == "term":
+            await self._scan_output(str(outbound.get("data") or ""))
 
     async def _process_control_msg(
         self,

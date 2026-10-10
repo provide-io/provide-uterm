@@ -6,9 +6,11 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 )
@@ -21,6 +23,30 @@ func (s *Server) registerRecordingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/sessions/{session_id}/recording", s.authenticated(s.handleRecordingMeta))
 	mux.HandleFunc("GET /api/sessions/{session_id}/recording/entries", s.authenticated(s.handleRecordingEntries))
 	mux.HandleFunc("GET /api/sessions/{session_id}/recording/download", s.authenticated(s.handleRecordingDownload))
+}
+
+// RecordingFlusher is implemented by a registry whose sessions buffer what they
+// record. The recording routes flush the session before reading the store,
+// as the reference's registry flushes the session's runtime first
+// (_flush_runtime_recording); without it a reader sees the recording as it
+// stood up to one flush interval ago.
+type RecordingFlusher interface {
+	FlushRecording(sessionID string) error
+}
+
+// flushRecording flushes id's buffered recording when the registry buffers. A
+// flush that fails is a 500, as the reference lets the flush's error out of
+// the route.
+func (s *Server) flushRecording(w http.ResponseWriter, id string) bool {
+	f, ok := s.deps.Registry.(RecordingFlusher)
+	if !ok {
+		return true
+	}
+	if err := f.FlushRecording(id); err != nil {
+		detailError(w, http.StatusInternalServerError, err.Error())
+		return false
+	}
+	return true
 }
 
 // recordingGate resolves the session, enforces CanReadRecording, and returns the
@@ -47,12 +73,25 @@ func (s *Server) handleRecordingMeta(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.flushRecording(w, id) {
+		return
+	}
 	meta, err := s.deps.Recording.RecordingMeta(id)
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, meta)
+	// The reference answers {**meta, "enabled": recording_enabled}. Meta
+	// marshals as the store returns it, so it is merged as JSON.
+	raw, _ := json.Marshal(meta) // Meta is strings, a bool and an int
+	out := map[string]any{}
+	_ = json.Unmarshal(raw, &out)
+	enabled := false
+	if st, err := s.deps.Registry.GetSession(r.Context(), id); err == nil {
+		enabled = st.RecordingEnabled
+	}
+	out["enabled"] = enabled
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleRecordingEntries returns paginated recording entries. limit is clamped
@@ -63,7 +102,21 @@ func (s *Server) handleRecordingEntries(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	q := recording.Query{Limit: queryInt(r, "limit", 200, 1, 500), Event: r.URL.Query().Get("event")}
+	// Validated as the reference's Query(ge=1, le=500) / Query(ge=0) /
+	// Query(max_length=100) validate: a bad value is a 422, never clamped.
+	q := recording.Query{Limit: 200, Event: r.URL.Query().Get("event")}
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil || limit < 1 || limit > 500 {
+			detailError(w, http.StatusUnprocessableEntity, "limit must be an integer from 1 to 500")
+			return
+		}
+		q.Limit = limit
+	}
+	if utf8.RuneCountInString(q.Event) > 100 {
+		detailError(w, http.StatusUnprocessableEntity, "event must be at most 100 characters")
+		return
+	}
 	if raw := r.URL.Query().Get("offset"); raw != "" {
 		off, err := strconv.Atoi(raw)
 		if err != nil || off < 0 {
@@ -71,6 +124,9 @@ func (s *Server) handleRecordingEntries(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		q.Offset = &off
+	}
+	if !s.flushRecording(w, id) {
+		return
 	}
 	entries, err := s.deps.Recording.GetEntries(id, q)
 	if err != nil {

@@ -1,0 +1,201 @@
+{
+ "generator": "packages/provide-uterm-ts/testdata/gen_stream_redaction_golden.py",
+ "default_rules": [
+  {
+   "pattern": "\\b(?:AKIA|ASIA|AROA|AIDA|AGPA|ANPA|ANVA|ASCA)[0-9A-Z]{16}\\b",
+   "replacement": "[AWS_ACCESS_KEY_REDACTED]"
+  },
+  {
+   "pattern": "(?i:aws[_ -]?secret[_ -]?access[_ -]?key\\s*[:=]\\s*['\\\"]?[A-Za-z0-9/+=]{40}['\\\"]?)",
+   "replacement": "[AWS_SECRET_REDACTED]"
+  },
+  {
+   "pattern": "\\bgh[opusr]_[A-Za-z0-9_]{36,251}\\b",
+   "replacement": "[GITHUB_TOKEN_REDACTED]"
+  },
+  {
+   "pattern": "\\bxox[abeprs]-(?:[0-9]+-){2,}[A-Za-z0-9-]{20,}\\b",
+   "replacement": "[SLACK_TOKEN_REDACTED]"
+  },
+  {
+   "pattern": "\\beyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\b",
+   "replacement": "[JWT_REDACTED]"
+  },
+  {
+   "pattern": "-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----[\\s\\S]+?-----END (?:RSA |DSA |EC |OPENSSH |PGP )?PRIVATE KEY-----",
+   "replacement": "[PRIVATE_KEY_REDACTED]"
+  },
+  {
+   "pattern": "(?i:\\bauthorization\\s*:\\s*bearer\\s+([A-Za-z0-9._\\-+/=]+))",
+   "replacement": "Authorization: Bearer [REDACTED]"
+  },
+  {
+   "pattern": "(?i:\\b(?:password|passwd|pwd)\\s*[:=]\\s*['\\\"]?(\\S{1,128}?)['\\\"]?(?=\\s|$|,|;|&))",
+   "replacement": "[PASSWORD_REDACTED]"
+  },
+  {
+   "pattern": "(?i:\\bapi[_-]?key\\s*[:=]\\s*['\\\"]?(\\S{6,128}?)['\\\"]?(?=\\s|$|,|;|&))",
+   "replacement": "[API_KEY_REDACTED]"
+  },
+  {
+   "pattern": "(?i:\\btoken\\s*[:=]\\s*['\\\"]?(\\S{8,256}?)['\\\"]?(?=\\s|$|,|;|&))",
+   "replacement": "[TOKEN_REDACTED]"
+  }
+ ],
+ "default": [
+  {
+   "input": "",
+   "output": ""
+  },
+  {
+   "input": "just some normal terminal output with no secrets",
+   "output": "just some normal terminal output with no secrets"
+  },
+  {
+   "input": "aws id AKIAIOSFODNN7EXAMPLE embedded",
+   "output": "aws id [AWS_ACCESS_KEY_REDACTED] embedded"
+  },
+  {
+   "input": "ASIA0123456789ABCDEF and AROA1234567890ABCDEF",
+   "output": "[AWS_ACCESS_KEY_REDACTED] and [AWS_ACCESS_KEY_REDACTED]"
+  },
+  {
+   "input": "AKIA0123456789AB",
+   "output": "AKIA0123456789AB"
+  },
+  {
+   "input": "aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY here",
+   "output": "[AWS_SECRET_REDACTED] here"
+  },
+  {
+   "input": "AWS SECRET ACCESS KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'",
+   "output": "[AWS_SECRET_REDACTED]"
+  },
+  {
+   "input": "clone with ghp_1234567890abcdefghijklmnopqrstuvwxAB token",
+   "output": "clone with [GITHUB_TOKEN_REDACTED] token"
+  },
+  {
+   "input": "slack xoxb-123456789012-123456789012-abcdefghijklmnopqrstuvwx sent",
+   "output": "slack [SLACK_TOKEN_REDACTED] sent"
+  },
+  {
+   "input": "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c ok",
+   "output": "jwt [JWT_REDACTED] ok"
+  },
+  {
+   "input": "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu\n-----END RSA PRIVATE KEY-----",
+   "output": "[PRIVATE_KEY_REDACTED]"
+  },
+  {
+   "input": "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY----- after",
+   "output": "[PRIVATE_KEY_REDACTED] after"
+  },
+  {
+   "input": "Authorization: Bearer abc.def-ghi_123+/=",
+   "output": "Authorization: Bearer [REDACTED]"
+  },
+  {
+   "input": "authorization:bearer xyz",
+   "output": "Authorization: Bearer [REDACTED]"
+  },
+  {
+   "input": "login password=hunter2 now",
+   "output": "login [PASSWORD_REDACTED] now"
+  },
+  {
+   "input": "PASSWD: hunter2",
+   "output": "[PASSWORD_REDACTED]"
+  },
+  {
+   "input": "pwd='quoted';next",
+   "output": "[PASSWORD_REDACTED];next"
+  },
+  {
+   "input": "password=",
+   "output": "password="
+  },
+  {
+   "input": "cfg api_key=SECRETVALUE123 loaded",
+   "output": "cfg [API_KEY_REDACTED] loaded"
+  },
+  {
+   "input": "cfg apikey: short",
+   "output": "cfg apikey: short"
+  },
+  {
+   "input": "env token=abcdef12345678 set",
+   "output": "env [TOKEN_REDACTED] set"
+  },
+  {
+   "input": "env token=short set",
+   "output": "env token=short set"
+  },
+  {
+   "input": "AKIAIOSFODNN7EXAMPLE and ghp_1234567890abcdefghijklmnopqrstuvwxAB together",
+   "output": "[AWS_ACCESS_KEY_REDACTED] and [GITHUB_TOKEN_REDACTED] together"
+  },
+  {
+   "input": "AKIAIOSFODNN7EXAMPLE then AROA1234567890ABCDEF",
+   "output": "[AWS_ACCESS_KEY_REDACTED] then [AWS_ACCESS_KEY_REDACTED]"
+  },
+  {
+   "input": "a\r\nAKIAIOSFODNN7EXAMPLE\r\n$ ",
+   "output": "a\r\n[AWS_ACCESS_KEY_REDACTED]\r\n$ "
+  }
+ ],
+ "custom_rules": [
+  {
+   "pattern": "(a)(b)c",
+   "replacement": "<ABC>"
+  },
+  {
+   "pattern": "x(y)?z",
+   "replacement": "<XZ>"
+  },
+  {
+   "pattern": "q+",
+   "replacement": "<Q>"
+  }
+ ],
+ "custom": [
+  {
+   "input": "abc xz xyz qqq",
+   "output": "<ABC> <XZ> <XZ> <Q>"
+  },
+  {
+   "input": "nothing",
+   "output": "nothing"
+  },
+  {
+   "input": "abcabc",
+   "output": "<ABC><ABC>"
+  }
+ ],
+ "uniform_rules": [
+  {
+   "pattern": "foo",
+   "replacement": "[REDACTED]"
+  },
+  {
+   "pattern": "ba(r)",
+   "replacement": "[REDACTED]"
+  }
+ ],
+ "uniform": [
+  {
+   "input": "foo bar baz",
+   "output": "[REDACTED] [REDACTED] baz"
+  },
+  {
+   "input": "none",
+   "output": "none"
+  }
+ ],
+ "empty": [
+  {
+   "input": "anything at all",
+   "output": "anything at all"
+  }
+ ]
+}

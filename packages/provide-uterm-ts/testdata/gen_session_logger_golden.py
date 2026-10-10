@@ -75,6 +75,57 @@ async def _quota_record() -> dict[str, Any]:
     return {"entries": _strip(await store.get_entries("s1", limit=500))}
 
 
+# Entries whose compact and CPython-default JSON differ by far more than a
+# timestamp's digits can: a separator per list element, and two characters
+# ``ensure_ascii`` writes as escapes. A port that measured entries any other
+# way than ``len(json.dumps(record)) + 1`` stops at a different entry.
+BOUNDARY_PAYLOAD: dict[str, Any] = {"v": [0] * 100, "s": "caf\u00e9 \u2603"}
+
+# A wall-clock-shaped timestamp of typical width (17 characters as JSON), used
+# only to SIZE the boundary quota so that the recorded value is reproducible.
+REPRESENTATIVE_TS = 1_700_000_000.123456
+
+
+async def _quota_boundary_record() -> dict[str, Any]:
+    """A byte quota that runs out partway through the third entry."""
+    # The quota is sized from a FIXED representative timestamp, never from
+    # time.time(). ``repr`` of a float is its shortest round-tripping form, so
+    # time.time() serialises to anywhere from ~12 to 18 characters depending on
+    # the instant (1760106000.5 vs 1760106000.1234567). Sizing from a live clock
+    # made the recorded ``max_bytes`` differ between two runs of this generator
+    # by a byte or two, which .ci/check_goldens.sh rightly flagged as
+    # non-deterministic. The live run below still stamps real timestamps; the
+    # half-entry margin is what absorbs their varying width.
+    sample = {"ts": REPRESENTATIVE_TS, "event": "e", "data": BOUNDARY_PAYLOAD, "session_id": "s1"}
+    size = len(json.dumps(sample)) + 1
+    # Mirrors the ``log_start`` entry InMemoryRecordingStore.start_session writes
+    # (and which recording_meta counts toward size_bytes).
+    log_start = {
+        "ts": REPRESENTATIVE_TS,
+        "event": "log_start",
+        "data": {"started_at": REPRESENTATIVE_TS},
+        "session_id": "s1",
+    }
+    start = len(json.dumps(log_start)) + 1
+    # Two entries fit with half an entry to spare, so the third is written and
+    # the fourth is not. Half an entry is far wider than a timestamp's spread.
+    max_bytes = start + 2 * size + size // 2
+
+    store = InMemoryRecordingStore()
+    logger = SessionLogger(store, max_bytes=max_bytes, flush_interval_s=3600)
+    await logger.start("s1")
+    for _ in range(6):
+        await logger.log_event("e", BOUNDARY_PAYLOAD)
+    await logger.stop()
+    entries = await store.get_entries("s1", limit=500)
+    return {
+        "max_bytes": max_bytes,
+        "payload": BOUNDARY_PAYLOAD,
+        "attempts": 6,
+        "written": sum(1 for entry in entries if entry["event"] == "e"),
+    }
+
+
 async def _batch_record() -> dict[str, Any]:
     """A full batch flushes without waiting for the interval."""
     store = InMemoryRecordingStore()
@@ -96,6 +147,7 @@ async def _run() -> dict[str, Any]:
         "wire_mode": await _drive(control_channel_mode="wire"),
         "redacted": await _drive(control_channel_mode="wire", redactor=redactor),
         "quota": await _quota_record(),
+        "quota_boundary": await _quota_boundary_record(),
         "batch": await _batch_record(),
     }
 

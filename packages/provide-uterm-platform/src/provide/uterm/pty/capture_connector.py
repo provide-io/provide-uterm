@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 import time
 from typing import Any
 
@@ -50,6 +51,37 @@ _VALID_CONFIG_KEYS = frozenset(
 )
 
 
+# A full clear: erase display, switch to the alternate screen, or full reset.
+# A full-screen program begins every whole paint with one, so the output after
+# the last of them is what draws the current screen from nothing.
+_FULL_CLEAR = re.compile(r"\x1b\[2J|\x1b\[\?1049h|\x1bc")
+# Bound on that output. A program that never clears again would otherwise grow it
+# forever; past this, a replay starts mid-paint and settles at the next clear.
+_REPLAY_MAX = 512 * 1024
+
+
+def _validate_config(config: dict[str, Any]) -> None:
+    unknown = set(config) - _VALID_CONFIG_KEYS
+    if unknown:
+        raise ValueError(f"unknown config keys for CaptureConnector: {sorted(unknown)}")
+    if "socket_path" not in config:
+        raise ValueError("CaptureConnector requires 'socket_path' in connector_config")
+
+
+def _make_emulator(cols: int, rows: int) -> Any:
+    """A terminal emulator to render the captured stream into, if pyte is present.
+
+    The emulator is the ``provide-uterm[emulator]`` extra. Without it a capture
+    session still works and its snapshot falls back to the raw output tail.
+    """
+
+    try:
+        from provide.uterm.emulator import TerminalEmulator
+    except ImportError:
+        return None
+    return TerminalEmulator(cols, rows, receive_encoding="utf-8")
+
+
 def _register() -> None:
     try:
         from provide.uterm.server.connectors.registry import register_connector
@@ -68,11 +100,7 @@ class CaptureConnector:
     """
 
     def __init__(self, session_id: str, display_name: str, config: dict[str, Any]) -> None:
-        unknown = set(config) - _VALID_CONFIG_KEYS
-        if unknown:
-            raise ValueError(f"unknown config keys for CaptureConnector: {sorted(unknown)}")
-        if "socket_path" not in config:
-            raise ValueError("CaptureConnector requires 'socket_path' in connector_config")
+        _validate_config(config)
 
         self._session_id = session_id
         self._display_name = display_name
@@ -86,6 +114,14 @@ class CaptureConnector:
 
         self._capture: CaptureSocket | None = None
         self._connected = False
+        # The screen the captured stream draws. The raw tail below is kept for
+        # deployments without the emulator, and is what the snapshot falls back
+        # to: as "the screen" it fails, because a program that redraws one line
+        # -- a blinking cursor -- fills 64 KiB with that line alone.
+        self._emulator = _make_emulator(self._cols, self._rows)
+        # Output since the last full clear, replayed into a new emulator when the
+        # size changes: see reconfigure.
+        self._since_clear = ""
         self._buffer = ""
         self._pending = ""  # new bytes not yet streamed to the browser
         self._connect_log: list[str] = []
@@ -118,14 +154,7 @@ class CaptureConnector:
             if frame is None:
                 break
             if frame.channel == CHANNEL_STDOUT:
-                raw = frame.data.decode("utf-8", errors="replace")
-                # Normalize bare \n → \r\n: DYLD capture bypasses the PTY ONLCR
-                # driver, so xterm.js would advance cursor down without a CR.
-                text = raw.replace("\r\n", "\n").replace("\n", "\r\n")
-                self._buffer += text
-                if len(self._buffer) > 65536:
-                    self._buffer = self._buffer[-65536:]
-                self._pending += text
+                self._pending += self._ingest_stdout(frame.data)
                 changed = True
             elif frame.channel == CHANNEL_STDIN:
                 self._stdin_count += 1
@@ -143,6 +172,64 @@ class CaptureConnector:
             data, self._pending = self._pending, ""
             return [{"type": "term", "data": data}]
         return []
+
+    def reconfigure(self, config: dict[str, Any]) -> bool:
+        """Apply a new configuration to the running connector, if it can be.
+
+        Whoever creates a capture session (PAM) knows only the socket the shim
+        writes to; the keystroke socket and the terminal size arrive later, from
+        whoever owns the session. Those apply in place. A different capture
+        socket cannot: the program is writing to the one already bound, so that
+        answers False and is left for a restart.
+        """
+
+        # Everything that can reject the config runs before anything changes:
+        # a rejected config must leave the running connector as it was (the
+        # registry turns the ValueError/TypeError into a 422 and keeps the stored
+        # definition). connect_timeout_s is parsed only to validate it -- a value
+        # the constructor cannot parse would fail the next start.
+        _validate_config(config)
+        cols, rows = int(config.get("cols", self._cols)), int(config.get("rows", self._rows))
+        float(config.get("connect_timeout_s", self._connect_timeout))
+        if str(config["socket_path"]) != self._socket_path:
+            return False
+        stdin_socket_path = str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
+        if stdin_socket_path != self._stdin_socket_path:
+            self._stdin_socket_path = stdin_socket_path
+            # The next keystroke connects to the new socket.
+            if self._stdin_writer is not None:
+                self._stdin_writer.close()
+                self._stdin_writer = None
+        if (cols, rows) != (self._cols, self._rows):
+            self._cols, self._rows = cols, rows
+            if self._emulator is not None:
+                # Not resize(): what was drawn for the real size and clipped by
+                # the old one is gone from the old screen. Redraw it from what the
+                # program sent since it last cleared -- PAM creates the session
+                # before anyone knows its size, so the screen starts at a default
+                # the program never drew for.
+                self._emulator = _make_emulator(cols, rows)
+                self._emulator.process(self._since_clear.encode("utf-8"))
+        return True
+
+    def _ingest_stdout(self, data: bytes) -> str:
+        """Take one chunk of captured output into the screen; return it for streaming."""
+
+        raw = data.decode("utf-8", errors="replace")
+        # Normalize bare \n → \r\n: DYLD capture bypasses the PTY ONLCR
+        # driver, so xterm.js would advance cursor down without a CR.
+        text = raw.replace("\r\n", "\n").replace("\n", "\r\n")
+        self._buffer += text
+        if len(self._buffer) > 65536:
+            self._buffer = self._buffer[-65536:]
+        if self._emulator is not None:
+            self._emulator.process(text.encode("utf-8"))
+        clears = list(_FULL_CLEAR.finditer(text))
+        if clears:
+            self._since_clear = text[clears[-1].start() :]
+        else:
+            self._since_clear = (self._since_clear + text)[-_REPLAY_MAX:]
+        return text
 
     async def handle_input(self, data: str) -> list[dict[str, Any]]:
         if self._stdin_socket_path:
@@ -188,11 +275,19 @@ class CaptureConnector:
         return self._snapshot()
 
     async def set_mode(self, mode: str) -> list[dict[str, Any]]:
-        return [{"type": "worker_hello", "input_mode": "open"}]
+        # Announce the mode asked for. The hub applies the hello's mode, so
+        # answering "open" regardless overrode a session defined as hijack --
+        # left over from when a capture had no input path and the mode could
+        # not matter. With stdin_socket_path it has one, and hijack is what
+        # gives a single viewer the lease.
+        return [{"type": "worker_hello", "input_mode": mode}]
 
     async def clear(self) -> list[dict[str, Any]]:
         self._buffer = ""
         self._pending = ""
+        self._since_clear = ""
+        if self._emulator is not None:
+            self._emulator.reset()
         return [{"type": "term", "data": ""}]
 
     async def get_analysis(self) -> str:
@@ -206,13 +301,21 @@ class CaptureConnector:
         )
 
     def _snapshot(self) -> dict[str, Any]:
-        screen = self._buffer
+        cursor = {"x": 0, "y": 0}
+        if self._emulator is not None:
+            # The rendered screen, colours included: the browser element clears
+            # its terminal and writes this, so it must be a whole screen, not a
+            # stretch of the history that drew one.
+            screen = self._emulator.ansi_screen()
+            cursor = dict(self._emulator.get_snapshot()["cursor"])
+        else:
+            screen = self._buffer
         return {
             "type": "snapshot",
             "screen": screen,
             # x/y, not row/col: that is what the snapshot frame contract and
             # every other connector use, and what the terminal element reads.
-            "cursor": {"x": 0, "y": 0},
+            "cursor": cursor,
             "cols": self._cols,
             "rows": self._rows,
             # Non-cryptographic change-detection hash; `usedforsecurity=False`

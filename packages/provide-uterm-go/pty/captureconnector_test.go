@@ -113,10 +113,14 @@ func TestCaptureConnectorClear(t *testing.T) {
 }
 
 func TestCaptureConnectorSetMode(t *testing.T) {
-	c := newCaptureConn(t, nil)
-	frames := c.SetMode("hijack")
-	if len(frames) != 1 || frames[0]["type"] != "worker_hello" || frames[0]["input_mode"] != "open" {
-		t.Fatalf("set_mode should re-advertise open: %+v", frames)
+	// The hub applies the hello's mode, so re-advertising "open" regardless
+	// would run a session defined as hijack open. Mirrors the Python fix.
+	for _, mode := range []string{"hijack", "open"} {
+		c := newCaptureConn(t, nil)
+		frames := c.SetMode(mode)
+		if len(frames) != 1 || frames[0]["type"] != "worker_hello" || frames[0]["input_mode"] != mode {
+			t.Fatalf("set_mode(%q) should announce %q: %+v", mode, mode, frames)
+		}
 	}
 }
 

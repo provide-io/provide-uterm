@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from provide.uterm import strip_ansi
 from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
     CHANNEL_STATS,
@@ -165,7 +166,8 @@ async def test_stats_frame_is_reported_without_reaching_the_screen() -> None:
         # Nothing to stream: a stats frame is not something the terminal drew.
         assert await conn.poll_messages() == []
         snapshot = await conn.get_snapshot()
-        assert snapshot["screen"] == ""
+        # Blank, not empty: a rendered screen is rows of nothing.
+        assert strip_ansi(snapshot["screen"]).strip() == ""
         assert "wouldblock=7" in await conn.get_analysis()
         await conn.stop()
 
@@ -227,6 +229,21 @@ async def test_set_mode_returns_hello() -> None:
         msgs = await conn.set_mode("open")
         types = [m["type"] for m in msgs]
         assert "worker_hello" in types
+        await conn.stop()
+
+
+@pytest.mark.parametrize("mode", ["hijack", "open"])
+async def test_set_mode_announces_the_mode_it_was_given(mode: str) -> None:
+    # The runtime calls set_mode(definition.input_mode) on start, and the hub
+    # applies whatever the hello says. Answering "open" regardless meant a
+    # session defined as hijack ran open: anyone could type, and no viewer
+    # was ever offered the lease.
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td, stdin_socket_path=str(Path(td) / "in.sock"))
+        await conn.start()
+        msgs = await conn.set_mode(mode)
+        hello = next(m for m in msgs if m["type"] == "worker_hello")
+        assert hello["input_mode"] == mode
         await conn.stop()
 
 
@@ -471,10 +488,228 @@ def test_snapshot_survives_the_hub_frame_builder() -> None:
     from provide.uterm.server.bridge.routes.websockets_worker import _build_worker_frame
 
     connector = CaptureConnector("s", "d", {"socket_path": "/tmp/probe.sock"})
-    connector._buffer = "CHOOSE A DOOR"
+    connector._ingest_stdout(b"CHOOSE A DOOR")
 
     frame = _build_worker_frame("snapshot", connector._snapshot())
 
-    assert frame["screen"] == "CHOOSE A DOOR"
+    assert "CHOOSE A DOOR" in strip_ansi(frame["screen"])
     assert frame["prompt_detected"] is None
-    assert frame["cursor"] == {"x": 0, "y": 0}
+    assert frame["cursor"] == {"x": 13, "y": 0}
+
+
+# ---------------------------------------------------------------------------
+# The snapshot is the screen, not the output history
+#
+# A captured program's output is a stream of edits to a screen. Keeping the
+# last 64 KiB of that stream as "the screen" meant a full-screen program that
+# redraws one line -- a blinking cursor, a clock -- pushed everything else out
+# within a minute, and a snapshot, a replay frame, or the annotation detector
+# saw that one line hundreds of times. The connector now renders the stream
+# through the terminal emulator and serves the screen it produces.
+# ---------------------------------------------------------------------------
+
+
+async def _feed(conn: CaptureConnector, *chunks: bytes) -> None:
+    await _send_frames(conn._socket_path, [_make_frame(CHANNEL_STDOUT, chunk) for chunk in chunks])
+    await asyncio.sleep(0.05)
+    await conn.poll_messages()
+
+
+async def test_snapshot_is_the_rendered_screen_not_the_output_history() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _feed(conn, b"\x1b[2J\x1b[1;1Hold screen", b"\x1b[2J\x1b[1;1Hnew screen")
+        plain = strip_ansi((await conn.get_snapshot())["screen"])
+        assert "new screen" in plain
+        assert "old screen" not in plain
+        await conn.stop()
+
+
+async def test_redrawing_one_line_cannot_push_the_rest_of_the_screen_out() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td, cols=80, rows=24)
+        await conn.start()
+        blinks = b"".join(b"\x1b[20;1Hblink %d" % (n % 2) for n in range(10_000))
+        assert len(blinks) > 65536
+        await _feed(conn, b"\x1b[2J\x1b[5;1HMESSAGE ON ROW FIVE", blinks)
+        plain = strip_ansi((await conn.get_snapshot())["screen"])
+        assert "MESSAGE ON ROW FIVE" in plain
+        await conn.stop()
+
+
+async def test_snapshot_keeps_colour_and_reports_the_real_cursor() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _feed(conn, b"\x1b[38;2;255;176;0mAMBER\x1b[0m\x1b[3;7H")
+        snap = await conn.get_snapshot()
+        assert "AMBER" in strip_ansi(snap["screen"])
+        assert "\x1b[" in snap["screen"]
+        assert snap["cursor"] == {"x": 6, "y": 2}
+        await conn.stop()
+
+
+async def test_clear_also_clears_the_rendered_screen() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _feed(conn, b"stale")
+        await conn.clear()
+        assert "stale" not in strip_ansi((await conn.get_snapshot())["screen"])
+        await conn.stop()
+
+
+async def test_without_the_emulator_the_snapshot_falls_back_to_the_output_tail(monkeypatch) -> None:
+    # pyte is the provide-uterm[emulator] extra; a deployment without it keeps
+    # the old behaviour rather than failing to start a capture session.
+    monkeypatch.setitem(sys.modules, "provide.uterm.emulator", None)
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        assert conn._emulator is None
+        await conn.start()
+        await _feed(conn, b"plain tail")
+        assert "plain tail" in (await conn.get_snapshot())["screen"]
+        await conn.clear()
+        assert (await conn.get_snapshot())["screen"] == ""
+        await conn.stop()
+
+
+# ---------------------------------------------------------------------------
+# Reconfiguring a running capture session
+#
+# Who creates a capture session (PAM) knows only the socket the shim writes
+# to; the keystroke socket and the size come later, from whoever owns the
+# session. Applying them used to need a restart, and a restart closes the
+# capture socket under the program writing to it.
+# ---------------------------------------------------------------------------
+
+
+async def test_a_running_session_takes_its_keyboard_without_a_restart() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        stdin_sock_path = str(Path(td) / "stdin.sock")
+        received: list[bytes] = []
+        got = asyncio.Event()
+
+        async def _on_conn(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            received.append(await reader.read(64))
+            writer.close()
+            got.set()
+
+        server = await asyncio.start_unix_server(_on_conn, path=stdin_sock_path)
+        try:
+            conn = _make_connector(td)
+            await conn.start()
+            capture = conn._capture
+            assert conn.reconfigure(
+                {"socket_path": conn._socket_path, "stdin_socket_path": stdin_sock_path, "cols": 132, "rows": 40}
+            )
+            # Same capture socket: nothing was rebound under the writer.
+            assert conn._capture is capture
+            await conn.handle_input("w")
+            await asyncio.wait_for(got.wait(), 2.0)
+            snap = await conn.get_snapshot()
+            assert (snap["cols"], snap["rows"]) == (132, 40)
+            assert len(strip_ansi(snap["screen"]).split("\n")) == 40
+            await conn.stop()
+        finally:
+            server.close()
+            await server.wait_closed()
+        assert received == [b"w"]
+
+
+async def test_a_new_capture_socket_cannot_be_applied_live() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        assert conn.reconfigure({"socket_path": str(Path(td) / "other.sock")}) is False
+        assert conn._socket_path.endswith("cap.sock")
+        await conn.stop()
+
+
+def test_reconfigure_rejects_what_the_constructor_would() -> None:
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock"})
+    with pytest.raises(ValueError):
+        conn.reconfigure({"socket_path": "/tmp/cap.sock", "bogus": 1})
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"cols": "wide"},
+        {"rows": None},
+        {"connect_timeout_s": "soon"},
+    ],
+)
+def test_a_rejected_reconfigure_changes_nothing(bad: dict[str, object]) -> None:
+    # Every check runs before any state changes: a value the connector cannot
+    # parse leaves the keystroke socket, its open connection and the size alone.
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/old.sock"})
+    writer = MagicMock()
+    conn._stdin_writer = writer
+    with pytest.raises((ValueError, TypeError)):
+        conn.reconfigure({"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/new.sock", **bad})
+    assert conn._stdin_socket_path == "/tmp/old.sock"
+    assert conn._stdin_writer is writer
+    writer.close.assert_not_called()
+    assert (conn._cols, conn._rows) == (80, 24)
+
+
+def test_a_bad_size_is_rejected_even_with_a_new_capture_socket() -> None:
+    # Answering False would store a config the next start() cannot build from.
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock"})
+    with pytest.raises(ValueError):
+        conn.reconfigure({"socket_path": "/tmp/other.sock", "cols": "wide"})
+
+
+def test_reconfigure_with_nothing_new_changes_nothing() -> None:
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/in.sock"})
+    writer = MagicMock()
+    conn._stdin_writer = writer
+    assert conn.reconfigure({"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/in.sock"})
+    # Same keystroke socket: the open connection to it is kept.
+    assert conn._stdin_writer is writer
+    writer.close.assert_not_called()
+
+
+def test_a_new_keystroke_socket_drops_the_connection_to_the_old_one() -> None:
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/old.sock"})
+    writer = MagicMock()
+    conn._stdin_writer = writer
+    assert conn.reconfigure({"socket_path": "/tmp/cap.sock", "stdin_socket_path": "/tmp/new.sock"})
+    writer.close.assert_called_once()
+    assert conn._stdin_writer is None
+
+
+def test_a_resize_without_the_emulator_still_records_the_size(monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "provide.uterm.emulator", None)
+    conn = CaptureConnector("s", "d", {"socket_path": "/tmp/cap.sock"})
+    assert conn.reconfigure({"socket_path": "/tmp/cap.sock", "cols": 100, "rows": 30})
+    assert (conn._cols, conn._rows) == (100, 30)
+
+
+async def test_a_resize_redraws_what_the_program_drew_for_that_size() -> None:
+    # PAM creates the session before anyone knows its size, so the screen starts
+    # at the default 80x24 while the program draws for its real one. Resizing
+    # the emulator afterwards cannot recover what was clipped; replaying what was
+    # drawn since the last clear, at the right size, can.
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _feed(conn, b"\x1b[?1049h\x1b[2J\x1b[1;1HTOP OF THE DECK\x1b[30;90HDEEP IN THE DECK")
+        assert conn.reconfigure({"socket_path": conn._socket_path, "cols": 120, "rows": 40})
+        rows = strip_ansi((await conn.get_snapshot())["screen"]).split("\n")
+        assert rows[0].startswith("TOP OF THE DECK")
+        assert rows[29][89:].startswith("DEEP IN THE DECK")
+        await conn.stop()
+
+
+async def test_only_output_since_the_last_clear_is_replayed() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        conn = _make_connector(td)
+        await conn.start()
+        await _feed(conn, b"\x1b[2J\x1b[1;1HOLD SCREEN", b"\x1b[2J\x1b[1;1HNEW SCREEN")
+        conn.reconfigure({"socket_path": conn._socket_path, "cols": 100, "rows": 30})
+        plain = strip_ansi((await conn.get_snapshot())["screen"])
+        assert "NEW SCREEN" in plain and "OLD SCREEN" not in plain
+        await conn.stop()

@@ -86,6 +86,11 @@ export interface SessionRuntimeStatus {
   visibility: Visibility;
   stopped_at: number | null;
   last_error: string | null;
+  /**
+   * Whether a stored `connector_config` change is waiting for a restart
+   * because the running connector could not take it in place.
+   */
+  config_pending_restart: boolean;
 }
 
 /** The state a session that has never been started is in. */
@@ -140,6 +145,12 @@ export function sessionRuntimeStatus(
     visibility: definition.visibility,
     stopped_at: state.stopped_at,
     last_error: state.last_error,
+    // Always false here. The reference sets it when a PATCH changes the
+    // connector_config of a running session whose connector cannot apply it
+    // live; this port has no session PATCH route, so no stored change can ever
+    // be waiting on a restart. The key is still emitted: a client reading the
+    // reference's shape must not find it missing.
+    config_pending_restart: false,
   };
 }
 

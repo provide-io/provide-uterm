@@ -53,6 +53,11 @@ func TestLiveServerBringsUpAutoStartSessions(t *testing.T) {
 	if got := sessions[0]["last_error"]; got != nil {
 		t.Fatalf("last_error = %#v, want null on a session that came up", got)
 	}
+	// Present and false, as the reference emits it for a session whose stored
+	// connector_config has nothing waiting on a restart.
+	if got, ok := sessions[0]["config_pending_restart"]; !ok || got != false {
+		t.Fatalf("config_pending_restart = %#v (present=%v), want false", got, ok)
+	}
 
 	cancel()
 	if err := <-serveErr; err != nil {

@@ -55,12 +55,12 @@ public class MoreSurfaceTests
     public void Annotation_PatternDetector()
     {
         var det = new PatternDetector();
-        var hits = det.Detect("write", "password=hunter2 and sudo rm -rf /");
+        var hits = det.Detect("send", "password=hunter2 and sudo rm -rf /");
         Assert.NotEmpty(hits);
         Assert.NotEmpty(hits[0].ToDict());
         Assert.Empty(det.Detect("read", "hello world"));
         var stream = new StreamingDetector(det);
-        Assert.NotEmpty(stream.Feed("write", "password=x"));
+        Assert.NotEmpty(stream.Detect("send", "password=x"));
         stream.Reset();
     }
 

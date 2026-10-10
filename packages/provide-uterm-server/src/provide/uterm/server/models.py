@@ -88,6 +88,10 @@ class SessionRuntimeStatus(ServerBaseModel):
     visibility: Visibility = "public"
     stopped_at: float | None = None
     last_error: str | None = None
+    # A connector_config change the running connector could not take in place.
+    # It is stored and applies at the next start; until then the caller knows a
+    # restart is owed. False for a session that is not running.
+    config_pending_restart: bool = False
 
 
 ServerModel: TypeAlias = (

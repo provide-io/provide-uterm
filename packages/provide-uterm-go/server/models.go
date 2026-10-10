@@ -34,6 +34,12 @@ type SessionStatus struct {
 	Visibility         string                `json:"visibility"`
 	StoppedAt          *float64              `json:"stopped_at"`
 	LastError          *string               `json:"last_error"`
+	// ConfigPendingRestart reports a stored connector_config change the running
+	// connector could not take in place. Always false in this port: the
+	// reference sets it from a PATCH that reconfigures a running session, and
+	// this port's PATCH does not accept connector_config, so nothing stored can
+	// be waiting on a restart. Emitted so the wire shape matches the reference.
+	ConfigPendingRestart bool `json:"config_pending_restart"`
 }
 
 // SessionListItem pairs a session's runtime status with its definition so the
@@ -57,6 +63,18 @@ type Annotation struct {
 	Description string
 	Severity    string
 	Principal   string
+}
+
+// Data is the annotation as the reference records and publishes it: the
+// annotation_data dict of annotate_session, whose source is always "agent".
+func (a Annotation) Data() map[string]any {
+	return map[string]any{
+		"label":       a.Label,
+		"description": a.Description,
+		"severity":    a.Severity,
+		"source":      "agent",
+		"principal":   a.Principal,
+	}
 }
 
 // SessionValidationError maps to HTTP 422 — a session-definition payload failed

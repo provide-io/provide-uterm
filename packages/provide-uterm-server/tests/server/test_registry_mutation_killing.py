@@ -41,6 +41,7 @@ def runtime() -> MagicMock:
     rt.restart = AsyncMock(name="restart")
     rt.clear = AsyncMock(name="clear")
     rt.set_mode = AsyncMock(name="set_mode")
+    rt.reconfigure = AsyncMock(name="reconfigure")
     rt.analyze = AsyncMock(name="analyze", return_value="ANALYSIS-OUT")
     rt.flush_recording = AsyncMock(name="flush_recording")
     rt.set_tunnel_state = MagicMock(name="set_tunnel_state")
@@ -418,6 +419,22 @@ class TestUpdateSession:
         await reg.update_session("a", {"display_name": "x"})
         runtime.set_mode.assert_not_awaited()
 
+    async def test_nothing_mutable_reports_status_and_touches_nothing(self, runtime: MagicMock) -> None:
+        """Kills the early return's ``return None`` and ``not updates`` mutants: a
+        payload with no mutable field returns the runtime's status without the
+        egress check, a reconfigure, a mode change, or any change to the session."""
+        reg = _make_registry([_session("a")])
+        before = reg._sessions["a"].model_dump()
+        egress = AsyncMock()
+        with patch("provide.uterm.server.egress.assert_session_egress_allowed", egress):
+            status = await reg.update_session("a", {"not_a_real_field": 42})
+        assert status is runtime.status.return_value
+        egress.assert_not_awaited()
+        runtime.reconfigure.assert_not_awaited()
+        runtime.set_mode.assert_not_awaited()
+        reg._hub.set_input_mode.assert_not_awaited()
+        assert reg._sessions["a"].model_dump() == before
+
     async def test_unknown_session_raises(self) -> None:
         reg = _make_registry()
         with pytest.raises(KeyError):
@@ -537,6 +554,17 @@ class TestLifecycleDelegation:
         reg._runtimes["a"] = runtime
         await reg.shutdown()
         runtime.stop.assert_awaited_once()
+
+    async def test_shutdown_stops_every_runtime_and_raises_the_first_failure(self) -> None:
+        first, second = OSError("disk full"), OSError("second")
+        runtimes = [MagicMock(stop=AsyncMock(side_effect=err)) for err in (first, None, second)]
+        reg = _make_registry([_session("a"), _session("b"), _session("c")])
+        reg._runtimes.update(zip("abc", runtimes, strict=True))
+        with pytest.raises(OSError) as exc:
+            await reg.shutdown()
+        assert exc.value is first
+        for rt in runtimes:
+            rt.stop.assert_awaited_once()
 
     async def test_start_auto_start_sessions_only_starts_flagged(self, runtime: MagicMock) -> None:
         reg = _make_registry([_session("a", auto_start=True), _session("b", auto_start=False)])
@@ -1091,6 +1119,40 @@ class TestKills:
         with patch("provide.uterm.server.egress.assert_session_egress_allowed", egress):
             await reg.update_session("a", {"connector_config": {"host": "h"}})
         egress.assert_awaited_once_with("shell", {"host": "h"}, block_private=True)
+
+    async def test_update_offers_the_validated_config_to_the_runtime(self, runtime: MagicMock) -> None:
+        reg = _make_registry([_session("a")])
+        with patch("provide.uterm.server.egress.assert_session_egress_allowed", AsyncMock()):
+            await reg.update_session("a", {"connector_config": {"host": "h"}})
+        runtime.reconfigure.assert_awaited_once_with({"host": "h"})
+
+    @pytest.mark.parametrize("rejection", [ValueError("unknown config keys"), TypeError("unknown config keys")])
+    async def test_a_rejected_config_is_a_validation_error_and_commits_nothing(
+        self, runtime: MagicMock, rejection: Exception
+    ) -> None:
+        reg = _make_registry([_session("a")])
+        before = reg._sessions["a"].model_dump()
+        runtime.reconfigure = AsyncMock(side_effect=rejection)
+        with pytest.raises(SessionValidationError) as exc:
+            await reg.update_session("a", {"connector_config": {"bogus": 1}, "tags": ["t"]})
+        assert str(exc.value) == "connector_config rejected: unknown config keys"
+        assert exc.value.__cause__ is rejection
+        # Neither the rejected config nor the other fields of the same PATCH.
+        assert reg._sessions["a"].model_dump() == before
+        runtime.set_mode.assert_not_awaited()
+
+    async def test_the_config_is_offered_before_it_is_committed(self, runtime: MagicMock) -> None:
+        reg = _make_registry([_session("a")])
+        seen: list[dict[str, Any]] = []
+        runtime.reconfigure = AsyncMock(side_effect=lambda _cfg: seen.append(dict(reg._sessions["a"].connector_config)))
+        await reg.update_session("a", {"connector_config": {"host": "h"}})
+        assert seen == [{}]
+        assert reg._sessions["a"].connector_config == {"host": "h"}
+
+    async def test_update_without_a_config_change_does_not_reconfigure(self, runtime: MagicMock) -> None:
+        reg = _make_registry([_session("a")])
+        await reg.update_session("a", {"tags": ["x"]})
+        runtime.reconfigure.assert_not_awaited()
 
     async def test_update_invalid_value_message_not_none(self) -> None:
         reg = _make_registry([_session("a")])

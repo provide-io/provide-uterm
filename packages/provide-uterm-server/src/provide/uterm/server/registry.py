@@ -169,8 +169,17 @@ class SessionRegistry:
                 await self.start_session(session.session_id)
 
     async def shutdown(self) -> None:
+        # Every runtime is stopped even when one fails (a final recording flush
+        # that raised): the others' connectors must not outlive the server.
+        # The first failure is raised once all of them are down.
+        failure: Exception | None = None
         for runtime in list(self._runtimes.values()):
-            await runtime.stop()
+            try:
+                await runtime.stop()
+            except Exception as exc:
+                failure = failure or exc
+        if failure is not None:
+            raise failure
 
     async def list_sessions(self) -> list[SessionRuntimeStatus]:
         async with self._lock:
@@ -281,32 +290,54 @@ class SessionRegistry:
             updates["owner"] = payload["owner"]
         async with self._lock:
             session = self._require_session(session_id)
-            if updates:
-                try:
-                    validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), **updates})
-                except ValidationError as exc:
-                    raise SessionValidationError(validation_error_message(exc)) from exc
-                # Egress chokepoint for mutations: re-validate the EFFECTIVE
-                # (merged) connector target so a host CHANGE to a metadata/blocked
-                # IP is rejected.  connector_type is immutable, so the session's
-                # type is authoritative.  Lazy import avoids an import cycle.
-                from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+            if not updates:
+                # Nothing mutable was sent: report the current status without
+                # validating, egress-checking, or touching the connector.
+                return self._runtime_for(session).status()
+            try:
+                validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), **updates})
+            except ValidationError as exc:
+                raise SessionValidationError(validation_error_message(exc)) from exc
+            # Egress chokepoint for mutations: re-validate the EFFECTIVE
+            # (merged) connector target so a host CHANGE to a metadata/blocked
+            # IP is rejected.  connector_type is immutable, so the session's
+            # type is authoritative.  Lazy import avoids an import cycle.
+            from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
 
-                try:
-                    await assert_session_egress_allowed(
-                        session.connector_type,
-                        validated.connector_config,
-                        block_private=self._block_private,
-                    )
-                except EgressBlockedError as exc:
-                    raise SessionValidationError(str(exc)) from exc
-                # Apply non-mode fields immediately; input_mode is deferred
-                # to runtime.set_mode() so it only commits after the
-                # connector-side change succeeds.
-                for field in updates:
-                    if field != "input_mode":
-                        setattr(session, field, getattr(validated, field))
+            try:
+                await assert_session_egress_allowed(
+                    session.connector_type,
+                    validated.connector_config,
+                    block_private=self._block_private,
+                )
+            except EgressBlockedError as exc:
+                raise SessionValidationError(str(exc)) from exc
             runtime = self._runtime_for(session)
+            if "connector_config" in updates:
+                # Offered to the running connector BEFORE anything is committed,
+                # which may take it in place; the status reports whether a
+                # restart is still owed. The connector is the only thing that
+                # knows its own config schema, and it rejects a config it cannot
+                # use (an unknown key, `"cols": "wide"`) with a bare ValueError
+                # or TypeError. Raised here, that rejection leaves the stored
+                # definition exactly as it was -- had the config been committed
+                # first, the next start() would build from it and fail -- and
+                # surfaces as SessionValidationError, i.e. a 422, not a 500.
+                # A connector must therefore validate the whole config before it
+                # changes any of its own state. A stopped session has no
+                # connector and validates nothing here.
+                # The connector sees the session's CURRENT input_mode; a mode
+                # change in the same PATCH reaches it through set_mode() below.
+                try:
+                    await runtime.reconfigure(validated.connector_config)
+                except (ValueError, TypeError) as exc:
+                    raise SessionValidationError(f"connector_config rejected: {exc}") from exc
+            # Apply non-mode fields immediately; input_mode is deferred
+            # to runtime.set_mode() so it only commits after the
+            # connector-side change succeeds.
+            for field in updates:
+                if field != "input_mode":
+                    setattr(session, field, getattr(validated, field))
         if "input_mode" in updates:
             await runtime.set_mode(validated.input_mode)
             await self._hub.set_input_mode(session_id, validated.input_mode)

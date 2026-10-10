@@ -14,7 +14,7 @@
  * `sessionlogger`.
  */
 
-import type { RecordingEvent, RecordingStore } from "../recording/index.ts";
+import { pyJsonSize, type RecordingEvent, type RecordingStore } from "../recording/index.ts";
 import { type Redactor, redactText } from "../redaction/index.ts";
 import { decodeCp437, encodeCp437 } from "../screen/index.ts";
 import { getLogger, type Logger } from "../telemetry/index.ts";
@@ -32,7 +32,7 @@ export interface SessionLoggerOptions {
   /** Whether to record raw wire and decoded control frames. */
   controlChannelMode?: ControlChannelMode;
   /** Applied to every logged string before it is written. */
-  redactor?: Redactor;
+  redactor?: Redactor | undefined;
   /** Seconds between periodic flushes. */
   flushIntervalS?: number;
   /** Entries buffered before a flush is forced. */
@@ -236,7 +236,10 @@ export class SessionLogger {
       }
 
       this.#buffer.push(record);
-      this.#bytesWritten += JSON.stringify(record).length + 1;
+      // Measured as the reference measures it — `len(json.dumps(record)) + 1`,
+      // CPython's default separators and ASCII escapes — so a budget runs out
+      // at the same entry in both. What a store writes is its own business.
+      this.#bytesWritten += pyJsonSize(record) + 1;
 
       if (this.#buffer.length >= this.#batchSize) {
         await this.#flushUnlocked();
