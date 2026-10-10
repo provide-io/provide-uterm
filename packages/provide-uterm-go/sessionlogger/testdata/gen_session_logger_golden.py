@@ -79,7 +79,7 @@ async def _quota_record() -> dict[str, Any]:
 # timestamp's digits can: a separator per list element, and two characters
 # ``ensure_ascii`` writes as escapes. A port that measured entries any other
 # way than ``len(json.dumps(record)) + 1`` stops at a different entry.
-BOUNDARY_PAYLOAD: dict[str, Any] = {"v": [0] * 100, "s": "caf\u00e9 \u2603"}
+BOUNDARY_PAYLOAD: dict[str, Any] = {"v": [0] * 100, "s": "caf\u00e9 \u2603"}  # codespell:ignore caf
 
 # A wall-clock-shaped timestamp of typical width (17 characters as JSON), used
 # only to SIZE the boundary quota so that the recorded value is reproducible.
