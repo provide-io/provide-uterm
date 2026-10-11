@@ -27,15 +27,9 @@ internal static class PyText
             return true;
         }
 
-        // Use Rune.IsWhiteSpace for general case
-        try
-        {
-            return Rune.IsWhiteSpace(new Rune(r));
-        }
-        catch
-        {
-            return false;
-        }
+        // Rune.IsWhiteSpace for the general case; a non-scalar (surrogate or
+        // out-of-range) value is not whitespace.
+        return Rune.IsValid(r) && Rune.IsWhiteSpace(new Rune(r));
     }
 
     internal static bool IsPyDigit(int r) =>

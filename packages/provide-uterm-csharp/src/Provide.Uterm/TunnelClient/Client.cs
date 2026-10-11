@@ -293,7 +293,7 @@ public sealed class PtyShareSession : IAsyncDisposable
             file = Command;
             args = "";
         }
-        else if (OperatingSystem.IsWindows())
+        else if (Platform.OsPlatform.IsWindows)
         {
             file = Command;
             args = "";

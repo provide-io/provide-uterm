@@ -15,9 +15,7 @@ namespace Provide.Uterm.Gateway;
 /// </summary>
 public sealed class TelnetGateway : IAsyncDisposable
 {
-    private TcpListener? _listener;
-    private CancellationTokenSource? _cts;
-    private Task? _acceptLoop;
+    private readonly TcpAcceptLoop _loop = new();
     public Func<TcpClient, CancellationToken, Task>? OnAccept { get; set; }
 
     /// <summary>
@@ -31,85 +29,12 @@ public sealed class TelnetGateway : IAsyncDisposable
     public Task StartAsync(string host = TerminalDefaults.BindAll, int port = 0, CancellationToken cancellationToken = default)
     {
         GatewayBindPolicy.RequireUnauthenticatedAllowed(host, AllowUnauthenticated);
-
-        if (port == 0)
-        {
-            port = TerminalDefaults.GatewayTelnetPort;
-        }
-
-        var ip = host is "0.0.0.0" or "" ? IPAddress.Any : IPAddress.Parse(host);
-        var listener = new TcpListener(ip, port);
-        listener.Start();
-        Port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        _listener = listener;
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _acceptLoop = AcceptLoopAsync(_cts.Token);
+        var bindPort = port == 0 ? TerminalDefaults.GatewayTelnetPort : port;
+        Port = _loop.Start(host, bindPort, () => OnAccept, cancellationToken);
         return Task.CompletedTask;
     }
 
-    private async Task AcceptLoopAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested && _listener is not null)
-        {
-            TcpClient client;
-            try
-            {
-                client = await _listener.AcceptTcpClientAsync(ct);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
-
-            var handler = OnAccept;
-            if (handler is not null)
-            {
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await handler(client, ct);
-                    }
-                    catch
-                    {
-                        client.Dispose();
-                    }
-                }, ct);
-            }
-            else
-            {
-                client.Dispose();
-            }
-        }
-    }
-
-    public async Task StopAsync()
-    {
-        if (_cts is not null)
-        {
-            await _cts.CancelAsync();
-        }
-
-        _listener?.Stop();
-        if (_acceptLoop is not null)
-        {
-            try
-            {
-                await _acceptLoop;
-            }
-            catch
-            {
-            }
-        }
-
-        _cts?.Dispose();
-        _cts = null;
-        _listener = null;
-    }
+    public Task StopAsync() => _loop.StopAsync();
 
     public ValueTask DisposeAsync() => new(StopAsync());
 }
@@ -120,93 +45,103 @@ public sealed class TelnetGateway : IAsyncDisposable
 /// </summary>
 public sealed class SshGateway : IAsyncDisposable
 {
-    private TcpListener? _listener;
-    private CancellationTokenSource? _cts;
-    private Task? _acceptLoop;
+    private readonly TcpAcceptLoop _loop = new();
     public Func<TcpClient, CancellationToken, Task>? OnAccept { get; set; }
     public int Port { get; private set; }
 
     public Task StartAsync(string host = TerminalDefaults.BindAll, int port = 0, CancellationToken cancellationToken = default)
     {
-        if (port == 0)
-        {
-            port = TerminalDefaults.GatewaySshPort;
-        }
-
-        var ip = host is "0.0.0.0" or "" ? IPAddress.Any : IPAddress.Parse(host);
-        var listener = new TcpListener(ip, port);
-        listener.Start();
-        Port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        _listener = listener;
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _acceptLoop = AcceptLoopAsync(_cts.Token);
+        var bindPort = port == 0 ? TerminalDefaults.GatewaySshPort : port;
+        Port = _loop.Start(host, bindPort, () => OnAccept, cancellationToken);
         return Task.CompletedTask;
     }
 
-    private async Task AcceptLoopAsync(CancellationToken ct)
+    public Task StopAsync() => _loop.StopAsync();
+
+    public ValueTask DisposeAsync() => new(StopAsync());
+}
+
+/// <summary>
+/// The accept loop both gateways share: hand each accepted client to the
+/// current handler (read per accept, so it may be set after start), or close
+/// it when there is none — which still proves the bind/accept path works.
+/// </summary>
+internal sealed class TcpAcceptLoop
+{
+    private TcpListener? _listener;
+    private CancellationTokenSource? _cts;
+    private Task? _acceptLoop;
+
+    public int Start(
+        string host,
+        int port,
+        Func<Func<TcpClient, CancellationToken, Task>?> handler,
+        CancellationToken cancellationToken)
     {
-        while (!ct.IsCancellationRequested && _listener is not null)
+        var ip = host is "0.0.0.0" or "" ? IPAddress.Any : IPAddress.Parse(host);
+        var listener = new TcpListener(ip, port);
+        listener.Start();
+        _listener = listener;
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _acceptLoop = AcceptLoopAsync(listener, handler, _cts.Token);
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
+    }
+
+    private static async Task AcceptLoopAsync(
+        TcpListener listener,
+        Func<Func<TcpClient, CancellationToken, Task>?> handlerOf,
+        CancellationToken ct)
+    {
+        while (true)
         {
             TcpClient client;
             try
             {
-                client = await _listener.AcceptTcpClientAsync(ct);
+                client = await listener.AcceptTcpClientAsync(ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or SocketException)
             {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
+                // Cancelled, or the listener was stopped under the accept.
+                return;
             }
 
-            var handler = OnAccept;
-            if (handler is not null)
+            var handler = handlerOf();
+            if (handler is null)
             {
-                _ = Task.Run(async () =>
+                client.Dispose();
+                continue;
+            }
+
+            _ = Task.Run(
+                async () =>
                 {
                     try
                     {
-                        await handler(client, ct);
+                        await handler(client, ct).ConfigureAwait(false);
                     }
                     catch
                     {
                         client.Dispose();
                     }
-                }, ct);
-            }
-            else
-            {
-                // Accept-and-close when no handler — proves bind/accept works.
-                client.Dispose();
-            }
+                },
+                CancellationToken.None);
         }
     }
 
     public async Task StopAsync()
     {
-        if (_cts is not null)
+        if (_cts is null)
         {
-            await _cts.CancelAsync();
+            return; // never started, or already stopped
         }
 
-        _listener?.Stop();
-        if (_acceptLoop is not null)
-        {
-            try
-            {
-                await _acceptLoop;
-            }
-            catch
-            {
-            }
-        }
-
-        _cts?.Dispose();
+        await _cts.CancelAsync().ConfigureAwait(false);
+        _listener!.Stop();
+        // The loop catches its own accept failures, so this never throws.
+        await _acceptLoop!.ConfigureAwait(false);
+        _cts.Dispose();
         _cts = null;
         _listener = null;
+        _acceptLoop = null;
     }
-
-    public ValueTask DisposeAsync() => new(StopAsync());
 }

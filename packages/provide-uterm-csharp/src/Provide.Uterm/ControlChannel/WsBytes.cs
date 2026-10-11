@@ -27,18 +27,12 @@ public static class WsBytes
     /// </summary>
     public static byte[] ChannelStrToBytes(string data)
     {
+        // One byte per UTF-16 char: terminal data is latin-1, so char==byte.
         var outBytes = new byte[data.Length];
         var i = 0;
         foreach (var r in data)
         {
             outBytes[i++] = r > 0xFF ? (byte)'?' : (byte)r;
-        }
-
-        // data.Length is char count; rune-aware would differ for surrogates,
-        // but terminal data is latin-1 so char==byte.
-        if (i != outBytes.Length)
-        {
-            Array.Resize(ref outBytes, i);
         }
 
         return outBytes;

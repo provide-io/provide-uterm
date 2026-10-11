@@ -95,13 +95,9 @@ public sealed class SessionLogger : IAsyncDisposable
             await cts.CancelAsync();
             if (task is not null)
             {
-                try
-                {
-                    await task;
-                }
-                catch (OperationCanceledException)
-                {
-                }
+                // The loop turns its own cancellation into a break, so awaiting
+                // it surfaces only a store failure from its last flush.
+                await task;
             }
 
             cts.Dispose();

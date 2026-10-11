@@ -38,10 +38,8 @@ public static class GatewayDrive
         string wsUrl,
         CancellationToken cancellationToken = default)
     {
-        using var ws = new ClientWebSocket();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        await ws.ConnectAsync(new Uri(wsUrl), cts.Token).ConfigureAwait(false);
+        using var ws = await ConnectWebSocketAsync(new Uri(wsUrl), cts.Token).ConfigureAwait(false);
 
         var hello = ControlChannelCodec.EncodeControlFrame(GatewayPump.HelloFrame());
         await ws.SendAsync(
@@ -86,7 +84,7 @@ public static class GatewayDrive
             {
                 linked.Cancel();
             }
-        }, token);
+        }, CancellationToken.None);
 
         var wsToLocal = Task.Run(async () =>
         {
@@ -155,27 +153,48 @@ public static class GatewayDrive
             {
                 linked.Cancel();
             }
-        }, token);
+        }, CancellationToken.None);
 
+        await Task.WhenAny(localToWs, wsToLocal).ConfigureAwait(false);
+        linked.Cancel();
+        // Both pumps swallow their own faults, so this only waits for the
+        // other direction to observe the cancel: the session is over when
+        // RunAsync returns, not some time after.
+        await Task.WhenAll(localToWs, wsToLocal).ConfigureAwait(false);
         try
         {
-            await Task.WhenAny(localToWs, wsToLocal).ConfigureAwait(false);
+            if (ws.State == WebSocketState.Open)
+            {
+                await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
         }
-        finally
+        catch
         {
-            linked.Cancel();
-            try
-            {
-                if (ws.State == WebSocketState.Open)
-                {
-                    await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None)
-                        .ConfigureAwait(false);
-                }
-            }
-            catch
-            {
-                // ignore
-            }
+            // ignore
+        }
+    }
+
+    /// <summary>
+    /// Opens the upstream WebSocket. A test seam (defaulting to a real
+    /// <see cref="ClientWebSocket"/>) so the pumps can run against an
+    /// in-memory socket whose every failure is scriptable.
+    /// </summary>
+    internal static Func<Uri, CancellationToken, Task<WebSocket>> ConnectWebSocketAsync { get; set; } =
+        DefaultConnectWebSocketAsync;
+
+    private static async Task<WebSocket> DefaultConnectWebSocketAsync(Uri uri, CancellationToken ct)
+    {
+        var ws = new ClientWebSocket();
+        try
+        {
+            await ws.ConnectAsync(uri, ct).ConfigureAwait(false);
+            return ws;
+        }
+        catch
+        {
+            ws.Dispose();
+            throw;
         }
     }
 
