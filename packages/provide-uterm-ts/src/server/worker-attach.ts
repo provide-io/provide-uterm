@@ -185,13 +185,22 @@ export async function attachConnector(
   let lastSnapshot: WorkerMessage | undefined;
 
   /**
-   * Hand everything a connector produced to the hub.
+   * Hand everything a connector produced to the hub, then to the recording.
    *
    * A snapshot is recorded and logged; anything else is only broadcast. The
    * reference's `_dispatch_worker_frame`, with its ordering: stored before it
    * is announced, so nothing can observe the event without the screen.
+   *
+   * Each message is logged after it is broadcast, as the reference's
+   * `_send_outbound_frame` logs a frame after its socket write. But a
+   * recording that cannot write does not hold back the live session: every
+   * message in the batch still reaches the hub, and logging is still tried
+   * for each, and only then is the recording's first failure thrown — for the
+   * caller to report, as it reports any other.
    */
   async function inbound(messages: readonly WorkerMessage[]): Promise<void> {
+    /** The recording's first failure in this batch, thrown once it is all out. */
+    let recordFailure: { error: unknown } | undefined;
     for (const message of messages) {
       if (String(message.type ?? "") !== "snapshot") {
         await hub.router.broadcast(sessionId, message);
@@ -203,9 +212,15 @@ export async function attachConnector(
           await hub.router.broadcast(sessionId, committed, socket, Number(committed.event_seq));
         }
       }
-      // Logged once it has been handed over, as the reference logs a frame
-      // after its socket write: the worker's message, not the hub's frame.
-      await recording?.logOutbound(message);
+      // The worker's message, not the hub's frame.
+      try {
+        await recording?.logOutbound(message);
+      } catch (error) {
+        recordFailure ??= { error };
+      }
+    }
+    if (recordFailure !== undefined) {
+      throw recordFailure.error;
     }
   }
 
@@ -293,13 +308,25 @@ export async function attachConnector(
   };
 
   hub.registerWorker(sessionId, socket, mode);
-  // The reference's `runtime_started`, written as its worker connects and
-  // before the first screen it sends.
-  await recording?.logEvent("runtime_started", { session_id: sessionId });
-  // The reference's worker sends a snapshot as soon as it connects, which is
-  // why `GET /api/sessions/{id}/snapshot` answers with a screen before anybody
-  // has typed anything. Sent through the same inbound path as every later one.
-  await inbound([await connector.getSnapshot()]);
+  try {
+    // The reference's `runtime_started`, written as its worker connects and
+    // before the first screen it sends.
+    await recording?.logEvent("runtime_started", { session_id: sessionId });
+    // The reference's worker sends a snapshot as soon as it connects, which is
+    // why `GET /api/sessions/{id}/snapshot` answers with a screen before
+    // anybody has typed anything. Sent through the same inbound path as every
+    // later one.
+    await inbound([await connector.getSnapshot()]);
+  } catch (error) {
+    // An attachment that never finished is taken back off the hub, as the
+    // reference's worker socket closes with the connection that failed: left
+    // registered, the hub would lease a worker nobody is polling. The poll
+    // loop has not started yet, so there is nothing else to stop. A cleanup
+    // that fails as well does not replace the failure that caused it.
+    hub.connections.deregisterWorker(sessionId, socket);
+    await hub.pruneIfIdle(sessionId).catch(() => undefined);
+    throw error;
+  }
 
   /**
    * Poll the connector for output it produced on its own.
@@ -315,7 +342,10 @@ export async function attachConnector(
    * A poll that throws ends the reference's connection, which it records as a
    * `runtime_error` and retries on its backoff. There is no connection here
    * to drop, so the error is reported and the poll retried on the same
-   * schedule; one that succeeds starts the schedule over. Handing what a poll
+   * schedule; an iteration that succeeds all the way through starts the
+   * schedule over. A poll that succeeds is not enough: a recording that keeps
+   * failing to take what it returned must back off like anything else, not
+   * retry at the first step forever. Handing what a poll
    * returned on — the hub's broadcast, the recording's write — fails the same
    * way and is treated the same way: in the reference both run inside the
    * one `try` its run loop catches.
@@ -328,15 +358,16 @@ export async function attachConnector(
     while (!detached) {
       try {
         const messages = await connector.pollMessages();
-        failures = 0;
         if (detached) {
           return;
         }
         if (messages.length === 0) {
+          failures = 0;
           await sleep(POLL_IDLE_MS);
           continue;
         }
         await inbound(messages);
+        failures = 0;
       } catch (error) {
         if (detached) {
           return;

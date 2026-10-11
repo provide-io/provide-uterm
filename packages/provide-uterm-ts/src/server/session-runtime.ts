@@ -222,9 +222,11 @@ export class SessionRuntimes {
       last_error: null,
     });
 
+    /** Set once the connector has started: only a started one is stopped. */
+    let connector: SessionConnector | undefined;
     let recording: SessionRecording | undefined;
     try {
-      const connector = this.#build(
+      const built = this.#build(
         sessionId,
         definition.display_name,
         definition.connector_type,
@@ -232,9 +234,11 @@ export class SessionRuntimes {
         // otherwise rewrite the definition every request is answered from.
         { ...definition.connector_config },
       );
-      await connector.start();
-      // Recorded only once it is up, so nothing is ever left holding a
-      // connector that threw on the way.
+      await built.start();
+      connector = built;
+      // Held from here, so a second start while this one is still attaching
+      // returns early rather than building another. Let go again below if
+      // anything after this point fails.
       this.#connectors.set(sessionId, connector);
       // Opened once the connector is up and before the worker attaches, which
       // is where the reference opens it: a recording spans one worker
@@ -245,7 +249,8 @@ export class SessionRuntimes {
       await recording.start((this.#registry.status(sessionId) as SessionRuntimeStatus).recording_enabled);
       // Attached to the hub as a worker, which is what makes the session
       // leasable: the hub arbitrates over workers, and one that had merely
-      // been started would be refused every acquire with `no_worker`.
+      // been started would be refused every acquire with `no_worker`. An
+      // attachment that fails takes its own worker back off the hub.
       this.#attached.set(
         sessionId,
         await attachConnector(this.#hub, sessionId, connector, definition.input_mode, {
@@ -263,6 +268,14 @@ export class SessionRuntimes {
       // reference's `finally` closes it. A store that cannot close it either
       // must not turn a reported failure into a thrown one.
       await recording?.stop().catch(() => undefined);
+      // Then the connector, as the reference's `_stop_connector` discards it
+      // when its run loop gives up — suppressing a stop that fails, since the
+      // session is going down either way. Left running and held, it would
+      // outlive the session and turn every later start into a no-op.
+      if (connector !== undefined) {
+        this.#connectors.delete(sessionId);
+        await connector.stop().catch(() => undefined);
+      }
       // `stopped`, with the reason and the instant — where the reference's run
       // loop comes to rest when it gives up. See the note on `error` above.
       this.#registry.setState(sessionId, {
@@ -304,36 +317,38 @@ export class SessionRuntimes {
     let failure: { error: unknown } | undefined;
     for (const [sessionId, connector] of this.#connectors) {
       let lastError: string | undefined;
-      try {
-        // Detached before it is stopped, so nothing can take a lease on a
-        // worker whose connector is on its way down.
-        await this.#attached.get(sessionId)?.detach();
-        // Closed before the connector, as the reference closes the recording
-        // with the worker connection and only then stops the connector.
-        // Present: a session's recording is made before its connector is held.
-        await (this.#recordings.get(sessionId) as SessionRecording).stop();
-      } catch (error) {
-        // A final flush that failed (disk full, EACCES) still has to let the
-        // connector go: otherwise the PTY or ssh process it holds outlives
-        // the server, and the session reads "running, connected" with nothing
-        // behind it. The reference's `stop()` raises the same error out of
-        // `_stop_recording` — before it reaches `_discard_connector` or the
-        // state update, which is the leak. Here the error is kept as
-        // `last_error`, the rest of the stop goes ahead, and it is raised once
-        // every session is down.
-        lastError = errorText(error);
+      /** Keep the first failure of this session's stop, and carry on. */
+      const fail = (error: unknown) => {
+        lastError ??= errorText(error);
         failure ??= { error };
-      } finally {
-        // The reference's `_discard_connector`, which suppresses a connector
-        // that fails to stop: the session is going down either way.
-        await connector.stop().catch(() => undefined);
-        this.#registry.setState(sessionId, {
-          lifecycle_state: "stopped",
-          connected: false,
-          stopped_at: this.#now(),
-          ...(lastError === undefined ? {} : { last_error: lastError }),
-        });
-      }
+      };
+      // Detached before it is stopped, so nothing can take a lease on a
+      // worker whose connector is on its way down.
+      await this.#attached.get(sessionId)?.detach().catch(fail);
+      // Closed before the connector, as the reference closes the recording
+      // with the worker connection and only then stops the connector. Its own
+      // step, so a detach that failed still gets the final flush and the
+      // closing entry written. Present: a session's recording is made before
+      // its connector is held.
+      //
+      // A final flush that failed (disk full, EACCES) still has to let the
+      // connector go: otherwise the PTY or ssh process it holds outlives the
+      // server, and the session reads "running, connected" with nothing behind
+      // it. The reference's `stop()` raises the same error out of
+      // `_stop_recording` — before it reaches `_discard_connector` or the state
+      // update, which is the leak. Here the error is kept as `last_error`, the
+      // rest of the stop goes ahead, and it is raised once every session is
+      // down.
+      await (this.#recordings.get(sessionId) as SessionRecording).stop().catch(fail);
+      // The reference's `_discard_connector`, which suppresses a connector
+      // that fails to stop: the session is going down either way.
+      await connector.stop().catch(() => undefined);
+      this.#registry.setState(sessionId, {
+        lifecycle_state: "stopped",
+        connected: false,
+        stopped_at: this.#now(),
+        ...(lastError === undefined ? {} : { last_error: lastError }),
+      });
     }
     this.#attached.clear();
     this.#connectors.clear();
