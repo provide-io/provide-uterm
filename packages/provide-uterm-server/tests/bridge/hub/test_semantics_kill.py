@@ -22,14 +22,21 @@ either resurrects a character the real scanner had already protected, or
 oscillates forever between the same two indices. Half of these mutants hang.
 
 ``pytest.mark.timeout`` is not a reliable way to catch that: mutmut applies
-its *own* per-mutant timeout, and under a loaded parallel run that fires
+its *own* per-mutant CPU-time limit, and under a loaded parallel run that fires
 before pytest-timeout's SIGALRM does, which reports as mutmut's TIMEOUT
 state rather than as a killed/failed test -- and the mutation gate treats
-TIMEOUT as a non-kill, not a pass. So every test below that feeds an input
-capable of triggering one of these rewinds runs ``CommandSplitter().split``
-on a background thread via ``_split_bounded`` and asserts the join comes back
-inside a fraction of a second, from *inside* the test process, well before
-mutmut's own watchdog would need to intervene.
+TIMEOUT as a non-kill, not a pass. Bounding the call on a background thread
+does not work either: the join gives up, the test fails, but the hung thread
+keeps spinning in the same process and pytest has to finish the session
+around it. Every GIL hand-off then costs a full switch interval, and the
+spinning thread's CPU time counts against mutmut's limit -- ``i += 1`` ->
+``i = 1`` burned ~51s of CPU on a single failing test and CI recorded it as
+TIMEOUT. So every test below runs ``CommandSplitter().split`` through
+``_split_bounded``, which hands it a ``str`` subclass carrying an operation
+budget. The scan loop calls ``len(command)`` once per iteration, so a scan
+that runs away exhausts the budget within a few hundred operations and
+*raises from inside the loop itself*: the call unwinds, nothing is left
+running, and the mutant is recorded as killed in milliseconds.
 
 *A discarded value is asserted only by its type, not its content.* ``found_op``
 and the fixed defaults on ``op_len``/``escaped``/``in_*_quote``/``start`` are
@@ -40,49 +47,85 @@ genuinely equivalent -- see the module-level ``EQUIVALENT_MUTANTS`` note below
 -- and are listed rather than chased with a test that can never fail.
 
 Every kill test in this file was validated against the actual mutmut-generated
-mutant source (not just reasoned about) before being written, using a
-throwaway harness that ran the real body and the mutant body side by side
-under a wall-clock bound.
+mutant source (not just reasoned about) before being written.
 """
 
 from __future__ import annotations
 
-import threading
+import pytest
 
 from provide.uterm.server.bridge.hub.semantics import CommandSplitter
 
-_HANG_BOUND_S = 0.5
+# Operations allowed per input character. A correct scan makes at most one
+# ``len()`` call and a handful of ``[]`` lookups per character; a runaway scan
+# makes unboundedly many, so any generous constant separates the two.
+_OPS_PER_CHAR = 16
 
 
-def _split_bounded(command: str, timeout: float = _HANG_BOUND_S) -> list[str]:
-    """Run ``CommandSplitter().split(command)`` on a daemon thread with a wall-clock bound.
+class ScanBudgetExceededError(AssertionError):
+    """Raised from inside the scan loop when it does far more work than its input allows."""
 
-    Several mutants below rewind the scanner's cursor and oscillate forever
-    instead of returning. ``pytest.mark.timeout`` cannot be trusted to catch
-    that under mutmut's own concurrent, already-timeout-bounded execution --
-    see the module docstring. Running the call off-thread and bounding the
-    join makes the hang observable, fast and deterministically, from inside
-    the test itself: a real (non-hanging) call always finishes in well under
-    a millisecond, so a 0.5s join is never close for correct code but still
-    fails long before mutmut's own watchdog would.
+
+class _BudgetedStr(str):
+    """A ``str`` that raises once ``len()``/``[]`` have been called too many times.
+
+    ``split`` reads its input only through ``len(command)`` (once per loop
+    iteration), ``command[i]``/``command[a:b]`` and ``startswith``. Counting the
+    first two bounds every iteration of the scan loop, so a mutant that stops
+    the cursor advancing (or rewinds it) fails deterministically and promptly
+    instead of hanging. ``str`` methods do not route through these dunders, and
+    ``__getitem__`` returns a plain ``str``, so results compare exactly.
     """
-    result: list[list[str]] = []
-    thread = threading.Thread(target=lambda: result.append(CommandSplitter().split(command)), daemon=True)
-    thread.start()
-    thread.join(timeout)
-    assert not thread.is_alive(), f"CommandSplitter().split({command!r}) hung"
-    return result[0]
+
+    __slots__ = ("_budget",)
+
+    def __new__(cls, value: str) -> _BudgetedStr:
+        obj = super().__new__(cls, value)
+        obj._budget = _OPS_PER_CHAR * (len(value) + 1)
+        return obj
+
+    def _spend(self) -> None:
+        self._budget -= 1
+        if self._budget < 0:
+            raise ScanBudgetExceededError(f"CommandSplitter().split({str(self)!r}) did not terminate")
+
+    def __len__(self) -> int:
+        self._spend()
+        return super().__len__()
+
+    def __getitem__(self, key: object) -> str:  # type: ignore[override]
+        self._spend()
+        return super().__getitem__(key)  # type: ignore[index]
+
+
+def _split_bounded(command: str) -> list[str]:
+    """Run ``CommandSplitter().split(command)`` with an operation budget.
+
+    Several mutants below stop or rewind the scanner's cursor and loop forever
+    instead of returning. The budget turns that hang into an exception raised
+    from inside the loop -- see the module docstring for why neither
+    ``pytest.mark.timeout`` nor a thread-bounded join is good enough.
+    """
+    return CommandSplitter().split(_BudgetedStr(command))
+
+
+def test_the_budget_never_trips_on_a_correct_scan() -> None:
+    """The budget must leave headroom for the real scanner on every construct it handles."""
+    command = "a 'b;c' \\; \"d|e\" && f || g | h ; i\\;j"
+    assert _split_bounded(command) == ["a 'b;c' \\; \"d|e\"", "f", "g", "h", "i\\;j"]
+
+
+def test_the_budget_trips_on_a_scan_that_never_advances() -> None:
+    """The budget itself must fire: a loop that re-reads one index forever raises promptly."""
+    budgeted = _BudgetedStr("ab")
+    with pytest.raises(ScanBudgetExceededError):
+        for _ in range(_OPS_PER_CHAR * 100):
+            budgeted[0]
 
 
 # ---------------------------------------------------------------------------
 # Equivalent mutants (documented, not tested):
 #
-# - shlex.shlex(...) construction/`.whitespace_split` variants: the `lexer`
-#   object built at the top of `split()` is never referenced again -- the
-#   rest of the method is a hand-rolled character scan. Constructing it with
-#   `None` as the stream, a different `posix=`/no `posix=` kwarg, or toggling
-#   `.whitespace_split` has no observable effect (confirmed: none of these
-#   constructor variants raise, and the object is discarded unused).
 # - `in_single_quote`/`in_double_quote`/`escaped` initialised (or reset) to
 #   `None` instead of `False`: every read is a `not x` / `if x:` truthiness
 #   check, never `is False`/`is None`, and `not None == not False == True`,
@@ -147,7 +190,7 @@ def test_the_character_right_after_a_leading_backslash_is_never_rescanned() -> N
     escaped -- here, that character is itself an operator, so a rewind lets
     it split when it should have stayed literal. A rewind that instead lands
     back *on* the backslash (the ``-=`` variant) oscillates forever, which is
-    why this test carries the module's timeout bound.
+    why this test carries the module's operation budget.
     """
     assert _split_bounded("\\;x") == ["\\;x"]
 
@@ -169,7 +212,7 @@ def test_detecting_a_backslash_mid_command_advances_by_exactly_one() -> None:
     Forcing it to the literal ``1`` is invisible only when the backslash is
     the very first character (position 0); anywhere later, it rewinds onto
     or past the backslash itself and the scan oscillates -- hence the
-    timeout bound. The ``+= 2``/``break`` variants instead skip the escaped
+    operation budget. The ``+= 2``/``break`` variants instead skip the escaped
     character forward, letting the operator after it (protected by the
     escape) be treated as literal text bundled into the wrong part.
     """
@@ -182,7 +225,7 @@ def test_toggling_single_quote_state_advances_by_exactly_one() -> None:
     A quoted string always has (at least) two quote characters; rewinding
     the step to the literal constant ``1`` is a no-op on the *opening*
     quote (already at index ~1) but re-triggers on the *closing* quote,
-    which oscillates the quote state forever -- hence the timeout bound.
+    which oscillates the quote state forever -- hence the operation budget.
     The ``+= 2``/``break`` variants instead skip the character right after a
     quote, letting a protected ``;`` leak through as literal text.
     """
@@ -237,7 +280,7 @@ def test_operator_consumption_advances_the_cursor_forward_not_to_op_len() -> Non
     Setting ``i`` to the literal ``op_len`` (rather than advancing by it)
     is invisible only when the operator happens to sit at that exact index;
     anywhere else it rewinds into already-scanned text and re-detects the
-    same operator forever -- hence the timeout bound.
+    same operator forever -- hence the operation budget.
     """
     assert _split_bounded("a;") == ["a"]
 
@@ -259,7 +302,7 @@ def test_the_main_loop_advances_one_character_at_a_time() -> None:
     Forcing the cursor back to the literal ``1`` after the very first plain
     character is a no-op (it was already headed to ``1``); on the second
     character it rewinds and the scanner re-reads the same character
-    forever -- hence the timeout bound. The ``-= 1`` variant instead walks
+    forever -- hence the operation budget. The ``-= 1`` variant instead walks
     off the front of the string and raises ``IndexError``, which also fails
     this test, just via an exception instead of a timeout.
     """
