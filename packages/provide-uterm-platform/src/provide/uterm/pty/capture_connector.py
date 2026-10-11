@@ -183,7 +183,14 @@ class CaptureConnector:
         answers False and is left for a restart.
         """
 
+        # Everything that can reject the config runs before anything changes:
+        # a rejected config must leave the running connector as it was (the
+        # registry turns the ValueError/TypeError into a 422 and keeps the stored
+        # definition). connect_timeout_s is parsed only to validate it -- a value
+        # the constructor cannot parse would fail the next start.
         _validate_config(config)
+        cols, rows = int(config.get("cols", self._cols)), int(config.get("rows", self._rows))
+        float(config.get("connect_timeout_s", self._connect_timeout))
         if str(config["socket_path"]) != self._socket_path:
             return False
         stdin_socket_path = str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
@@ -193,7 +200,6 @@ class CaptureConnector:
             if self._stdin_writer is not None:
                 self._stdin_writer.close()
                 self._stdin_writer = None
-        cols, rows = int(config.get("cols", self._cols)), int(config.get("rows", self._rows))
         if (cols, rows) != (self._cols, self._rows):
             self._cols, self._rows = cols, rows
             if self._emulator is not None:
