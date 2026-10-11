@@ -63,7 +63,7 @@ func spawnPTY(
 	// stream (the frontend renders its own echo). The termios state is shared
 	// across the pty pair, so applying it to the master fd is equivalent to
 	// tcsetattr on the slave.
-	if err := disableEcho(int(master.Fd())); err != nil {
+	if err := setNoEcho(int(master.Fd())); err != nil {
 		_ = master.Close()
 		if c.Process != nil {
 			_ = c.Process.Kill()
@@ -75,6 +75,14 @@ func spawnPTY(
 	return &spawnedChild{master: master, cmd: c}, nil
 }
 
+// setNoEcho and userGroupIDs are disableEcho and (*user.User).GroupIds, as
+// variables only so a test can fail them: neither fails on a working PTY or a
+// resolvable user.
+var (
+	setNoEcho    = disableEcho
+	userGroupIDs = func(u *user.User) ([]string, error) { return u.GroupIds() }
+)
+
 // supplementaryGroups resolves the supplementary group ids for resolved (the Go
 // analogue of os.initgroups(name, gid)). Best-effort: on any lookup failure it
 // returns nil, so Credential falls back to setgroups([]) — never leaving the
@@ -84,7 +92,7 @@ func supplementaryGroups(resolved *ResolvedUser) []uint32 {
 	if err != nil {
 		return nil
 	}
-	ids, err := u.GroupIds()
+	ids, err := userGroupIDs(u)
 	if err != nil {
 		return nil
 	}

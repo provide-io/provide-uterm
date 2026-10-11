@@ -99,7 +99,7 @@ func (l *PamNotifyListener) Start(ctx context.Context, handler PamEventHandler) 
 	if err != nil {
 		return err
 	}
-	if err := os.Chmod(l.path, notifySocketMode); err != nil {
+	if err := chmodSocket(l.path, notifySocketMode); err != nil {
 		_ = ln.Close()
 		return err
 	}
@@ -188,10 +188,8 @@ func (l *PamNotifyListener) handleConn(ctx context.Context, conn net.Conn) {
 		if err != nil {
 			return
 		}
-		if len(line) > notifyMaxLine {
-			log.Warn("pam_notify_listener oversized_line — dropped", "bytes", len(line))
-			continue
-		}
+		// The reader's buffer is notifyMaxLine bytes, so ReadSlice never hands
+		// back a longer line: anything longer is ErrBufferFull above.
 		ev, ok := parseEvent(ctx, line)
 		if !ok {
 			continue

@@ -13,6 +13,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// getsockoptUcred is unix.GetsockoptUcred, a variable only so a test can fail
+// it: on a connected Unix socket it does not fail.
+var getsockoptUcred = unix.GetsockoptUcred
+
 // peerEUID returns the connecting peer's uid via SO_PEERCRED, or ok=false when
 // unavailable. Port of PamNotifyListener._peer_euid (Linux SO_PEERCRED path).
 func peerEUID(conn net.Conn) (int, bool) {
@@ -27,7 +31,7 @@ func peerEUID(conn net.Conn) (int, bool) {
 	var uid int
 	var innerErr error
 	ctrlErr := raw.Control(func(fd uintptr) {
-		cred, e := unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+		cred, e := getsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
 		if e != nil {
 			innerErr = e
 			return

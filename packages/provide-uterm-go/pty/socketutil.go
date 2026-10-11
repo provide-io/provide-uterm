@@ -7,8 +7,14 @@ package pty
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
+
+// chmodSocket tightens a freshly bound socket's mode (os.Chmod). A variable
+// only so a test can fail it: on a socket this process just created, the chmod
+// cannot be made to fail from outside.
+var chmodSocket = os.Chmod
 
 // ValidateSocketPath rejects Unix socket paths that aren't absolute or contain
 // null bytes. Port of socket_utils.validate_socket_path.

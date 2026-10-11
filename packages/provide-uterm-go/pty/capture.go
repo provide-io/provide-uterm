@@ -101,7 +101,7 @@ func (s *CaptureSocket) Start() error {
 		return err
 	}
 	// Belt-and-suspenders: enforce 0o600 even if the platform ignored the umask.
-	if err := os.Chmod(s.path, socketMode); err != nil {
+	if err := chmodSocket(s.path, socketMode); err != nil {
 		_ = ln.Close()
 		return err
 	}

@@ -83,6 +83,10 @@ type PTYConnector struct {
 
 	// geteuid is a test seam for the PAM root check.
 	geteuid func() int
+	// newPam opens the PAM session (NewPamSession). A seam because the only
+	// default backend is the fail-closed stub, so the success path can only be
+	// driven with an injected backend.
+	newPam func(service string) (*PamSession, error)
 }
 
 // NewPTYConnector validates config and builds a connector. Port of
@@ -157,6 +161,7 @@ func NewPTYConnector(sessionID, displayName string, config map[string]any) (*PTY
 		uidMap:      NewUidMap(nil, false),
 		decoder:     &incrementalDecoder{},
 		geteuid:     os.Geteuid,
+		newPam:      NewPamSession,
 	}
 	return c, nil
 }
@@ -169,7 +174,7 @@ func (c *PTYConnector) Start(ctx context.Context) error {
 		if c.geteuid() != 0 {
 			return fmt.Errorf("user-switching via PAM requires the server to run as root")
 		}
-		pam, err := NewPamSession("provide-uterm")
+		pam, err := c.newPam("provide-uterm")
 		if err != nil {
 			return err
 		}
