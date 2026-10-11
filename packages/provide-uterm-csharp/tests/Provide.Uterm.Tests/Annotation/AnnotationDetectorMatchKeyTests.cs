@@ -17,7 +17,7 @@ namespace Provide.Uterm.Tests.Annotation;
 /// <c>provide-uterm-annotation/tests/test_annotation_match_key.py</c>, and with
 /// <c>annotation_match_key</c> itself through <c>read_path_golden.json</c>.
 /// </summary>
-public sealed class AnnotationMatchKeyTests
+public sealed class AnnotationDetectorMatchKeyTests
 {
     private const string KeyA = "AKIAIOSFODNN7EXAMPLE"; // pragma: allowlist secret
     private const string KeyB = "AKIAJ2345678ABCDWXYZ"; // pragma: allowlist secret
@@ -141,5 +141,78 @@ public sealed class AnnotationMatchKeyTests
         Assert.DoesNotContain("MatchKey", json, StringComparison.Ordinal);
         Assert.DoesNotContain(KeyA, JsonSerializer.Serialize(annotation.ToDict()), StringComparison.Ordinal);
         Assert.Equal("", new Provide.Uterm.Annotation.Annotation().MatchKey);
+    }
+
+    private static string Key(string ruleId, string match) =>
+        Provide.Uterm.Annotation.Annotation.ComputeMatchKey(ruleId, match);
+
+    [Fact]
+    public void ALoneSurrogateIsFound()
+    {
+        // A Fact, not InlineData: attribute strings are stored as UTF-8, which
+        // turns a lone surrogate into U+FFFD before the test ever sees it.
+        (string Text, bool Lone)[] cases =
+        [
+            ("", false),
+            ("plain", false),
+            ("\U0001f600", false),
+            ("a\U0001f600b\U0010ffff", false),
+            ("\ud800", true),
+            ("\udc00", true),
+            ("a\ud800", true),
+            ("\ud800a", true),
+            ("\udc00\ud800", true),
+            ("\ud800\ud800\udc00", true),
+            ("\U0001f600\udc00", true),
+        ];
+        foreach (var (text, lone) in cases)
+        {
+            Assert.True(
+                lone == Provide.Uterm.Annotation.Annotation.HasLoneSurrogate(text),
+                $"{string.Join(",", text.Select(c => ((int)c).ToString("x4")))}: expected {lone}");
+        }
+    }
+
+    public static TheoryData<string> WellFormed => new()
+    {
+        "",
+        "AKIAIOSFODNN7EXAMPLE",
+        "caf\u00e9 \u2603 \U0001f600 \u07ff\u0800\uffff\U00010000\U0010ffff",
+        new string('\u2603', 170), // 510 bytes + rule + NUL: just over the stack buffer
+        new string('x', Provide.Uterm.Annotation.Annotation.MatchKeyStackLimit - 2), // exactly at it
+        new string('x', Provide.Uterm.Annotation.Annotation.MatchKeyStackLimit - 1), // one past it
+        string.Concat(Enumerable.Repeat("\U0001f600", 300)),
+    };
+
+    [Theory]
+    [MemberData(nameof(WellFormed))]
+    public void TheFastPathHashesTheSameBytesAsSurrogatepass(string match)
+    {
+        // For well-formed text, surrogatepass is plain UTF-8: both encoders agree.
+        var surrogatePass = Provide.Uterm.Annotation.Annotation.MatchKeyInputSurrogatePass("r", match);
+        Assert.Equal([.. "r\0"u8, .. Encoding.UTF8.GetBytes(match)], surrogatePass);
+        Assert.Equal(Sha256Hex(surrogatePass), Key("r", match));
+    }
+
+    [Fact]
+    public void TheSlowPathIsTakenForALoneSurrogateInEitherPart()
+    {
+        // Long enough that a buffer bug would show; the lone surrogate encodes as
+        // its own three bytes (Encoding.UTF8 would write EF BF BD instead).
+        var longMatch = new string('x', 600) + "\ud800";
+        Assert.Equal(
+            Sha256Hex([(byte)'r', 0, .. Encoding.ASCII.GetBytes(new string('x', 600)), 0xED, 0xA0, 0x80]),
+            Key("r", longMatch));
+        Assert.Equal(Sha256Hex([0xED, 0xB0, 0x80, 0, (byte)'m']), Key("\udc00", "m"));
+        Assert.NotEqual(Sha256Hex([.. Encoding.UTF8.GetBytes("r\0\ud800")]), Key("r", "\ud800"));
+    }
+
+    [Fact]
+    public void KeysAreStableAcrossRepeatedCallsOnBothPaths()
+    {
+        var big = new string('y', 4000);
+        Assert.Equal(Key("r", big), Key("r", big));
+        Assert.Equal(Key("r", big + "\ud800"), Key("r", big + "\ud800"));
+        Assert.NotEqual(Key("r", big), Key("r", big + "z"));
     }
 }

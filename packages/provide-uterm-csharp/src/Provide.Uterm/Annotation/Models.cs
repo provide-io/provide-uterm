@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System.Buffers;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
@@ -44,11 +46,68 @@ public sealed class Annotation
     /// </summary>
     public static string ComputeMatchKey(string ruleId, string match)
     {
+        // Hot path: one call per detector match. Well-formed text (no lone
+        // surrogate) is plain UTF-8, so Encoding.UTF8 writes the same bytes as
+        // surrogatepass into a stack or pooled buffer; only text with a lone
+        // surrogate takes the hand-rolled encoder.
+        if (HasLoneSurrogate(ruleId) || HasLoneSurrogate(match))
+        {
+            return Convert.ToHexStringLower(SHA256.HashData(MatchKeyInputSurrogatePass(ruleId, match)));
+        }
+
+        var length = Encoding.UTF8.GetByteCount(ruleId) + 1 + Encoding.UTF8.GetByteCount(match);
+        byte[]? rented = null;
+        Span<byte> buffer = length <= MatchKeyStackLimit
+            ? stackalloc byte[MatchKeyStackLimit]
+            : rented = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            var written = Encoding.UTF8.GetBytes(ruleId, buffer);
+            buffer[written++] = 0;
+            written += Encoding.UTF8.GetBytes(match, buffer[written..]);
+            Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
+            SHA256.HashData(buffer[..written], hash);
+            return Convert.ToHexStringLower(hash);
+        }
+        finally
+        {
+            if (rented is not null) ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>Longest match-key input hashed from a stack buffer; longer input rents one.</summary>
+    internal const int MatchKeyStackLimit = 512;
+
+    /// <summary>Whether <paramref name="text"/> holds a surrogate that is not half of a pair.</summary>
+    internal static bool HasLoneSurrogate(string text)
+    {
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            {
+                i++;
+            }
+            else if (char.IsSurrogate(text[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The bytes <see cref="ComputeMatchKey"/> hashes, by Python's
+    /// <c>str.encode("utf-8", "surrogatepass")</c>: rule id, NUL, match. Any
+    /// input works; the key uses it only for text with a lone surrogate.
+    /// </summary>
+    internal static byte[] MatchKeyInputSurrogatePass(string ruleId, string match)
+    {
         var bytes = new List<byte>((ruleId.Length + match.Length + 1) * 3);
         AppendSurrogatePassUtf8(bytes, ruleId);
         bytes.Add(0);
         AppendSurrogatePassUtf8(bytes, match);
-        return Convert.ToHexStringLower(SHA256.HashData(bytes.ToArray()));
+        return bytes.ToArray();
     }
 
     /// <summary>Python's <c>str.encode("utf-8", "surrogatepass")</c> of a UTF-16 string.</summary>

@@ -9,12 +9,12 @@ Read-path detector rules run over every streamed ``term`` chunk and every
 snapshot screen of a recorded hosted session. The reference
 (``provide.uterm.server.runtime.HostedSessionRuntime``) strips escape sequences
 from both, carries an escape sequence cut off at a chunk boundary into the next
-chunk (``_split_incomplete_escape``), and dedupes the two paths on a digest of
+chunk (``split_incomplete_escape``), and dedupes the two paths on a digest of
 (rule id, full matched text) (``_read_annotation_key`` = ``Annotation.match_key``):
 a snapshot skips a match already recorded, and the stream chunk right after a
 snapshot skips a match that snapshot recorded. This corpus pins:
 
-* ``split``: ``_split_incomplete_escape`` on edge inputs, and its constants;
+* ``split``: ``split_incomplete_escape`` on edge inputs, and its constants;
 * ``match_keys``: ``annotation_match_key`` on (rule id, match) pairs, and the
   match keys the detector gives each read-path annotation of some texts;
 * ``scenarios``: a sequence of outbound ``term``/``snapshot`` frames through a
@@ -35,13 +35,10 @@ from unittest.mock import AsyncMock
 
 from provide.uterm.annotation import PatternDetector, annotation_match_key
 
+from provide.uterm import MAX_ESCAPE_CARRY, split_incomplete_escape
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.runtime import HostedSessionRuntime
-from provide.uterm.server.runtime_helpers import (
-    _MAX_ESCAPE_CARRY,
-    _MAX_READ_ANNOTATION_KEYS,
-    _split_incomplete_escape,
-)
+from provide.uterm.server.runtime_helpers import _MAX_READ_ANNOTATION_KEYS
 
 OUT = Path(__file__).with_name("read_path_golden.json")
 
@@ -58,10 +55,10 @@ SPLIT_INPUTS: list[str] = [
     "a\x1b]0;title",
     "\x1b[1m\x1b[3",
     "\x1b[?25",
-    "\x1b[" + "1" * (_MAX_ESCAPE_CARRY - 2),
-    "\x1b[" + "1" * (_MAX_ESCAPE_CARRY - 1),
-    "x" * 100 + "\x1b[" + "1" * (_MAX_ESCAPE_CARRY - 2),
-    "\x1b[" + "1;" * _MAX_ESCAPE_CARRY,
+    "\x1b[" + "1" * (MAX_ESCAPE_CARRY - 2),
+    "\x1b[" + "1" * (MAX_ESCAPE_CARRY - 1),
+    "x" * 100 + "\x1b[" + "1" * (MAX_ESCAPE_CARRY - 2),
+    "\x1b[" + "1;" * MAX_ESCAPE_CARRY,
 ]
 
 MATCH_KEY_INPUTS: list[list[str]] = [
@@ -86,7 +83,7 @@ SCENARIOS: dict[str, list[list[str]]] = {
     "escape_split_across_chunks": [["term", "$ \x1b[1"], ["term", "msudo rm -rf /\r\n"]],
     "bare_esc_carried": [["term", "$ \x1b"], ["term", "[1msudo ls\r\n"]],
     "carry_left_at_end": [["term", "$ sudo ls\r\n\x1b[1"]],
-    "overlong_sequence_released": [["term", "\x1b[" + "1;" * _MAX_ESCAPE_CARRY]],
+    "overlong_sequence_released": [["term", "\x1b[" + "1;" * MAX_ESCAPE_CARRY]],
     "snapshot_after_stream_deduped": [["term", "$ sudo ls\r\n"], ["snapshot", "$ sudo ls\n"]],
     "identical_snapshots_once": [
         ["snapshot", "$ rm -rf build\n"],
@@ -172,12 +169,12 @@ def main() -> int:
     """Write the golden corpus and report the record count."""
     payload = {
         "generator": "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/gen_read_path_golden.py",
-        "max_escape_carry": _MAX_ESCAPE_CARRY,
+        "max_escape_carry": MAX_ESCAPE_CARRY,
         "max_read_annotation_keys": _MAX_READ_ANNOTATION_KEYS,
         "split": [
             {"input": text, "complete": complete, "carry": carry}
             for text in SPLIT_INPUTS
-            for complete, carry in [_split_incomplete_escape(text)]
+            for complete, carry in [split_incomplete_escape(text)]
         ],
         "match_keys": [
             {"rule_id": rule_id, "match": match, "key": annotation_match_key(rule_id, match)}
