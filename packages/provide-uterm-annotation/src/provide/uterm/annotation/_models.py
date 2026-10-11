@@ -6,11 +6,29 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import re
+
+
+def annotation_match_key(rule_id: str, match: str) -> str:
+    """Identity of one detector match: ``sha256(rule_id + "\\x00" + match)``, hex.
+
+    *match* is the FULL matched text (``re.Match.group(0)``, not the 80-char
+    description cut), encoded as UTF-8 (``surrogatepass``, so a lone surrogate
+    hashes instead of raising). The digest names the rule and the exact text it
+    matched -- two different AWS keys get two different keys, the same key seen
+    twice gets the same one -- without the raw text (often a secret) being kept
+    anywhere: a consumer that dedupes on it holds only digests.
+
+    Reference format for the Go/TS/C# ports: lowercase hex SHA-256 of the UTF-8
+    bytes of ``rule_id``, one NUL byte, then the UTF-8 bytes of the match.
+    """
+
+    return hashlib.sha256(f"{rule_id}\x00{match}".encode("utf-8", "surrogatepass")).hexdigest()
 
 
 @dataclass(slots=True)
@@ -31,6 +49,10 @@ class Annotation:
     source: str
     principal: str
     span: AnnotationSpan | None = None
+    # ``annotation_match_key(rule_id, match)`` for a detector annotation, "" for
+    # any other. NOT serialised (``to_dict`` omits it) and excluded from repr and
+    # equality: it is an in-process identity for dedupe, not recorded data.
+    match_key: str = field(default="", repr=False, compare=False)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a plain :class:`dict`, with ``span`` as a nested dict if present."""
