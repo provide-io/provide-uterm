@@ -310,6 +310,57 @@ def test_a_failed_registry_shutdown_still_closes_the_control_plane(monkeypatch: 
     plane_close.assert_awaited_once()
 
 
+async def test_a_failed_close_does_not_replace_the_shutdown_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = MagicMock()
+    monkeypatch.setattr(factory_impl, "logger", recorder)
+    registry = AsyncMock()
+    registry.shutdown.side_effect = OSError("disk full")
+    plane = AsyncMock()
+    close_failure = RuntimeError("pool gone")
+    plane.close.side_effect = close_failure
+
+    with pytest.raises(OSError, match="disk full"):
+        await factory_impl._shutdown_registry_then_close(registry, plane)
+
+    plane.close.assert_awaited_once()
+    recorder.warning.assert_called_once_with("server_control_plane_close_failed error=%s", close_failure)
+
+
+async def test_a_failed_shutdown_with_a_clean_close_logs_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = MagicMock()
+    monkeypatch.setattr(factory_impl, "logger", recorder)
+    registry = AsyncMock()
+    registry.shutdown.side_effect = OSError("disk full")
+    plane = AsyncMock()
+
+    with pytest.raises(OSError, match="disk full"):
+        await factory_impl._shutdown_registry_then_close(registry, plane)
+
+    plane.close.assert_awaited_once()
+    recorder.warning.assert_not_called()
+
+
+async def test_after_a_clean_shutdown_a_close_failure_propagates_as_itself() -> None:
+    registry = AsyncMock()
+    plane = AsyncMock()
+    plane.close.side_effect = RuntimeError("pool gone")
+
+    with pytest.raises(RuntimeError, match="pool gone"):
+        await factory_impl._shutdown_registry_then_close(registry, plane)
+
+    registry.shutdown.assert_awaited_once()
+
+
+async def test_a_clean_shutdown_closes_the_control_plane_once() -> None:
+    registry = AsyncMock()
+    plane = AsyncMock()
+
+    await factory_impl._shutdown_registry_then_close(registry, plane)
+
+    registry.shutdown.assert_awaited_once()
+    plane.close.assert_awaited_once()
+
+
 def test_the_governance_gates_are_released_on_shutdown(monkeypatch: pytest.MonkeyPatch) -> None:
     """The four gates are passed positionally; a dropped one leaks its client."""
     seen: list[tuple[Any, ...]] = []
