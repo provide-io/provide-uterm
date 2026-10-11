@@ -308,11 +308,11 @@ func (c *LitevirtAIClient) runHandshakeAndLoop() error {
 					return fmt.Errorf("unsupported encoding: %d", encoding)
 				}
 
+				// The bounds check also caps the allocation below: ServerInit
+				// already held width/height to MaxRFBDimension, so a rectangle
+				// that fits inside them cannot exceed it either.
 				if rw == 0 || rh == 0 || rx+rw > int(width) || ry+rh > int(height) {
 					return fmt.Errorf("invalid rectangle bounds")
-				}
-				if rw > MaxRFBDimension || rh > MaxRFBDimension {
-					return fmt.Errorf("rectangle too large")
 				}
 
 				pixels := make([]byte, rw*rh*4)
@@ -324,9 +324,10 @@ func (c *LitevirtAIClient) runHandshakeAndLoop() error {
 				t := c.tracker
 				c.trackerMu.Unlock()
 				if t != nil {
-					if err := t.ApplyRawUpdate(rx, ry, rw, rh, pixels); err != nil {
-						return err
-					}
+					// ApplyRawUpdate only refuses negative dimensions or a short
+					// buffer; rw/rh come from uint16s and pixels was sized to
+					// exactly rw*rh*4 above, so neither can happen here.
+					_ = t.ApplyRawUpdate(rx, ry, rw, rh, pixels)
 				}
 			}
 

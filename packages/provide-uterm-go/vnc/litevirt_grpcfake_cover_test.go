@@ -1,7 +1,6 @@
 package vnc
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -58,6 +57,9 @@ func (s *fakeClientStream) RecvMsg(m any) error {
 type fakeClientConn struct {
 	stream grpc.ClientStream
 	newErr error
+	// streamCtx, when set, receives the context ProxyVNC was opened with, so a
+	// test can observe the relay cancelling its pumps.
+	streamCtx chan context.Context
 }
 
 func (c *fakeClientConn) Invoke(ctx context.Context, method string, args, reply any, opts ...grpc.CallOption) error {
@@ -67,6 +69,9 @@ func (c *fakeClientConn) Invoke(ctx context.Context, method string, args, reply 
 func (c *fakeClientConn) NewStream(ctx context.Context, desc *grpc.StreamDesc, method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	if c.newErr != nil {
 		return nil, c.newErr
+	}
+	if c.streamCtx != nil {
+		c.streamCtx <- ctx
 	}
 	return c.stream, nil
 }
@@ -156,19 +161,18 @@ func TestServeHumanRelayEndToEnd(t *testing.T) {
 	_, _, _ = conn.Read(ctx)
 }
 
-// TestServeHumanRelayVideoWriteError covers the c.Write error branch of the
-// server->client pump: the WebSocket client goes away while the server keeps
-// pushing video frames, so c.Write eventually fails.
+// TestServeHumanRelayVideoWriteError covers the write-failure exit of the
+// server->client pump: once the WebSocket client has gone and the relay has
+// torn its context down, the next video frame from upstream cannot be written,
+// and that failure must end the pump rather than leave it parked.
 func TestServeHumanRelayVideoWriteError(t *testing.T) {
-	recv := make(chan []byte, 64)
-	// Preload many frames so the pump keeps writing after the client leaves.
-	for i := 0; i < 64; i++ {
-		recv <- bytes.Repeat([]byte("frame"), 64)
-	}
+	recv := make(chan []byte) // unbuffered: each send is handed to the pump
 	fcs := &fakeClientStream{ctx: context.Background(), recv: recv}
-	cc := &fakeClientConn{stream: fcs}
+	cc := &fakeClientConn{stream: fcs, streamCtx: make(chan context.Context, 1)}
 
+	handlerDone := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(handlerDone)
 		ServeHumanRelay(w, r, cc, "vm1", allowPolicy{}, "s", "l", "p", "operator")
 	}))
 	defer srv.Close()
@@ -179,13 +183,37 @@ func TestServeHumanRelayVideoWriteError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	// Read one frame, then abruptly close so subsequent server writes fail.
-	if _, _, err := conn.Read(ctx); err != nil {
-		t.Fatalf("first read: %v", err)
+	streamCtx := <-cc.streamCtx
+
+	// One frame is relayed while the client is still there.
+	recv <- []byte("frame-1")
+	if _, data, rErr := conn.Read(ctx); rErr != nil || string(data) != "frame-1" {
+		t.Fatalf("first read = %q, %v", data, rErr)
 	}
-	_ = conn.Close(websocket.StatusGoingAway, "bye")
-	// Give the relay time to observe the write failure and tear down.
-	time.Sleep(200 * time.Millisecond)
+
+	// The client leaves; the input pump sees it and the relay cancels.
+	_ = conn.CloseNow()
+	select {
+	case <-streamCtx.Done():
+	case <-ctx.Done():
+		t.Fatal("relay never cancelled after the client left")
+	}
+
+	// The pump is parked in Recv. Feed it frames until one fails to write and
+	// ends the pump: the socket is gone and the relay's context is cancelled,
+	// so a write can at most land in a dead socket's buffer once before the
+	// failure surfaces. The handler must then return promptly, well inside the
+	// 2s drain timeout it would otherwise sit out.
+	deadline := time.After(1500 * time.Millisecond)
+	for {
+		select {
+		case recv <- []byte("frame-n"):
+		case <-handlerDone:
+			return
+		case <-deadline:
+			t.Fatal("relay did not finish after the video write failed")
+		}
+	}
 }
 
 // TestServeHumanRelayProxyVNCDialError covers the ProxyVNC-dial-failure branch:
