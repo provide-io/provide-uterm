@@ -1099,6 +1099,29 @@ class TestKills:
             await reg.update_session("a", {"connector_config": {"host": "h"}})
         runtime.reconfigure.assert_awaited_once_with({"host": "h"})
 
+    @pytest.mark.parametrize("rejection", [ValueError("unknown config keys"), TypeError("unknown config keys")])
+    async def test_a_rejected_config_is_a_validation_error_and_commits_nothing(
+        self, runtime: MagicMock, rejection: Exception
+    ) -> None:
+        reg = _make_registry([_session("a")])
+        before = reg._sessions["a"].model_dump()
+        runtime.reconfigure = AsyncMock(side_effect=rejection)
+        with pytest.raises(SessionValidationError) as exc:
+            await reg.update_session("a", {"connector_config": {"bogus": 1}, "tags": ["t"]})
+        assert str(exc.value) == "connector_config rejected: unknown config keys"
+        assert exc.value.__cause__ is rejection
+        # Neither the rejected config nor the other fields of the same PATCH.
+        assert reg._sessions["a"].model_dump() == before
+        runtime.set_mode.assert_not_awaited()
+
+    async def test_the_config_is_offered_before_it_is_committed(self, runtime: MagicMock) -> None:
+        reg = _make_registry([_session("a")])
+        seen: list[dict[str, Any]] = []
+        runtime.reconfigure = AsyncMock(side_effect=lambda _cfg: seen.append(dict(reg._sessions["a"].connector_config)))
+        await reg.update_session("a", {"connector_config": {"host": "h"}})
+        assert seen == [{}]
+        assert reg._sessions["a"].connector_config == {"host": "h"}
+
     async def test_update_without_a_config_change_does_not_reconfigure(self, runtime: MagicMock) -> None:
         reg = _make_registry([_session("a")])
         await reg.update_session("a", {"tags": ["x"]})
