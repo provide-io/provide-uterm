@@ -109,6 +109,22 @@ func recordingRedactor(enabled bool) redaction.Redactor {
 // closing a recording do their store I/O on the bridge's run goroutine,
 // between connections, outside mu, as the reference awaits them in its run
 // loop.
+// recordingLog is the part of *sessionlogger.SessionLogger the recorder writes
+// through. An interface only so a test can fail a single write of a live
+// recording: in production every write lands on a batchWriter that queues it
+// and never fails, so these error arms are otherwise reached only by a store
+// or encoder fault the recorder does not control.
+type recordingLog interface {
+	LogWire(direction, text string) error
+	LogControl(direction string, control map[string]any) error
+	LogEvent(event string, data map[string]any) error
+	LogScreenFrame(frame map[string]any, raw []byte) error
+	LogSend(keys string) error
+	LogSendMasked(byteCount int) error
+	Flush() error
+	Stop() error
+}
+
 type sessionRecorder struct {
 	sessionID string
 	store     recording.Store
@@ -121,7 +137,7 @@ type sessionRecorder struct {
 
 	mu      sync.Mutex
 	enabled bool
-	rec     *sessionlogger.SessionLogger
+	rec     recordingLog
 	// writer is rec's batchWriter, set and cleared with it: a new recording
 	// starts with nothing queued and no failure.
 	writer *batchWriter
@@ -129,7 +145,7 @@ type sessionRecorder struct {
 	// its unwritten entries are still queued for that recording alone. The
 	// next attempt's start retries the close before it opens anything (see
 	// AttemptStarted).
-	unclosed         *sessionlogger.SessionLogger
+	unclosed         recordingLog
 	unclosedWriter   *batchWriter
 	eventSeq         int
 	atPasswordPrompt bool

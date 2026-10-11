@@ -126,7 +126,7 @@ func runInspect(ctx context.Context, opts inspectOptions, out, errw io.Writer) e
 		return fmt.Errorf("cannot connect to tunnel: %w", err)
 	}
 	defer func() { _ = client.Close() }()
-	if err := client.SendRaw(sigCtx, tunnelclient.OpenHTTPFrame(opts.Port)); err != nil {
+	if err := openTunnelChannel(sigCtx, client, tunnelclient.OpenHTTPFrame(opts.Port)); err != nil {
 		return fmt.Errorf("cannot open http channel: %w", err)
 	}
 
@@ -141,6 +141,14 @@ func runInspect(ctx context.Context, opts inspectOptions, out, errw io.Writer) e
 		return err
 	}
 	return sess.serve(sigCtx, ln)
+}
+
+// openTunnelChannel sends the frame that opens a tunnel's data channel right
+// after Connect. A package variable only so a test can fail it: on a socket
+// that has just connected, the write cannot be made to fail from outside.
+// Production always sends through the client.
+var openTunnelChannel = func(ctx context.Context, c *tunnelclient.Client, frame []byte) error {
+	return c.SendRaw(ctx, frame)
 }
 
 // inspectSession holds the mutable state shared between the reverse-proxy
@@ -203,9 +211,9 @@ func (s *inspectSession) serve(ctx context.Context, ln net.Listener) error {
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	case err := <-errCh:
-		if err == http.ErrServerClosed {
-			return nil
-		}
+		// Never http.ErrServerClosed: only the ctx arm above shuts srv down,
+		// and it returns without reading errCh. Serve stopping on its own is
+		// always a real failure.
 		return err
 	}
 }

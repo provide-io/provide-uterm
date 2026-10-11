@@ -59,6 +59,10 @@ func newShareCmd() *cobra.Command {
 	return cmd
 }
 
+// osHostname is os.Hostname, as a package variable only so a test can make it
+// fail; it does not fail on a working host.
+var osHostname = os.Hostname
+
 // shareDisplayName builds the display name from --display-name or user@hostname.
 func shareDisplayName(override string) string {
 	if override != "" {
@@ -68,7 +72,7 @@ func shareDisplayName(override string) string {
 	if u, err := user.Current(); err == nil && u.Username != "" {
 		name = u.Username
 	}
-	host, err := os.Hostname()
+	host, err := osHostname()
 	if err != nil || host == "" {
 		host = "localhost"
 	}

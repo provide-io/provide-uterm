@@ -112,9 +112,7 @@ func runListen(ctx context.Context, opts listenOptions, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if len(servers) == 0 {
-		return fmt.Errorf("no servers started")
-	}
+	// validateListen guarantees at least one port, so servers is never empty.
 	return serveListen(sigCtx, servers, out)
 }
 
