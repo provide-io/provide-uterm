@@ -46,6 +46,44 @@ public sealed partial class FanoutExecutionTests
         public IFanoutOutputSubscription SubscribeOutput(string workerId) => Subscription;
     }
 
+    /// <summary>Sends succeed at once; subscriptions dispose slowly.</summary>
+    private sealed class PromptHub : IFanoutHub
+    {
+        public SlowDisposeSubscription Subscription { get; } = new();
+
+        public Task<bool> SendWorkerAsync(
+            string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.FromResult(true);
+
+        public Task BroadcastAsync(string workerId, IReadOnlyDictionary<string, object?> msg, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public IFanoutOutputSubscription SubscribeOutput(string workerId) => Subscription;
+    }
+
+    [Theory]
+    [InlineData("parallel")]
+    [InlineData("sequential")]
+    public async Task Dispose_Still_Running_Within_The_Budget_Is_Awaited_To_Completion(string mode)
+    {
+        // The dispose is pending when the controller looks at it and finishes
+        // while the budget still has time left, so the controller waits for it
+        // rather than abandoning it. Driven explicitly: left to timing, the
+        // dispose almost always completes before the controller looks.
+        var hub = new PromptHub();
+        var lateFaults = 0;
+        var controller = NewController(hub, mode, ["w1"], lateFaultObserver: _ => Interlocked.Increment(ref lateFaults));
+
+        var pending = controller.SendAsync("g", "id", Admin("alice"), 0, 30_000);
+        await hub.Subscription.DisposeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(pending.IsCompleted);
+
+        hub.Subscription.Dispose.TrySetResult();
+        var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Empty(result.FailedSessions);
+        Assert.Equal(0, lateFaults);
+    }
+
     [Theory]
     [InlineData("parallel")]
     [InlineData("sequential")]
