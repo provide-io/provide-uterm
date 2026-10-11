@@ -5,7 +5,11 @@
 
 package manager
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"log/slog"
+	"math"
+)
 
 // strPtr / floatPtr / intPtr are small helpers for the many nullable fields.
 func strPtr(s string) *string     { return &s }
@@ -107,11 +111,31 @@ type SwarmStatus struct {
 }
 
 // toMap serializes SwarmStatus to the model_dump() shape.
+//
+// A non-finite UptimeSeconds (NaN/Inf, e.g. from a clock that went
+// backwards or broke) is emitted as null, matching Pydantic's default
+// ser_json_inf_nan="null" in the Python manager's model_dump_json(); a bare
+// json.Marshal would fail on it. If encoding still fails (a non-finite float
+// inside an agent's Extra), the failure is logged and the status is returned
+// without its agent rows rather than collapsing to an empty map.
 func (s *SwarmStatus) toMap() map[string]any {
 	type alias SwarmStatus
-	b, _ := json.Marshal((*alias)(s))
+	cp := *s
+	uptimeNull := math.IsNaN(cp.UptimeSeconds) || math.IsInf(cp.UptimeSeconds, 0)
+	if uptimeNull {
+		cp.UptimeSeconds = 0
+	}
+	b, err := json.Marshal((*alias)(&cp))
+	if err != nil {
+		slog.Default().Warn("swarm_status_encode_failed", "error", err.Error(), "agents", len(cp.Agents))
+		cp.Agents = []*AgentStatus{}
+		b, _ = json.Marshal((*alias)(&cp))
+	}
 	m := map[string]any{}
 	_ = json.Unmarshal(b, &m)
+	if uptimeNull {
+		m["uptime_seconds"] = nil
+	}
 	for k, v := range s.Extra {
 		if _, known := m[k]; known {
 			continue
