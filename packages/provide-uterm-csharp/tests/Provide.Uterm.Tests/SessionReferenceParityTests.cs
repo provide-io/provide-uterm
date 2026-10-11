@@ -45,6 +45,7 @@ public sealed class SessionReferenceParityTests
         "visibility",
         "stopped_at",
         "last_error",
+        "config_pending_restart",
     ];
 
     private static int FreePort()
@@ -183,6 +184,7 @@ public sealed class SessionReferenceParityTests
         Assert.False(session.GetProperty("recording_available").GetBoolean());
         Assert.Equal(JsonValueKind.Null, session.GetProperty("stopped_at").ValueKind);
         Assert.Equal(JsonValueKind.Null, session.GetProperty("last_error").ValueKind);
+        Assert.False(session.GetProperty("config_pending_restart").GetBoolean());
         Assert.False(string.IsNullOrEmpty(session.GetProperty("lifecycle_state").GetString()));
         Assert.False(string.IsNullOrEmpty(session.GetProperty("created_at").GetString()));
     }

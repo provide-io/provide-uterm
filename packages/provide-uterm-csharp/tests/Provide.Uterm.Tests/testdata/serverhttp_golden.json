@@ -142,7 +142,8 @@
           "owner": null,
           "visibility": "public",
           "stopped_at": null,
-          "last_error": null
+          "last_error": null,
+          "config_pending_restart": false
         }
       ]
     },
@@ -173,7 +174,8 @@
         "owner": null,
         "visibility": "public",
         "stopped_at": null,
-        "last_error": null
+        "last_error": null,
+        "config_pending_restart": false
       }
     },
     {

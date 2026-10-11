@@ -199,7 +199,8 @@
         "owner": null,
         "visibility": "public",
         "stopped_at": null,
-        "last_error": null
+        "last_error": null,
+        "config_pending_restart": false
       },
       "json": {
         "input_mode": "hijack"
@@ -712,7 +713,8 @@
         "owner": null,
         "visibility": "public",
         "stopped_at": null,
-        "last_error": null
+        "last_error": null,
+        "config_pending_restart": false
       },
       "json": {
         "input_mode": "open"

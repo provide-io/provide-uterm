@@ -84,6 +84,15 @@ public sealed class SessionStatus
     [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public string? LastError { get; set; }
 
+    /// <summary>
+    /// Whether a stored <c>connector_config</c> change waits for a restart because
+    /// the running connector could not take it in place. Always false in this
+    /// port: the reference sets it from a PATCH that reconfigures a running
+    /// session, and this port's PATCH does not accept <c>connector_config</c>, so
+    /// nothing stored can be owed a restart. Emitted so the wire shape matches.
+    /// </summary>
+    public bool ConfigPendingRestart { get; }
+
     /// <summary>Whether a hijack lease is held. Hub state, not wire state.</summary>
     [JsonIgnore]
     public bool IsHijacked { get; set; }
