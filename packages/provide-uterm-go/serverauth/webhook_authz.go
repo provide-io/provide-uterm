@@ -154,10 +154,8 @@ func (w *WebhookAuthorizationProvider) CapabilitiesFor(p *Principal) Set {
 		"subject_id": p.SubjectID,
 		"action":     "capabilities",
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return NewSet()
-	}
+	// Only string values: json.Marshal cannot fail.
+	body, _ := json.Marshal(payload)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(w.TimeoutS*float64(time.Second)))
 	defer cancel()
 	if w.AssertURLAllowed != nil {
@@ -272,10 +270,8 @@ func (w *WebhookAuthorizationProvider) ResolveBrowserRole(p *Principal, session 
 		"session_id": sid,
 		"action":     "resolve_role",
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return "viewer"
-	}
+	// Only string / []string values: json.Marshal cannot fail.
+	body, _ := json.Marshal(payload)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(w.TimeoutS*float64(time.Second)))
 	defer cancel()
 	if w.AssertURLAllowed != nil {

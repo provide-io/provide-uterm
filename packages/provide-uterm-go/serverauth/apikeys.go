@@ -66,9 +66,9 @@ func (s *ApiKeyStore) SetClock(now func() float64) { s.now = now }
 // nbytes of randomness, base64url-encoded without padding.
 func tokenURLSafe(nbytes int) string {
 	buf := make([]byte, nbytes)
-	if _, err := rand.Read(buf); err != nil {
-		panic(err) // crypto/rand failure is unrecoverable
-	}
+	// crypto/rand.Read never returns an error (Go >= 1.24: it crashes the
+	// program irrecoverably instead), so there is no error to handle.
+	_, _ = rand.Read(buf)
 	return base64.RawURLEncoding.EncodeToString(buf)
 }
 
