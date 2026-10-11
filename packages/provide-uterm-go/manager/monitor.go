@@ -334,6 +334,11 @@ func (pm *AgentProcessManager) handleBustRespawn() {
 	pm.manager.BroadcastStatus()
 }
 
+// readDir is os.ReadDir, as a package variable only so a test can fail the
+// listing, or hand back an entry whose Info fails (a file removed between the
+// listing and the stat); neither can be staged on a real directory.
+var readDir = os.ReadDir
+
 // cleanupOldWorkerLogs deletes stale .prev and orphan worker log files,
 // mirroring _cleanup_old_worker_logs.
 func (pm *AgentProcessManager) cleanupOldWorkerLogs() int {
@@ -352,7 +357,7 @@ func (pm *AgentProcessManager) cleanupOldWorkerLogs() int {
 		activeIDs[id] = struct{}{}
 	}
 	pm.manager.mu.Unlock()
-	entries, err := os.ReadDir(logDir)
+	entries, err := readDir(logDir)
 	if err != nil {
 		return 0
 	}
@@ -492,10 +497,7 @@ func (pm *AgentProcessManager) spawnToDesired(deficit int, active, dead []*Agent
 			break
 		}
 		config := configs[0]
-		newID, err := pm.AllocateAgentID()
-		if err != nil {
-			return
-		}
+		newID := pm.AllocateAgentID()
 		pm.manager.mu.Lock()
 		if _, ok := pm.manager.Agents[newID]; !ok {
 			a := newAgentStatus(newID)

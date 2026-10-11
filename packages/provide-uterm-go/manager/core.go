@@ -282,11 +282,9 @@ func (m *AgentManager) unregisterWSClient(c statusSink) {
 // BroadcastStatus pushes the current status to all dashboard clients, mirroring
 // broadcast_status.
 func (m *AgentManager) BroadcastStatus() {
-	status := m.GetSwarmStatus()
-	msg, err := json.Marshal(status)
-	if err != nil {
-		return
-	}
+	// SwarmStatus.MarshalJSON encodes a map it just decoded from JSON (and
+	// GetSwarmStatus sets no Extra), so this cannot fail.
+	msg, _ := json.Marshal(m.GetSwarmStatus())
 	m.wsMu.Lock()
 	clients := make([]statusSink, 0, len(m.wsClients))
 	for c := range m.wsClients {

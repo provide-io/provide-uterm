@@ -240,9 +240,6 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	s.M.mu.Lock()
 	if s.M.DesiredAgents > 0 {
 		s.M.DesiredAgents--
-		if s.M.DesiredAgents < 0 {
-			s.M.DesiredAgents = 0
-		}
 	}
 	desired := s.M.DesiredAgents
 	s.M.mu.Unlock()

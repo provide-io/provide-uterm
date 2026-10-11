@@ -107,9 +107,14 @@ func (tm *TimeseriesManager) GetSummary(windowMinutes int) map[string]any {
 	}
 }
 
+// openTail opens the timeseries file for a tail read. A package variable only
+// so a test can hand back a file whose open, seek or read fails; a regular
+// file the manager just wrote cannot be made to fail those on demand.
+var openTail = func(path string) (io.ReadSeekCloser, error) { return os.Open(path) }
+
 // readTailBytes reads the raw bytes from the tail of the timeseries file.
 func (tm *TimeseriesManager) readTailBytes(capped int) ([]byte, error) {
-	f, err := os.Open(tm.Path)
+	f, err := openTail(tm.Path)
 	if err != nil {
 		return nil, err
 	}

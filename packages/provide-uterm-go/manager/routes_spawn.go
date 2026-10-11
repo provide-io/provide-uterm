@@ -26,16 +26,12 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, rejected.public)
 		return
 	}
-	var err error
 	if agentID == "" {
-		agentID, err = s.M.PM.AllocateAgentID()
+		agentID = s.M.PM.AllocateAgentID()
 	} else {
 		s.M.PM.NoteAgentID(agentID)
 	}
-	spawned := ""
-	if err == nil {
-		spawned, err = s.M.SpawnAgent(r.Context(), configPath, agentID)
-	}
+	spawned, err := s.M.SpawnAgent(r.Context(), configPath, agentID)
 	if err != nil {
 		s.M.logger.Warn("swarm_spawn_failed", "config_path", configPath, "agent_id", agentID, "error", err.Error())
 		jsonError(w, http.StatusBadRequest, spawnFailedMessage)
