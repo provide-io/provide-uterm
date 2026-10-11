@@ -539,6 +539,17 @@ class TestLifecycleDelegation:
         await reg.shutdown()
         runtime.stop.assert_awaited_once()
 
+    async def test_shutdown_stops_every_runtime_and_raises_the_first_failure(self) -> None:
+        first, second = OSError("disk full"), OSError("second")
+        runtimes = [MagicMock(stop=AsyncMock(side_effect=err)) for err in (first, None, second)]
+        reg = _make_registry([_session("a"), _session("b"), _session("c")])
+        reg._runtimes.update(zip("abc", runtimes, strict=True))
+        with pytest.raises(OSError) as exc:
+            await reg.shutdown()
+        assert exc.value is first
+        for rt in runtimes:
+            rt.stop.assert_awaited_once()
+
     async def test_start_auto_start_sessions_only_starts_flagged(self, runtime: MagicMock) -> None:
         reg = _make_registry([_session("a", auto_start=True), _session("b", auto_start=False)])
         await reg.start_auto_start_sessions()

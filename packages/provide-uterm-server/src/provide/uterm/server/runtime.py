@@ -156,29 +156,57 @@ class HostedSessionRuntime:
         self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
+        """Stop the run loop, close the recording, release the connector.
+
+        Every step runs even when an earlier one fails. A final recording flush
+        that raises (disk full, EACCES) used to skip the connector and the state
+        update, leaking the connector's process while the status still read
+        running/connected. Now the first failure is kept, the connector is
+        discarded and the state is set to stopped regardless, the failure is
+        recorded in ``_last_error``, and only then is it re-raised to the caller.
+        """
         self._stop.set()
-        task = self._task
-        if task is not None:
-            if task.done():
-                with contextlib.suppress(asyncio.CancelledError):
-                    task.result()
-            else:
-                running_loop = asyncio.get_running_loop()
-                task_loop = task.get_loop()
-                if task_loop is running_loop:
-                    task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await task
-                else:
-                    task_loop.call_soon_threadsafe(task.cancel)
-                    future = asyncio.run_coroutine_threadsafe(_await_task_completion(task), task_loop)
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await asyncio.wrap_future(future)
+        failure: Exception | None = None
+        try:
+            await self._finish_run_task()
+        except Exception as exc:
+            failure = exc
+        try:
+            await self._stop_recording()
+        except Exception as exc:
+            failure = failure or exc
         self._task = None
-        await self._stop_connector()
+        await self._discard_connector()
         self._state = "stopped"
         self._stopped_at = time.time()
         self._connected = False
+        if failure is not None:
+            self._last_error = str(failure)
+            raise failure
+
+    async def _finish_run_task(self) -> None:
+        """Cancel the run loop (if still running) and wait for it to end.
+
+        Raises whatever the task itself failed with, other than cancellation.
+        """
+        task = self._task
+        if task is None:
+            return
+        if task.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                task.result()
+            return
+        running_loop = asyncio.get_running_loop()
+        task_loop = task.get_loop()
+        if task_loop is running_loop:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        else:
+            task_loop.call_soon_threadsafe(task.cancel)
+            future = asyncio.run_coroutine_threadsafe(_await_task_completion(task), task_loop)
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.wrap_future(future)
 
     async def restart(self) -> None:
         await self.stop()
@@ -314,14 +342,19 @@ class HostedSessionRuntime:
             self._recording_path = await self._recording_store.get_path(self.definition.session_id)
 
     async def _stop_recording(self) -> None:
-        if self._logger is not None:
-            await self._logger.stop()
+        # try/finally: a logger whose stop() raises (its final flush failed) is
+        # still dropped, along with everything scoped to its recording, so a
+        # failed close never leaves a half-closed logger behind.
+        try:
+            if self._logger is not None:
+                await self._logger.stop()
+        finally:
             self._logger = None
-        self._recording_path = None
-        # Both belong to the recording that just ended: the next one annotates
-        # what it sees afresh, and does not begin with a stale half-sequence.
-        self._escape_carry = ""
-        self._read_annotation_keys.clear()
+            self._recording_path = None
+            # Both belong to the recording that just ended: the next one annotates
+            # what it sees afresh, and does not begin with a stale half-sequence.
+            self._escape_carry = ""
+            self._read_annotation_keys.clear()
 
     async def _discard_connector(self) -> None:
         """Drop the connector alone, leaving the recording where it is.
@@ -337,8 +370,11 @@ class HostedSessionRuntime:
                 await connector.stop()
 
     async def _stop_connector(self) -> None:
-        await self._stop_recording()
-        await self._discard_connector()
+        # The connector goes even when closing the recording fails.
+        try:
+            await self._stop_recording()
+        finally:
+            await self._discard_connector()
 
     async def _log_snapshot(self, msg: dict[str, Any]) -> None:
         screen = str(msg.get("screen", ""))
