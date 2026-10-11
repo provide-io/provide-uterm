@@ -77,8 +77,8 @@ build:
 # Serialize + batch test hosts. Ubuntu CI hits glibc free()/malloc crashes after
 # ~300–400 tests in one process (native PTY/SSH residual). Fresh process per batch.
 # Filters use class-name prefixes from --list-tests (no catch-all ~Term/~Coverage).
-TEST_BATCH_1 := FullyQualifiedName~AnnotationDetector|FullyQualifiedName~AnsiColors|FullyQualifiedName~AuthMutationKill|FullyQualifiedName~ChannelsLineEditor|FullyQualifiedName~ChannelsMutationKill|FullyQualifiedName~Conformance|FullyQualifiedName~CtrlMsg|FullyQualifiedName~Defaults|FullyQualifiedName~Filters|FullyQualifiedName~Frames|FullyQualifiedName~Policy|FullyQualifiedName~StrictPolicy|FullyQualifiedName~Redaction|FullyQualifiedName~Sanitizer|FullyQualifiedName~Screen|FullyQualifiedName~Vt|FullyQualifiedName~DeckMux|FullyQualifiedName~ServerRecordingHttp|FullyQualifiedName~ControlChannel|FullyQualifiedName~Egress|FullyQualifiedName~Sqlite|FullyQualifiedName~ControlPlaneGraphical
-TEST_BATCH_2 := FullyQualifiedName~Hub|FullyQualifiedName~BrowserWsRateLimit|FullyQualifiedName~Fanout|FullyQualifiedName~McpAuth|FullyQualifiedName~ResumeLifecycle|FullyQualifiedName~ResumeTokenStore|FullyQualifiedName~WebSocketCloseHandler|FullyQualifiedName~WebSocketFragmentation|FullyQualifiedName~WebSocketMessageReader|FullyQualifiedName~WorkerAdmission|FullyQualifiedName~WorkerBearerAuthentication|FullyQualifiedName~ServerIntegration|FullyQualifiedName~ServerConfig|FullyQualifiedName~ServerAuth|FullyQualifiedName~ServerObservabilityWiring|FullyQualifiedName~WebhookAuthorization|FullyQualifiedName~WebhookDelivery|FullyQualifiedName~JwksJwt|FullyQualifiedName~CfAccessJwt|FullyQualifiedName~Vnc|FullyQualifiedName~HumanRelay|FullyQualifiedName~HumanVnc|FullyQualifiedName~RfbInputFilter|FullyQualifiedName~ClientDefaults|FullyQualifiedName~Session|FullyQualifiedName~TermSession|FullyQualifiedName~ModuleSurface|FullyQualifiedName~SmokeSurface|FullyQualifiedName~MoreSurface|FullyQualifiedName~ServerFactoryControlPlane
+TEST_BATCH_1 := FullyQualifiedName~AnnotationDetector|FullyQualifiedName~AnsiColors|FullyQualifiedName~AuthMutationKill|FullyQualifiedName~ChannelsLineEditor|FullyQualifiedName~ChannelsMutationKill|FullyQualifiedName~Conformance|FullyQualifiedName~CtrlMsg|FullyQualifiedName~Defaults|FullyQualifiedName~Filters|FullyQualifiedName~Frames|FullyQualifiedName~Policy|FullyQualifiedName~StrictPolicy|FullyQualifiedName~Redaction|FullyQualifiedName~Sanitizer|FullyQualifiedName~Screen|FullyQualifiedName~Vt|FullyQualifiedName~DeckMux|FullyQualifiedName~ServerRecordingHttp|FullyQualifiedName~ControlChannel|FullyQualifiedName~Egress|FullyQualifiedName~Sqlite|FullyQualifiedName~ControlPlaneGraphical|FullyQualifiedName~SharedCorpusParity|FullyQualifiedName~OutputCollector
+TEST_BATCH_2 := FullyQualifiedName~Hub|FullyQualifiedName~BrowserWsRateLimit|FullyQualifiedName~Fanout|FullyQualifiedName~McpAuth|FullyQualifiedName~ResumeLifecycle|FullyQualifiedName~ResumeTokenStore|FullyQualifiedName~WebSocketCloseHandler|FullyQualifiedName~WebSocketFragmentation|FullyQualifiedName~WebSocketMessageReader|FullyQualifiedName~WorkerAdmission|FullyQualifiedName~WorkerBearerAuthentication|FullyQualifiedName~ServerIntegration|FullyQualifiedName~ServerConfig|FullyQualifiedName~ServerAuth|FullyQualifiedName~ServerObservabilityWiring|FullyQualifiedName~WebhookAuthorization|FullyQualifiedName~WebhookDelivery|FullyQualifiedName~JwksJwt|FullyQualifiedName~CfAccessJwt|FullyQualifiedName~Vnc|FullyQualifiedName~HumanRelay|FullyQualifiedName~HumanVnc|FullyQualifiedName~RfbInputFilter|FullyQualifiedName~ClientDefaults|FullyQualifiedName~Session|FullyQualifiedName~TermSession|FullyQualifiedName~ModuleSurface|FullyQualifiedName~SmokeSurface|FullyQualifiedName~MoreSurface|FullyQualifiedName~ServerFactoryControlPlane|FullyQualifiedName~BrowserWsAnonymousRefusal|FullyQualifiedName~WebhookShutdownRace|FullyQualifiedName~WebhookLateRegistration|FullyQualifiedName~ManagerStopRoute|FullyQualifiedName~SecurityHeadersSecurityPosture
 # Native-heavy classes get their own process (batch 3 crashed Ubuntu after ~18
 # tests when Cli+Pty+Gateway shared one host).
 TEST_BATCH_3A := FullyQualifiedName~Cli
@@ -217,7 +217,19 @@ build-binaries:
 	  { echo "error: unexpected PascalCase/MCP binary in bin/"; exit 1; } || true
 	@echo "uterm + uterm-manager binaries under bin/ (lowercase; MCP not shipped)"
 
-quality-gate: build conformance-test test cover build-binaries
+# Every test must be selected by some TEST_BATCH_* filter, or `test` and
+# `cover` build it and never run it (ci/check_test_batches.py says why). Via a
+# file for the same dash/pipefail reason as BUILD_LOG.
+LIST_TESTS_LOG := obj/list-tests-$(CONFIGURATION).log
+
+.PHONY: test-batches
+test-batches:
+	@mkdir -p obj
+	@$(DOTNET) test -c $(CONFIGURATION) --no-build --list-tests > $(LIST_TESTS_LOG) 2>&1 \
+	  || { cat $(LIST_TESTS_LOG); exit 1; }
+	@python3 ci/check_test_batches.py Makefile < $(LIST_TESTS_LOG)
+
+quality-gate: build test-batches conformance-test test cover build-binaries
 	@echo "csharp quality gate passed"
 
 # Optional live C# client -> Python server interop. Skips when uv is absent.

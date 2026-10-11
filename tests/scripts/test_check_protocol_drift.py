@@ -117,6 +117,55 @@ def test_identical_twins_pass(monkeypatch, tmp_path: Path) -> None:
     assert check_protocol_drift.check_twinned_fixtures() == []
 
 
+def test_csharp_copies_of_typescript_goldens_are_derived() -> None:
+    """The derived pairs must be real, or the check is vacuous.
+
+    The six named here drifted while nothing compared them; stream_redaction was
+    the one pair listed by hand before the pairs were derived.
+    """
+    pairs = {Path(copy).name: (source, copy) for source, copy in check_protocol_drift.csharp_copies_of_ts_goldens()}
+    assert len(pairs) > 100
+    for name in (
+        "chaos_golden.json",
+        "guiroutes_golden.json",
+        "serverjwt_golden.json",
+        "session_logger_golden.json",
+        "telnet_transport_golden.json",
+        "ws_transport_golden.json",
+        "stream_redaction_golden.json",
+        "annotation_golden.json",
+    ):
+        source, copy = pairs[name]
+        assert source == f"{check_protocol_drift.TS_TESTDATA}/{name}"
+        assert copy == f"{check_protocol_drift.CSHARP_TESTDATA}/{name}"
+    # A C# corpus with no TypeScript source is not a copy.
+    assert "read_path_golden.json" not in pairs
+
+
+def test_drift_in_a_derived_csharp_copy_is_reported(monkeypatch, tmp_path: Path) -> None:
+    ts_dir = tmp_path / check_protocol_drift.TS_TESTDATA
+    cs_dir = tmp_path / check_protocol_drift.CSHARP_TESTDATA
+    ts_dir.mkdir(parents=True)
+    cs_dir.mkdir(parents=True)
+    (ts_dir / "x_golden.json").write_text('{"x": 2}', encoding="utf-8")
+    (cs_dir / "x_golden.json").write_text('{"x": 1}', encoding="utf-8")
+    (cs_dir / "only_here_golden.json").write_text("{}", encoding="utf-8")
+    (cs_dir / "x.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(check_protocol_drift, "ROOT", tmp_path)
+    monkeypatch.setattr(check_protocol_drift, "TWINNED_FIXTURES", ())
+
+    assert check_protocol_drift.csharp_copies_of_ts_goldens() == (
+        (f"{check_protocol_drift.TS_TESTDATA}/x_golden.json", f"{check_protocol_drift.CSHARP_TESTDATA}/x_golden.json"),
+    )
+    errors = check_protocol_drift.check_twinned_fixtures()
+    assert len(errors) == 1
+    assert "twinned fixture drift" in errors[0]
+    assert "x_golden.json" in errors[0]
+
+    (cs_dir / "x_golden.json").write_text('{"x": 2}', encoding="utf-8")
+    assert check_protocol_drift.check_twinned_fixtures() == []
+
+
 def test_protocol_change_without_doc_is_reported(monkeypatch) -> None:
     """The half of the gate that a passing local run cannot demonstrate."""
     monkeypatch.setattr(

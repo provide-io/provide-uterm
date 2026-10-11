@@ -124,9 +124,14 @@ public class SharedCorpusParityTests
         return found.OrderBy(v => v).ToList();
     }
 
+    // A corpus with a gen_<name>.py beside it is generated HERE, from the
+    // reference, and .ci/check_goldens.sh holds it to that generator: it is a
+    // source, not a copy of another port's corpus (read_path_golden.json).
     private static IEnumerable<string> ReadLocalGoldenFiles(string localRoot) =>
         Directory.EnumerateFiles(localRoot, "*_golden.json", SearchOption.AllDirectories)
             .Where(p => Path.GetFileName(p) != "vectors.json")
+            .Where(p => !File.Exists(Path.Combine(
+                Path.GetDirectoryName(p)!, "gen_" + Path.GetFileNameWithoutExtension(p) + ".py")))
             .OrderBy(p => p);
 
     private static string? RelativeToTestdata(string sourceRoot, string path)

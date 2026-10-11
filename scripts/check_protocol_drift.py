@@ -142,10 +142,8 @@ TWINNED_FIXTURES: tuple[tuple[str, ...], ...] = (
         "packages/provide-uterm-go/tunnel/testdata/token_hash_golden.json",
         "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/tunnel/token_hash_golden.json",
     ),
-    (
-        "packages/provide-uterm-ts/testdata/stream_redaction_golden.json",
-        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/stream_redaction_golden.json",
-    ),
+    # The TypeScript -> C# copies (stream_redaction_golden.json among them) are
+    # not listed: csharp_copies_of_ts_goldens() derives every one of them.
     # spec/ is the source here (scripts/generate_behavior_vectors.py writes all of
     # them); Python, Go and C# each keep a copy next to the tests that replay it.
     # TypeScript reads spec/ directly.
@@ -158,6 +156,33 @@ TWINNED_FIXTURES: tuple[tuple[str, ...], ...] = (
         "packages/provide-uterm/tests/bridge/testdata/behavior_vectors.json",
     ),
 )
+
+# The C# test project keeps a COPY of most TypeScript corpora: every
+# `*_golden.json` directly in its testdata/ with a same-named file in the
+# TypeScript testdata/ is one. The TypeScript file is the source -- its
+# generator re-derives it from the reference, and `.ci/check_goldens.sh` holds
+# it there -- and the copy has no generator, so nothing re-derived it.
+#
+# Only one of them (stream_redaction) used to be listed above, and six others
+# (chaos, guiroutes, serverjwt, session_logger, telnet_transport, ws_transport)
+# drifted when their TypeScript sources were re-recorded. The C# test that
+# compares them, SharedCorpusParityTests, matched none of the Makefile's
+# TEST_BATCH filters, so it never ran and nothing reported the drift. Deriving
+# the pairs means a new copy is held to its source without being remembered into
+# a list. To re-sync a copy, copy the TypeScript file over it.
+CSHARP_TESTDATA = "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata"
+TS_TESTDATA = "packages/provide-uterm-ts/testdata"
+
+
+def csharp_copies_of_ts_goldens() -> tuple[tuple[str, str], ...]:
+    """(TypeScript source, C# copy) for every C# corpus copied from a TypeScript one."""
+    copies = sorted((ROOT / CSHARP_TESTDATA).glob("*_golden.json"))
+    return tuple(
+        (f"{TS_TESTDATA}/{copy.name}", f"{CSHARP_TESTDATA}/{copy.name}")
+        for copy in copies
+        if (ROOT / TS_TESTDATA / copy.name).is_file()
+    )
+
 
 # Touching any of these changes what goes on the wire.
 PROTOCOL_SOURCES: tuple[str, ...] = (
@@ -207,7 +232,7 @@ def check_versions() -> list[str]:
 def check_twinned_fixtures() -> list[str]:
     """Require every committed copy of a shared fixture to be byte-identical."""
     errors: list[str] = []
-    for group in TWINNED_FIXTURES:
+    for group in (*TWINNED_FIXTURES, *csharp_copies_of_ts_goldens()):
         digests: dict[str, str] = {}
         for relative in group:
             path = ROOT / relative
