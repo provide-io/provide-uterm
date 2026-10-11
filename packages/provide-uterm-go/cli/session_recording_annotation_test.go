@@ -14,6 +14,7 @@ import (
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 )
 
 // --- annotation -------------------------------------------------------------
@@ -22,7 +23,9 @@ import (
 // PatternDetector: a send split mid-word, styled streamed output, a match
 // split across frames, an empty frame, a screen matching several categories,
 // input masked at a prompt yet still annotated, a styled screen, an escape
-// sequence split across frames, and the snapshot path's dedupe.
+// sequence split across frames, and the read-path dedupe rule: the snapshot
+// path's skip, two credentials of one rule, a snapshot's match consumed by the
+// next chunk, and a pending key expiring after a chunk with no match.
 func TestAnnotationMatchesTheReferenceCorpus(t *testing.T) {
 	g := loadSessionRecordingGolden(t)
 	store := recording.NewInMemoryStore()
@@ -164,7 +167,7 @@ func TestAStyledPasswordPromptMasksTheInput(t *testing.T) {
 
 // The prompt test itself sees text: what logSnapshot hands it is stripped.
 func TestPasswordPromptMustEndTheScreen(t *testing.T) {
-	for screen, want := range map[string]bool{
+	for text, want := range map[string]bool{
 		"Password:":                   true,
 		"PASSWORD:   \n\n":            true,
 		"Password: ok\n$ ":            false,
@@ -172,8 +175,8 @@ func TestPasswordPromptMustEndTheScreen(t *testing.T) {
 		"Your passphrase (again) :\t": true,
 		"no prompt here":              false,
 	} {
-		if got := atPasswordPrompt(screen); got != want {
-			t.Errorf("atPasswordPrompt(%q) = %t, want %t", screen, got, want)
+		if got := atPasswordPrompt(text); got != want {
+			t.Errorf("atPasswordPrompt(%q) = %t, want %t", text, got, want)
 		}
 	}
 }
@@ -187,31 +190,6 @@ func TestAStyledScreenIsScannedAsText(t *testing.T) {
 	rec.AttemptEnded(nil)
 	if got := descriptions(t, store); !reflect.DeepEqual(got, []string{"sudo command detected: sudo"}) {
 		t.Fatalf("annotations = %v", got)
-	}
-}
-
-func TestSplitIncompleteEscape(t *testing.T) {
-	long := "\x1b[" + strings.Repeat("1", maxEscapeCarry-2) // exactly the bound
-	for _, c := range []struct{ in, complete, carry string }{
-		{"plain", "plain", ""},
-		{"", "", ""},
-		{"ok \x1b", "ok ", "\x1b"},
-		{"ok \x1b[", "ok ", "\x1b["},
-		{"ok \x1b[1;3", "ok ", "\x1b[1;3"},
-		{"ok \x1b[1 ", "ok ", "\x1b[1 "}, // an intermediate byte, still no final
-		{"ok \x1b[1m", "ok \x1b[1m", ""}, // complete: StripANSI's to remove
-		{"\x1b[1m\x1b[2", "\x1b[1m", "\x1b[2"},
-		{"\x1b[1", "", "\x1b[1"},     // a tail from the very first byte
-		{"a\x1bb", "a\x1bb", ""},     // ESC then a non-CSI byte: not a tail
-		{"a\x1b[1x", "a\x1b[1x", ""}, // final byte reached
-		{"a\x1b[1é", "a\x1b[1é", ""}, // a byte no sequence carries
-		{"x" + long, "x", long},
-		{"x" + long + "1", "x" + long + "1", ""}, // one past the bound: released
-	} {
-		complete, carry := splitIncompleteEscape(c.in)
-		if complete != c.complete || carry != c.carry {
-			t.Errorf("splitIncompleteEscape(%q) = (%q, %q), want (%q, %q)", c.in, complete, carry, c.complete, c.carry)
-		}
 	}
 }
 
@@ -236,9 +214,9 @@ func TestAnEscapeSequenceSplitAcrossFramesIsCarried(t *testing.T) {
 }
 
 // The stream records every match and the snapshot path skips one it already
-// holds; identical snapshots record a match once; the stream never
-// suppresses, not even a match a snapshot recorded first.
-func TestTheSnapshotPathDedupesAndTheStreamDoesNot(t *testing.T) {
+// holds; identical snapshots record a match once; a snapshot's match is
+// consumed by the very next chunk only, and a later repeat is recorded.
+func TestTheSnapshotPathDedupesAndTheNextChunkConsumes(t *testing.T) {
 	rec, store := annotatedRecorder(t)
 	rec.AttemptStarted()
 	sendFrame(t, rec, map[string]any{"type": "term", "data": "$ sudo ls\r\n"})
@@ -250,7 +228,6 @@ func TestTheSnapshotPathDedupesAndTheStreamDoesNot(t *testing.T) {
 	rec.AttemptEnded(nil)
 	want := []string{
 		"sudo command detected: sudo",
-		"shutdown command detected: shutdown",
 		"shutdown command detected: shutdown",
 		"shutdown command detected: shutdown",
 	}
@@ -290,8 +267,9 @@ func TestReadPathStateIsResetWithTheRecording(t *testing.T) {
 	sendFrame(t, rec, map[string]any{"type": "term", "data": "\x1b[1"})
 	rec.AttemptEnded(nil)
 	rec.mu.Lock()
-	if rec.escapeCarry != "" || len(rec.readAnnotationKeys) != 0 {
-		t.Fatalf("carry %q, keys %v survived the recording", rec.escapeCarry, rec.readAnnotationKeys)
+	if rec.escapeCarry != "" || len(rec.readAnnotationKeys) != 0 || len(rec.snapshotOnlyKeys) != 0 {
+		t.Fatalf("carry %q, keys %v, pending %v survived the recording",
+			rec.escapeCarry, rec.readAnnotationKeys, rec.snapshotOnlyKeys)
 	}
 	rec.mu.Unlock()
 	rec.AttemptStarted()
@@ -322,16 +300,22 @@ func TestReadAnnotationKeysAreBounded(t *testing.T) {
 	if _, ok := rec.readAnnotationKeys["0"]; !ok {
 		t.Fatal("the key that overflowed the set was not kept")
 	}
-	if maxReadAnnotationKeys != 1024 || maxEscapeCarry != 64 {
+	if maxReadAnnotationKeys != 1024 || screen.MaxEscapeCarry != 64 {
 		t.Fatal("bounds drifted from runtime_helpers.py")
 	}
 }
 
-// The key is label and description, NUL-joined, as the reference forms it.
+// The key is the detector's match key: a digest of rule id and the full
+// match, holding no raw text.
 func TestReadAnnotationKey(t *testing.T) {
-	got := readAnnotationKey(annotation.Annotation{Label: "privilege", Description: "sudo command detected: sudo"})
-	if got != "privilege\x00sudo command detected: sudo" {
-		t.Fatalf("key = %q", got)
+	anns := annotation.NewPatternDetector(nil).Detect("read", awsKeyA, 1)
+	if len(anns) != 1 {
+		t.Fatalf("annotations = %v", anns)
+	}
+	key := readAnnotationKey(anns[0])
+	if key != annotation.AnnotationMatchKey("cred.aws_access_key", "AKIAIOSFODNN7EXA") ||
+		strings.Contains(key, "AKIA") || len(key) != 64 {
+		t.Fatalf("key = %q", key)
 	}
 }
 
@@ -340,12 +324,12 @@ func TestReadAnnotationKey(t *testing.T) {
 func TestEveryMatchInOneStepIsRecorded(t *testing.T) {
 	rec, store := annotatedRecorder(t)
 	rec.AttemptStarted()
-	sendFrame(t, rec, snapshotFrame("$ sudo ls\n$ shutdown now\n$ "))
+	sendFrame(t, rec, snapshotFrame("$ rm -rf build\n$ shutdown now\n$ "))
 	sendFrame(t, rec, map[string]any{"type": "term", "data": "$ sudo reboot\r\n"})
 	must(t, rec.InputReceived("sudo reboot\r"))
 	rec.AttemptEnded(nil)
 	want := []string{
-		"sudo command detected: sudo",
+		"Recursive force-remove detected: rm -rf",
 		"shutdown command detected: shutdown",
 		"sudo command detected: sudo",
 		"reboot command detected: reboot",
@@ -354,5 +338,184 @@ func TestEveryMatchInOneStepIsRecorded(t *testing.T) {
 	}
 	if got := descriptions(t, store); !reflect.DeepEqual(got, want) {
 		t.Fatalf("annotations = %v, want %v", got, want)
+	}
+}
+
+// --- read-path dedupe rule (tests/server/test_read_path_dedupe.py) ---------
+
+const (
+	awsKeyA   = "AKIAIOSFODNN7EXAMPLE" // pragma: allowlist secret
+	awsKeyB   = "AKIAJ2345678ABCDWXYZ" // pragma: allowlist secret
+	descSudo  = "sudo command detected: sudo"
+	descRM    = "Recursive force-remove detected: rm -rf"
+	descAWS   = "AWS access key detected in read"
+	descReboo = "reboot command detected: reboot"
+)
+
+func term(t *testing.T, rec *sessionRecorder, data string) {
+	t.Helper()
+	sendFrame(t, rec, map[string]any{"type": "term", "data": data})
+}
+
+func snap(t *testing.T, rec *sessionRecorder, text string) {
+	t.Helper()
+	sendFrame(t, rec, snapshotFrame(text))
+}
+
+// dedupeCase runs steps in one open recording and checks what was annotated.
+func dedupeCase(t *testing.T, want []string, steps func(*sessionRecorder)) *sessionRecorder {
+	t.Helper()
+	rec, store := annotatedRecorder(t)
+	rec.AttemptStarted()
+	steps(rec)
+	must(t, rec.flush())
+	if got := descriptions(t, store); !reflect.DeepEqual(got, want) {
+		t.Fatalf("annotations = %v, want %v", got, want)
+	}
+	return rec
+}
+
+func TestASnapshotAfterTheStreamDoesNotRepeatItsMatch(t *testing.T) {
+	dedupeCase(t, []string{descSudo}, func(rec *sessionRecorder) {
+		term(t, rec, "$ sudo ls\r\n")
+		snap(t, rec, "$ sudo ls\n")
+	})
+}
+
+func TestRepeatedIdenticalSnapshotsAnnotateOnce(t *testing.T) {
+	dedupeCase(t, []string{descRM}, func(rec *sessionRecorder) {
+		for range 3 {
+			snap(t, rec, "$ rm -rf build\n")
+		}
+	})
+}
+
+func TestACommandStreamedTwiceIsAnnotatedTwice(t *testing.T) {
+	dedupeCase(t, []string{descSudo, descSudo}, func(rec *sessionRecorder) {
+		term(t, rec, "$ sudo ls\r\n")
+		term(t, rec, "$ sudo ls\r\n")
+		snap(t, rec, "$ sudo ls\n$ sudo ls\n")
+	})
+}
+
+func TestASnapshotStillRecordsWhatTheStreamNeverSaw(t *testing.T) {
+	dedupeCase(t, []string{descSudo, descRM}, func(rec *sessionRecorder) {
+		term(t, rec, "$ sudo ls\r\n")
+		snap(t, rec, "$ sudo ls\n$ rm -rf build\n")
+	})
+}
+
+// Snapshot first, then the same text on the stream: one record. The stream
+// consumes the snapshot's record once; a later repeat is a new occurrence.
+func TestAStreamMatchASnapshotAlreadyRecordedIsNotRecordedAgain(t *testing.T) {
+	rec, store := annotatedRecorder(t)
+	rec.AttemptStarted()
+	snap(t, rec, "$ sudo ls\n")
+	if len(rec.snapshotOnlyKeys) != 1 {
+		t.Fatalf("pending = %v, want the snapshot's key", rec.snapshotOnlyKeys)
+	}
+	term(t, rec, "$ sudo ls\r\n")
+	if len(rec.snapshotOnlyKeys) != 0 {
+		t.Fatalf("pending = %v after the chunk", rec.snapshotOnlyKeys)
+	}
+	must(t, rec.flush())
+	if got := descriptions(t, store); !reflect.DeepEqual(got, []string{descSudo}) {
+		t.Fatalf("annotations = %v", got)
+	}
+	term(t, rec, "$ sudo ls\r\n")
+	snap(t, rec, "$ sudo ls\n$ sudo ls\n")
+	must(t, rec.flush())
+	if got := descriptions(t, store); !reflect.DeepEqual(got, []string{descSudo, descSudo}) {
+		t.Fatalf("annotations = %v", got)
+	}
+}
+
+func TestASnapshotThenItsChunkRecordsOnceAndALaterNewMatchRecordsAgain(t *testing.T) {
+	dedupeCase(t, []string{descSudo, descSudo, descReboo}, func(rec *sessionRecorder) {
+		snap(t, rec, "$ sudo ls\n")
+		term(t, rec, "$ sudo ls\r\n")
+		term(t, rec, "$ sudo reboot\r\n")
+	})
+}
+
+// Missing an annotation is worse than an occasional duplicate: the pending
+// key dedupes only the chunk right after the snapshot.
+func TestPendingSnapshotKeysExpireWithTheNextChunkEvenWithoutAMatch(t *testing.T) {
+	dedupeCase(t, []string{descSudo, descSudo}, func(rec *sessionRecorder) {
+		snap(t, rec, "$ sudo ls\n")
+		term(t, rec, "unrelated output\r\n")
+		if len(rec.snapshotOnlyKeys) != 0 {
+			t.Fatalf("pending = %v after a chunk", rec.snapshotOnlyKeys)
+		}
+		term(t, rec, "$ sudo ls\r\n")
+	})
+}
+
+func TestAPendingKeyIsConsumedOnlyByItsOwnMatch(t *testing.T) {
+	rec := dedupeCase(t, []string{descSudo, descRM}, func(rec *sessionRecorder) {
+		snap(t, rec, "$ sudo ls\n")
+		term(t, rec, "$ rm -rf build\r\n")
+	})
+	if len(rec.snapshotOnlyKeys) != 0 {
+		t.Fatalf("pending = %v", rec.snapshotOnlyKeys)
+	}
+}
+
+func TestAnEmptyChunkLeavesPendingKeysAlone(t *testing.T) {
+	dedupeCase(t, []string{descSudo}, func(rec *sessionRecorder) {
+		snap(t, rec, "$ sudo ls\n")
+		term(t, rec, "")
+		term(t, rec, "$ sudo ls\r\n")
+	})
+}
+
+// Output while not recording is not scanned, and leaves pending keys alone.
+func TestAnUnrecordedChunkLeavesPendingKeysAlone(t *testing.T) {
+	rec, _ := annotatedRecorder(t)
+	rec.snapshotOnlyKeys["k"] = struct{}{}
+	term(t, rec, "$ sudo ls\r\n")
+	if _, ok := rec.snapshotOnlyKeys["k"]; !ok {
+		t.Fatal("an unrecorded chunk cleared the pending keys")
+	}
+}
+
+// Credential rules never embed the match in the description, so a key of
+// label+description would have dropped every AWS key after the first.
+func TestDifferentCredentialsOfOneRuleInSuccessiveSnapshotsAreAllRecorded(t *testing.T) {
+	dedupeCase(t, []string{descAWS, descAWS}, func(rec *sessionRecorder) {
+		snap(t, rec, awsKeyA+" first\n")
+		snap(t, rec, awsKeyB+" second\n")
+		snap(t, rec, awsKeyB+" second\n")
+	})
+}
+
+func TestDifferentCredentialsOnTheStreamAfterASnapshotAreRecorded(t *testing.T) {
+	rec := dedupeCase(t, []string{descAWS, descAWS}, func(rec *sessionRecorder) {
+		snap(t, rec, awsKeyA+"\n")
+		term(t, rec, awsKeyB+"\r\n")
+	})
+	// The key sets hold digests, never the secret.
+	for k := range rec.readAnnotationKeys {
+		if strings.Contains(k, "AKIA") || len(k) != 64 {
+			t.Fatalf("key %q is not a digest", k)
+		}
+	}
+	if len(rec.readAnnotationKeys) != 2 {
+		t.Fatalf("keys = %v, want one per credential", rec.readAnnotationKeys)
+	}
+}
+
+// The snapshot-only set is bounded as the other is.
+func TestTheSnapshotOnlySetIsBoundedToo(t *testing.T) {
+	keys := map[string]struct{}{}
+	for i := range maxReadAnnotationKeys {
+		addBounded(keys, fmt.Sprint("k", i))
+	}
+	if len(keys) != maxReadAnnotationKeys {
+		t.Fatalf("len = %d, want the bound held", len(keys))
+	}
+	addBounded(keys, "next")
+	if _, ok := keys["next"]; !ok || len(keys) != 1 {
+		t.Fatalf("keys = %v, want only the next key", keys)
 	}
 }

@@ -105,6 +105,7 @@ func (d *PatternDetector) Scan(eventType, text string, seq int) ([]Annotation, i
 			Source:      "detector",
 			Principal:   "system",
 			Span:        &AnnotationSpan{FromSeq: seq, ToSeq: seq},
+			MatchKey:    AnnotationMatchKey(rule.RuleID, text[loc[0]:loc[1]]),
 		})
 	}
 
