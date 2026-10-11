@@ -121,7 +121,7 @@ public sealed class SessionOutputAnnotationTests
     }
 
     private static async Task<(UtermServer Server, TermHub Hub, InMemoryStore Store)> StartAsync(
-        bool recording, bool redact = true)
+        bool recording, bool redact = true, Action<InMemorySessionRegistry>? withRegistry = null)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
@@ -140,6 +140,8 @@ public sealed class SessionOutputAnnotationTests
             RecordingEnabled = recording,
         });
         var store = new InMemoryStore();
+        var registry = new InMemorySessionRegistry(cfg.Sessions);
+        withRegistry?.Invoke(registry);
         var clock = new RealClock();
         var hub = new TermHub(new TermHubConfig { Clock = clock });
         var server = new UtermServer(new ServerDeps
@@ -148,7 +150,7 @@ public sealed class SessionOutputAnnotationTests
             Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
             Authz = new AuthorizationService(),
             Config = cfg,
-            Registry = new InMemorySessionRegistry(cfg.Sessions),
+            Registry = registry,
             Version = "test",
             Clock = clock,
             Recording = store,
@@ -280,6 +282,79 @@ public sealed class SessionOutputAnnotationTests
             await worker.SendTextAsync("export K=" + Key);
 
             Assert.Empty(await RecordedAnnotationsAsync(store));
+        }
+    }
+
+    private static SessionDefinition Def(bool? recording) => new()
+    {
+        SessionId = "g1",
+        DisplayName = "g1",
+        ConnectorType = "shell",
+        Visibility = "public",
+        RecordingEnabled = recording,
+    };
+
+    private static long Generation(InMemorySessionRegistry registry)
+    {
+        Assert.True(registry.TryGetStatus("g1", out var status));
+        return status.RecordingGeneration;
+    }
+
+    [Fact]
+    public void EachTimeRecordingTurnsOnIsANewGeneration()
+    {
+        var registry = new InMemorySessionRegistry();
+        registry.Upsert(Def(recording: false));
+        Assert.Equal(0, Generation(registry));
+        registry.Upsert(Def(recording: true));
+        Assert.Equal(1, Generation(registry));
+        // Staying on, or going off, is the same recording (or none).
+        registry.Upsert(Def(recording: true));
+        Assert.Equal(1, Generation(registry));
+        registry.Upsert(Def(recording: false));
+        Assert.Equal(1, Generation(registry));
+        registry.Upsert(Def(recording: true));
+        Assert.Equal(2, Generation(registry));
+
+        // A session defined as recorded starts at its first recording.
+        var recorded = new InMemorySessionRegistry(recordingEnabledByDefault: true);
+        recorded.Upsert(Def(recording: null));
+        Assert.Equal(1, Generation(recorded));
+
+        // Bookkeeping, not wire shape.
+        Assert.True(registry.TryGetStatus("g1", out var status));
+        Assert.DoesNotContain(
+            "generation", System.Text.Json.JsonSerializer.Serialize(status), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RecordingTurnedOffAndOnWithNoFrameBetweenStartsAFreshRecording()
+    {
+        InMemorySessionRegistry? registry = null;
+        var (server, hub, store) = await StartAsync(recording: true, withRegistry: r => registry = r);
+        await using (server)
+        {
+            var worker = hub.Registry.Get("rec1")!.WorkerWs!;
+            var snapshotReq = ControlChannelCodec.EncodeControlFrame(
+                new Dictionary<string, object?> { ["type"] = "snapshot_req" });
+            await worker.SendTextAsync("export K=" + Key);
+            await worker.SendTextAsync(snapshotReq);
+            Assert.Equal(
+                ["AWS access key detected in send", "AWS access key detected in read"],
+                Descriptions(await RecordedAnnotationsAsync(store)));
+
+            // Off, then on again, before the session sends anything.
+            Assert.True(registry!.TryGetDefinition("rec1", out var def));
+            def.RecordingEnabled = false;
+            registry.Upsert(def);
+            def.RecordingEnabled = true;
+            registry.Upsert(def);
+
+            // The new recording has seen nothing yet, so the snapshot's key is new to it.
+            await worker.SendTextAsync(snapshotReq);
+            Assert.Equal(
+                ["AWS access key detected in send", "AWS access key detected in read", "AWS access key detected in read"],
+                Descriptions(await RecordedAnnotationsAsync(store)));
         }
     }
 }
