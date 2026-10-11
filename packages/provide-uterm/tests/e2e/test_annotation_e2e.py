@@ -420,21 +420,23 @@ async def test_detector_annotation_includes_span() -> None:
 async def test_multiple_snapshots_increasing_seq() -> None:
     """Two snapshots with patterns produce annotations with distinct increasing sequence numbers.
 
-    The two screens match different rules: the snapshot path records a read-path
-    match only once, so a second screen showing the same key would add nothing.
+    Both screens match the SAME rule (AWS access key) with DIFFERENT keys: the
+    snapshot dedupe is keyed on the matched text, so the second key is still
+    annotated even though its label and description equal the first's.
     """
     async with _live_server_with_recording([_session("seq1")]) as (registry, base_url):
         runtime = await _start_and_get_runtime(registry, base_url, "seq1")
 
         await runtime._log_snapshot({"screen": "AKIAIOSFODNN7EXAMPLE first"})
-        await runtime._log_snapshot({"screen": "Bearer abcdefgh12345678 second"})
+        await runtime._log_snapshot({"screen": "AKIAJ2345678ABCDWXYZ second"})
         await asyncio.sleep(0.1)
         if runtime._logger:
             await runtime._logger.flush()
 
         annotations = await _get_annotations(base_url, "seq1")
         cred_annotations = [a for a in annotations if a["data"]["label"] == "credential_exposure"]
-        assert len(cred_annotations) >= 2
+        assert len(cred_annotations) == 2
+        assert {a["data"]["description"] for a in cred_annotations} == {"AWS access key detected in read"}
         seq1 = cred_annotations[0]["data"]["span"]["from_seq"]
         seq2 = cred_annotations[1]["data"]["span"]["from_seq"]
         assert seq2 > seq1

@@ -5,9 +5,12 @@
 """Read-path annotation: one record per match, and escapes split across chunks.
 
 Read-path rules run over every streamed ``term`` chunk AND every snapshot
-screen. The stream records every match it sees; the snapshot path skips any
-match already recorded (by the stream or an earlier snapshot), so the same
-output is not annotated twice. And an escape sequence cut off at a chunk
+screen. The snapshot path skips any match already recorded (by the stream or an
+earlier snapshot); the stream records every match except one occurrence a
+snapshot recorded before the stream delivered it, which it consumes once. So the
+same output is annotated once whichever path sees it first, a command run twice
+is annotated twice, and matches are keyed by a digest of (rule id, matched text),
+so different credentials of one rule are each recorded. And an escape sequence cut off at a chunk
 boundary is carried into the next chunk before stripping, so its tail does not
 glue itself onto the text that follows (``\\x1b[1`` + ``msudo`` -> ``msudo``).
 """
@@ -18,18 +21,20 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.uterm.annotation import Annotation, PatternDetector
+from provide.uterm.annotation import PatternDetector, annotation_match_key
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.runtime import HostedSessionRuntime
 from provide.uterm.server.runtime_helpers import (
     _MAX_ESCAPE_CARRY,
     _MAX_READ_ANNOTATION_KEYS,
+    _add_bounded,
     _read_annotation_key,
     _split_incomplete_escape,
 )
 
 _SUDO = "sudo command detected: sudo"
 _RM = "Recursive force-remove detected: rm -rf"
+_AWS = "AWS access key detected in read"
 
 
 def _runtime() -> tuple[HostedSessionRuntime, AsyncMock]:
@@ -158,15 +163,77 @@ async def test_a_snapshot_still_records_what_the_stream_never_saw() -> None:
     assert _annotations(logger) == [_SUDO, _RM]
 
 
-def test_the_key_is_the_rule_label_and_its_described_match() -> None:
-    annotation = Annotation(
-        label="privilege_escalation",
-        description="sudo command detected: sudo",
-        severity="high",
-        source="detector",
-        principal="system",
-    )
-    assert _read_annotation_key(annotation) == "privilege_escalation\x00sudo command detected: sudo"
+async def test_a_stream_match_a_snapshot_already_recorded_is_not_recorded_again() -> None:
+    # Snapshot first, then the same text on the stream: one record. The stream
+    # consumes the snapshot's record once; a later repeat is a new occurrence.
+    runtime, logger = _runtime()
+
+    await _snapshot(runtime, "$ sudo ls\n")
+    assert runtime._snapshot_only_keys
+    await _term(runtime, "$ sudo ls\r\n")
+    assert runtime._snapshot_only_keys == set()
+    assert _annotations(logger) == [_SUDO]
+
+    await _term(runtime, "$ sudo ls\r\n")
+    await _snapshot(runtime, "$ sudo ls\n$ sudo ls\n")
+    assert _annotations(logger) == [_SUDO, _SUDO]
+
+
+async def test_a_snapshot_only_key_is_consumed_by_its_own_match_only() -> None:
+    runtime, logger = _runtime()
+
+    await _snapshot(runtime, "$ sudo ls\n")
+    await _term(runtime, "$ rm -rf build\r\n")
+
+    assert _annotations(logger) == [_SUDO, _RM]
+    assert len(runtime._snapshot_only_keys) == 1
+
+
+async def test_different_credentials_of_one_rule_in_successive_snapshots_are_all_recorded() -> None:
+    # Credential rules never embed the match in the description, so a key of
+    # label+description would have dropped every AWS key after the first.
+    runtime, logger = _runtime()
+
+    await _snapshot(runtime, "AKIAIOSFODNN7EXAMPLE first\n")
+    await _snapshot(runtime, "AKIAJ2345678ABCDWXYZ second\n")
+    await _snapshot(runtime, "AKIAJ2345678ABCDWXYZ second\n")
+
+    assert _annotations(logger) == [_AWS, _AWS]
+
+
+async def test_different_credentials_on_the_stream_after_a_snapshot_are_recorded() -> None:
+    runtime, logger = _runtime()
+
+    await _snapshot(runtime, "AKIAIOSFODNN7EXAMPLE\n")
+    await _term(runtime, "AKIAJ2345678ABCDWXYZ\r\n")
+
+    assert _annotations(logger) == [_AWS, _AWS]
+
+
+def test_the_key_is_the_detector_match_key_and_holds_no_raw_text() -> None:
+    (annotation,) = PatternDetector().detect("read", "AKIAIOSFODNN7EXAMPLE", seq=1)
+    key = _read_annotation_key(annotation)
+    assert key == annotation_match_key("cred.aws_access_key", "AKIAIOSFODNN7EXA")
+    assert "AKIA" not in key
+    assert len(key) == 64
+
+
+async def test_the_key_sets_hold_digests_not_secrets() -> None:
+    runtime, _ = _runtime()
+
+    await _snapshot(runtime, "AKIAIOSFODNN7EXAMPLE\n")
+    await _term(runtime, "AKIAJ2345678ABCDWXYZ\r\n")
+
+    for key in runtime._read_annotation_keys | runtime._snapshot_only_keys:
+        assert "AKIA" not in key
+
+
+def test_the_snapshot_only_set_is_bounded_too() -> None:
+    keys: set[str] = set()
+    for i in range(_MAX_READ_ANNOTATION_KEYS):
+        _add_bounded(keys, f"k{i}")
+    _add_bounded(keys, "next")
+    assert keys == {"next"}
 
 
 def test_the_key_set_is_bounded_and_starts_over_when_full() -> None:
@@ -184,11 +251,14 @@ def test_the_key_set_is_bounded_and_starts_over_when_full() -> None:
 async def test_a_new_recording_starts_with_no_keys_and_no_carry() -> None:
     runtime, logger = _runtime()
     await _term(runtime, "$ sudo ls\r\n\x1b[1")
+    await _snapshot(runtime, "$ rm -rf build\n")
     assert runtime._read_annotation_keys
+    assert runtime._snapshot_only_keys
     assert runtime._escape_carry
 
     await runtime._stop_recording()
 
     logger.stop.assert_awaited_once()
     assert runtime._read_annotation_keys == set()
+    assert runtime._snapshot_only_keys == set()
     assert runtime._escape_carry == ""

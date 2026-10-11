@@ -969,21 +969,6 @@
    {
     "event": "annotation",
     "data": {
-     "label": "privilege_escalation",
-     "description": "sudo command detected: sudo",
-     "severity": "high",
-     "source": "detector",
-     "principal": "system",
-     "span": {
-      "from_seq": 7,
-      "to_seq": 7
-     }
-    },
-    "session_id": "rec"
-   },
-   {
-    "event": "annotation",
-    "data": {
      "label": "session_lifecycle",
      "description": "reboot command detected: reboot",
      "severity": "info",
