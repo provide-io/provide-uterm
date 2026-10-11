@@ -608,7 +608,10 @@ public sealed class SessionAnnotatorReadPathTests
         // Two threads scan while a third moves the generation forward (with a
         // spell unrecorded between some of them). Every reset is applied under
         // the lock in the order readings are taken, so the state never flips
-        // back to an older generation: at most one reset per state entered.
+        // back to an older generation: exactly one reset per state entered.
+        // The toggler waits for each state to be observed before moving on, so
+        // the count does not depend on how the threads are scheduled; a stale
+        // reading reapplied (the bug) would push it past the states entered.
         long generation = 0;
         var states = 1; // generation 0 itself
         var annotator = new SessionAnnotator(
@@ -634,6 +637,10 @@ public sealed class SessionAnnotatorReadPathTests
             }
         }
 
+        void Observed() => Assert.True(
+            SpinWait.SpinUntil(() => annotator.StateResets >= states || !errors.IsEmpty, TimeSpan.FromSeconds(30)),
+            $"state {states} was never observed");
+
         var t1 = new Thread(() => Scan(() => annotator.ScanOutput("$ sudo ls\r\n\x1b[1")));
         var t2 = new Thread(() => Scan(() =>
         {
@@ -642,18 +649,19 @@ public sealed class SessionAnnotatorReadPathTests
         }));
         t1.Start();
         t2.Start();
+        Observed();
         for (var g = 1; g <= 200; g++)
         {
             if (g % 10 == 0)
             {
                 Interlocked.Exchange(ref generation, -1);
                 states++;
-                Thread.Yield();
+                Observed();
             }
 
             Interlocked.Exchange(ref generation, g);
             states++;
-            Thread.Yield();
+            Observed();
         }
 
         stop.Cancel();
@@ -661,7 +669,7 @@ public sealed class SessionAnnotatorReadPathTests
         Assert.True(t2.Join(TimeSpan.FromSeconds(30)));
 
         Assert.Empty(errors);
-        Assert.InRange(annotator.StateResets, 1, states);
+        Assert.Equal(states, annotator.StateResets);
         // Settled on the last generation: further scans reset nothing.
         var resets = annotator.StateResets;
         annotator.ScanOutput("x");
