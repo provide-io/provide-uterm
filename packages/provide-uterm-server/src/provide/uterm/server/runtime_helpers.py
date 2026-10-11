@@ -15,7 +15,6 @@ import asyncio
 import contextlib
 from typing import TYPE_CHECKING, Any, Literal
 
-from provide.uterm import MAX_ESCAPE_CARRY, split_incomplete_escape
 from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
@@ -31,13 +30,6 @@ def _encode_runtime_frame(msg: dict[str, Any]) -> str:
         return encode_terminal_data(str(msg.get("data") or ""))
     return encode_control_frame(msg)
 
-
-# The chunk-boundary escape carry lives in core, built from the same grammar
-# constants as strip_ansi (provide.uterm.screen), so a change to what strip_ansi
-# strips keeps the carry correct. These underscore names are kept as aliases for
-# existing importers (tests, the C# read-path golden generator).
-_MAX_ESCAPE_CARRY = MAX_ESCAPE_CARRY
-_split_incomplete_escape = split_incomplete_escape
 
 # Bound on each per-recording set of read-path annotation keys (see
 # HostedSessionRuntime._read_annotation_keys / _snapshot_only_keys). Past it the
@@ -64,6 +56,10 @@ def _read_annotation_key(annotation: Annotation) -> str:
     a description (credential rules never embed the match), are two keys -- and
     it is a digest, so the dedupe sets never hold a raw secret. It is not part of
     the recorded annotation (``Annotation.to_dict`` omits it).
+
+    It is "" for an annotation the detector did not build. An EMPTY key is never
+    deduped: the runtime records that annotation and adds it to neither set
+    (otherwise every such annotation would collapse into one key).
     """
 
     return annotation.match_key

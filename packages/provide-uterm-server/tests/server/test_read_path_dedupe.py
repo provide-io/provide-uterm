@@ -22,15 +22,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from provide.uterm.annotation import PatternDetector, annotation_match_key
+from provide.uterm import MAX_ESCAPE_CARRY, split_incomplete_escape
+from provide.uterm.annotation import Annotation, PatternDetector, annotation_match_key
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.runtime import HostedSessionRuntime
 from provide.uterm.server.runtime_helpers import (
-    _MAX_ESCAPE_CARRY,
     _MAX_READ_ANNOTATION_KEYS,
     _add_bounded,
     _read_annotation_key,
-    _split_incomplete_escape,
 )
 
 _SUDO = "sudo command detected: sudo"
@@ -90,7 +89,7 @@ async def test_a_bare_esc_at_the_end_of_a_chunk_is_carried() -> None:
 async def test_an_overlong_unterminated_sequence_is_released() -> None:
     # Not a real sequence: it is not held back for ever.
     runtime, _ = _runtime()
-    junk = "\x1b[" + "1;" * _MAX_ESCAPE_CARRY
+    junk = "\x1b[" + "1;" * MAX_ESCAPE_CARRY
 
     await _term(runtime, junk)
 
@@ -110,16 +109,16 @@ async def test_an_overlong_unterminated_sequence_is_released() -> None:
         ("a\x1b[1m", ("a\x1b[1m", "")),  # complete at the very end
         ("a\x1bc", ("a\x1bc", "")),  # complete two-byte sequence
         ("\x1b[1m\x1b[3", ("\x1b[1m", "\x1b[3")),  # only the last ESC counts
-        ("\x1b[" + "1" * (_MAX_ESCAPE_CARRY - 2), ("", "\x1b[" + "1" * (_MAX_ESCAPE_CARRY - 2))),
-        ("\x1b[" + "1" * (_MAX_ESCAPE_CARRY - 1), ("\x1b[" + "1" * (_MAX_ESCAPE_CARRY - 1), "")),
+        ("\x1b[" + "1" * (MAX_ESCAPE_CARRY - 2), ("", "\x1b[" + "1" * (MAX_ESCAPE_CARRY - 2))),
+        ("\x1b[" + "1" * (MAX_ESCAPE_CARRY - 1), ("\x1b[" + "1" * (MAX_ESCAPE_CARRY - 1), "")),
     ],
 )
 def test_split_incomplete_escape(text: str, expected: tuple[str, str]) -> None:
-    assert _split_incomplete_escape(text) == expected
+    assert split_incomplete_escape(text) == expected
 
 
 def test_the_carry_limit_is_64() -> None:
-    assert _MAX_ESCAPE_CARRY == 64
+    assert MAX_ESCAPE_CARRY == 64
 
 
 # ---------------------------------------------------------------------------
@@ -297,3 +296,44 @@ async def test_a_new_recording_starts_with_no_keys_and_no_carry() -> None:
     assert runtime._read_annotation_keys == set()
     assert runtime._snapshot_only_keys == set()
     assert runtime._escape_carry == ""
+
+
+# ---------------------------------------------------------------------------
+# An empty match key (an annotation the detector did not build) is never deduped
+# ---------------------------------------------------------------------------
+
+
+class _StubDetector:
+    """Returns one annotation with an EMPTY match key for every read scan."""
+
+    def detect(self, _event_type: str, _text: str, seq: int) -> list[Annotation]:
+        return [
+            Annotation(
+                label="custom",
+                description=f"custom #{seq}",
+                severity="low",
+                source="plugin",
+                principal="system",
+            )
+        ]
+
+
+async def test_an_empty_key_is_recorded_every_time_and_remembered_nowhere() -> None:
+    runtime, logger = _runtime()
+    stub = _StubDetector()
+    runtime._detector = stub  # type: ignore[assignment]
+    runtime._read_stream = stub  # type: ignore[assignment]
+
+    await _snapshot(runtime, "a\n")
+    await _snapshot(runtime, "a\n")
+    await _term(runtime, "a\r\n")
+    await _term(runtime, "a\r\n")
+
+    assert len(_annotations(logger)) == 4
+    assert runtime._read_annotation_keys == set()
+    assert runtime._snapshot_only_keys == set()
+
+
+def test_the_key_of_a_non_detector_annotation_is_empty() -> None:
+    annotation = Annotation(label="x", description="y", severity="low", source="user", principal="tim")
+    assert _read_annotation_key(annotation) == ""
