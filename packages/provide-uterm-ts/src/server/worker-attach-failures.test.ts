@@ -186,10 +186,10 @@ describe("a recording store that fails under the poll loop", () => {
     await vi.waitFor(() => expect(recovered(waits)).toBe(true));
     await attachment.detach();
 
-    // The poll itself succeeded each time, which starts the schedule over:
-    // what it returned could not be handed on, and that backs off once.
+    // The poll itself succeeded each time, but what it returned could not be
+    // handed on: that is a failed iteration, and two in a row back off further.
     const backoff = waits.indexOf(POLL_ERROR_BACKOFF_MS[0] as number);
-    expect(waits.slice(backoff, backoff + 2)).toStrictEqual([POLL_ERROR_BACKOFF_MS[0], POLL_ERROR_BACKOFF_MS[0]]);
+    expect(waits.slice(backoff, backoff + 2)).toStrictEqual([POLL_ERROR_BACKOFF_MS[0], POLL_ERROR_BACKOFF_MS[1]]);
     const recorded = await store.getEntries("w1", { event: "runtime_error" });
     expect(recorded.map((entry) => entry.data)).toStrictEqual([
       { error: "broadcast failed" },
@@ -285,6 +285,141 @@ describe("a failure on the way back from the link", () => {
     expect(warnings.map((warning) => warning.fields)).toStrictEqual([{ session_id: "w1", error: "broadcast failed" }]);
     const recorded = await store.getEntries("w1", { event: "runtime_error" });
     expect(recorded.map((entry) => entry.data)).toStrictEqual([{ error: "broadcast failed" }]);
+    expect(unhandled).toStrictEqual([]);
+  });
+});
+
+describe("a recording that keeps failing to take what a poll returned", () => {
+  it("backs off further each time, rather than retrying at the first step forever", async () => {
+    const store = new FailingStore();
+    const recording = await openRecording(store);
+    const connector = new EmittingConnector();
+    let armed = false;
+    connector.pollMessages = async () => (armed ? [{ type: "snapshot", screen: "out", ts: 2 }] : []);
+    const { logger } = capturingLogger();
+    const { waits, sleep } = recordingSleep();
+    const attachment = await attachConnector(new SessionHub(), "w1", connector, "hijack", {
+      now: () => 5,
+      recording,
+      sleep,
+      logger,
+    });
+    store.failing = true;
+    armed = true;
+    // Every poll succeeds; every write of what it returned fails.
+    const backoffs = () => waits.filter((ms) => ms !== POLL_IDLE_MS);
+    await vi.waitFor(() => expect(backoffs().length).toBeGreaterThanOrEqual(4));
+    await attachment.detach();
+    expect(backoffs().slice(0, 4)).toStrictEqual(POLL_ERROR_BACKOFF_MS.slice(0, 4));
+    expect(unhandled).toStrictEqual([]);
+  });
+
+  it("starts the schedule over after a poll that found nothing", async () => {
+    const outcomes: Array<WorkerMessage[] | Error> = [new Error("read failed"), [], new Error("read failed again")];
+    const connector = new EmittingConnector();
+    connector.pollMessages = async () => {
+      const next = outcomes.shift();
+      if (next instanceof Error) {
+        throw next;
+      }
+      return next ?? [];
+    };
+    const { logger } = capturingLogger();
+    const { waits, sleep } = recordingSleep();
+    const attachment = await attachConnector(new SessionHub(), "w1", connector, "hijack", {
+      now: () => 5,
+      sleep,
+      logger,
+    });
+    await vi.waitFor(() => expect(waits.length).toBeGreaterThanOrEqual(3));
+    await attachment.detach();
+    expect(waits.slice(0, 3)).toStrictEqual([POLL_ERROR_BACKOFF_MS[0], POLL_IDLE_MS, POLL_ERROR_BACKOFF_MS[0]]);
+  });
+});
+
+describe("a recording that fails partway through a batch", () => {
+  it("still broadcasts every message, records the rest, and reports the failure once", async () => {
+    const store = new FailingStore();
+    const recording = await openRecording(store);
+    const hub = new SessionHub();
+    const connector = new EmittingConnector();
+    const { logger, warnings } = capturingLogger();
+    const errors: string[] = [];
+    const { waits, sleep } = recordingSleep();
+    const attachment = await attachConnector(hub, "w1", connector, "hijack", {
+      now: () => 5,
+      recording,
+      sleep,
+      logger,
+      onError: (error) => errors.push(error),
+    });
+    const broadcast: unknown[] = [];
+    hub.router.broadcast = async (_workerId, message) => {
+      broadcast.push((message as WorkerMessage).screen);
+    };
+    // Only the first frame's write fails, as a store that recovers would.
+    let refusals = 1;
+    const append = store.appendEvents.bind(store);
+    store.appendEvents = async (sessionId, events) => {
+      if (refusals > 0) {
+        refusals -= 1;
+        throw new Error("ENOSPC: no space left on device");
+      }
+      await append(sessionId, events);
+    };
+
+    connector.pending.push([
+      { type: "snapshot", screen: "one", ts: 2 },
+      { type: "snapshot", screen: "two", ts: 3 },
+      { type: "snapshot", screen: "three", ts: 4 },
+    ]);
+    await vi.waitFor(() => expect(waits).toContain(POLL_ERROR_BACKOFF_MS[0]));
+    await attachment.detach();
+
+    expect(broadcast).toStrictEqual(["one", "two", "three"]);
+    // Logging went on past the failure: the write that failed kept its
+    // buffer, and the next frame's write carried it, so nothing is lost.
+    const screens = (await store.getEntries("w1", { event: "read" })).map(
+      (entry) => (entry.data as { screen: unknown }).screen,
+    );
+    expect(screens).toStrictEqual(["seed", "one", "two", "three"]);
+    expect(errors).toStrictEqual(["ENOSPC: no space left on device"]);
+    expect(warnings.map((warning) => warning.msg)).toStrictEqual(["hosted_session_runtime_failed"]);
+    expect(unhandled).toStrictEqual([]);
+  });
+});
+
+describe("an attachment that fails before it is finished", () => {
+  it("takes its worker back off the hub and raises what failed", async () => {
+    const hub = new SessionHub();
+    const connector = new EmittingConnector();
+    connector.getSnapshot = async () => {
+      throw new Error("no screen");
+    };
+    let polled = 0;
+    connector.pollMessages = async () => {
+      polled += 1;
+      return [];
+    };
+    await expect(attachConnector(hub, "w1", connector, "hijack", { now: () => 5 })).rejects.toThrow("no screen");
+    expect(hub.registry.get("w1")).toBeUndefined();
+    // Nothing is left polling a connector nobody holds.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(polled).toBe(0);
+  });
+
+  it("raises its own failure, not a cleanup that failed after it", async () => {
+    const store = new FailingStore();
+    const recording = await openRecording(store);
+    const hub = new SessionHub();
+    hub.pruneIfIdle = async () => {
+      throw new Error("prune failed");
+    };
+    store.failing = true;
+    await expect(
+      attachConnector(hub, "w1", new EmittingConnector(), "hijack", { now: () => 5, recording }),
+    ).rejects.toThrow("ENOSPC: no space left on device");
+    expect(hub.registry.get("w1")?.workerWs ?? undefined).toBeUndefined();
     expect(unhandled).toStrictEqual([]);
   });
 });
