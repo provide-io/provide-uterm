@@ -27,32 +27,15 @@ GOLANGCI_LINT ?= golangci-lint
 GO_MK_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 export GOLANGCI_LINT_CACHE := $(GO_MK_DIR).golangci-cache
 
-# 97.0, not 100.0: the library/wire packages are all at (or within a hair of)
-# 100%. A pass across manager/server/gateway/cli proved the "these need fault
-# injection" assumption largely wrong — real child processes and real live
-# sockets (httptest, ephemeral-port listeners, actual subprocess teardown)
-# drove all four from the 77-91% range up to 94-99%. What is left in each is
-# now genuinely fault-injection-only (a specific syscall failing in a way a
-# test cannot trigger):
-#   - manager (~94%): syscall-failure branches (rename/write/MkdirAll errors,
-#     log rotation) in the monitor loop's reconciliation.
-#   - server (~95%): frame-encoder/deckmux internal-error log arms; handshake
-#     mid-write races; OS/socket-level Serve() failure branches; residual WS
-#     resume/deckmux paths.
-#   - gateway (~99%): a handful of crypto/rand and channel-accept error arms.
-#   - cli (~98%): external-constructor failures (telemetry/engine wiring),
-#     os.Hostname()/json.Marshal(fixed map) failure arms.
-#   - pty (~95.6% on macOS, higher on Linux CI — SO_PEERCRED is Linux-only):
-#     real-libpam success paths (the fail-closed stub can never authenticate),
-#     /etc/passwd read failures, and a few accept-vs-Stop/queue-drain races
-#     that only manifest under adversarial scheduling.
-# transports/client/controlplane-sqlite/hub carry only syscall/driver/
-# JSON-encode guards the Python originals also exclude. Whole-module ~98.0%
-# after browser resume/deck + timeseries/swarm strip + no-worker REST paths;
-# cover profile filters cmd/ (see cover target). Floor
-# 97.5 leaves ~0.5pt headroom.
-# Measured ~98.0% after GUI/MCP/embed residual waves; keep 0.2pt dual-runner headroom.
-COVER_THRESHOLD ?= 97.8
+# 100.0: every statement in the cover profile (cmd/, vnc/gen/ and benchmarks/
+# filtered, see cover) is executed. The arms once written off as "needs fault
+# injection" -- syscall, socket, crypto/rand and json.Marshal failures -- are
+# either reached through a package-level seam that defaults to the real call
+# (filepath.Abs, term.MakeRaw, net.Listen, os.Hostname, the sqlite driver, ...)
+# or were deleted as provably unreachable (rand.Read cannot return an error
+# since Go 1.24; Marshal of a fixed string map cannot fail). A new uncovered
+# line fails the gate: cover it, or delete it if it cannot run.
+COVER_THRESHOLD ?= 100.0
 
 # Driver for the mutation gate (stdlib-only Python >= 3.11; tomllib + json).
 PYTHON ?= python3

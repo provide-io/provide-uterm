@@ -80,17 +80,14 @@ make quality-gate   # build + test + coverage floor + binaries
 make quality-gate
 ```
 
-Coverage excludes pure Unicode/charset lookup tables (data-only) and live
-OS/socket residual packages (`Pty/PtyTransport`, live telnet/SSH/WebSocket
-transport bodies, Proxy/Gateway accept races — see `ci/coverage_gate.py`).
-The gate floor is `COVER_THRESHOLD=97.9` (local/macOS after Wave10 ~98.09%;
-Ubuntu ~98.02% / Windows ~97.96% residual baseline; dual-OS file-mode arms
-explain the OS delta). Floor is not raised until both OS jobs show ≥0.2pt
-headroom. Remaining misses match Go’s residual class: production
-`Console.CancelKeyPress` wait arms (tests inject `WaitForCancel` no-ops),
-Embed/session cancel races, RFB attach catch arms, dual-OS
-`SetUnixFileMode` PlatformNotSupported, and rare codec/float fallbacks —
-not untested pure library logic.
+Coverage excludes only pure Unicode/charset lookup tables (data-only),
+generated code and the native Unix PTY P/Invoke (`Pty/PtyTransport`,
+`Pty/NativeUnixPty`, whose remaining arms are libc failure returns) — see
+`ci/coverage_gate.py`. Everything else, including the live telnet/SSH/WebSocket
+transports, gateways, RFB client and MCP endpoint, is measured and covered by
+loopback tests. The gate floor is `COVER_THRESHOLD=100.0` on Linux. The Windows
+job passes its own lower floor because the Unix-only lines in the denominator
+cannot run there (see `csharp-quality-windows` in `.github/workflows/ci.yml`).
 
 ## Mutation testing
 

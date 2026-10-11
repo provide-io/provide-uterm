@@ -4,44 +4,24 @@
 # Quality gate for the C# port. Mirrors packages/provide-uterm-go/Makefile.
 
 DOTNET ?= dotnet
-# Coverage residual (what keeps the floor below 100):
-#   - Excluded from the denominator in ci/coverage_gate.py: only the native PTY
-#     (Pty/PtyTransport.cs, Pty/NativeUnixPty.cs) -- Unix P/Invoke the Windows
-#     host cannot run, whose remaining arms are libc failure returns. The pty
-#     batch (3d) is also skipped by `cover` on CI. Opt into native PTY via
-#     PreferNativePty / UTERM_NATIVE_PTY=1.
-#   - Everything else is measured. The live-socket files that used to be
-#     excluded (telnet/SSH/WebSocket transports, SSH and TCP gateways, RFB
-#     client, MCP endpoint, proxy, embed telnet upstream, human-VNC stream
-#     adapters) are covered by loopback tests in tests/.../Coverage100/.
-#   - Platform-conditional arms (OsPlatform.IsWindows-gated FileIo/DevIdp/
-#     TunnelClient/Connector branches) count on both OSes but each OS can only
-#     execute its own side, so neither run alone reaches 100%.
-# Pure library batches still track ~99%+. Raise only with ≥0.2pt headroom on
-# BOTH csharp-quality and csharp-quality-windows after a full cover run.
-# Floor is set by the Windows run: platform-conditional Linux-only arms
-# (IsWindows-gated Connector/DevIdp/TunnelClient branches) sit in the denominator
-# but cannot execute on Windows, so csharp-quality-windows tops out ~97.46% while
-# Ubuntu covers them.
+# 100.0 on Linux: every line outside the gate's exclusions (ci/coverage_gate.py
+# -- Unix PTY P/Invoke, data tables, generated code) is executed by `make cover`.
+# The platform-conditional arms are driven on either OS through
+# OsPlatform.IsWindowsProbe, and the live-socket transports, gateways and relays
+# run against loopback peers. A new uncovered line fails the gate: cover it, or
+# delete it if it cannot run. The native PTY is excluded because its remaining
+# arms are libc failure returns; `cover` also skips its batch (3d) on CI. Opt
+# into it locally via PreferNativePty / UTERM_NATIVE_PTY=1.
 #
-# Back to 97.4 now that the Windows number is stable. It had been lowered to 97.3
-# because coverage moved run to run: four runs of one tree measured 17287, 17289,
-# 17283 and 17281 lines of 17745, straddling the 17284 this threshold demands, so
-# the gate passed twice and failed twice on identical code.
+# At 100 the gate fails on a single line, so a line that only runs when a race
+# goes one way fails it on identical code. If it starts flapping, diff two
+# cobertura runs and force the arm (as ResumeLifecycleIntegrationTests
+# .ExpiryBehindAnInFlightTransitionQueuesBehindIt does) rather than lowering this.
 #
-# The cause was six lines in Hub/Lease.Expiry.cs that only ran when a lifecycle
-# transition happened to be in flight; ResumeLifecycleIntegrationTests
-# .ExpiryBehindAnInFlightTransitionQueuesBehindIt now forces that arm, and three
-# consecutive local runs measured an identical total. Windows measures 17291 on
-# the first run after the fix -- higher than any observation before it, and seven
-# lines above this threshold.
-#
-# Seven lines is thinner than the ">=0.2pt headroom" the note above asks for
-# before *raising* the number, which is why this is written down: the gate is now
-# expected to fail only when coverage genuinely drops, not on noise. If it starts
-# flapping again, diff two cobertura runs before touching the threshold -- that is
-# what found the last cause.
-COVER_THRESHOLD ?= 97.4
+# csharp-quality-windows passes its own COVER_THRESHOLD (see ci.yml): the
+# Windows runner cannot execute the Unix-only lines that remain in the
+# denominator, so it holds the measured Windows floor instead of 100.
+COVER_THRESHOLD ?= 100.0
 CONFIGURATION ?= Release
 
 .PHONY: build test cover build-binaries quality-gate interop-test conformance-test mutation-gate
