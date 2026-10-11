@@ -170,16 +170,16 @@ func pumpOnce(ctx context.Context, wsURL string, cfg pumpConfig) (int, error) {
 	defer conn.CloseNow() //nolint:errcheck // best-effort close on pump exit
 
 	if cfg.identityFrame != nil {
-		if err := sendFrame(ctx, conn, cfg.identityFrame); err != nil {
+		if err := sendPumpFrame(ctx, conn, cfg.identityFrame); err != nil {
 			return -1, err
 		}
 	}
 	if cfg.st.token != nil {
-		if err := sendResume(ctx, conn, resumeFrame(cfg.st.token)); err != nil {
+		if err := sendPumpFrame(ctx, conn, resumeFrame(cfg.st.token)); err != nil {
 			return -1, err
 		}
 	}
-	if err := sendFrame(ctx, conn, helloFrame()); err != nil {
+	if err := sendPumpFrame(ctx, conn, helloFrame()); err != nil {
 		return -1, err
 	}
 
@@ -266,10 +266,10 @@ func dispatchTextMessage(msg string, dec *controlchannel.Decoder, cfg pumpConfig
 	return false
 }
 
-// sendResume sends the resume frame. It is sendFrame, swappable in tests: the
-// resume frame holds only strings so it always encodes, and a WebSocket write
-// on a freshly dialled connection does not fail on demand.
-var sendResume = sendFrame
+// sendPumpFrame sends pumpOnce's opening frames. It is sendFrame, swappable
+// in tests: a WebSocket write on a freshly dialled connection does not fail on
+// demand, so the per-frame failure arms are otherwise reachable only by a race.
+var sendPumpFrame = sendFrame
 
 func sendFrame(ctx context.Context, conn *websocket.Conn, frame map[string]any) error {
 	enc, err := controlchannel.EncodeControlFrame(frame)
