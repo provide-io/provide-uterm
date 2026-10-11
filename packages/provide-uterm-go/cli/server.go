@@ -390,5 +390,9 @@ func runServer(ctx context.Context, configPath, host string, port int, frontendD
 	// listener is bound (see buildServerFromConfig) — not here, so that this
 	// entry point and the live-conformance one cannot disagree about whether a
 	// configured session comes up.
-	return bundle.srv.Run(sigCtx)
+	err = bundle.srv.Run(sigCtx)
+	// Once nothing is served: stop every session, settling any recording a
+	// connection could not close (reported if it still cannot be written).
+	bundle.registry.Shutdown(context.Background())
+	return err
 }

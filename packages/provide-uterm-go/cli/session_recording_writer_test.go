@@ -529,3 +529,167 @@ func TestAnUnencodableFrameIsReported(t *testing.T) {
 		rec.AttemptEnded(nil)
 	}
 }
+
+// --- settling an unclosed recording at the session's final stop ------------
+
+// leaveUnclosed opens a recording on rec, logs into it and ends it while the
+// store refuses every append, leaving it unclosed.
+func leaveUnclosed(t *testing.T, rec *sessionRecorder) {
+	t.Helper()
+	rec.AttemptStarted()
+	must(t, rec.Connected())
+	rec.AttemptEnded(nil)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.unclosed == nil || rec.unclosedWriter == nil {
+		t.Fatal("the failed close did not leave the recording unclosed")
+	}
+}
+
+// settle retries the close once: on a recovered store what was owed lands,
+// then log_stop; a second settle has nothing left to do.
+func TestSettleClosesAnUnclosedRecording(t *testing.T) {
+	store := &failAfter{InMemoryStore: recording.NewInMemoryStore()}
+	logs := &syncBuffer{}
+	rec := newSessionRecorder("s1", store, testRecordingConfig(), nil, slog.New(slog.NewTextHandler(logs, nil)))
+	rec.setEnabled(true)
+	leaveUnclosed(t, rec)
+	store.allow(100)
+	rec.settle()
+	rec.settle()
+	if got := eventNames(t, store); !reflect.DeepEqual(got, []string{"log_start", "runtime_started", "log_stop"}) {
+		t.Fatalf("events = %v", got)
+	}
+	if strings.Contains(logs.String(), "hosted_session_recording_dropped") {
+		t.Fatalf("a settled recording was reported dropped: %s", logs)
+	}
+	if rec.unclosed != nil || rec.unclosedWriter != nil {
+		t.Fatal("the settled recording is still held")
+	}
+}
+
+// settle on a store still refusing drops the recording, reported once with
+// what was lost, and lets it go.
+func TestSettleDropsWhatStillCannotBeWritten(t *testing.T) {
+	store := &failAfter{InMemoryStore: recording.NewInMemoryStore()}
+	logs := &syncBuffer{}
+	rec := newSessionRecorder("s1", store, testRecordingConfig(), nil, slog.New(slog.NewTextHandler(logs, nil)))
+	rec.setEnabled(true)
+	leaveUnclosed(t, rec)
+	rec.settle()
+	store.allow(100)
+	rec.settle()
+	if !strings.Contains(logs.String(), "msg=hosted_session_recording_dropped session_id=s1 unwritten_entries=1") ||
+		strings.Count(logs.String(), "hosted_session_recording_dropped") != 1 {
+		t.Fatalf("the drop was not reported exactly once: %s", logs)
+	}
+	if got := eventNames(t, store); !reflect.DeepEqual(got, []string{"log_start"}) {
+		t.Fatalf("events = %v, want the dropped entries never written", got)
+	}
+	if rec.unclosed != nil || rec.unclosedWriter != nil {
+		t.Fatal("the dropped recording is still held")
+	}
+}
+
+// unclosedRegistry is a registry whose provide-shell recorder holds a
+// recording its last connection could not close, and the store, now taking
+// writes again.
+func unclosedRegistry(t *testing.T) (*SessionRegistryImpl, *failAfter, *sessionRecorder) {
+	t.Helper()
+	ctx := context.Background()
+	store := &failAfter{InMemoryStore: recording.NewInMemoryStore()}
+	r := newTestRegistry(t)
+	r.SetRecording(store, nil)
+	if _, err := r.StartSession(ctx, "provide-shell"); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	rec := r.recorderFor(r.entries["provide-shell"])
+	r.mu.Unlock()
+	leaveUnclosed(t, rec)
+	store.allow(100)
+	return r, store, rec
+}
+
+// A session stopped for good, deleted, or shut down with the server settles
+// its unclosed recording then and there: no next attempt is coming to do it.
+func TestTheFinalStopSettlesAnUnclosedRecording(t *testing.T) {
+	for name, stop := range map[string]func(*SessionRegistryImpl){
+		"StopSession": func(r *SessionRegistryImpl) {
+			if _, err := r.StopSession(context.Background(), "provide-shell"); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"DeleteSession": func(r *SessionRegistryImpl) { must(t, r.DeleteSession(context.Background(), "provide-shell")) },
+		"Shutdown":      func(r *SessionRegistryImpl) { r.Shutdown(context.Background()) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, store, rec := unclosedRegistry(t)
+			stop(r)
+			want := []string{"log_start", "runtime_started", "log_stop"}
+			var got []string
+			for _, e := range entriesOf(t, store, "provide-shell", "") {
+				got = append(got, e["event"].(string))
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("events = %v, want %v", got, want)
+			}
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			if rec.unclosed != nil {
+				t.Fatal("the recording is still held after the final stop")
+			}
+		})
+	}
+}
+
+// Shutdown stops every session, not only the first.
+func TestShutdownStopsEverySession(t *testing.T) {
+	ctx := context.Background()
+	r := newTestRegistry(t)
+	r.mu.Lock()
+	r.seed(serverconfig.SessionDefinition{SessionID: "second", DisplayName: "Second", ConnectorType: "shell"})
+	ids := append([]string(nil), r.order...)
+	r.mu.Unlock()
+	for _, id := range ids {
+		if _, err := r.StartSession(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.Shutdown(ctx)
+	for _, id := range ids {
+		st, err := r.GetSession(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.LifecycleState != server.LifecycleStopped {
+			t.Fatalf("%s: state = %q after shutdown", id, st.LifecycleState)
+		}
+	}
+}
+
+// A session that never recorded has no recorder to settle.
+func TestSettleRecordingWithoutARecorder(t *testing.T) {
+	settleRecording(nil)
+}
+
+// --- an empty match key is never deduped -----------------------------------
+
+func TestAnEmptyMatchKeyIsNeverDeduped(t *testing.T) {
+	rec, _ := annotatedRecorder(t)
+	for range 2 {
+		if !rec.admitSnapshotMatch("") || !rec.admitStreamMatch("") {
+			t.Fatal("a match with an empty key was not recorded")
+		}
+	}
+	if len(rec.readAnnotationKeys) != 0 || len(rec.snapshotOnlyKeys) != 0 {
+		t.Fatalf("an empty key entered a set: %v, %v", rec.readAnnotationKeys, rec.snapshotOnlyKeys)
+	}
+	// A non-empty key still follows the rule.
+	if !rec.admitSnapshotMatch("k") || rec.admitSnapshotMatch("k") {
+		t.Fatal("a snapshot key was not deduped")
+	}
+	if rec.admitStreamMatch("k") || !rec.admitStreamMatch("k") {
+		t.Fatal("a pending key was not consumed exactly once")
+	}
+}

@@ -122,9 +122,11 @@ func (l *LiveServer) WaitReady(ctx context.Context) {
 	}
 }
 
-// Close releases the webhook delivery loops and the control-plane engine. Serve
-// must have returned first.
+// Close stops every session (settling their recordings), then releases the
+// webhook delivery loops and the control-plane engine. Serve must have
+// returned first.
 func (l *LiveServer) Close() error {
+	l.bundle.registry.Shutdown(context.Background())
 	l.bundle.webhooks.Shutdown()
 	return l.bundle.engine.Close(context.Background())
 }

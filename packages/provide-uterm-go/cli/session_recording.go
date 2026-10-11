@@ -158,7 +158,9 @@ type sessionRecorder struct {
 	// twice is annotated twice; a pending key never suppresses a later,
 	// genuinely new match. Accepted cost: if the snapshot's text reaches the
 	// stream only in a LATER chunk, it is recorded a second time -- a
-	// duplicate is preferred over a missed annotation. Both sets are bounded
+	// duplicate is preferred over a missed annotation. An EMPTY key (an
+	// annotation with no match identity) is never deduped: it is recorded and
+	// enters neither set. Both sets are bounded
 	// (addBounded), scoped to one recording and reset with it: see
 	// AttemptEnded.
 	readAnnotationKeys map[string]struct{}
@@ -218,17 +220,10 @@ func (s *sessionRecorder) isEnabled() bool {
 // recording opened here. Each recording gets a fresh writer, so a failure the
 // last one met is not this connection's.
 func (s *sessionRecorder) AttemptStarted() {
+	s.settle()
 	s.mu.Lock()
 	skip := s.rec != nil || !s.enabled
-	unclosed, unclosedWriter := s.unclosed, s.unclosedWriter
-	s.unclosed, s.unclosedWriter = nil, nil
 	s.mu.Unlock()
-	if unclosed != nil {
-		if err := unclosed.Stop(); err != nil {
-			s.logger.Warn("hosted_session_recording_dropped", "session_id", s.sessionID,
-				"unwritten_entries", unclosedWriter.unwritten(), "error", err.Error())
-		}
-	}
 	if skip {
 		return
 	}
@@ -258,8 +253,8 @@ func (s *sessionRecorder) AttemptStarted() {
 // and stopped outside it: Stop drains the writer and closes the recording in
 // the store, on the bridge's run goroutine, after the connection's send and
 // receive goroutines are done with it. A Stop that fails leaves the recording
-// open in the store with entries still queued; it is kept as unclosed for the
-// next attempt's start to settle.
+// open in the store with entries still queued; it is kept as unclosed for
+// settle: the next attempt's start, or the session's final stop.
 func (s *sessionRecorder) AttemptEnded(err error) {
 	s.mu.Lock()
 	rec, writer := s.rec, s.writer
@@ -283,6 +278,31 @@ func (s *sessionRecorder) AttemptEnded(err error) {
 		s.mu.Lock()
 		s.unclosed, s.unclosedWriter = rec, writer
 		s.mu.Unlock()
+	}
+}
+
+// settle retries the close of a recording the last attempt could not close,
+// once: what it still owes is written into it, then its log_stop. If the store
+// refuses again it is dropped, with a hosted_session_recording_dropped warning
+// naming how many entries were lost. AttemptStarted settles before it opens
+// the next recording; the registry settles when the session stops for good
+// (StopSession, DeleteSession, Shutdown), after its bridge has stopped, so a
+// recording is never left owing for the recorder's lifetime nor closed
+// arbitrarily late by a much later restart. The store I/O runs on the
+// caller's goroutine, outside mu: the bridge's run goroutine, or the
+// registry's caller once the bridge is gone -- never a send/receive
+// goroutine.
+func (s *sessionRecorder) settle() {
+	s.mu.Lock()
+	unclosed, writer := s.unclosed, s.unclosedWriter
+	s.unclosed, s.unclosedWriter = nil, nil
+	s.mu.Unlock()
+	if unclosed == nil {
+		return
+	}
+	if err := unclosed.Stop(); err != nil {
+		s.logger.Warn("hosted_session_recording_dropped", "session_id", s.sessionID,
+			"unwritten_entries", writer.unwritten(), "error", err.Error())
 	}
 }
 
@@ -365,17 +385,46 @@ func (s *sessionRecorder) logSnapshot(frame map[string]any) error {
 	// recorded by the stream or an earlier snapshot is skipped; a new one is
 	// recorded and left pending for the next stream chunk.
 	for _, a := range s.detector.Detect("read", text, s.eventSeq) {
-		key := readAnnotationKey(a)
-		if _, seen := s.readAnnotationKeys[key]; seen {
+		if !s.admitSnapshotMatch(readAnnotationKey(a)) {
 			continue
 		}
-		s.rememberReadAnnotation(key)
-		addBounded(s.snapshotOnlyKeys, key)
 		if err := s.logEvent("annotation", a.ToDict()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// admitSnapshotMatch is the snapshot half of the dedupe rule (see
+// sessionRecorder): whether a snapshot match with this key is recorded, the
+// key sets updated to say it was. An empty key is never deduped: it is
+// recorded and enters neither set. Caller holds s.mu.
+func (s *sessionRecorder) admitSnapshotMatch(key string) bool {
+	if key == "" {
+		return true
+	}
+	if _, seen := s.readAnnotationKeys[key]; seen {
+		return false
+	}
+	s.rememberReadAnnotation(key)
+	addBounded(s.snapshotOnlyKeys, key)
+	return true
+}
+
+// admitStreamMatch is the stream half: a key a snapshot left pending is
+// consumed and not recorded; any other is recorded and remembered. An empty
+// key is never deduped: it is recorded and enters neither set. Caller holds
+// s.mu.
+func (s *sessionRecorder) admitStreamMatch(key string) bool {
+	if key == "" {
+		return true
+	}
+	if _, pending := s.snapshotOnlyKeys[key]; pending {
+		delete(s.snapshotOnlyKeys, key)
+		return false
+	}
+	s.rememberReadAnnotation(key)
+	return true
 }
 
 // rememberReadAnnotation is _remember_read_annotation: key added to the bounded
@@ -404,12 +453,9 @@ func (s *sessionRecorder) scanOutput(data string) error {
 	var text string
 	text, s.escapeCarry = screen.SplitIncompleteEscape(s.escapeCarry+data, screen.MaxEscapeCarry)
 	for _, a := range s.readStream.Detect("read", screen.StripANSI(text), s.eventSeq) {
-		key := readAnnotationKey(a)
-		if _, pending := s.snapshotOnlyKeys[key]; pending {
-			delete(s.snapshotOnlyKeys, key)
+		if !s.admitStreamMatch(readAnnotationKey(a)) {
 			continue
 		}
-		s.rememberReadAnnotation(key)
 		if err := s.logEvent("annotation", a.ToDict()); err != nil {
 			return err
 		}

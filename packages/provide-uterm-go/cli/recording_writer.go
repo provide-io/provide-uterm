@@ -35,7 +35,8 @@ import (
 //     retries it on a timer: the failure is reported, the bridge ends the
 //     connection on it, and the recording's end drains again. A recording
 //     whose end still fails is retried once more, and otherwise dropped with
-//     a warning, by the next attempt's start (sessionRecorder.AttemptStarted).
+//     a warning, by the next attempt's start or the session's final stop
+//     (sessionRecorder.settle).
 //   - Failure is reported: while the head cannot be written, failure returns
 //     the error, and the recorder hands it to the bridge at the next point it
 //     observes (the reference raises it from the write that filled the batch;
