@@ -8,7 +8,6 @@ package mcp
 import (
 	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 // Keystroke unescaping and sanitization shared by the MCP hijack_send tool.
@@ -92,8 +91,8 @@ func isAllowedKeystrokeRune(r rune) bool {
 }
 
 // sanitizeKeystrokes filters non-printable bytes while preserving terminal input
-// controls, then caps the result at maxBytes UTF-8 bytes (decoding the truncated
-// tail with "ignore" error handling, i.e. dropping a split trailing rune).
+// controls, then caps the result at maxBytes bytes (the reference decodes the
+// truncated tail with "ignore", which on this ASCII-only output is a no-op).
 func sanitizeKeystrokes(keys string, maxBytes int) string {
 	var b strings.Builder
 	for _, r := range keys {
@@ -105,13 +104,10 @@ func sanitizeKeystrokes(keys string, maxBytes int) string {
 	if len(filtered) <= maxBytes {
 		return filtered
 	}
-	truncated := filtered[:maxBytes]
-	// Drop a trailing byte sequence that no longer forms a valid rune, matching
-	// bytes.decode("utf-8", "ignore") on a mid-rune cut.
-	for len(truncated) > 0 && !utf8.ValidString(truncated) {
-		truncated = truncated[:len(truncated)-1]
-	}
-	return truncated
+	// isAllowedKeystrokeRune admits ASCII only, so every byte of filtered is a
+	// whole rune and a cut at any offset is already what the reference's
+	// bytes.decode("utf-8", "ignore") would leave: there is no split tail to drop.
+	return filtered[:maxBytes]
 }
 
 // prepareKeystrokes unescapes then sanitizes keystrokes. Port of

@@ -8,6 +8,7 @@ package shell
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -247,20 +248,18 @@ func TestCastMalformedHTTPURL(t *testing.T) {
 }
 
 func TestCastFileReadError(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("running as root: permission checks do not apply")
-	}
 	p := writeTemp(t, makeCastText(2, [][2]any{{0.0, "hi\r\n"}}))
-	if err := os.Chmod(p, 0o000); err != nil {
-		t.Fatal(err)
+	orig := readLocalFile
+	readLocalFile = func(path string) ([]byte, error) {
+		if path != p {
+			t.Errorf("read %q, want %q", path, p)
+		}
+		return nil, errors.New("injected read failure")
 	}
-	t.Cleanup(func() { _ = os.Chmod(p, 0o600) })
-	// Confirm the file is actually unreadable in this environment.
-	if _, err := os.ReadFile(p); err == nil {
-		t.Skip("file still readable (permissive filesystem)")
-	}
+	t.Cleanup(func() { readLocalFile = orig })
 	d := newDispatcher(nil)
-	if got := dispatchText(t, d, "cast file://"+p); !strings.Contains(got, "cannot fetch") {
+	got := dispatchText(t, d, "cast file://"+p)
+	if !strings.Contains(got, "cannot fetch") || !strings.Contains(got, "injected read failure") {
 		t.Fatalf("= %q", got)
 	}
 }

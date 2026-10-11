@@ -195,17 +195,11 @@ func (t *SSHTransport) Connect(ctx context.Context, host string, port int, opts 
 		_ = client.Close()
 		return fmt.Errorf("ssh request pty: %w", err)
 	}
-	stdin, err := session.StdinPipe()
+	stdin, stdout, err := openSessionPipes(session)
 	if err != nil {
 		_ = session.Close()
 		_ = client.Close()
-		return fmt.Errorf("ssh stdin pipe: %w", err)
-	}
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		_ = session.Close()
-		_ = client.Close()
-		return fmt.Errorf("ssh stdout pipe: %w", err)
+		return err
 	}
 	if err := session.Shell(); err != nil {
 		_ = session.Close()
@@ -229,6 +223,25 @@ func (t *SSHTransport) Connect(ctx context.Context, host string, port int, opts 
 
 	logger.Debug("ssh_transport connected", "host", host, "port", port, "user", opts.SSH.User)
 	return nil
+}
+
+// openSessionPipes wires the session's stdin/stdout pipes. A package variable
+// only so a test can fail it on a live session: on the freshly created session
+// Connect hands it, the library's own refusals (a pipe already set, or the
+// session already started) cannot fire. Production always uses sessionPipes.
+var openSessionPipes = sessionPipes
+
+// sessionPipes returns the session's stdin writer and stdout reader.
+func sessionPipes(session *ssh.Session) (io.WriteCloser, io.Reader, error) {
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("ssh stdin pipe: %w", err)
+	}
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return nil, nil, fmt.Errorf("ssh stdout pipe: %w", err)
+	}
+	return stdin, stdout, nil
 }
 
 // readLoop pumps stdout chunks into rxCh until EOF/error or Disconnect. It

@@ -150,6 +150,11 @@ func fetchText(ctx context.Context, client *http.Client, url string) (string, Re
 	return strings.ToValidUTF8(string(data), "�"), Result{}, true
 }
 
+// readLocalFile reads a file:// target. A package variable only so a test can
+// make the read fail after the stat succeeded (a chmod 000 file is still
+// readable when the tests run as root); production always uses os.ReadFile.
+var readLocalFile = os.ReadFile
+
 // fetchBytes fetches the raw body of url. See fetchText for scheme handling.
 func fetchBytes(ctx context.Context, client *http.Client, url string) ([]byte, Result, bool) {
 	switch {
@@ -159,7 +164,7 @@ func fetchBytes(ctx context.Context, client *http.Client, url string) ([]byte, R
 		if err != nil || info.IsDir() {
 			return nil, textResult(ErrorMsg("file not found: "+path) + Prompt), false
 		}
-		data, err := os.ReadFile(path) //nolint:gosec // single-tenant shell; arbitrary local path by design (parity with urllib file://)
+		data, err := readLocalFile(path) //nolint:gosec // single-tenant shell; arbitrary local path by design (parity with urllib file://)
 		if err != nil {
 			return nil, textResult(ErrorMsg("cannot fetch: "+err.Error()) + Prompt), false
 		}

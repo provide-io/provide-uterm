@@ -129,3 +129,15 @@ func TestRecvFrameDecoderError(t *testing.T) {
 		t.Fatal("expected decoder protocol error")
 	}
 }
+
+// TestNewRequestErrorIsTransport covers http.NewRequestWithContext rejecting
+// the request (an invalid method token) after the URL built cleanly: it must
+// surface as a transport error, not a panic or a nil body.
+func TestNewRequestErrorIsTransport(t *testing.T) {
+	c := NewHijackClient("http://test")
+	_, err := c.doRequest(ctx(), "BAD METHOD", "/api/x", nil, nil, 0)
+	apiErr, ok := err.(*APIError)
+	if !ok || !apiErr.Transport {
+		t.Fatalf("expected transport error for an invalid method, got %v", err)
+	}
+}

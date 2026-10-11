@@ -29,6 +29,10 @@ const ephemeralLoopback = "127.0.0.1:0"
 // finds — a harness that fails says more than one that hangs.
 const readyTimeout = 30 * time.Second
 
+// listen binds the server role's socket. A package variable only so a test
+// can make the bind fail; production always uses net.Listen.
+var listen = net.Listen
+
 // ServeOptions configures a server-role run.
 type ServeOptions struct {
 	// AuthMode is the scenario's requested auth mode; empty means dev_token.
@@ -49,7 +53,7 @@ func (o ServeOptions) authMode() string {
 // writes the one-line handshake to stdout, and serves until stdin reaches EOF
 // or ctx is cancelled (the caller wires SIGINT/SIGTERM into ctx).
 func RunServe(ctx context.Context, opts ServeOptions, stdin io.Reader, stdout io.Writer) error {
-	ln, err := net.Listen("tcp", ephemeralLoopback)
+	ln, err := listen("tcp", ephemeralLoopback)
 	if err != nil {
 		return err
 	}
