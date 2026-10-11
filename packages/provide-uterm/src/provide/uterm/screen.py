@@ -12,7 +12,26 @@ from __future__ import annotations
 
 import re
 
-_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-_])")
+# The escape grammar strip_ansi removes, in named parts so the chunk-carry check
+# below (split_incomplete_escape) is built from the SAME pieces and cannot drift:
+#   CSI:  ESC "[" <parameter bytes 0x30-0x3F>* <intermediate bytes 0x20-0x2F>* <final 0x40-0x7E>
+#   Fe:   ESC <one byte 0x40-0x5F>   (a two-byte escape; "[" itself is one, so a
+#         bare "ESC [" with nothing after it is ambiguous until more arrives)
+_ESC = "\x1b"
+_CSI_INTRODUCER = r"\["
+_CSI_PARAMETER_BYTES = r"[0-?]*"
+_CSI_INTERMEDIATE_BYTES = r"[ -/]*"
+_CSI_FINAL_BYTE = r"[@-~]"
+_FE_FINAL_BYTE = r"[@-_]"
+_CSI_PREFIX = _CSI_INTRODUCER + _CSI_PARAMETER_BYTES + _CSI_INTERMEDIATE_BYTES
+_ANSI_ESCAPE_RE = re.compile(f"{_ESC}(?:{_CSI_PREFIX}{_CSI_FINAL_BYTE}|{_FE_FINAL_BYTE})")
+# A proper prefix of something _ANSI_ESCAPE_RE strips: a bare ESC, or a CSI whose
+# parameter/intermediate bytes have not yet reached a final byte.
+_INCOMPLETE_ESCAPE_RE = re.compile(f"{_ESC}(?:{_CSI_PREFIX})?")
+# Longest tail split_incomplete_escape holds back, in characters, ESC included. A
+# real sequence is a handful of bytes; past this the "sequence" is not one (or is
+# hostile), and it is released into the text rather than carried forever.
+MAX_ESCAPE_CARRY = 64
 # Some BBS/telnet servers occasionally leak bare SGR fragments like `1;31m` at line
 # starts without the ESC prefix. Strip only when they look isolated.
 _BARE_SGR_RE = re.compile(r"(?:(?<=^)|(?<=\n)|(?<=\r)|(?<=\s))(?:\d{1,3}(?:;\d{1,3})*)m(?=\x1b|\s|$)")
@@ -46,6 +65,28 @@ def strip_ansi(text: str) -> str:
         Text with all ANSI escape codes removed.
     """
     return normalize_terminal_text(text)
+
+
+def split_incomplete_escape(text: str, max_carry: int = MAX_ESCAPE_CARRY) -> tuple[str, str]:
+    """Split *text* into ``(complete, carry)``: carry is an unterminated trailing escape.
+
+    For text that arrives in chunks: :func:`strip_ansi` sees one chunk at a time,
+    so ``"\x1b[1"`` + ``"msudo"`` would strip to ``"\x1b[1"`` (no final byte, left
+    alone) and ``"msudo"``. The caller strips *complete* now and prepends *carry*
+    to the next chunk, so the whole sequence is stripped once it completes.
+
+    *carry* is non-empty exactly when the text from the LAST ESC to the end is a
+    proper prefix of a sequence strip_ansi removes (a bare ESC, or ``ESC [`` plus
+    parameter/intermediate bytes with no final byte) and is at most *max_carry*
+    characters long. Only the last ESC can start one: no byte of an incomplete
+    sequence is ESC. Built from the same grammar constants as strip_ansi.
+    """
+    start = text.rfind(_ESC)
+    if start < 0 or len(text) - start > max_carry:
+        return text, ""
+    if _INCOMPLETE_ESCAPE_RE.fullmatch(text, start) is None:
+        return text, ""
+    return text[:start], text[start:]
 
 
 def decode_cp437(data: bytes) -> str:
