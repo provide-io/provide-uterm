@@ -23,7 +23,7 @@
       "status": 200,
       "headers": {
         "content-type": "application/json",
-        "content-length": "161"
+        "content-length": "<volatile>"
       },
       "body": {
         "session_id": "recorded",
@@ -42,7 +42,7 @@
       "status": 200,
       "headers": {
         "content-type": "application/json",
-        "content-length": "161"
+        "content-length": "<volatile>"
       },
       "body": {
         "session_id": "recorded",
