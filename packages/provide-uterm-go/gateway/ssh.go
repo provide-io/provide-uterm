@@ -65,6 +65,13 @@ func (g *SshWsGateway) Start(host string, port int) (net.Listener, error) {
 	return net.Listen("tcp", net.JoinHostPort(host, fmt.Sprintf("%d", port)))
 }
 
+// generateHostKey makes the ephemeral ed25519 host key; swappable in tests
+// because key generation from crypto/rand does not fail on demand.
+var generateHostKey = func() (ed25519.PrivateKey, error) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	return priv, err
+}
+
 // hostSigner loads the configured host key or generates an ephemeral ed25519 one.
 func (g *SshWsGateway) hostSigner() (ssh.Signer, error) {
 	if g.ServerKey != "" {
@@ -81,7 +88,7 @@ func (g *SshWsGateway) hostSigner() (ssh.Signer, error) {
 		}
 		return ssh.ParsePrivateKey(pem)
 	}
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	priv, err := generateHostKey()
 	if err != nil {
 		return nil, err
 	}
