@@ -14,6 +14,10 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
+// absPath is filepath.Abs, swappable in tests: Abs only fails when os.Getwd
+// does, which a test cannot provoke portably.
+var absPath = filepath.Abs
+
 // tableSections mirrors config._TABLE_SECTIONS (the sections whose value MUST
 // be a TOML table).
 var tableSections = []string{
@@ -371,7 +375,7 @@ func LoadServerConfig(path string) (*UtermServerConfig, error) {
 		return nil, err
 	}
 	if !filepath.IsAbs(cfg.Recording.Directory) {
-		abs, err := filepath.Abs(filepath.Join(filepath.Dir(path), cfg.Recording.Directory))
+		abs, err := absPath(filepath.Join(filepath.Dir(path), cfg.Recording.Directory))
 		if err != nil {
 			return nil, err
 		}
