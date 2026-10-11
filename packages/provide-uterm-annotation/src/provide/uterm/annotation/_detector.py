@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from provide.uterm.annotation._models import Annotation, AnnotationSpan, DetectionRule
+from provide.uterm.annotation._models import Annotation, AnnotationSpan, DetectionRule, annotation_match_key
 from provide.uterm.annotation._rules import BUILTIN_RULES
 
 _DESCRIPTION_TRUNCATE = 80
@@ -80,6 +80,7 @@ class PatternDetector:
                     source="detector",
                     principal="system",
                     span=AnnotationSpan(from_seq=seq, to_seq=seq),
+                    match_key=annotation_match_key(rule.rule_id, m.group(0)),
                 )
             )
 
