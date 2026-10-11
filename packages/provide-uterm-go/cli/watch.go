@@ -99,6 +99,15 @@ func readWatchToken(token, tokenFile string) string {
 	return strings.TrimSpace(string(data))
 }
 
+// watchHeader builds the WS dial headers: a bearer token when one resolves.
+func watchHeader(token, tokenFile string) http.Header {
+	header := http.Header{}
+	if tok := readWatchToken(token, tokenFile); tok != "" {
+		header.Set("Authorization", "Bearer "+tok)
+	}
+	return header
+}
+
 // runWatch wires the WS reader to the bubbletea program.
 func runWatch(ctx context.Context, tunnelArg, server, layout, token, tokenFile string) error {
 	if ctx == nil {
@@ -110,10 +119,7 @@ func runWatch(ctx context.Context, tunnelArg, server, layout, token, tokenFile s
 		return err
 	}
 	wsURL := watchWSURL(server, tunnelID)
-	header := http.Header{}
-	if tok := readWatchToken(token, tokenFile); tok != "" {
-		header.Set("Authorization", "Bearer "+tok)
-	}
+	header := watchHeader(token, tokenFile)
 
 	model := newWatchModel(tunnelID, layout)
 	program := tea.NewProgram(model, tea.WithContext(ctx), tea.WithAltScreen())

@@ -99,7 +99,7 @@ func runTunnel(ctx context.Context, opts tunnelOptions, out io.Writer) error {
 		return fmt.Errorf("cannot connect to tunnel: %w", err)
 	}
 	defer func() { _ = client.Close() }()
-	if err := client.SendRaw(sigCtx, tunnelclient.OpenTCPFrame(opts.Port)); err != nil {
+	if err := openTunnelChannel(sigCtx, client, tunnelclient.OpenTCPFrame(opts.Port)); err != nil {
 		return fmt.Errorf("cannot open tcp channel: %w", err)
 	}
 

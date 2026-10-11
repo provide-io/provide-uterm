@@ -7,7 +7,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -177,9 +176,8 @@ func serveProxy(ctx context.Context, ln net.Listener, opts proxyOptions) error {
 		defer cancel()
 		return srv.Shutdown(shutdownCtx)
 	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
+		// Never http.ErrServerClosed: only the ctx arm above shuts srv down,
+		// and it returns without reading errCh.
 		return err
 	}
 }

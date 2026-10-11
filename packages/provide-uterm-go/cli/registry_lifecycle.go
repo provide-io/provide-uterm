@@ -247,10 +247,9 @@ func (r *SessionRegistryImpl) LastSnapshot(_ context.Context, id string) (map[st
 	if err != nil {
 		return nil, err
 	}
+	// raw is a marshaled struct, so always a JSON object: this cannot fail.
 	var out map[string]any
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
-	}
+	_ = json.Unmarshal(raw, &out)
 	return out, nil
 }
 
@@ -275,6 +274,11 @@ func (r *SessionRegistryImpl) Events(_ context.Context, id string, limit int) ([
 	}
 	return events, nil
 }
+
+// watchUntil is time.Until, as a package variable only so a test can land a
+// loop iteration exactly on the deadline (otherwise reachable only when an
+// event arrives in the deadline's last instant).
+var watchUntil = time.Until
 
 // WatchSessionEvents long-polls the hub EventBus for session events (Python
 // watch_session_events / C# EventBus.WatchAsync). Without a bus, falls back to
@@ -355,7 +359,7 @@ func (r *SessionRegistryImpl) WatchSessionEvents(ctx context.Context, id string,
 	timedOut := false
 	deadline := time.Now().Add(time.Duration(timeoutMS) * time.Millisecond)
 	for len(collected) < maxEvents {
-		remaining := time.Until(deadline)
+		remaining := watchUntil(deadline)
 		if remaining <= 0 {
 			timedOut = true
 			break

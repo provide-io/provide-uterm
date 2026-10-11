@@ -97,9 +97,16 @@ func applyServerOverrides(cfg *serverconfig.UtermServerConfig, host string, port
 // guard resolves DNS, and a test that proves "a name resolving into private
 // space is refused" must not depend on a real resolver's answer for a name
 // somebody else controls. Production callers pass nothing and get the defaults.
+// The two constructor seams exist so tests can fail steps that cannot fail
+// from a config: telemetry setup is process-global and succeeds once done, and
+// server.New only refuses the nil dependencies this function never passes.
 type buildSeams struct {
 	// webhookResolver replaces net.DefaultResolver in the webhook egress guard.
 	webhookResolver server.EgressResolver
+	// setupTelemetry replaces ptel.SetupTelemetry when non-nil.
+	setupTelemetry func() error
+	// newServer replaces server.New when non-nil.
+	newServer func(server.Deps) (*server.Server, error)
 }
 
 // buildOption mutates [buildSeams].
@@ -138,8 +145,16 @@ func buildServerFromConfig(
 	for _, opt := range opts {
 		opt(&seams)
 	}
+	setupTelemetry := seams.setupTelemetry
+	if setupTelemetry == nil {
+		setupTelemetry = func() error { _, err := ptel.SetupTelemetry(); return err }
+	}
+	newServer := seams.newServer
+	if newServer == nil {
+		newServer = server.New
+	}
 	// App layer: initialise telemetry once, then thread the logger through.
-	if _, err := ptel.SetupTelemetry(); err != nil {
+	if err := setupTelemetry(); err != nil {
 		return nil, err
 	}
 	logger := ptel.GetLogger(ctx, "provide.uterm")
@@ -233,7 +248,7 @@ func buildServerFromConfig(
 
 	webhooks := webhookManagerFor(cfg, bus, tunnelStore, clock, metrics, logger, seams.webhookResolver)
 
-	srv, err := server.New(server.Deps{
+	srv, err := newServer(server.Deps{
 		Hub:              h,
 		Auth:             auth,
 		Authz:            serverauth.NewAuthorizationServiceFromConfig(cfg),
