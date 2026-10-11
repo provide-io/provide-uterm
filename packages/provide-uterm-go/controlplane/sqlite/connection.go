@@ -53,7 +53,7 @@ type conn struct {
 
 // connectSQLite opens a SQLite connection with the baseline bootstrap pragmas
 // applied. Port of control.plane.sqlite.connection.connect_sqlite.
-func connectSQLite(ctx context.Context, databaseURL string, busyTimeoutMS int, wal bool) (*conn, error) {
+func connectSQLite(ctx context.Context, driverName, databaseURL string, busyTimeoutMS int, wal bool) (*conn, error) {
 	dbPath := ResolveDatabasePath(databaseURL)
 	if dbPath != ":memory:" {
 		if dir := filepath.Dir(expandUser(dbPath)); dir != "" {
@@ -65,7 +65,7 @@ func connectSQLite(ctx context.Context, databaseURL string, busyTimeoutMS int, w
 	}
 	// MaxOpenConns(1) + a single grabbed *sql.Conn reproduces Python's single
 	// aiosqlite connection: BEGIN IMMEDIATE and its COMMIT run on the same conn.
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open(driverName, dbPath)
 	if err != nil {
 		return nil, &ConnectionError{msg: fmt.Sprintf(
 			"failed to initialize sqlite control-plane connection: %v", err)}

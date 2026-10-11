@@ -36,6 +36,11 @@ type Engine struct {
 	// deterministically exercising the rowcount!=1 branch (the Python test
 	// monkeypatches _conn.execute for the same purpose).
 	consumeUpdateHook func(ctx context.Context, tokenValue string)
+
+	// driverName is the database/sql driver Open dials. Always "sqlite" in
+	// production; tests point it at a fault-injecting wrapper of the same
+	// driver to reach the error arms only a failing disk or driver can hit.
+	driverName string
 }
 
 // New builds a SQLite Engine from config. Defaults are applied so a Config with
@@ -43,10 +48,11 @@ type Engine struct {
 func New(config cp.Config) *Engine {
 	config = config.Normalized()
 	return &Engine{
-		config: config,
-		caps:   config.Capabilities,
-		txLock: newTxLock(),
-		now:    func() float64 { return float64(time.Now().UnixNano()) / 1e9 },
+		config:     config,
+		caps:       config.Capabilities,
+		txLock:     newTxLock(),
+		now:        func() float64 { return float64(time.Now().UnixNano()) / 1e9 },
+		driverName: "sqlite",
 	}
 }
 
@@ -61,7 +67,7 @@ func (e *Engine) Open(ctx context.Context) error {
 	if e.conn != nil {
 		return nil
 	}
-	c, err := connectSQLite(ctx, e.config.DatabaseURL, 5000, true)
+	c, err := connectSQLite(ctx, e.driverName, e.config.DatabaseURL, 5000, true)
 	if err != nil {
 		return err
 	}
