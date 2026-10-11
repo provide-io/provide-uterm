@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System.Text;
 using System.Text.Json.Nodes;
 using Provide.Uterm.Annotation;
+using Provide.Uterm.Screen;
 using Provide.Uterm.Server;
 
 namespace Provide.Uterm.Tests.Server;
@@ -31,13 +33,16 @@ public sealed class SessionAnnotatorReadPathTests
         public readonly List<Dictionary<string, object?>> Recorded = [];
         public readonly SessionAnnotator Annotator;
 
-        public Harness()
+        public Harness(Func<Provide.Uterm.Annotation.Annotation, string>? keyOf = null)
         {
             Annotator = new SessionAnnotator(new PatternDetector(), () => Recording, data =>
             {
                 Recorded.Add(data);
                 return Task.CompletedTask;
-            });
+            })
+            {
+                KeyOf = keyOf ?? SessionAnnotator.ReadAnnotationKey,
+            };
         }
 
         public Task Term(string data) => Annotator.RecordAsync(Annotator.ScanOutput(data));
@@ -55,9 +60,9 @@ public sealed class SessionAnnotatorReadPathTests
     [Fact]
     public void ConstantsMatchTheReference()
     {
-        Assert.Equal(64, SessionAnnotator.MaxEscapeCarry);
+        Assert.Equal(64, ScreenNormalize.MaxEscapeCarry);
         Assert.Equal(1024, SessionAnnotator.MaxReadAnnotationKeys);
-        Assert.Equal(SessionAnnotator.MaxEscapeCarry, (int)Golden["max_escape_carry"]!);
+        Assert.Equal(ScreenNormalize.MaxEscapeCarry, (int)Golden["max_escape_carry"]!);
         Assert.Equal(SessionAnnotator.MaxReadAnnotationKeys, (int)Golden["max_read_annotation_keys"]!);
     }
 
@@ -68,7 +73,7 @@ public sealed class SessionAnnotatorReadPathTests
         Assert.NotEmpty(cases);
         foreach (var c in cases)
         {
-            var (complete, carry) = SessionAnnotator.SplitIncompleteEscape((string)c!["input"]!);
+            var (complete, carry) = ScreenNormalize.SplitIncompleteEscape((string)c!["input"]!);
             Assert.Equal((string)c["complete"]!, complete);
             Assert.Equal((string)c["carry"]!, carry);
         }
@@ -136,7 +141,7 @@ public sealed class SessionAnnotatorReadPathTests
     {
         var h = new Harness();
 
-        await h.Term("\x1b[" + string.Concat(Enumerable.Repeat("1;", SessionAnnotator.MaxEscapeCarry)));
+        await h.Term("\x1b[" + string.Concat(Enumerable.Repeat("1;", ScreenNormalize.MaxEscapeCarry)));
 
         Assert.Equal("", h.Annotator.EscapeCarry);
     }
@@ -507,5 +512,171 @@ public sealed class SessionAnnotatorReadPathTests
         await h.Snapshot("$ sudo ls\n");
 
         Assert.Equal([Sudo], h.Descriptions);
+    }
+
+    // ------------------------------------------------------------------
+    // An empty key is never deduped
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public async Task AnEmptyKeyIsAlwaysRecordedAndNeverRemembered()
+    {
+        // An annotation the detector did not build carries no key: dedupe on ""
+        // would collapse every such annotation into one.
+        var h = new Harness(_ => "");
+
+        await h.Snapshot("$ sudo ls\n");
+        await h.Snapshot("$ sudo ls\n");
+        Assert.Equal(0, h.Annotator.ReadAnnotationKeyCount);
+        Assert.Equal(0, h.Annotator.PendingSnapshotKeyCount);
+        await h.Term("$ sudo ls\r\n");
+        await h.Snapshot("$ sudo ls\n");
+
+        Assert.Equal([Sudo, Sudo, Sudo, Sudo], h.Descriptions);
+        Assert.Equal(0, h.Annotator.ReadAnnotationKeyCount);
+    }
+
+    [Fact]
+    public async Task AnEmptyKeyDoesNotDisturbTheKeyedMatchesBesideIt()
+    {
+        // Only sudo is keyless here; rm keeps its real key and is deduped as usual.
+        var h = new Harness(a => a.Description == Sudo ? "" : SessionAnnotator.ReadAnnotationKey(a));
+
+        await h.Snapshot("$ sudo ls; rm -rf build\n");
+        Assert.Equal(1, h.Annotator.PendingSnapshotKeyCount);
+        await h.Term("$ sudo ls; rm -rf build\r\n");
+        await h.Snapshot("$ sudo ls; rm -rf build\n");
+
+        Assert.Equal([Sudo, Rm, Sudo, Sudo], h.Descriptions);
+        Assert.Equal(1, h.Annotator.ReadAnnotationKeyCount);
+    }
+
+    // ------------------------------------------------------------------
+    // The recording state is read under the lock its scan uses
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void AStaleReadingCannotResetANewerRecording()
+    {
+        // Thread A reads generation 1 and stalls; meanwhile generation 2 begins
+        // and a scan under it leaves a carry. When A resumes, its stale reading
+        // must not reset generation 2's state.
+        long generation = 1;
+        var stalledThread = -1;
+        using var stalled = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var annotator = new SessionAnnotator(new PatternDetector(), () =>
+        {
+            var seen = Interlocked.Read(ref generation);
+            if (Environment.CurrentManagedThreadId == Volatile.Read(ref stalledThread)
+                && Interlocked.Exchange(ref stalledThread, -1) != -1)
+            {
+                stalled.Set();
+                release.Wait();
+            }
+
+            return seen;
+        }, _ => Task.CompletedTask);
+        annotator.ScanOutput("$ ");
+        Assert.Equal(1, annotator.StateResets);
+
+        var a = new Thread(() =>
+        {
+            Volatile.Write(ref stalledThread, Environment.CurrentManagedThreadId);
+            annotator.ScanSnapshot(new Dictionary<string, object?> { ["screen"] = "$ sudo ls\n" });
+        });
+        a.Start();
+        Assert.True(stalled.Wait(TimeSpan.FromSeconds(10)));
+
+        Interlocked.Exchange(ref generation, 2);
+        annotator.ScanOutput("$ \x1b[1");
+        Assert.Equal(2, annotator.StateResets);
+        Assert.Equal("\x1b[1", annotator.EscapeCarry);
+
+        release.Set();
+        Assert.True(a.Join(TimeSpan.FromSeconds(10)));
+
+        Assert.Equal(2, annotator.StateResets);
+        Assert.Equal("\x1b[1", annotator.EscapeCarry);
+        // A's snapshot ran under generation 2 and left its key pending there.
+        Assert.Equal(1, annotator.PendingSnapshotKeyCount);
+    }
+
+    [Fact]
+    public void ConcurrentScansResetOnlyOncePerGeneration()
+    {
+        // Two threads scan while a third moves the generation forward (with a
+        // spell unrecorded between some of them). Every reset is applied under
+        // the lock in the order readings are taken, so the state never flips
+        // back to an older generation: at most one reset per state entered.
+        long generation = 0;
+        var states = 1; // generation 0 itself
+        var annotator = new SessionAnnotator(
+            new PatternDetector(),
+            () =>
+            {
+                var g = Interlocked.Read(ref generation);
+                return g < 0 ? null : g;
+            },
+            _ => Task.CompletedTask);
+        using var stop = new CancellationTokenSource();
+        var errors = new System.Collections.Concurrent.ConcurrentQueue<Exception>();
+
+        void Scan(Action body)
+        {
+            try
+            {
+                while (!stop.IsCancellationRequested) body();
+            }
+            catch (Exception ex)
+            {
+                errors.Enqueue(ex);
+            }
+        }
+
+        var t1 = new Thread(() => Scan(() => annotator.ScanOutput("$ sudo ls\r\n\x1b[1")));
+        var t2 = new Thread(() => Scan(() =>
+        {
+            annotator.ScanSnapshot(new Dictionary<string, object?> { ["screen"] = "$ rm -rf build\n" });
+            annotator.ScanInput("sudo ls");
+        }));
+        t1.Start();
+        t2.Start();
+        for (var g = 1; g <= 200; g++)
+        {
+            if (g % 10 == 0)
+            {
+                Interlocked.Exchange(ref generation, -1);
+                states++;
+                Thread.Yield();
+            }
+
+            Interlocked.Exchange(ref generation, g);
+            states++;
+            Thread.Yield();
+        }
+
+        stop.Cancel();
+        Assert.True(t1.Join(TimeSpan.FromSeconds(30)));
+        Assert.True(t2.Join(TimeSpan.FromSeconds(30)));
+
+        Assert.Empty(errors);
+        Assert.InRange(annotator.StateResets, 1, states);
+        // Settled on the last generation: further scans reset nothing.
+        var resets = annotator.StateResets;
+        annotator.ScanOutput("x");
+        annotator.ScanInput("x");
+        Assert.Equal(resets, annotator.StateResets);
+    }
+
+    [Fact]
+    public void ASnapshotWithNoScreenReadsAsEmpty()
+    {
+        var h = new Harness();
+
+        Assert.Empty(h.Annotator.ScanSnapshot(new Dictionary<string, object?>()));
+        Assert.Empty(h.Annotator.ScanSnapshot(new Dictionary<string, object?> { ["screen"] = null }));
+        // A non-string screen is read through its text form.
+        Assert.Single(h.Annotator.ScanSnapshot(new Dictionary<string, object?> { ["screen"] = new StringBuilder("$ sudo ls") }));
     }
 }

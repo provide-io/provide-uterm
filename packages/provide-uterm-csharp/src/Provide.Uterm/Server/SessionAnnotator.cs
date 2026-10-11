@@ -49,7 +49,9 @@ namespace Provide.Uterm.Server;
 /// twice, and a pending key never suppresses a later, genuinely new match. If a
 /// snapshot's text reaches the stream only in a later chunk it is recorded a
 /// second time: a duplicate is preferred over a missed annotation. Both sets
-/// are bounded by <see cref="MaxReadAnnotationKeys"/> (cleared when full).</para>
+/// are bounded by <see cref="MaxReadAnnotationKeys"/> (cleared when full). A
+/// match with an EMPTY key is never deduped: it is recorded and added to
+/// neither set.</para>
 ///
 /// <para>The escape carry and both key sets belong to one recording: the
 /// reference clears them in <c>_stop_recording</c>. This port has no separate
@@ -57,18 +59,14 @@ namespace Provide.Uterm.Server;
 /// identified by its <see cref="SessionStatus.RecordingGeneration"/> — so they
 /// are cleared when a scan first sees a different recording state from the last
 /// one it saw: the recording ending, or a new one (a later generation) having
-/// begun, even if no frame arrived while recording was off. A scan that sees
-/// the same state as the last one takes no lock to check it.</para>
+/// begun, even if no frame arrived while recording was off. The state is read,
+/// and any reset applied, inside the same critical section as the scan that
+/// relies on it, so a scan holding a stale reading can never reset a newer
+/// recording's state. The one lock-free path is an unrecorded session that
+/// was already unrecorded at the last scan: it changes nothing and returns.</para>
 /// </summary>
 internal sealed class SessionAnnotator
 {
-    /// <summary>
-    /// Longest escape tail held back between chunks: core's
-    /// <see cref="ScreenNormalize.MaxEscapeCarry"/> (reference: runtime_helpers'
-    /// <c>_MAX_ESCAPE_CARRY</c> alias of <c>MAX_ESCAPE_CARRY</c>).
-    /// </summary>
-    internal const int MaxEscapeCarry = ScreenNormalize.MaxEscapeCarry;
-
     /// <summary>
     /// Bound on each per-recording set of read-path annotation keys; past it the
     /// set is cleared and starts over. Reference: <c>_MAX_READ_ANNOTATION_KEYS = 1024</c>.
@@ -128,6 +126,13 @@ internal sealed class SessionAnnotator
         _record = record;
     }
 
+    /// <summary>
+    /// The dedupe key of a read-path annotation: <see cref="ReadAnnotationKey"/>.
+    /// Replaceable only by tests, to stand in for an annotation the detector
+    /// did not build (whose key is empty).
+    /// </summary>
+    internal Func<Annotation.Annotation, string> KeyOf { get; init; } = ReadAnnotationKey;
+
     /// <summary>The escape tail held back from the last streamed chunk (tests).</summary>
     internal string EscapeCarry
     {
@@ -164,16 +169,23 @@ internal sealed class SessionAnnotator
     /// </summary>
     public IReadOnlyList<Annotation.Annotation> ScanSnapshot(IReadOnlyDictionary<string, object?> frame)
     {
-        if (!IsRecording()) return [];
+        if (SettledUnrecorded()) return [];
         var screen = frame.TryGetValue("screen", out var s) ? s?.ToString() ?? "" : "";
         var text = ScreenNormalize.StripAnsi(screen);
         lock (_gate)
         {
+            if (!ObserveRecording()) return [];
             _eventSeq++;
             var fresh = new List<Annotation.Annotation>();
             foreach (var annotation in _detector.Detect("read", text, _eventSeq))
             {
-                var key = ReadAnnotationKey(annotation);
+                var key = KeyOf(annotation);
+                if (key.Length == 0)
+                {
+                    fresh.Add(annotation);
+                    continue;
+                }
+
                 if (_readAnnotationKeys.Contains(key)) continue;
                 AddBounded(_readAnnotationKeys, key);
                 AddBounded(_snapshotOnlyKeys, key);
@@ -201,14 +213,21 @@ internal sealed class SessionAnnotator
     /// </summary>
     public IReadOnlyList<Annotation.Annotation> ScanOutput(string data)
     {
-        if (string.IsNullOrEmpty(data) || !IsRecording()) return [];
+        if (string.IsNullOrEmpty(data) || SettledUnrecorded()) return [];
         lock (_gate)
         {
-            (var text, _escapeCarry) = SplitIncompleteEscape(_escapeCarry + data);
+            if (!ObserveRecording()) return [];
+            (var text, _escapeCarry) = ScreenNormalize.SplitIncompleteEscape(_escapeCarry + data);
             var fresh = new List<Annotation.Annotation>();
             foreach (var annotation in _readStream.Detect("read", ScreenNormalize.StripAnsi(text), _eventSeq))
             {
-                var key = ReadAnnotationKey(annotation);
+                var key = KeyOf(annotation);
+                if (key.Length == 0)
+                {
+                    fresh.Add(annotation);
+                    continue;
+                }
+
                 if (_snapshotOnlyKeys.Remove(key)) continue;
                 AddBounded(_readAnnotationKeys, key);
                 fresh.Add(annotation);
@@ -224,28 +243,23 @@ internal sealed class SessionAnnotator
     /// <summary>Input on its way to the connector, as "send".</summary>
     public IReadOnlyList<Annotation.Annotation> ScanInput(string data)
     {
-        if (!IsRecording()) return [];
+        if (SettledUnrecorded()) return [];
         lock (_gate)
         {
+            if (!ObserveRecording()) return [];
             _eventSeq++;
             return _sendStream.Detect("send", data, _eventSeq);
         }
     }
 
     /// <summary>
-    /// Core's <see cref="ScreenNormalize.SplitIncompleteEscape"/> at
-    /// <see cref="MaxEscapeCarry"/> (reference: runtime_helpers'
-    /// <c>_split_incomplete_escape</c> alias).
-    /// </summary>
-    internal static (string Complete, string Carry) SplitIncompleteEscape(string text) =>
-        ScreenNormalize.SplitIncompleteEscape(text);
-
-    /// <summary>
     /// Identity of a read-path annotation for stream/snapshot dedupe: the
     /// detector's <see cref="Annotation.Annotation.MatchKey"/> (SHA-256 of rule
     /// id + full matched text). It tells apart two different credentials of one
     /// rule, which share a label and description, and it is a digest, so the
-    /// key sets never hold a raw secret. Reference: <c>_read_annotation_key</c>.
+    /// key sets never hold a raw secret. It is "" for an annotation the
+    /// detector did not build, and an empty key is never deduped (it would
+    /// collapse every such annotation into one). Reference: <c>_read_annotation_key</c>.
     /// </summary>
     internal static string ReadAnnotationKey(Annotation.Annotation annotation) => annotation.MatchKey;
 
@@ -257,31 +271,39 @@ internal sealed class SessionAnnotator
     }
 
     /// <summary>
-    /// Whether the session is recorded now. When the recording state differs
-    /// from the last one seen — the recording ended, or another began — the
-    /// carry and keys belonged to a recording that is over, so they go with it
-    /// (reference: <c>_stop_recording</c>). Only that transition takes the lock.
+    /// Whether the session is recorded now; the caller holds <c>_gate</c> and
+    /// scans under the same hold. When the recording state differs from the
+    /// last one seen — the recording ended, or another began — the carry and
+    /// keys belonged to a recording that is over, so they go with it
+    /// (reference: <c>_stop_recording</c>). Reading the state under the lock
+    /// that the scan uses is what keeps a stale reading from resetting a newer
+    /// recording: every reading is applied in the order the lock grants it.
     /// </summary>
-    private bool IsRecording()
+    private bool ObserveRecording()
     {
         var current = _recording() ?? NotRecording;
-        if (Volatile.Read(ref _observedRecording) != current)
+        if (_observedRecording != current)
         {
-            lock (_gate)
-            {
-                if (_observedRecording != current)
-                {
-                    _escapeCarry = "";
-                    _readAnnotationKeys.Clear();
-                    _snapshotOnlyKeys.Clear();
-                    _stateResets++;
-                    Volatile.Write(ref _observedRecording, current);
-                }
-            }
+            _escapeCarry = "";
+            _readAnnotationKeys.Clear();
+            _snapshotOnlyKeys.Clear();
+            _stateResets++;
+            Volatile.Write(ref _observedRecording, current);
         }
 
         return current != NotRecording;
     }
+
+    /// <summary>
+    /// The lock-free path: the session is not recorded and was not at the last
+    /// scan either, so there is nothing to reset and nothing to scan. Safe
+    /// without the lock because it changes nothing: it is the same as a scan
+    /// that ran, under the lock, at the moment the delegate was read — the
+    /// last observation being "not recorded" too, no state existed to clear.
+    /// Any other case takes the lock and decides there.
+    /// </summary>
+    private bool SettledUnrecorded() =>
+        _recording() is null && Volatile.Read(ref _observedRecording) == NotRecording;
 
     /// <summary>Record each match as an <c>annotation</c> event, payload as the reference's <c>to_dict()</c>.</summary>
     public async Task RecordAsync(IReadOnlyList<Annotation.Annotation> annotations)
