@@ -62,10 +62,10 @@ public sealed partial class UtermServer
     }
 
     /// <summary>
-    /// Write one annotation to a session: the hub's event ring (what a watcher
-    /// sees live) and the recording store. The operator's annotate route and the
-    /// detector (<see cref="SessionAnnotator"/>) both come through here, so an
-    /// automatic annotation lands exactly where a manual one does.
+    /// Write one operator annotation to a session: the hub's event ring (what a
+    /// watcher sees live) and the recording store. Only the annotate route comes
+    /// through here; the detector's annotations take
+    /// <see cref="RecordDetectedAnnotationAsync"/>.
     /// </summary>
     private async Task<(double Ts, int Seq)> RecordAnnotationAsync(
         string sessionId, Dictionary<string, object?> annotationData)
@@ -98,6 +98,59 @@ public sealed partial class UtermServer
             },
         }).ConfigureAwait(false);
         return (ts, seq);
+    }
+
+    /// <summary>
+    /// The redactor every automatic annotation passes before it is recorded:
+    /// the reference's <c>_build_recording_redactor(recording.redact_sensitive)</c>
+    /// (<c>server/runtime_helpers.py</c>) — the default rule set when
+    /// <c>redact_sensitive</c> is on (the default), none when it is off.
+    /// </summary>
+    private string RedactForRecording(string text) =>
+        _deps.Config.Recording.RedactSensitive
+            ? (_recordingRedactor ??= new Redaction.StreamRedactor(Redaction.RedactionDefaults.DefaultRules()))
+                .Redact(text)
+            : text;
+
+    /// <summary>Built on first use; it holds no state, so a racing second build is harmless.</summary>
+    private Redaction.StreamRedactor? _recordingRedactor;
+
+    /// <summary>
+    /// Write one detector annotation (<see cref="SessionAnnotator"/>) to the
+    /// session's recording, and nowhere else.
+    ///
+    /// <para>The reference's runtime logs its automatic annotations only to the
+    /// recording logger (<c>_log_snapshot</c>, <c>_scan_output</c> and
+    /// <c>_log_send</c> each call <c>logger.log_event("annotation", ...)</c>):
+    /// they never enter the hub's live event ring. They used to come through
+    /// <see cref="RecordAnnotationAsync"/>, which put each one in the ring — where
+    /// every watcher reads it — and wrote it to the store unredacted. A rule
+    /// whose description embeds the match (up to 80 characters of it) could
+    /// carry a credential both places.</para>
+    ///
+    /// <para>Every string field passes the recording redactor first. That is
+    /// stricter than the reference as written: its <c>SessionLogger</c> redacts
+    /// keys, screens and wire text, but <c>log_event</c> writes its payload as
+    /// given.</para>
+    /// </summary>
+    private Task RecordDetectedAnnotationAsync(string sessionId, Dictionary<string, object?> annotationData)
+    {
+        var data = new Dictionary<string, object?>(annotationData.Count);
+        foreach (var (key, value) in annotationData)
+        {
+            data[key] = value is string text ? RedactForRecording(text) : value;
+        }
+
+        return _recording.AppendEventsAsync(sessionId, new[]
+        {
+            new Event
+            {
+                ["ts"] = _clock.Wall(),
+                ["event"] = "annotation",
+                ["data"] = data,
+                ["session_id"] = sessionId,
+            },
+        });
     }
 
     private async Task<IResult> HandleRecordingMeta(HttpContext ctx, string sessionId)
