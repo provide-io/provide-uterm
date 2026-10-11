@@ -96,6 +96,14 @@ public static class Root
         w.WriteLine($"Version: {Version}");
     }
 
+    // Long flags that never take a value. Every other long flag consumes the
+    // next argument as its value even when it begins with '-' (base64url
+    // tokens do ~1 time in 64), matching the Go port's pflag parsing.
+    private static readonly HashSet<string> BooleanFlags = new(StringComparer.Ordinal)
+    {
+        "allow-unauthenticated", "help", "insecure-ssh", "once", "version",
+    };
+
     internal static Dictionary<string, string> ParseFlags(string[] args)
     {
         var flags = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -117,7 +125,7 @@ public static class Root
                 {
                     flags[key[..eq]] = key[(eq + 1)..];
                 }
-                else if (i + 1 < args.Length && !args[i + 1].StartsWith('-'))
+                else if (i + 1 < args.Length && !BooleanFlags.Contains(key))
                 {
                     flags[key] = args[++i];
                 }
