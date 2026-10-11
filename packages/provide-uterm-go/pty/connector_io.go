@@ -146,6 +146,7 @@ func md5Hex(s string) string {
 }
 
 // isDarwin reports whether the host is macOS (for DYLD vs LD_PRELOAD selection).
-func isDarwin() bool {
+// A variable so a test can exercise both injection variants on one host.
+var isDarwin = func() bool {
 	return runtime.GOOS == "darwin"
 }

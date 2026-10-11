@@ -36,10 +36,14 @@ func lookupShell(uid int, name string) string {
 	return defaultShell
 }
 
+// passwdPath is the passwd database read by shellFromPasswd; a variable so a
+// test can point it at a fixture or a missing file.
+var passwdPath = "/etc/passwd"
+
 // shellFromPasswd scans /etc/passwd for a line matching name (or uid) and
 // returns its shell field, or "" when no match / the file is unreadable.
 func shellFromPasswd(uid int, name string) string {
-	f, err := os.Open("/etc/passwd")
+	f, err := os.Open(passwdPath)
 	if err != nil {
 		return ""
 	}

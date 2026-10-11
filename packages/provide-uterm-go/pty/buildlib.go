@@ -17,7 +17,8 @@ package pty
 // and CaptureConnector) IS ported and fully exercised; only the C injection
 // artifact is absent. With no library path the connector simply does not set
 // LD_PRELOAD/DYLD, exactly as the Python path behaves when the library was not
-// built (_build.get_capture_lib_path → None).
-func getCaptureLibPath() string {
+// built (_build.get_capture_lib_path → None). It is a variable so a test can
+// supply a library path and check the injection variables the connector sets.
+var getCaptureLibPath = func() string {
 	return ""
 }
