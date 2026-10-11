@@ -4,24 +4,38 @@
 //
 
 using Provide.Uterm.Cli;
+using Provide.Uterm.Conformance;
 
 namespace Provide.Uterm.Tests.Cli;
 
-// A value flag must keep a value that begins with '-': DevIdp worker tokens are
-// base64url, so ~1 in 64 starts with '-', and `--token <tok>` used to drop it.
+// DevIdp worker tokens are base64url, so ~1 in 64 starts with '-'. `--token <tok>`
+// used to drop such a token silently; like the Python CLI (argparse), the
+// separate-argument form is now rejected and `--token=<tok>` is the way to pass it.
 public class RootParseFlagsTests
 {
     [Theory]
     [InlineData("-abc")]
     [InlineData("--abc")]
-    [InlineData("-")]
     [InlineData("--")]
-    public void ValueFlag_SeparateArg_KeepsDashValue(string value)
+    [InlineData("--once")]
+    public void ValueFlag_SeparateArg_OptionLikeValue_IsRejected(string value)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => Root.ParseFlags(["--token", value, "--url", "ws://h/t"]));
+        Assert.Contains("argument --token: expected one argument", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("--token=VALUE", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("-")]
+    [InlineData("-5")]
+    [InlineData("-.5")]
+    [InlineData("-1.5")]
+    [InlineData("-a b")]
+    public void ValueFlag_SeparateArg_ArgparseValue_IsKept(string value)
     {
         var f = Root.ParseFlags(["--token", value, "--url", "ws://h/t"]);
         Assert.Equal(value, f["token"]);
         Assert.Equal("ws://h/t", f["url"]);
-        Assert.False(f.ContainsKey("_0"));
     }
 
     [Theory]
@@ -37,11 +51,10 @@ public class RootParseFlagsTests
     }
 
     [Fact]
-    public void ValueFlag_ValueLooksLikeBooleanFlag_IsStillTheValue()
+    public void ShortPort_OptionLikeValue_IsRejected()
     {
-        var f = Root.ParseFlags(["--token", "--once"]);
-        Assert.Equal("--once", f["token"]);
-        Assert.False(f.ContainsKey("once"));
+        var ex = Assert.Throws<ArgumentException>(() => Root.ParseFlags(["-p", "-x"]));
+        Assert.Contains("argument -p: expected one argument", ex.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -52,10 +65,10 @@ public class RootParseFlagsTests
     [InlineData("version")]
     public void BooleanFlag_DoesNotConsumeNextArg(string flag)
     {
-        var f = Root.ParseFlags([$"--{flag}", "-abc", "pos"]);
+        var f = Root.ParseFlags([$"--{flag}", "--token=-abc", "pos"]);
         Assert.Equal("true", f[flag]);
+        Assert.Equal("-abc", f["token"]);
         Assert.Equal("pos", f["_0"]);
-        Assert.False(f.ContainsKey("abc"));
     }
 
     [Fact]
@@ -66,12 +79,20 @@ public class RootParseFlagsTests
     }
 
     [Fact]
-    public void TunnelArgs_TokenStartingWithDash_IsKept()
+    public void Execute_Tunnel_DashToken_SeparateArg_FailsWithUsageError()
     {
-        // Previously "--token" parsed as "true" and "-tok_9x" was dropped, so the
-        // tunnel client authenticated with the literal bearer "true".
-        var f = Root.ParseFlags(["--url", "ws://127.0.0.1:9/tunnel", "--token", "-tok_9x", "--once"]);
-        Assert.Equal("-tok_9x", f["token"]);
-        Assert.Equal("true", f["once"]);
+        using var e = new StringWriter();
+        var code = Root.Execute(["tunnel", "--url", "ws://127.0.0.1:9/tunnel", "--token", "-tok_9x", "--once"], TextWriter.Null, e);
+        Assert.Equal(1, code);
+        Assert.Contains("error: argument --token: expected one argument", e.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LiveDriver_DashToken_SeparateArg_FailsWithUsageError()
+    {
+        using var e = new StringWriter();
+        var code = await LiveDriver.ExecuteAsync(["client", "--token", "-tok_9x"], new StringWriter(), e);
+        Assert.Equal(LiveDriver.UsageExitCode, code);
+        Assert.Contains("error: argument --token: expected one argument", e.ToString(), StringComparison.Ordinal);
     }
 }
