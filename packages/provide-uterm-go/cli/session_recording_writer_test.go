@@ -6,10 +6,13 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -233,8 +236,10 @@ func TestAFailedBatchIsRetriedInOrder(t *testing.T) {
 	}
 }
 
-// A recording that cannot be closed keeps what it could not write; the next
-// recording's start writes it first, so it lands before the new log_start.
+// A recording that cannot be closed keeps what it could not write, for that
+// recording alone; the next attempt's start retries the close, so it lands,
+// log_stop included, before the new log_start. The new connection does not
+// inherit the old failure.
 func TestAnUnwrittenRecordingIsWrittenBeforeTheNextStarts(t *testing.T) {
 	store := &failAfter{InMemoryStore: recording.NewInMemoryStore()}
 	cfg := testRecordingConfig()
@@ -248,8 +253,81 @@ func TestAnUnwrittenRecordingIsWrittenBeforeTheNextStarts(t *testing.T) {
 	}
 	store.allow(100)
 	rec.AttemptStarted()
+	must(t, rec.Connected())
 	rec.AttemptEnded(nil)
-	want := []string{"log_start", "runtime_started", "log_start", "log_stop"}
+	want := []string{"log_start", "runtime_started", "log_stop", "log_start", "runtime_started", "log_stop"}
+	if got := eventNames(t, store); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+}
+
+// syncBuffer is a log sink safe to write from the periodic flusher.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// A recording whose close fails at its end and again at the next start is
+// dropped with a warning naming what was lost -- never written after the new
+// recording's log_start -- and the new connection starts clean: its
+// Connected is not failed by the old recording's error.
+func TestAnUnwritableRecordingIsDroppedNotInterleaved(t *testing.T) {
+	store := &failAfter{InMemoryStore: recording.NewInMemoryStore()}
+	logs := &syncBuffer{}
+	rec := newSessionRecorder("s1", store, testRecordingConfig(), nil, slog.New(slog.NewTextHandler(logs, nil)))
+	rec.setEnabled(true)
+	rec.AttemptStarted()
+	must(t, rec.Connected())
+	must(t, rec.InputReceived("old"))
+	rec.AttemptEnded(nil) // drain fails: runtime_started and send stay queued
+	rec.AttemptStarted()  // the retried close fails too: dropped
+	if !strings.Contains(logs.String(), "msg=hosted_session_recording_dropped session_id=s1 unwritten_entries=2") {
+		t.Fatalf("the dropped recording was not reported: %s", logs)
+	}
+	store.allow(100)
+	must(t, rec.Connected())
+	must(t, rec.InputReceived("new"))
+	rec.AttemptEnded(nil)
+	rec.AttemptStarted() // nothing left over to settle
+	rec.AttemptEnded(nil)
+	want := []string{"log_start", "log_start", "runtime_started", "send", "log_stop", "log_start", "log_stop"}
+	if got := eventNames(t, store); !reflect.DeepEqual(got, want) {
+		t.Fatalf("events = %v, want %v", got, want)
+	}
+	if sends := entries(t, store, "send"); len(sends) != 1 || sends[0]["data"].(map[string]any)["keys"] != "new" {
+		t.Fatalf("sends = %v, want only the new recording's", sends)
+	}
+	if n := strings.Count(logs.String(), "hosted_session_recording_dropped"); n != 1 {
+		t.Fatalf("dropped reported %d times, want once", n)
+	}
+}
+
+// A recording left unclosed is settled at the next attempt's start even when
+// that attempt does not record.
+func TestAnUnwrittenRecordingIsSettledWhenTheNextIsNotRecorded(t *testing.T) {
+	store := &failAfter{InMemoryStore: recording.NewInMemoryStore()}
+	rec := newSessionRecorder("s1", store, testRecordingConfig(), nil, nil)
+	rec.setEnabled(true)
+	rec.AttemptStarted()
+	must(t, rec.Connected())
+	rec.AttemptEnded(nil)
+	store.allow(100)
+	rec.setEnabled(false)
+	rec.AttemptStarted()
+	rec.AttemptEnded(nil)
+	want := []string{"log_start", "runtime_started", "log_stop"}
 	if got := eventNames(t, store); !reflect.DeepEqual(got, want) {
 		t.Fatalf("events = %v, want %v", got, want)
 	}
@@ -403,11 +481,12 @@ func TestAWriterKeepsWhatTheStoreRefuses(t *testing.T) {
 	if w.EndSession("s1") == nil || ends.ended != 0 {
 		t.Fatalf("EndSession closed a recording with %d batch unwritten", len(w.queue))
 	}
-	// StartSession opens the next recording even so.
-	must(t, w.StartSession("s1", nil))
+	if n := w.unwritten(); n != 1 {
+		t.Fatalf("unwritten = %d, want the refused batch's one entry", n)
+	}
 	ends.allow(1)
 	must(t, w.EndSession("s1"))
-	if ends.ended != 1 || len(w.queue) != 0 {
+	if ends.ended != 1 || w.unwritten() != 0 {
 		t.Fatalf("ended = %d, queue = %v after the store recovered", ends.ended, w.queue)
 	}
 }
