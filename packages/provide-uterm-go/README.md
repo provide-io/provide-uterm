@@ -119,16 +119,16 @@ were derived — see the package doc and the introducing commit).
 ## Quality gate
 
 ```bash
-make quality-gate   # fmt-check, vet, golangci-lint, race tests, coverage >= 97.8%
+make quality-gate   # fmt-check, vet, golangci-lint, race tests, coverage = 100%
 ```
 
-Library/wire packages are held at (or within a hair of) 100% statement
-coverage; the whole-module floor is `COVER_THRESHOLD=97.8` (measured
-**~98.0%** after filtering `cmd/` + litevirt glue + the `vnc/gen/` protoc
-output — see the `cover` target for why each is out). Remaining residual is
-live-socket/OS-signal/fault-injection-only branches in manager/server/pty/cli
-(see the Makefile header). `go vet`, `golangci-lint`, and `-race` cleanliness
-are enforced across every package. New files need the SPDX header block.
+Every statement in the cover profile is executed: the floor is
+`COVER_THRESHOLD=100.0`, measured after filtering `cmd/`, `benchmarks/` and the
+`vnc/gen/` protoc output (see the `cover` target for why each is out). OS,
+socket and encoder failure arms are reached through package-level seams that
+default to the real call; arms that provably cannot run are deleted rather than
+excluded (see the Makefile header). `go vet`, `golangci-lint`, and `-race`
+cleanliness are enforced across every package. New files need the SPDX header block.
 `testdata/` golden corpora are excluded from detect-secrets (synthetic test
 vectors, not credentials).
 

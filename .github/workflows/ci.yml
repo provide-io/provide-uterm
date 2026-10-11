@@ -263,7 +263,10 @@ jobs:
         env:
           PYTHON: python
           CI: "true"
-        run: make quality-gate
+        # The Makefile's 100 is the Linux floor. Unix-only lines stay in the
+        # denominator but cannot run on this runner, so Windows holds its last
+        # measured floor; raise it from the cobertura report uploaded below.
+        run: make quality-gate COVER_THRESHOLD=97.4
       # Keep the cobertura reports. The C# line count drifts a few lines between
       # runs of identical code, and the only way that was ever diagnosed was by
       # diffing two reports (which found six lines in Hub/Lease.Expiry.cs that
