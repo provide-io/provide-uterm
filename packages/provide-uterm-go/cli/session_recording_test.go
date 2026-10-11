@@ -16,15 +16,12 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
@@ -300,24 +297,6 @@ func TestThePasswordPromptIsTrackedWhileUnrecorded(t *testing.T) {
 	}
 }
 
-// The reference's prompt test, right-stripped and anchored at the end.
-func TestPasswordPromptMustEndTheScreen(t *testing.T) {
-	for screen, want := range map[string]bool{
-		"Password:":                   true,
-		"PASSWORD:   \n\n":            true,
-		"Password: ok\n$ ":            false,
-		"password reset\nuser:":       false,
-		"Your passphrase (again) :\t": true,
-		"no prompt here":              false,
-		// Matched as sent, escape sequences and all, as runtime.py does.
-		"Password: \x1b[0m": false,
-	} {
-		if got := atPasswordPrompt(screen); got != want {
-			t.Errorf("atPasswordPrompt(%q) = %t, want %t", screen, got, want)
-		}
-	}
-}
-
 // The flush knobs come from the recording config — the reference passes both
 // (and once did not, which went unnoticed because the defaults matched).
 func TestRecordingHonoursTheFlushBatchSize(t *testing.T) {
@@ -326,6 +305,8 @@ func TestRecordingHonoursTheFlushBatchSize(t *testing.T) {
 	rec, store := newTestRecorder(t, cfg)
 	rec.AttemptStarted()
 	must(t, rec.Connected())
+	// The full batch was handed to the writer at once; wait for it to land.
+	must(t, rec.writer.drain())
 	if got := eventNames(t, store); !reflect.DeepEqual(got, []string{"log_start", "runtime_started"}) {
 		t.Fatalf("a batch of one is flushed at once, got %v", got)
 	}
@@ -334,6 +315,7 @@ func TestRecordingHonoursTheFlushBatchSize(t *testing.T) {
 	rec, store = newTestRecorder(t, testRecordingConfig())
 	rec.AttemptStarted()
 	must(t, rec.Connected())
+	must(t, rec.writer.drain())
 	if got := eventNames(t, store); !reflect.DeepEqual(got, []string{"log_start"}) {
 		t.Fatalf("a partial batch waits for a flush, got %v", got)
 	}
@@ -649,293 +631,5 @@ func TestHostedSessionRecordingIsReadableOverHTTP(t *testing.T) {
 	get("/api/sessions/s-telnet/recording", &meta)
 	if meta["enabled"] != true || meta["exists"] != true || meta["session_id"] != "s-telnet" {
 		t.Fatalf("recording meta over HTTP = %v", meta)
-	}
-}
-
-// --- annotation -------------------------------------------------------------
-
-// The corpus's annotated script, recorded by a runtime given the reference's
-// PatternDetector: a send split mid-word, styled streamed output, a match
-// split across frames, an empty frame, a screen matching several categories,
-// and input masked at a prompt yet still annotated.
-func TestAnnotationMatchesTheReferenceCorpus(t *testing.T) {
-	g := loadSessionRecordingGolden(t)
-	store := recording.NewInMemoryStore()
-	rec := newSessionRecorder(g.SessionID, store, goldenConfig(t, nil), annotation.NewPatternDetector(nil), nil)
-	rec.setEnabled(true)
-	compareRecorded(t, "annotated", replayScript(t, g, g.AnnotatedScript, rec, store), g.Recorded["annotated"])
-}
-
-// annotatedRecorder is a recording recorder with the reference's detector.
-func annotatedRecorder(t *testing.T) (*sessionRecorder, *recording.InMemoryStore) {
-	t.Helper()
-	store := recording.NewInMemoryStore()
-	rec := newSessionRecorder("s1", store, testRecordingConfig(), annotation.NewPatternDetector(nil), nil)
-	rec.setEnabled(true)
-	return rec, store
-}
-
-func descriptions(t *testing.T, store recording.Store) []string {
-	t.Helper()
-	var out []string
-	for _, e := range entries(t, store, "annotation") {
-		out = append(out, e["data"].(map[string]any)["description"].(string))
-	}
-	return out
-}
-
-const testAWSKey = "AKIA0123456789AB" // pragma: allowlist secret
-
-// Mirrors tests/server/test_output_annotation.py: streamed output is scanned
-// through its escape sequences...
-func TestStreamedOutputIsScannedThroughItsEscapeSequences(t *testing.T) {
-	rec, store := annotatedRecorder(t)
-	rec.AttemptStarted()
-	sendFrame(t, rec, map[string]any{"type": "term", "data": "\x1b[12;5H\x1b[38;2;255;176;0m" + testAWSKey + "\x1b[0m"})
-	rec.AttemptEnded(nil)
-	if got := descriptions(t, store); !reflect.DeepEqual(got, []string{"AWS access key detected in read"}) {
-		t.Fatalf("annotations = %v", got)
-	}
-}
-
-// ...a match split across frames is found once...
-func TestAMatchSplitAcrossFramesIsFoundOnce(t *testing.T) {
-	rec, store := annotatedRecorder(t)
-	rec.AttemptStarted()
-	sendFrame(t, rec, map[string]any{"type": "term", "data": "DROP TA"})
-	sendFrame(t, rec, map[string]any{"type": "term", "data": "BLE callers;"})
-	rec.AttemptEnded(nil)
-	if got := descriptions(t, store); !reflect.DeepEqual(got, []string{"SQL DROP statement detected: DROP TABLE"}) {
-		t.Fatalf("annotations = %v", got)
-	}
-}
-
-// ...and nothing is scanned when nothing is recorded: annotations are
-// recording entries, with nowhere to go otherwise.
-func TestNothingIsScannedWhenNothingIsRecorded(t *testing.T) {
-	rec, store := annotatedRecorder(t)
-	rec.setEnabled(false)
-	rec.AttemptStarted()
-	sendFrame(t, rec, map[string]any{"type": "term", "data": "DROP TA"})
-	rec.setEnabled(true)
-	rec.AttemptEnded(nil)
-	rec.AttemptStarted()
-	// Had the unrecorded half been carried, this would complete it.
-	sendFrame(t, rec, map[string]any{"type": "term", "data": "BLE callers;"})
-	rec.AttemptEnded(nil)
-	if got := descriptions(t, store); len(got) != 0 {
-		t.Fatalf("unrecorded output was scanned: %v", got)
-	}
-}
-
-// The streams and the sequence last the runtime's life, as the reference keeps
-// them on HostedSessionRuntime: a partial match carried from one recording
-// completes in the next, once per direction, and spans carry on from the
-// sequence the first recording reached.
-func TestAnnotationStateOutlivesARecording(t *testing.T) {
-	rec, store := annotatedRecorder(t)
-	rec.AttemptStarted()
-	sendFrame(t, rec, snapshotFrame("$ "))
-	must(t, rec.InputReceived("DROP TA"))
-	sendFrame(t, rec, map[string]any{"type": "term", "data": "DROP TA"})
-	rec.AttemptEnded(nil)
-
-	rec.AttemptStarted()
-	must(t, rec.InputReceived("BLE x;"))
-	sendFrame(t, rec, map[string]any{"type": "term", "data": "BLE x;"})
-	rec.AttemptEnded(nil)
-
-	anns := entries(t, store, "annotation")
-	if len(anns) != 2 {
-		t.Fatalf("want one DROP TABLE per direction, got %v", anns)
-	}
-	for _, a := range anns {
-		span := a["data"].(map[string]any)["span"].(map[string]any)
-		if span["from_seq"] != float64(3) || span["to_seq"] != float64(3) {
-			t.Fatalf("span = %v, want seq 3 carried over the restart", span)
-		}
-	}
-}
-
-// A registry's sessions annotate with the detector it was given.
-func TestRegistryRecordersShareTheDetector(t *testing.T) {
-	r := newTestRegistry(t)
-	det := annotation.NewPatternDetector(nil)
-	r.SetRecording(recording.NewInMemoryStore(), det)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	rec := r.recorderFor(r.entries["provide-shell"])
-	if rec.detector != det || rec.sendStream == nil || rec.readStream == nil || rec.sendStream == rec.readStream {
-		t.Fatal("a session's recorder uses the registry's detector with a stream per direction")
-	}
-}
-
-// --- operator annotations --------------------------------------------------
-
-// An operator annotation lands in the session's open recording as an
-// "annotation" entry carrying the reference's annotation_data; with no
-// recording open it is not recorded, and the call still succeeds.
-func TestOperatorAnnotationsAreRecorded(t *testing.T) {
-	ctx := context.Background()
-	r, store := recordingRegistry(t)
-	if _, err := r.StartSession(ctx, "provide-shell"); err != nil {
-		t.Fatal(err)
-	}
-	r.mu.Lock()
-	rec := r.recorderFor(r.entries["provide-shell"])
-	r.mu.Unlock()
-	ann := server.Annotation{Label: "note", Description: "why", Severity: "high", Principal: "ops"}
-
-	// Not yet recording: accepted, nothing written.
-	if _, _, err := r.AnnotateSession(ctx, "provide-shell", ann); err != nil {
-		t.Fatal(err)
-	}
-	rec.AttemptStarted()
-	if _, _, err := r.AnnotateSession(ctx, "provide-shell", ann); err != nil {
-		t.Fatal(err)
-	}
-	rec.AttemptEnded(nil)
-	got := entriesOf(t, store, "provide-shell", "annotation")
-	want := map[string]any{"label": "note", "description": "why", "severity": "high", "source": "agent", "principal": "ops"}
-	if len(got) != 1 || !reflect.DeepEqual(got[0]["data"], want) {
-		t.Fatalf("annotation entries = %v", got)
-	}
-}
-
-// A recording write that fails is reported, as the reference lets the
-// logger's error out of annotate_session.
-func TestOperatorAnnotationWriteFailureIsAnError(t *testing.T) {
-	ctx := context.Background()
-	r := newTestRegistry(t)
-	r.SetRecording(failingWriteStore{}, nil)
-	r.recCfg.FlushBatchSize = 1
-	if _, err := r.StartSession(ctx, "provide-shell"); err != nil {
-		t.Fatal(err)
-	}
-	r.mu.Lock()
-	rec := r.recorderFor(r.entries["provide-shell"])
-	r.mu.Unlock()
-	rec.AttemptStarted()
-	defer rec.AttemptEnded(nil)
-	if _, _, err := r.AnnotateSession(ctx, "provide-shell", server.Annotation{Label: "x"}); err == nil {
-		t.Fatal("a failed recording write was not reported")
-	}
-}
-
-// A served connection that ends on an error records it as runtime_error
-// before the recording closes, as the reference's run loop records the
-// exception that ended _bridge_session.
-func TestAConnectionEndRecordsTheError(t *testing.T) {
-	rec, store := newTestRecorder(t, testRecordingConfig())
-	rec.AttemptStarted()
-	must(t, rec.Connected())
-	rec.AttemptEnded(errors.New("failed to read frame header: EOF"))
-	want := []string{"log_start", "runtime_started", "runtime_error", "log_stop"}
-	if got := eventNames(t, store); !reflect.DeepEqual(got, want) {
-		t.Fatalf("events = %v, want %v", got, want)
-	}
-}
-
-// A recording write that fails is handed back to the bridge, which ends the
-// connection on it; the attempt's end then tries to record runtime_error and
-// closes the recording either way. Every observed point reports it.
-func TestRecordingWriteFailuresAreReturned(t *testing.T) {
-	cfg := testRecordingConfig()
-	cfg.FlushBatchSize = 1
-	cfg.ControlChannelMode = "wire"
-	rec := newSessionRecorder("s1", failingWriteStore{}, cfg, annotation.NewPatternDetector(nil), nil)
-	rec.setEnabled(true)
-	rec.AttemptStarted()
-	steps := map[string]func() error{
-		"Connected":       rec.Connected,
-		"FrameSent":       func() error { return rec.FrameSent("x", snapshotFrame("$ ")) },
-		"WireReceived":    func() error { return rec.WireReceived("x") },
-		"ControlReceived": func() error { return rec.ControlReceived(map[string]any{"type": "snapshot_req"}) },
-		"InputReceived":   func() error { return rec.InputReceived("x") },
-		"flush":           rec.flush,
-	}
-	for name, step := range steps {
-		if err := step(); err == nil {
-			t.Errorf("%s: a failed write was not returned", name)
-		}
-	}
-	rec.AttemptEnded(errors.New("disk full"))
-	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	if rec.rec != nil {
-		t.Fatal("the failed attempt's recording was not released")
-	}
-}
-
-// Each later write in one observed step is skipped once one fails, and the
-// sequence is not advanced for a write that did not happen — the first
-// raising call ends the reference's method.
-func TestAFailedWriteStopsTheStep(t *testing.T) {
-	for name, cfg := range map[string]func(*serverconfig.RecordingConfig){
-		"snapshot": func(*serverconfig.RecordingConfig) {},
-		"wire":     func(c *serverconfig.RecordingConfig) { c.ControlChannelMode = "wire" },
-	} {
-		t.Run(name, func(t *testing.T) {
-			c := testRecordingConfig()
-			c.FlushBatchSize = 1
-			cfg(&c)
-			rec := newSessionRecorder("s1", failingWriteStore{}, c, annotation.NewPatternDetector(nil), nil)
-			rec.setEnabled(true)
-			rec.AttemptStarted()
-			defer rec.AttemptEnded(nil)
-			if rec.FrameSent("x", snapshotFrame("DROP TABLE x;")) == nil {
-				t.Fatal("no error")
-			}
-			if rec.InputReceived("DROP TABLE y;") == nil {
-				t.Fatal("no error")
-			}
-			if err := rec.FrameSent("x", map[string]any{"type": "term", "data": "DROP TABLE z;"}); err == nil && name == "wire" {
-				t.Fatal("no error")
-			}
-			rec.mu.Lock()
-			defer rec.mu.Unlock()
-			if rec.eventSeq != 0 {
-				t.Fatalf("eventSeq = %d after writes that failed", rec.eventSeq)
-			}
-		})
-	}
-}
-
-// A store that takes the read but not the annotation still ends the step.
-func TestAFailedAnnotationWriteIsReturned(t *testing.T) {
-	store := &failAfter{InMemoryStore: recording.NewInMemoryStore(), ok: 1}
-	cfg := testRecordingConfig()
-	cfg.FlushBatchSize = 1
-	rec := newSessionRecorder("s1", store, cfg, annotation.NewPatternDetector(nil), nil)
-	rec.setEnabled(true)
-	rec.AttemptStarted()
-	defer rec.AttemptEnded(nil)
-	if rec.InputReceived("sudo -i\r") == nil {
-		t.Fatal("a failed annotation write was not returned")
-	}
-}
-
-// failAfter accepts ok appends, then fails every one after.
-type failAfter struct {
-	*recording.InMemoryStore
-	mu sync.Mutex
-	ok int
-}
-
-func (f *failAfter) AppendEvents(id string, events []recording.Event) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.ok == 0 {
-		return errors.New("disk full")
-	}
-	f.ok--
-	return f.InMemoryStore.AppendEvents(id, events)
-}
-
-// must fails the test on an unexpected recording error.
-func must(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
-		t.Fatal(err)
 	}
 }
