@@ -74,6 +74,7 @@ from provide.uterm.render.segments import (
     tokens_to_segments,
 )
 from provide.uterm.screen import (
+    MAX_ESCAPE_CARRY,
     clean_screen_for_display,
     decode_cp437,
     encode_cp437,
@@ -82,6 +83,7 @@ from provide.uterm.screen import (
     extract_menu_options,
     extract_numbered_list,
     normalize_terminal_text,
+    split_incomplete_escape,
     strip_ansi,
 )
 from provide.uterm.ws_bytes import (
@@ -122,6 +124,8 @@ __all__ = [
     "LineEditor",
     # screen
     "strip_ansi",
+    "split_incomplete_escape",
+    "MAX_ESCAPE_CARRY",
     "normalize_terminal_text",
     "decode_cp437",
     "encode_cp437",
