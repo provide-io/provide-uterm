@@ -150,27 +150,17 @@ func (pm *AgentProcessManager) NoteAgentID(agentID string) {
 	}
 }
 
-// AllocateAgentID returns a fresh unused agent_NNN id.
-func (pm *AgentProcessManager) AllocateAgentID() (string, error) {
-	idx := pm.SyncNextAgentIndex()
-	pm.manager.mu.Lock()
-	bound := len(pm.manager.Agents) + len(pm.manager.Processes) + 1
-	pm.manager.mu.Unlock()
-	for i := 0; i < bound; i++ {
-		candidate := fmt.Sprintf("agent_%03d", idx)
-		pm.manager.mu.Lock()
-		_, inAgents := pm.manager.Agents[candidate]
-		_, inProcs := pm.manager.Processes[candidate]
-		pm.manager.mu.Unlock()
-		if !inAgents && !inProcs {
-			pm.mu.Lock()
-			pm.nextAgentIndex = idx + 1
-			pm.mu.Unlock()
-			return candidate, nil
-		}
-		idx++
-	}
-	return "", fmt.Errorf("agent id allocation exhausted")
+// AllocateAgentID returns a fresh unused agent_NNN id. SyncNextAgentIndex
+// first moves the counter past every id the manager knows, so the counter's
+// value is free; taking it and advancing under one lock also keeps two
+// concurrent allocations from handing out the same id.
+func (pm *AgentProcessManager) AllocateAgentID() string {
+	pm.SyncNextAgentIndex()
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	idx := pm.nextAgentIndex
+	pm.nextAgentIndex++
+	return fmt.Sprintf("agent_%03d", idx)
 }
 
 // loadWorkerType reads worker_type and the raw config from a config file.

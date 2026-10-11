@@ -162,15 +162,12 @@ func TestHeartbeatTimeout(t *testing.T) {
 
 func TestAllocateAndNoteAgentID(t *testing.T) {
 	m := testManager(t, sleepCmd("30"))
-	id, err := m.PM.AllocateAgentID()
-	if err != nil {
-		t.Fatalf("allocate: %v", err)
-	}
+	id := m.PM.AllocateAgentID()
 	if id != "agent_000" {
 		t.Fatalf("id = %q, want agent_000", id)
 	}
 	m.PM.NoteAgentID("agent_010")
-	id2, _ := m.PM.AllocateAgentID()
+	id2 := m.PM.AllocateAgentID()
 	if id2 != "agent_011" {
 		t.Fatalf("id2 = %q, want agent_011", id2)
 	}
