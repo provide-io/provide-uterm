@@ -563,8 +563,13 @@ def create_server_app(
             # Delegated to a module-level helper so the branchy close loop is
             # tracked correctly on Python 3.11 (see ``_aclose_webhook_gates``).
             await _aclose_webhook_gates(policy_gate, fanout_policy_gate, behavioral_audit_gate, telemetry_sink)
-            await registry.shutdown()
-            await control_plane.close()
+            # registry.shutdown() re-raises the first runtime.stop() failure (a
+            # recording whose final flush failed); the control plane is closed
+            # regardless, and that failure then propagates out of the lifespan.
+            try:
+                await registry.shutdown()
+            finally:
+                await control_plane.close()
 
     app = FastAPI(title=config.server.title, lifespan=_lifespan)
     install_ws_denial_support(app)

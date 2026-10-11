@@ -291,6 +291,25 @@ def test_every_collaborator_is_shut_down(monkeypatch: pytest.MonkeyPatch) -> Non
     plane_close.assert_awaited_once()
 
 
+def test_a_failed_registry_shutdown_still_closes_the_control_plane(monkeypatch: pytest.MonkeyPatch) -> None:
+    """registry.shutdown() re-raises a runtime's failed final flush.
+
+    The control plane (a database pool) is closed regardless, and only then
+    does the failure propagate out of the lifespan.
+    """
+    app = _app()
+    registry_shutdown = AsyncMock(side_effect=OSError("disk full"))
+    plane_close = AsyncMock()
+    _patch_method(monkeypatch, app.state.uterm_registry, "shutdown", registry_shutdown)
+    _patch_method(monkeypatch, app.state.uterm_control_plane, "close", plane_close)
+
+    with pytest.raises(OSError, match="disk full"), TestClient(app):
+        pass
+
+    registry_shutdown.assert_awaited_once()
+    plane_close.assert_awaited_once()
+
+
 def test_the_governance_gates_are_released_on_shutdown(monkeypatch: pytest.MonkeyPatch) -> None:
     """The four gates are passed positionally; a dropped one leaks its client."""
     seen: list[tuple[Any, ...]] = []
