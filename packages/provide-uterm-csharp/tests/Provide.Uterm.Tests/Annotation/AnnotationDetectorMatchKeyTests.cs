@@ -177,7 +177,7 @@ public sealed class AnnotationDetectorMatchKeyTests
     {
         "",
         "AKIAIOSFODNN7EXAMPLE",
-        "caf\u00e9 \u2603 \U0001f600 \u07ff\u0800\uffff\U00010000\U0010ffff",
+        "caf\u00e9 \u2603 \U0001f600 \u07ff\u0800\uffff\U00010000\U0010ffff",  // codespell:ignore caf
         "\u007f\u0080", // either side of the one-byte / two-byte boundary
         new string('\u2603', 170), // 510 bytes + rule + NUL: just over the stack buffer
         new string('x', Provide.Uterm.Annotation.Annotation.MatchKeyStackLimit - 2), // exactly at it
