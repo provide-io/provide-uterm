@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System.Text.RegularExpressions;
 using Provide.Uterm.Client;
 using Provide.Uterm.Defaults;
 using Provide.Uterm.Gateway;
@@ -96,13 +97,34 @@ public static class Root
         w.WriteLine($"Version: {Version}");
     }
 
-    // Long flags that never take a value. Every other long flag consumes the
-    // next argument as its value even when it begins with '-' (base64url
-    // tokens do ~1 time in 64), matching the Go port's pflag parsing.
+    // Long flags that never take a value; every other long flag requires one.
     private static readonly HashSet<string> BooleanFlags = new(StringComparer.Ordinal)
     {
         "allow-unauthenticated", "help", "insecure-ssh", "once", "version",
     };
+
+    // argparse's negative-number pattern: such args are values, not options.
+    private static readonly Regex NegativeNumber = new(@"^-\d+$|^-\d*\.\d+$", RegexOptions.CultureInvariant);
+
+    // Mirrors argparse's _parse_optional: an argument is option-like when it
+    // starts with '-' and is not "-", a negative number, or text containing a
+    // space. A value flag followed by an option-like argument is rejected, as
+    // the Python CLI does ("expected one argument"), instead of silently
+    // dropping the value: base64url tokens begin with '-' ~1 time in 64. Pass
+    // such a value as --flag=VALUE.
+    private static bool LooksLikeOption(string arg) =>
+        arg.StartsWith('-') && arg != "-" && !NegativeNumber.IsMatch(arg) && !arg.Contains(' ', StringComparison.Ordinal);
+
+    private static string TakeValue(string[] args, ref int i, string flag)
+    {
+        var value = args[++i];
+        if (LooksLikeOption(value))
+        {
+            throw new ArgumentException($"argument {flag}: expected one argument (use {flag}=VALUE for a value starting with '-')");
+        }
+
+        return value;
+    }
 
     internal static Dictionary<string, string> ParseFlags(string[] args)
     {
@@ -127,7 +149,7 @@ public static class Root
                 }
                 else if (i + 1 < args.Length && !BooleanFlags.Contains(key))
                 {
-                    flags[key] = args[++i];
+                    flags[key] = TakeValue(args, ref i, a);
                 }
                 else
                 {
@@ -143,7 +165,7 @@ public static class Root
                 }
                 else if (i + 1 < args.Length)
                 {
-                    flags[key] = args[++i];
+                    flags[key] = TakeValue(args, ref i, a);
                 }
             }
         }

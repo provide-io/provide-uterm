@@ -62,7 +62,17 @@ public static class LiveDriver
             return args.Length == 0 ? UsageExitCode : 0;
         }
 
-        var flags = Root.ParseFlags(args.Skip(1).ToArray());
+        Dictionary<string, string> flags;
+        try
+        {
+            flags = Root.ParseFlags(args.Skip(1).ToArray());
+        }
+        catch (ArgumentException ex)
+        {
+            error.WriteLine($"error: {ex.Message}");
+            return UsageExitCode;
+        }
+
         return args[0] switch
         {
             "serve" => await ServeAsync(flags, output, error, input, ct).ConfigureAwait(false),
