@@ -71,27 +71,49 @@ func TestPumpOnceIdentityFrameEncodeError(t *testing.T) {
 	}
 }
 
-func TestPumpOnceResumeFrameSendError(t *testing.T) {
-	url, got := recordingWSServer(t)
-	sentinel := errors.New("resume write failed")
-	var resumed map[string]any
-	orig := sendResume
-	sendResume = func(_ context.Context, _ *websocket.Conn, f map[string]any) error {
-		resumed = f
-		return sentinel
+// failPumpFrame makes sendPumpFrame fail on the first frame of type failType,
+// recording the type of every frame offered.
+func failPumpFrame(t *testing.T, failType string) (*[]string, error) {
+	t.Helper()
+	sentinel := errors.New(failType + " write failed")
+	var offered []string
+	orig := sendPumpFrame
+	sendPumpFrame = func(ctx context.Context, conn *websocket.Conn, f map[string]any) error {
+		typ, _ := f["type"].(string)
+		offered = append(offered, typ)
+		if typ == failType {
+			return sentinel
+		}
+		return orig(ctx, conn, f)
 	}
-	t.Cleanup(func() { sendResume = orig })
+	t.Cleanup(func() { sendPumpFrame = orig })
+	return &offered, sentinel
+}
 
-	cfg := basePumpConfig(&controlState{token: &tokenRec{token: "tok-1"}})
-	code, err := pumpOnce(context.Background(), url, cfg)
-	if !errors.Is(err, sentinel) || code != -1 {
-		t.Fatalf("pumpOnce = %d, %v; want -1 and sentinel", code, err)
+func TestPumpOnceOpeningFrameSendErrors(t *testing.T) {
+	cases := []struct {
+		failType string
+		token    *tokenRec
+		want     []string
+	}{
+		{"resume", &tokenRec{token: "tok-1"}, []string{"resume"}},
+		{"hello", nil, []string{"hello"}},
 	}
-	if resumed["type"] != "resume" || resumed["token"] != "tok-1" {
-		t.Fatalf("resume frame = %v", resumed)
-	}
-	if msg, ok := <-got; ok {
-		t.Fatalf("server received %q; hello must not follow a failed resume", msg)
+	for _, tc := range cases {
+		t.Run(tc.failType, func(t *testing.T) {
+			url, got := recordingWSServer(t)
+			offered, sentinel := failPumpFrame(t, tc.failType)
+			code, err := pumpOnce(context.Background(), url, basePumpConfig(&controlState{token: tc.token}))
+			if !errors.Is(err, sentinel) || code != -1 {
+				t.Fatalf("pumpOnce = %d, %v; want -1 and the %s failure", code, err, tc.failType)
+			}
+			if strings.Join(*offered, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("frames offered = %v, want %v", *offered, tc.want)
+			}
+			if msg, ok := <-got; ok {
+				t.Fatalf("server received %q; nothing may follow a failed opening frame", msg)
+			}
+		})
 	}
 }
 
