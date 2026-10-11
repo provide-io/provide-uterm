@@ -81,16 +81,32 @@ async def _quota_record() -> dict[str, Any]:
 # way than ``len(json.dumps(record)) + 1`` stops at a different entry.
 BOUNDARY_PAYLOAD: dict[str, Any] = {"v": [0] * 100, "s": "caf\u00e9 \u2603"}
 
+# A wall-clock-shaped timestamp of typical width (17 characters as JSON), used
+# only to SIZE the boundary quota so that the recorded value is reproducible.
+REPRESENTATIVE_TS = 1_700_000_000.123456
+
 
 async def _quota_boundary_record() -> dict[str, Any]:
     """A byte quota that runs out partway through the third entry."""
-    import time
-
-    sample = {"ts": time.time(), "event": "e", "data": BOUNDARY_PAYLOAD, "session_id": "s1"}
+    # The quota is sized from a FIXED representative timestamp, never from
+    # time.time(). ``repr`` of a float is its shortest round-tripping form, so
+    # time.time() serialises to anywhere from ~12 to 18 characters depending on
+    # the instant (1760106000.5 vs 1760106000.1234567). Sizing from a live clock
+    # made the recorded ``max_bytes`` differ between two runs of this generator
+    # by a byte or two, which .ci/check_goldens.sh rightly flagged as
+    # non-deterministic. The live run below still stamps real timestamps; the
+    # half-entry margin is what absorbs their varying width.
+    sample = {"ts": REPRESENTATIVE_TS, "event": "e", "data": BOUNDARY_PAYLOAD, "session_id": "s1"}
     size = len(json.dumps(sample)) + 1
-    probe = InMemoryRecordingStore()
-    await probe.start_session("s1", {"started_at": time.time()})
-    start = int((await probe.recording_meta("s1"))["size_bytes"])
+    # Mirrors the ``log_start`` entry InMemoryRecordingStore.start_session writes
+    # (and which recording_meta counts toward size_bytes).
+    log_start = {
+        "ts": REPRESENTATIVE_TS,
+        "event": "log_start",
+        "data": {"started_at": REPRESENTATIVE_TS},
+        "session_id": "s1",
+    }
+    start = len(json.dumps(log_start)) + 1
     # Two entries fit with half an entry to spare, so the third is written and
     # the fourth is not. Half an entry is far wider than a timestamp's spread.
     max_bytes = start + 2 * size + size // 2
