@@ -41,12 +41,20 @@ public static class HumanRelay
         CancellationToken cancellationToken = default) =>
         serverSrc.CopyToAsync(clientDst, cancellationToken);
 
+    private static readonly AsyncLocal<TimeSpan?> DrainTimeoutOverride = new();
+
     /// <summary>
     /// How long the second pump gets to finish on its own after the first ends.
     /// A test seam (internal) so the cancel-the-straggler arm runs without a
-    /// two-second wait; production keeps the two seconds.
+    /// two-second wait; production keeps the two seconds. The override is
+    /// async-local, so a test that sets it changes only relays started from its
+    /// own flow and never the relays of tests running in parallel with it.
     /// </summary>
-    internal static TimeSpan DrainTimeout { get; set; } = TimeSpan.FromSeconds(2);
+    internal static TimeSpan DrainTimeout
+    {
+        get => DrainTimeoutOverride.Value ?? TimeSpan.FromSeconds(2);
+        set => DrainTimeoutOverride.Value = value;
+    }
 
     /// <summary>
     /// Concurrent dual pump until either direction ends or faults; cancels the peer.
