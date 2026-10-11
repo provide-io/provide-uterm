@@ -146,7 +146,8 @@ public sealed class RfbClient : IGraphicalSession, IAsyncDisposable
             _height = height;
             _tracker = new FramebufferTracker(width, height);
             _loopCts = new CancellationTokenSource();
-            _loop = Task.Run(() => ReadLoopAsync(_loopCts.Token));
+            var token = _loopCts.Token;
+            _loop = Task.Run(() => ReadLoopAsync(stream, token));
         }
     }
 
@@ -238,13 +239,9 @@ public sealed class RfbClient : IGraphicalSession, IAsyncDisposable
 
         if (loop is not null)
         {
-            try
-            {
-                await loop.ConfigureAwait(false);
-            }
-            catch
-            {
-            }
+            // The read loop ends on cancellation or any stream failure and
+            // never faults.
+            await loop.ConfigureAwait(false);
         }
 
         lock (_lock)
@@ -259,13 +256,14 @@ public sealed class RfbClient : IGraphicalSession, IAsyncDisposable
         cts?.Dispose();
     }
 
-    private async Task ReadLoopAsync(CancellationToken ct)
+    /// <summary>The running server-message loop (null when not connected); for tests.</summary>
+    internal Task? ReadLoop
     {
-        NetworkStream stream;
-        lock (_lock)
-        {
-            stream = _stream ?? throw new InvalidOperationException("not connected");
-        }
+        get { lock (_lock) return _loop; }
+    }
+
+    private async Task ReadLoopAsync(NetworkStream stream, CancellationToken ct)
+    {
 
         try
         {

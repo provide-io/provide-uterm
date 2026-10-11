@@ -42,6 +42,13 @@ public static class HumanRelay
         serverSrc.CopyToAsync(clientDst, cancellationToken);
 
     /// <summary>
+    /// How long the second pump gets to finish on its own after the first ends.
+    /// A test seam (internal) so the cancel-the-straggler arm runs without a
+    /// two-second wait; production keeps the two seconds.
+    /// </summary>
+    internal static TimeSpan DrainTimeout { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     /// Concurrent dual pump until either direction ends or faults; cancels the peer.
     /// Filter errors (e.g. bad security type) are rethrown.
     /// </summary>
@@ -127,20 +134,13 @@ public static class HumanRelay
         }
 
         var drain = Task.WhenAll(clientPump, serverPump);
-        var finished = await Task.WhenAny(drain, Task.Delay(TimeSpan.FromSeconds(2), CancellationToken.None))
+        var finished = await Task.WhenAny(drain, Task.Delay(DrainTimeout, CancellationToken.None))
             .ConfigureAwait(false);
         if (!ReferenceEquals(finished, drain))
         {
             // The peer never answered the close. Cancelling is the only way out now,
             // and an abort here costs nothing that was still deliverable.
-            try
-            {
-                linked.Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-                // ignore
-            }
+            linked.Cancel();
         }
 
         if (ReferenceEquals(finished, drain))

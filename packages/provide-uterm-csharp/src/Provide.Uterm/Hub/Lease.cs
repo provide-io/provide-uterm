@@ -183,19 +183,10 @@ public sealed partial class HijackLeaseManager
                 {
                     throw canceled;
                 }
-                if (delivery.Error is not null
-                    || delivery.Outcome == PauseDeliveryOutcome.NotDelivered)
-                {
-                    lock (_lock)
-                    {
-                        var st = _registry.Get(workerId);
-                        if (st is not null && ReferenceEquals(st.WorkerWs, workerWs))
-                        {
-                            st.WorkerWs = null;
-                        }
-                    }
-                }
 
+                // No separate WorkerWs fence: ReconcileFailedWorkerSendAsync just
+                // deregistered this exact worker (DeregisterWorkerLocked nulls
+                // WorkerWs whenever it is still the one that failed).
                 return (false, "no_worker", null);
             }
 

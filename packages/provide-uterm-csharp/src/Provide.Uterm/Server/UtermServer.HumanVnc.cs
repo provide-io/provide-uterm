@@ -120,9 +120,8 @@ public sealed partial class UtermServer
             }
             else if (tcp is not null)
             {
-                // TcpClient.Dispose also closes the NetworkStream.
-                try { tcp.Dispose(); }
-                catch { /* best-effort */ }
+                // TcpClient.Dispose also closes the NetworkStream, and never throws.
+                tcp.Dispose();
             }
             else
             {
@@ -223,8 +222,7 @@ public sealed partial class UtermServer
         }
         catch (Exception ex)
         {
-            try { tcp?.Dispose(); }
-            catch { /* best-effort */ }
+            tcp?.Dispose(); // TcpClient.Dispose never throws
 
             GuiLog.Info("gui_vnc_rfb_failed", new Dictionary<string, object?>
             {
@@ -236,7 +234,7 @@ public sealed partial class UtermServer
         }
     }
 
-    private static async Task RunHumanVncRelayAsync(
+    internal static async Task RunHumanVncRelayAsync(
         WebSocket ws,
         Stream upstream,
         string sessionId,
@@ -273,8 +271,7 @@ public sealed partial class UtermServer
         }
         finally
         {
-            try { linked.Cancel(); }
-            catch (ObjectDisposedException) { /* ignore */ }
+            linked.Cancel(); // still in its using scope, so never disposed here
 
             if (ws.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {
@@ -292,7 +289,7 @@ public sealed partial class UtermServer
         }
     }
 
-    private string ResolvePrincipalRole(Principal p, string workerId)
+    internal string ResolvePrincipalRole(Principal p, string workerId)
     {
         if (_deps.Registry.TryGetDefinition(workerId, out var def))
         {

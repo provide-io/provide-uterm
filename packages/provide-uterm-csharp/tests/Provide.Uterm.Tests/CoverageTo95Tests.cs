@@ -61,7 +61,9 @@ public class CoverageTo95Tests
     [Fact]
     public async Task Proxy_Bridge_EchoesThroughTelnetUpstream()
     {
-        // Local TCP peer: accept once, drain IAC, then echo subsequent bytes.
+        // Local TCP peer: accept once, read until the browser's payload has
+        // arrived (after whatever telnet negotiation precedes it, however the
+        // reads split), then echo the payload back.
         var bbsPort = FreePort();
         var listener = new TcpListener(IPAddress.Loopback, bbsPort);
         listener.Start();
@@ -69,34 +71,24 @@ public class CoverageTo95Tests
         {
             using var client = await listener.AcceptTcpClientAsync();
             await using var stream = client.GetStream();
+            var seen = new List<byte>();
             var buf = new byte[4096];
-            // Drain telnet negotiation / first write
-            client.ReceiveTimeout = 2000;
-            try
+            var payload = Encoding.ASCII.GetBytes("ping-from-browser");
+            while (!Encoding.ASCII.GetString(seen.ToArray()).Contains("ping-from-browser", StringComparison.Ordinal))
             {
-                _ = await stream.ReadAsync(buf);
-            }
-            catch
-            {
-                // ignore
-            }
-
-            while (client.Connected)
-            {
-                int n;
-                try
+                var n = await stream.ReadAsync(buf);
+                if (n <= 0)
                 {
-                    n = await stream.ReadAsync(buf);
-                }
-                catch
-                {
-                    break;
+                    return;
                 }
 
-                if (n <= 0) break;
-                await stream.WriteAsync(buf.AsMemory(0, n));
-                await stream.FlushAsync();
+                seen.AddRange(buf.AsSpan(0, n).ToArray());
             }
+
+            await stream.WriteAsync(payload);
+            await stream.FlushAsync();
+            // Hold the connection until the proxy tears it down.
+            _ = await stream.ReadAsync(buf);
         });
 
         var proxyPort = FreePort();

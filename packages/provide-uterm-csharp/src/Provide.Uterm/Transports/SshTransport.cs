@@ -4,6 +4,7 @@
 //
 
 using System.Text;
+using System.Threading.Channels;
 using Renci.SshNet;
 using Renci.SshNet.Common;
 
@@ -18,6 +19,12 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
 {
     private SshClient? _client;
     private ShellStream? _shell;
+
+    // ShellStream has no cancellable read (Stream.ReadAsync falls back to a
+    // blocking Read that ignores the token), so a dedicated reader drains it
+    // into this queue and ReceiveAsync waits on the queue with its timeout.
+    private ChannelReader<byte[]>? _inbox;
+    private byte[]? _carry;
     private readonly object _lock = new();
 
     // Set by DisconnectAsync so a read or write it interrupts reports our own close.
@@ -87,12 +94,18 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
 
         var term = options.Term;
         var shell = client.CreateShellStream(term, (uint)options.Cols, (uint)options.Rows, 0, 0, 4096);
+        var inbox = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
         lock (_lock)
         {
             _client = client;
             _shell = shell;
+            _inbox = inbox.Reader;
+            _carry = null;
             _localDisconnect = false;
         }
+
+        _ = Task.Factory.StartNew(
+            () => DrainShell(shell, inbox.Writer), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
         return Task.CompletedTask;
     }
@@ -111,9 +124,37 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
             _client?.Dispose();
             _shell = null;
             _client = null;
+            _inbox = null;
+            _carry = null;
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Copies the shell's output into <paramref name="inbox"/> until the channel
+    /// ends (completing it) or the read fails (completing it with the failure,
+    /// as the transport-closed error a receive reports when the session is gone).
+    /// </summary>
+    internal void DrainShell(Stream shell, ChannelWriter<byte[]> inbox)
+    {
+        var buf = new byte[4096];
+        try
+        {
+            int n;
+            while ((n = shell.Read(buf, 0, buf.Length)) > 0)
+            {
+                inbox.TryWrite(buf[..n]);
+            }
+
+            inbox.TryComplete();
+        }
+        catch (Exception ex)
+        {
+            inbox.TryComplete(IsSessionFailure(ex)
+                ? new TransportClosedException("connection lost", CloseFromFailure(ex, _localDisconnect), ex)
+                : ex);
+        }
     }
 
     public async Task SendAsync(byte[] data, CancellationToken cancellationToken = default)
@@ -152,38 +193,49 @@ public sealed class SshTransport : IConnectionTransport, IDisposable
 
     public async Task<byte[]> ReceiveAsync(int maxBytes, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        ShellStream shell;
+        ChannelReader<byte[]> inbox;
         lock (_lock)
         {
-            shell = _shell ?? throw TransportErrors.NotConnected;
+            inbox = _inbox ?? throw TransportErrors.NotConnected;
         }
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(timeout);
-        var buf = new byte[Math.Max(1, maxBytes)];
-        int n;
-        try
+        var max = Math.Max(1, maxBytes);
+        byte[] chunk;
+        if (Interlocked.Exchange(ref _carry, null) is { } carried)
         {
-            n = await shell.ReadAsync(buf.AsMemory(0, buf.Length), cts.Token);
+            chunk = carried;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        else
         {
-            return Array.Empty<byte>();
-        }
-        catch (Exception ex) when (IsSessionFailure(ex))
-        {
-            throw new TransportClosedException("connection lost", CloseFromFailure(ex, _localDisconnect), ex);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(timeout);
+            try
+            {
+                if (!await inbox.WaitToReadAsync(cts.Token).ConfigureAwait(false))
+                {
+                    // ShellStream reads 0 only once its channel has closed. Before this it
+                    // returned an empty chunk, which a reader polling IsConnected() could spin on
+                    // while the SSH session outlived the channel.
+                    throw new TransportClosedException("connection closed by remote", EndOfStreamClose(_localDisconnect));
+                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Array.Empty<byte>();
+            }
+
+            // Single reader: what WaitToReadAsync saw is still there.
+            _ = inbox.TryRead(out var next);
+            chunk = next!;
         }
 
-        if (n == 0)
+        if (chunk.Length > max)
         {
-            // ShellStream reads 0 only once its channel has closed. Before this it
-            // returned an empty chunk, which a reader polling IsConnected() could spin on
-            // while the SSH session outlived the channel.
-            throw new TransportClosedException("connection closed by remote", EndOfStreamClose(_localDisconnect));
+            _carry = chunk[max..];
+            return chunk[..max];
         }
 
-        return buf[..n];
+        return chunk;
     }
 
     /// <summary>The close a channel end-of-stream reports: ours after DisconnectAsync, else the peer's.</summary>

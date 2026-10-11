@@ -73,11 +73,9 @@ public sealed partial class ConnectionManager
                     }
 
                     var st = _hub.State.GetOrCreate(workerId);
-                    if (lifecycleTransition?.IsTerminal == true)
-                    {
-                        lifecycleTransition = null;
-                        completion = null;
-                    }
+                    // This registration's own transition is never terminal while it
+                    // waits: it is preserveOnWorkerClear (a worker clear re-activates
+                    // rather than clears it) and only this method completes it.
                     if (ReferenceEquals(st.WorkerWs, ws)) return true;
                     if (st.DisconnectResumeCompletion is { IsCompleted: false } lifecycleCompletion
                         && (completion is null

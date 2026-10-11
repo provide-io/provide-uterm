@@ -112,6 +112,13 @@ public sealed class ManagerServer : IAsyncDisposable
 
     public ManagerServer(AgentManager manager) => _manager = manager;
 
+    /// <summary>
+    /// Writes one JSON response. A test seam defaulting to <see cref="WriteJson"/>,
+    /// so the handler's fault path (and a 500 that cannot be written either)
+    /// can be provoked over a real listener.
+    /// </summary>
+    internal Func<HttpListenerContext, int, object, Task> WriteResponse { get; set; } = WriteJson;
+
     public AgentManager Manager => _manager;
     public string? BaseAddress { get; private set; }
 
@@ -142,8 +149,9 @@ public sealed class ManagerServer : IAsyncDisposable
 
         if (_loop is not null)
         {
-            try { await _loop.ConfigureAwait(false); }
-            catch { /* cancelled */ }
+            // The accept loop turns every accept failure into a break, so this
+            // never throws.
+            await _loop.ConfigureAwait(false);
         }
     }
 
@@ -176,7 +184,7 @@ public sealed class ManagerServer : IAsyncDisposable
         {
             if (!Authorize(ctx))
             {
-                await WriteJson(ctx, 401, new { detail = "unauthorized" }).ConfigureAwait(false);
+                await WriteResponse(ctx, 401, new { detail = "unauthorized" }).ConfigureAwait(false);
                 return;
             }
 
@@ -185,19 +193,19 @@ public sealed class ManagerServer : IAsyncDisposable
 
             if (method == "GET" && path is "/health" or "")
             {
-                await WriteJson(ctx, 200, new { status = "ok" }).ConfigureAwait(false);
+                await WriteResponse(ctx, 200, new { status = "ok" }).ConfigureAwait(false);
                 return;
             }
 
             if (method == "GET" && path == "/swarm/status")
             {
-                await WriteJson(ctx, 200, _manager.GetSwarmStatus()).ConfigureAwait(false);
+                await WriteResponse(ctx, 200, _manager.GetSwarmStatus()).ConfigureAwait(false);
                 return;
             }
 
             if (method == "GET" && path == "/swarm/timeseries/info")
             {
-                await WriteJson(ctx, 200, _manager.GetTimeseriesInfo()).ConfigureAwait(false);
+                await WriteResponse(ctx, 200, _manager.GetTimeseriesInfo()).ConfigureAwait(false);
                 return;
             }
 
@@ -206,7 +214,7 @@ public sealed class ManagerServer : IAsyncDisposable
                 var limit = 200;
                 var q = ctx.Request.QueryString["limit"];
                 if (int.TryParse(q, out var n)) limit = n;
-                await WriteJson(ctx, 200, new
+                await WriteResponse(ctx, 200, new
                 {
                     rows = _manager.GetTimeseriesRecent(limit),
                     info = _manager.GetTimeseriesInfo(),
@@ -216,7 +224,7 @@ public sealed class ManagerServer : IAsyncDisposable
 
             if (method == "GET" && path == "/swarm/agents")
             {
-                await WriteJson(ctx, 200, _manager.List()).ConfigureAwait(false);
+                await WriteResponse(ctx, 200, _manager.List()).ConfigureAwait(false);
                 return;
             }
 
@@ -225,7 +233,7 @@ public sealed class ManagerServer : IAsyncDisposable
                 var body = await ReadBody(ctx).ConfigureAwait(false);
                 var workerType = body.TryGetValue("worker_type", out var wt) ? Convert.ToString(wt) ?? "default" : "default";
                 var rec = _manager.Spawn(workerType);
-                await WriteJson(ctx, 200, rec).ConfigureAwait(false);
+                await WriteResponse(ctx, 200, rec).ConfigureAwait(false);
                 return;
             }
 
@@ -236,7 +244,7 @@ public sealed class ManagerServer : IAsyncDisposable
             {
                 var id = path["/swarm/agents/".Length..^"/stop".Length];
                 var ok = _manager.Stop(id);
-                await WriteJson(ctx, ok ? 200 : 404, new { ok }).ConfigureAwait(false);
+                await WriteResponse(ctx, ok ? 200 : 404, new { ok }).ConfigureAwait(false);
                 return;
             }
 
@@ -244,11 +252,11 @@ public sealed class ManagerServer : IAsyncDisposable
             {
                 var id = path["/swarm/agents/".Length..];
                 var ok = _manager.Remove(id);
-                await WriteJson(ctx, ok ? 200 : 404, new { ok }).ConfigureAwait(false);
+                await WriteResponse(ctx, ok ? 200 : 404, new { ok }).ConfigureAwait(false);
                 return;
             }
 
-            await WriteJson(ctx, 404, new { detail = "not found" }).ConfigureAwait(false);
+            await WriteResponse(ctx, 404, new { detail = "not found" }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -260,7 +268,7 @@ public sealed class ManagerServer : IAsyncDisposable
                 ["path"] = ctx.Request.Url?.AbsolutePath,
                 ["error"] = ex.Message,
             });
-            try { await WriteJson(ctx, 500, new { detail = "internal error" }).ConfigureAwait(false); }
+            try { await WriteResponse(ctx, 500, new { detail = "internal error" }).ConfigureAwait(false); }
             catch { /* ignore */ }
         }
     }
@@ -342,26 +350,6 @@ public static class ManagerProgram
         return 0;
     }
 
-    /// <summary>Test hook for the interactive manager wait loop.</summary>
-    internal static Action WaitForCancel { get; set; } = DefaultWaitCancel;
-
-    /// <summary>Production SIGINT wait — excluded from coverage (not unit-testable).</summary>
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
-    private static void DefaultWaitCancel()
-    {
-        using var cts = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, e) =>
-        {
-            e.Cancel = true;
-            cts.Cancel();
-        };
-        try
-        {
-            Task.Delay(Timeout.Infinite, cts.Token).GetAwaiter().GetResult();
-        }
-        catch (OperationCanceledException)
-        {
-            // shutdown
-        }
-    }
+    /// <summary>Test hook for the interactive manager wait loop (production: block until Ctrl-C).</summary>
+    internal static Action WaitForCancel { get; set; } = Provide.Uterm.Platform.ConsoleCancel.WaitForCtrlC;
 }

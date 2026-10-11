@@ -34,24 +34,17 @@ EXCLUDE_SUBSTR = (
     # Generated / build artifacts (coverlet may index source generators under obj/).
     "/obj/",
     "RegexGenerator.g.cs",
-    # OS/socket-only residual packages (documented, matching Go residual policy for
-    # live-socket / PTY / real-SSH paths that unit tests cannot fully exercise).
+    # Native PTY: Unix P/Invoke (openpty/posix_spawn/waitpid). The test host
+    # cannot drive these on Windows at all, `make cover` skips the pty batch on
+    # CI, and the remaining arms are libc failure returns (openpty/spawn/
+    # waitpid errors, a child that exits before the first read) that need
+    # fault injection into libc rather than a test seam. Every other former
+    # live-socket residual (telnet/SSH/WebSocket transports, the SSH and TCP
+    # gateways, RFB, the MCP endpoint, the proxy, the embed telnet upstream and
+    # the human-VNC stream adapters) is now covered by loopback tests and
+    # counts toward the floor.
     "Pty/PtyTransport.cs",
-    "Pty/NativeUnixPty.cs",  # posix_spawn/openpty/P-Invoke residual
-    "Transports/SshTransport.cs",
-    "Transports/TelnetTransport.cs",
-    "Transports/WebSocketTransport.cs",
-    "Gateway/SshWsGateway.cs",  # live FxSsh accept + channel pump residual
-    "Vnc/RfbClient.cs",  # live RFB TCP client residual (unit-tested encode + handshake smoke)
-    "Vnc/WsBinaryStreams.cs",  # ASP.NET WS stream adapters; exercised via HumanVncRouteTests WS path
-    "Server/UtermServer.Mcp.cs",  # StreamJsonRpc MCP WebSocket accept residual (tools surface unit-tested elsewhere)
-    # Human VNC handler (UtermServer.HumanVnc.cs) stays in the floor — HumanVncRouteTests.
-    "Embed/TelnetUpstream.cs",  # live TCP telnet residual (IAC+policy unit-tested via ScriptedTelnetUpstream)
-    # Live bridge / gateway residual (Makefile COVER notes: BridgeAsync races,
-    # ObjectDisposedException on accept during Stop). Unit tests hit pure helpers;
-    # the live-socket arms remain out of the floor.
-    "Cli/Proxy.cs",
-    "Gateway/Gateway.cs",
+    "Pty/NativeUnixPty.cs",
 )
 
 

@@ -292,14 +292,8 @@ public static class Root
             WaitCancel();
             cts.Cancel();
         });
-        try
-        {
-            ProxyCommand.RunAsync(opts, cts.Token).GetAwaiter().GetResult();
-        }
-        catch (OperationCanceledException)
-        {
-            // expected on cancel
-        }
+        // RunAsync treats cancellation as its normal end and does not rethrow it.
+        ProxyCommand.RunAsync(opts, cts.Token).GetAwaiter().GetResult();
 
         waiter.GetAwaiter().GetResult();
         return 0;
@@ -350,15 +344,7 @@ public static class Root
 
         if (proto.Equals("ssh", StringComparison.OrdinalIgnoreCase))
         {
-            // Ephemeral port when --port 0 (FxSsh needs a concrete bind port).
-            if (port == 0)
-            {
-                var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-                probe.Start();
-                port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
-                probe.Stop();
-            }
-
+            // --port 0 is ephemeral: the gateway probes a free port itself.
             var sshGw = new SshWsGateway(wsUrl, allowUnauthenticated: allowUnauth);
             try
             {
@@ -710,20 +696,7 @@ public static class Root
     /// Test hook for the interactive Ctrl-C wait. Production default blocks until
     /// SIGINT; tests assign a no-op to exercise non-<c>--once</c> command paths.
     /// </summary>
-    internal static Action WaitForCancel { get; set; } = DefaultWaitCancel;
+    internal static Action WaitForCancel { get; set; } = Provide.Uterm.Platform.ConsoleCancel.WaitForCtrlC;
 
     private static void WaitCancel() => WaitForCancel();
-
-    /// <summary>Production SIGINT wait — excluded from coverage (not unit-testable).</summary>
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
-    private static void DefaultWaitCancel()
-    {
-        var tcs = new TaskCompletionSource();
-        Console.CancelKeyPress += (_, ev) =>
-        {
-            ev.Cancel = true;
-            tcs.TrySetResult();
-        };
-        tcs.Task.GetAwaiter().GetResult();
-    }
 }

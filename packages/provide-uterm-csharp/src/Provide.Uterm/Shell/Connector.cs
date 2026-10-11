@@ -63,13 +63,8 @@ public sealed class UshellConnector : IConnector
         };
         _ctxValues = ctx.Values;
         _dispatcher = new CommandDispatcher(ctx, config.HttpClient, config.RenderImage);
-        _pollSleep = config.PollSleep ?? (d =>
-        {
-            if (d > TimeSpan.Zero)
-            {
-                Thread.Sleep(d);
-            }
-        });
+        // _pollDelay is normalized to a positive span below, so a plain sleep suffices.
+        _pollSleep = config.PollSleep ?? Thread.Sleep;
         _pollDelay = config.PollDelay <= TimeSpan.Zero ? TimeSpan.FromMilliseconds(50) : config.PollDelay;
     }
 
