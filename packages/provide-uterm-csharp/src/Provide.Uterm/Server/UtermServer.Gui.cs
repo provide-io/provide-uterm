@@ -103,10 +103,12 @@ public sealed partial class UtermServer
                     return DetailError(502, AttachRfbFailed);
                 }
 
-                // Dispose any previous graphical session before replace.
-                if (_deps.Hub.Registry.Get(workerId) is { GraphicalSession: IDisposable prev })
+                // Dispose any previous graphical session before replace. RfbClient
+                // is IAsyncDisposable (not IDisposable), and its dispose never
+                // throws: the read loop and socket teardown swallow their faults.
+                if (_deps.Hub.Registry.Get(workerId) is { GraphicalSession: IAsyncDisposable prev })
                 {
-                    try { prev.Dispose(); } catch { /* best-effort */ }
+                    await prev.DisposeAsync().ConfigureAwait(false);
                 }
 
                 session = client;

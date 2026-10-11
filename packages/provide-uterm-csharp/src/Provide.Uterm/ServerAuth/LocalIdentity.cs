@@ -257,11 +257,9 @@ public sealed class LocalIdentityProvider : IAuthenticator
             return new SecurityKey[] { Jwks.ResolveKey(_auth.JwtJwksUrl, kid) };
         }
 
-        var material = _auth.JwtPublicKeyPem ?? "";
-        if (material.Length == 0)
-        {
-            throw new SecurityTokenException("jwt_public_key_pem or jwt_jwks_url must be configured in jwt mode");
-        }
+        // PrincipalFromJwtToken refused a config with neither, so without a
+        // JWKS URL the PEM/secret is present.
+        var material = _auth.JwtPublicKeyPem!;
 
         if (LooksLikePem(material))
         {

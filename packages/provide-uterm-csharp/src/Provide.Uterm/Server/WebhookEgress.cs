@@ -79,7 +79,6 @@ public sealed class WebhookEgressPolicy
 
     private const string ReasonRequired = "url is required";
     private const string ReasonScheme = "url must be absolute http(s)";
-    private const string ReasonNoHost = "webhook url must include a host";
     private const string ReasonLoopback = "loopback webhook destinations are not allowed";
     private const string ReasonNotAllowed = "webhook url host is not allowed";
     private const string ReasonUnresolvable = "webhook url host could not be resolved";
@@ -121,11 +120,10 @@ public sealed class WebhookEgressPolicy
         // `metadata.google.internal.` and `METADATA.GOOGLE.INTERNAL` name the
         // same host to a resolver, so a guard that compares the raw string is
         // bypassed by typing one extra character.
+        // Never empty: System.Uri refuses an http(s) authority whose host is
+        // empty or only dots/brackets, so the reference's "no host" refusal has
+        // no input that reaches it here (the scheme refusal above covers them).
         var host = uri.DnsSafeHost.Trim().Trim('[', ']').TrimEnd('.').ToLowerInvariant();
-        if (host.Length == 0)
-        {
-            return Refuse(ReasonNoHost);
-        }
 
         // Refused by name, before resolution. On GCE it answers with
         // 169.254.169.254 and would be caught below anyway, but the name is how

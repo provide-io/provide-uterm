@@ -85,13 +85,10 @@ public static class ServerFactory
                 }
                 telemetryLog.Info(eventType, attrs);
             },
+            // The same one-parser mapping the webhook manager's OnLog uses below:
+            // Levels.Parse reads debug/warn/warning/error and falls back to Info.
             OnLog = (level, message) =>
-            {
-                if (level == "debug") log.Debug(message);
-                else if (level == "warn" || level == "warning") log.Warn(message);
-                else if (level == "error") log.Error(message);
-                else log.Info(message);
-            },
+                log.Log(Provide.Telemetry.Levels.Parse(level), message),
         });
         var registry = new InMemorySessionRegistry(cfg.Sessions, cfg.Recording.EnabledByDefault);
         graphicalTargets ??= SeedGraphicalTargets(cfg);

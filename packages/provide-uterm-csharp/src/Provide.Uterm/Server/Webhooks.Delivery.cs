@@ -487,7 +487,6 @@ public sealed partial class WebhookManager : IAsyncDisposable
     {
         private readonly Action _unsubscribe;
         private readonly CancellationTokenSource _cancel;
-        private int _released;
 
         internal DeliveryWorker(Action unsubscribe, CancellationTokenSource cancel)
         {
@@ -501,17 +500,13 @@ public sealed partial class WebhookManager : IAsyncDisposable
         internal int Blocked;
 
         /// <summary>
-        /// Tear down the subscription and release the loop. Idempotent, because
-        /// unregister-then-shutdown is an ordinary sequence and cancelling a
-        /// disposed token source throws.
+        /// Tear down the subscription and release the loop. Called exactly once:
+        /// a worker is released only by whoever removes it from <c>_workers</c>
+        /// under <c>_gate</c> (Unregister, or ShutdownAsync's snapshot-and-clear),
+        /// so unregister-then-shutdown cannot release it twice.
         /// </summary>
         internal void Release()
         {
-            if (Interlocked.Exchange(ref _released, 1) != 0)
-            {
-                return;
-            }
-
             _unsubscribe();
             _cancel.Cancel();
             _cancel.Dispose();

@@ -72,15 +72,8 @@ public sealed partial class UtermServer
     {
         var ts = _clock.Wall();
         var evt = _deps.Hub.AppendEventData(sessionId, "annotation", annotationData);
-        var seq = 0;
-        if (evt.TryGetValue("seq", out var seqObj) && seqObj is int si)
-        {
-            seq = si;
-        }
-        else if (seqObj is long sl)
-        {
-            seq = (int)sl;
-        }
+        // The router stamps seq as an int (0 for a session with no worker state).
+        var seq = evt.TryGetValue("seq", out var seqObj) && seqObj is int si ? si : 0;
 
         if (evt.TryGetValue("ts", out var tsObj) && tsObj is double td)
         {

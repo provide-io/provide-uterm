@@ -528,30 +528,32 @@ public sealed partial class UtermServer
                 Environment.GetEnvironmentVariable("UTERM_TEST_MODE"), "1", StringComparison.Ordinal)
                 ? TimeSpan.FromMilliseconds(80)
                 : TimeSpan.FromSeconds(15);
-            while (!ctx.RequestAborted.IsCancellationRequested)
+            // Ends only by returning (worker gone) or by the request aborting,
+            // which surfaces as the OperationCanceledException caught below.
+            while (true)
             {
                 using var beatCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
                 beatCts.CancelAfter(beat);
                 try
                 {
-                    while (await sub.Channel.Reader.WaitToReadAsync(beatCts.Token).ConfigureAwait(false))
+                    // Only this handler's own finally completes the channel, so
+                    // the wait never reports "completed" while the loop runs.
+                    _ = await sub.Channel.Reader.WaitToReadAsync(beatCts.Token).ConfigureAwait(false);
+                    while (sub.Channel.Reader.TryRead(out var item))
                     {
-                        while (sub.Channel.Reader.TryRead(out var item))
+                        if (item is null)
                         {
-                            if (item is null)
-                            {
-                                await ctx.Response.WriteAsync(
-                                    "data: {\"type\":\"worker_disconnected\"}\n\n",
-                                    ctx.RequestAborted).ConfigureAwait(false);
-                                await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
-                                return;
-                            }
-
-                            var json = JsonSerializer.Serialize(item, JsonOpts);
-                            await ctx.Response.WriteAsync("data: " + json + "\n\n", ctx.RequestAborted)
-                                .ConfigureAwait(false);
+                            await ctx.Response.WriteAsync(
+                                "data: {\"type\":\"worker_disconnected\"}\n\n",
+                                ctx.RequestAborted).ConfigureAwait(false);
                             await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
+                            return;
                         }
+
+                        var json = JsonSerializer.Serialize(item, JsonOpts);
+                        await ctx.Response.WriteAsync("data: " + json + "\n\n", ctx.RequestAborted)
+                            .ConfigureAwait(false);
+                        await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
                     }
                 }
                 catch (OperationCanceledException) when (!ctx.RequestAborted.IsCancellationRequested)

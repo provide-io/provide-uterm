@@ -270,15 +270,10 @@ public sealed partial class ConnectionManager
             // Publication failures must not strand the replacement transition fence.
         }
 
-        try
-        {
-            await BroadcastHijackStateAsync(
-                publication.WorkerId, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // A failed peer must not strand the replacement transition fence.
-        }
+        // Cannot throw: per-browser send failures are absorbed (and pruned)
+        // inside, and CancellationToken.None leaves nothing to cancel.
+        await BroadcastHijackStateAsync(
+            publication.WorkerId, CancellationToken.None).ConfigureAwait(false);
     }
 
     public bool IsActiveWorker(string workerId, IWorkerWs ws)
@@ -481,22 +476,18 @@ public sealed partial class ConnectionManager
         }
         if (!result.Reconciled) return result;
 
-        try
-        {
-            await BroadcastToBrowsersAsync(
-                workerId,
-                new Dictionary<string, object?>
-                {
-                    ["type"] = "worker_disconnected",
-                    ["worker_id"] = workerId,
-                    ["ts"] = _hub.Clock.Wall(),
-                },
-                CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Teardown publication is best-effort and must not strand successors.
-        }
+        // Neither broadcast below can throw: per-browser send failures are
+        // absorbed (and pruned) inside, and CancellationToken.None leaves
+        // nothing to cancel, so teardown publication cannot strand successors.
+        await BroadcastToBrowsersAsync(
+            workerId,
+            new Dictionary<string, object?>
+            {
+                ["type"] = "worker_disconnected",
+                ["worker_id"] = workerId,
+                ["ts"] = _hub.Clock.Wall(),
+            },
+            CancellationToken.None).ConfigureAwait(false);
 
         try
         {
@@ -510,14 +501,7 @@ public sealed partial class ConnectionManager
             // Host callbacks cannot make authoritative teardown fail.
         }
 
-        try
-        {
-            await BroadcastHijackStateAsync(workerId, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // Teardown publication is best-effort and must not strand successors.
-        }
+        await BroadcastHijackStateAsync(workerId, CancellationToken.None).ConfigureAwait(false);
         return result;
     }
 
