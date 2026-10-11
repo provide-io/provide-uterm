@@ -134,12 +134,10 @@ func (w *WebhookIdentityProvider) resolve(ctx context.Context, req *Request) (*P
 	cookies := filterMap(req.Cookies, func(k string) bool { return w.ForwardCookies.Has(k) })
 
 	nonce := w.nonceGen()
-	body, err := json.Marshal(webhookRequestPayload{
+	// String maps and strings only: json.Marshal cannot fail.
+	body, _ := json.Marshal(webhookRequestPayload{
 		Headers: headers, Cookies: cookies, Action: "resolve_principal", Nonce: nonce,
 	})
-	if err != nil {
-		return nil, err
-	}
 
 	reqHeaders := map[string]string{"Content-Type": "application/json", "X-Uterm-Nonce": nonce}
 	if w.Secret != "" {
@@ -156,10 +154,11 @@ func (w *WebhookIdentityProvider) resolve(ctx context.Context, req *Request) (*P
 		return nil, err
 	}
 
-	if err := w.verifyResponse(respBody, respHeaders, nonce); err != nil {
+	data, err := w.verifyResponse(respBody, respHeaders, nonce)
+	if err != nil {
 		return nil, err
 	}
-	return w.principalFromResponse(respBody)
+	return principalFromResponse(data)
 }
 
 func (w *WebhookIdentityProvider) post(ctx context.Context, body []byte, headers map[string]string) ([]byte, http.Header, error) {
@@ -185,40 +184,39 @@ func (w *WebhookIdentityProvider) post(ctx context.Context, body []byte, headers
 	return content, resp.Header, nil
 }
 
-// verifyResponse ports the response-signature, replay, and nonce-binding checks.
-func (w *WebhookIdentityProvider) verifyResponse(respBody []byte, respHeaders http.Header, nonce string) error {
+// verifyResponse ports the response-signature, replay, and nonce-binding checks,
+// returning the decoded response document on success.
+func (w *WebhookIdentityProvider) verifyResponse(
+	respBody []byte, respHeaders http.Header, nonce string,
+) (map[string]any, error) {
 	now := w.now()
 	if w.RequireSignedResponse {
 		if !VerifyWebhookSignature(w.Secret, respBody,
 			respHeaders.Get("X-Uterm-Signature"), respHeaders.Get("X-Uterm-Timestamp"), DefaultMaxAgeS, &now) {
-			return errors.New("webhook IdP response signature verification failed")
+			return nil, errors.New("webhook IdP response signature verification failed")
 		}
 	}
 	respSig := respHeaders.Get("X-Uterm-Signature")
 	if respSig != "" && w.replay.seenOrRecord(respSig, now) {
-		return errors.New("webhook IdP response replay detected")
+		return nil, errors.New("webhook IdP response replay detected")
 	}
 
-	var data map[string]any
-	if err := json.Unmarshal(respBody, &data); err != nil {
-		return err
-	}
-	echoed, present := data["nonce"]
-	if w.RequireResponseNonce {
-		if !present || echoed == nil || !hmac.Equal([]byte(asStr(echoed)), []byte(nonce)) {
-			return errors.New("webhook IdP response nonce missing or mismatched")
-		}
-	} else if present && echoed != nil && !hmac.Equal([]byte(asStr(echoed)), []byte(nonce)) {
-		return errors.New("webhook IdP response nonce mismatched")
-	}
-	return nil
-}
-
-func (w *WebhookIdentityProvider) principalFromResponse(respBody []byte) (*Principal, error) {
 	var data map[string]any
 	if err := json.Unmarshal(respBody, &data); err != nil {
 		return nil, err
 	}
+	echoed, present := data["nonce"]
+	if w.RequireResponseNonce {
+		if !present || echoed == nil || !hmac.Equal([]byte(asStr(echoed)), []byte(nonce)) {
+			return nil, errors.New("webhook IdP response nonce missing or mismatched")
+		}
+	} else if present && echoed != nil && !hmac.Equal([]byte(asStr(echoed)), []byte(nonce)) {
+		return nil, errors.New("webhook IdP response nonce mismatched")
+	}
+	return data, nil
+}
+
+func principalFromResponse(data map[string]any) (*Principal, error) {
 	subject, ok := data["subject_id"].(string)
 	if !ok {
 		return nil, errors.New("webhook IdP response missing subject_id")

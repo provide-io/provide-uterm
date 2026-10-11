@@ -22,6 +22,12 @@ import (
 const DevTokenTTLS = 24 * 3600
 
 // defaultDevTokenRelPath is the ~/.cache/uterm/dev_token default location.
+// signDevToken HS256-signs the dev JWT; swappable in tests because signing a
+// MapClaims of plain values with a non-empty []byte key does not fail on demand.
+var signDevToken = func(claims jwt.MapClaims, key []byte) (string, error) {
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+}
+
 var defaultDevTokenRelPath = filepath.Join(".cache", "uterm", "dev_token")
 
 // resolvedTokenPath ports dev_idp._resolved_token_path: caller precedence →
@@ -96,7 +102,7 @@ func SetupDevIDP(auth *serverconfig.AuthConfig, opts DevIDPOptions) (string, err
 	if strings.TrimSpace(opts.Tenant) != "" {
 		claims[auth.JWTTenantClaim] = opts.Tenant
 	}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	token, err := signDevToken(claims, []byte(secret))
 	if err != nil {
 		return "", err
 	}
