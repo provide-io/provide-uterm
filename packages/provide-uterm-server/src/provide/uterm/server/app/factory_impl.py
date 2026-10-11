@@ -89,6 +89,16 @@ if TYPE_CHECKING:
 
         async def aclose(self) -> None: ...
 
+    class _Shutdown(Protocol):
+        """Structural type for the session registry's shutdown."""
+
+        async def shutdown(self) -> None: ...
+
+    class _Closeable(Protocol):
+        """Structural type for the control plane's close."""
+
+        async def close(self) -> None: ...
+
 
 # ``_detect_multi_replica_environment`` is re-exported (it now lives in
 # ``factory_sweeps``) to keep this module's public import surface unchanged.
@@ -124,6 +134,28 @@ async def _aclose_webhook_gates(*gates: _GateClient | None) -> None:
     for gate in gates:
         if gate is not None:
             await gate.aclose()
+
+
+async def _shutdown_registry_then_close(registry: _Shutdown, control_plane: _Closeable) -> None:
+    """Shut the session registry down, then close the control plane, always.
+
+    ``registry.shutdown()`` re-raises the first ``runtime.stop()`` failure (a
+    recording whose final flush failed). The control plane is closed regardless,
+    and the SHUTDOWN failure is the one that propagates: a close that also fails
+    is logged (``server_control_plane_close_failed``) rather than allowed to
+    replace it. With a clean shutdown, a close failure propagates as itself.
+    A module-level helper for the same Python 3.11 coverage reason as
+    ``_aclose_webhook_gates``.
+    """
+    try:
+        await registry.shutdown()
+    except BaseException:
+        try:
+            await control_plane.close()
+        except Exception as close_exc:
+            logger.warning("server_control_plane_close_failed error=%s", close_exc)
+        raise
+    await control_plane.close()
 
 
 def create_server_app(
@@ -563,13 +595,7 @@ def create_server_app(
             # Delegated to a module-level helper so the branchy close loop is
             # tracked correctly on Python 3.11 (see ``_aclose_webhook_gates``).
             await _aclose_webhook_gates(policy_gate, fanout_policy_gate, behavioral_audit_gate, telemetry_sink)
-            # registry.shutdown() re-raises the first runtime.stop() failure (a
-            # recording whose final flush failed); the control plane is closed
-            # regardless, and that failure then propagates out of the lifespan.
-            try:
-                await registry.shutdown()
-            finally:
-                await control_plane.close()
+            await _shutdown_registry_then_close(registry, control_plane)
 
     app = FastAPI(title=config.server.title, lifespan=_lifespan)
     install_ws_denial_support(app)
