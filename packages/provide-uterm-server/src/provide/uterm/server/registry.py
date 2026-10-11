@@ -290,25 +290,28 @@ class SessionRegistry:
             updates["owner"] = payload["owner"]
         async with self._lock:
             session = self._require_session(session_id)
-            if updates:
-                try:
-                    validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), **updates})
-                except ValidationError as exc:
-                    raise SessionValidationError(validation_error_message(exc)) from exc
-                # Egress chokepoint for mutations: re-validate the EFFECTIVE
-                # (merged) connector target so a host CHANGE to a metadata/blocked
-                # IP is rejected.  connector_type is immutable, so the session's
-                # type is authoritative.  Lazy import avoids an import cycle.
-                from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
+            if not updates:
+                # Nothing mutable was sent: report the current status without
+                # validating, egress-checking, or touching the connector.
+                return self._runtime_for(session).status()
+            try:
+                validated = SessionDefinition.model_validate({**session.model_dump(mode="python"), **updates})
+            except ValidationError as exc:
+                raise SessionValidationError(validation_error_message(exc)) from exc
+            # Egress chokepoint for mutations: re-validate the EFFECTIVE
+            # (merged) connector target so a host CHANGE to a metadata/blocked
+            # IP is rejected.  connector_type is immutable, so the session's
+            # type is authoritative.  Lazy import avoids an import cycle.
+            from provide.uterm.server.egress import EgressBlockedError, assert_session_egress_allowed
 
-                try:
-                    await assert_session_egress_allowed(
-                        session.connector_type,
-                        validated.connector_config,
-                        block_private=self._block_private,
-                    )
-                except EgressBlockedError as exc:
-                    raise SessionValidationError(str(exc)) from exc
+            try:
+                await assert_session_egress_allowed(
+                    session.connector_type,
+                    validated.connector_config,
+                    block_private=self._block_private,
+                )
+            except EgressBlockedError as exc:
+                raise SessionValidationError(str(exc)) from exc
             runtime = self._runtime_for(session)
             if "connector_config" in updates:
                 # Offered to the running connector BEFORE anything is committed,
