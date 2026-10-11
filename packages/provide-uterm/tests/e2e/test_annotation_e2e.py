@@ -418,12 +418,16 @@ async def test_detector_annotation_includes_span() -> None:
 
 
 async def test_multiple_snapshots_increasing_seq() -> None:
-    """Two snapshots with patterns produce annotations with distinct increasing sequence numbers."""
+    """Two snapshots with patterns produce annotations with distinct increasing sequence numbers.
+
+    The two screens match different rules: the snapshot path records a read-path
+    match only once, so a second screen showing the same key would add nothing.
+    """
     async with _live_server_with_recording([_session("seq1")]) as (registry, base_url):
         runtime = await _start_and_get_runtime(registry, base_url, "seq1")
 
         await runtime._log_snapshot({"screen": "AKIAIOSFODNN7EXAMPLE first"})
-        await runtime._log_snapshot({"screen": "AKIAIOSFODNN7EXAMPLE second"})
+        await runtime._log_snapshot({"screen": "Bearer abcdefgh12345678 second"})
         await asyncio.sleep(0.1)
         if runtime._logger:
             await runtime._logger.flush()
