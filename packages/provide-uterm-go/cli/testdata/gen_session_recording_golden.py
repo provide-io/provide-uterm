@@ -22,8 +22,12 @@ is how the server factory builds every runtime: each match is an
 ``annotation`` entry. Read-path rules run on each snapshot's screen and on each
 streamed ``term`` frame, both with escape sequences removed (the stream
 carrying a partial match, and an unterminated escape sequence, across frames),
-and send-path rules on typed input (carrying likewise). The snapshot path skips
-a read-path match the recording already holds; the stream path never does. Every ``ts`` in the script has a
+and send-path rules on typed input (carrying likewise). Read-path matches are
+deduped per recording on a digest of (rule id, full matched text), by the rule
+in ``HostedSessionRuntime.__init__``: the snapshot path skips a match the
+recording already holds; the stream path records every match except one a
+snapshot recorded that arrives in the very next stream chunk, which it consumes
+once (pending snapshot keys expire with that chunk, matched or not). Every ``ts`` in the script has a
 fractional part: an integral float is ``4.0`` on CPython's wire and ``4`` once
 decoded into a Go float64 and re-encoded, a difference in number models rather than in recording, and a
 connector's stamps are never integral anyway. Wall-clock ``ts`` fields and the
@@ -79,6 +83,7 @@ SCRIPT: list[list[Any]] = [
 ]
 
 _KEY = "AKIA0123456789AB"  # pragma: allowlist secret
+_KEY_B = "AKIA9876543210ZY"  # pragma: allowlist secret
 
 # Every path a rule can match on, and the ones it must not.
 ANNOTATED_SCRIPT: list[list[Any]] = [
@@ -101,15 +106,34 @@ ANNOTATED_SCRIPT: list[list[Any]] = [
     ["send", "shutdown now\r"],
     # A styled screen is scanned as text: sudo is found through its SGR codes.
     # The rm -rf on it was already recorded from the earlier screen, so the
-    # snapshot path skips it (rule + matched text is the dedupe key).
+    # snapshot path skips it (the key is a digest of rule id + matched text).
     ["outbound", {"type": "snapshot", "screen": "# \x1b[1msudo\x1b[0m rm -rf /tmp/x\n# ", "ts": 5.5}],
     # An escape sequence split across frames is carried, so the second frame
-    # does not leave "msudo" behind; the stream path never suppresses a match,
-    # so this sudo is recorded although the snapshot already recorded one.
+    # does not leave "msudo" behind. The snapshot's sudo was pending only for
+    # the very next chunk -- "ok \x1b[1", which completes no match -- so it has
+    # expired, and this streamed sudo is recorded a second time (a duplicate is
+    # preferred over a missed annotation; it would have been consumed had the
+    # match arrived in that next chunk).
     ["outbound", {"type": "term", "data": "ok \x1b[1", "ts": 6.25}],
     ["outbound", {"type": "term", "data": "msudo reboot\x1b[0m\r\n", "ts": 6.5}],
     # The same screen again records nothing new: every match on it is known.
     ["outbound", {"type": "snapshot", "screen": "# \x1b[1msudo\x1b[0m rm -rf /tmp/x\n# ", "ts": 6.75}],
+    # A second, different credential of the same rule is recorded: same label
+    # and description as the first, but a different matched text. Shown again,
+    # it is known and skipped.
+    ["outbound", {"type": "snapshot", "screen": f"# echo {_KEY_B}\n# ", "ts": 7.25}],
+    ["outbound", {"type": "snapshot", "screen": f"# echo {_KEY_B}\n# ", "ts": 7.5}],
+    # A snapshot then the same text in the very next chunk: recorded once, the
+    # chunk consuming the snapshot's pending key. Streamed again, it is a new
+    # occurrence and recorded.
+    ["outbound", {"type": "snapshot", "screen": "$ pkexec visudo\n$ ", "ts": 8.25}],
+    ["outbound", {"type": "term", "data": "$ pkexec visudo\r\n", "ts": 8.5}],
+    ["outbound", {"type": "term", "data": "$ pkexec visudo\r\n", "ts": 8.75}],
+    # Expiry: a chunk with no match still ends the pending keys, so the same
+    # text in the chunk after it is recorded again.
+    ["outbound", {"type": "snapshot", "screen": "$ kubectl delete pod web\n$ ", "ts": 9.25}],
+    ["outbound", {"type": "term", "data": "building...\r\n", "ts": 9.5}],
+    ["outbound", {"type": "term", "data": "$ kubectl delete pod web\r\n", "ts": 9.75}],
     ["outbound", {"type": "hijack_state", "enabled": True, "owner": "ops"}],
 ]
 

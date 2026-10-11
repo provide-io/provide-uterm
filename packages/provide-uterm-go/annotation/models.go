@@ -18,7 +18,11 @@
 // CompilePattern rather than being silently dropped.
 package annotation
 
-import "regexp"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"regexp"
+)
 
 // AnnotationSpan is a contiguous range of recording event sequence numbers.
 type AnnotationSpan struct {
@@ -35,6 +39,25 @@ type Annotation struct {
 	Source      string
 	Principal   string
 	Span        *AnnotationSpan
+	// MatchKey is AnnotationMatchKey(rule id, full match) for a detector
+	// annotation, "" for any other. It is NOT serialised (ToDict omits it, and
+	// it is excluded from JSON): an in-process identity for dedupe, not
+	// recorded data. Unlike the reference's dataclass field it does take part
+	// in ==; compare ToDict output for the reference's equality.
+	MatchKey string `json:"-"`
+}
+
+// AnnotationMatchKey is annotation_match_key: the identity of one detector
+// match, the lowercase hex SHA-256 of ruleID's bytes, one NUL byte, then the
+// FULL matched text's bytes (not the 80-character description cut). The
+// digest names the rule and the exact text it matched -- two different AWS
+// keys get two different keys, the same key seen twice gets the same one --
+// without the raw text (often a secret) being kept anywhere. Go strings are
+// hashed as the bytes they hold, which for valid UTF-8 is the reference's
+// UTF-8 encoding (and for a lone surrogate, its surrogatepass encoding).
+func AnnotationMatchKey(ruleID, match string) string {
+	sum := sha256.Sum256([]byte(ruleID + "\x00" + match))
+	return hex.EncodeToString(sum[:])
 }
 
 // ToDict serialises to a plain map, with "span" as a nested map when present

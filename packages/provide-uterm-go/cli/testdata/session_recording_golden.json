@@ -215,6 +215,70 @@
   [
    "outbound",
    {
+    "type": "snapshot",
+    "screen": "# echo AKIA9876543210ZY\n# ",
+    "ts": 7.25
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "# echo AKIA9876543210ZY\n# ",
+    "ts": 7.5
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "$ pkexec visudo\n$ ",
+    "ts": 8.25
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "$ pkexec visudo\r\n",
+    "ts": 8.5
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "$ pkexec visudo\r\n",
+    "ts": 8.75
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "$ kubectl delete pod web\n$ ",
+    "ts": 9.25
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "building...\r\n",
+    "ts": 9.5
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "$ kubectl delete pod web\r\n",
+    "ts": 9.75
+   }
+  ],
+  [
+   "outbound",
+   {
     "type": "hijack_state",
     "enabled": true,
     "owner": "ops"
@@ -1004,6 +1068,125 @@
      "ts": 6.75,
      "raw": "# \u001b[1msudo\u001b[0m rm -rf /tmp/x\n# ",
      "raw_bytes_b64": "IyAbWzFtc3VkbxtbMG0gcm0gLXJmIC90bXAveAojIA=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "# echo AKIA9876543210ZY\n# ",
+     "ts": 7.25,
+     "raw": "# echo AKIA9876543210ZY\n# ",
+     "raw_bytes_b64": "IyBlY2hvIEFLSUE5ODc2NTQzMjEwWlkKIyA="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 9,
+      "to_seq": 9
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "# echo AKIA9876543210ZY\n# ",
+     "ts": 7.5,
+     "raw": "# echo AKIA9876543210ZY\n# ",
+     "raw_bytes_b64": "IyBlY2hvIEFLSUE5ODc2NTQzMjEwWlkKIyA="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ pkexec visudo\n$ ",
+     "ts": 8.25,
+     "raw": "$ pkexec visudo\n$ ",
+     "raw_bytes_b64": "JCBwa2V4ZWMgdmlzdWRvCiQg"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "privilege_escalation",
+     "description": "pkexec privilege escalation detected: pkexec",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 11,
+      "to_seq": 11
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "privilege_escalation",
+     "description": "pkexec privilege escalation detected: pkexec",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 11,
+      "to_seq": 11
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ kubectl delete pod web\n$ ",
+     "ts": 9.25,
+     "raw": "$ kubectl delete pod web\n$ ",
+     "raw_bytes_b64": "JCBrdWJlY3RsIGRlbGV0ZSBwb2Qgd2ViCiQg"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "destructive_command",
+     "description": "kubectl delete command detected: kubectl delete",
+     "severity": "critical",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 12,
+      "to_seq": 12
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "destructive_command",
+     "description": "kubectl delete command detected: kubectl delete",
+     "severity": "critical",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 12,
+      "to_seq": 12
+     }
     },
     "session_id": "rec"
    },

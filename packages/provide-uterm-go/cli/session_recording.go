@@ -53,53 +53,31 @@ func atPasswordPrompt(text string) bool {
 	return passwordPromptRE.MatchString(strings.TrimRightFunc(text, unicode.IsSpace))
 }
 
-// incompleteEscapeTailRE is runtime_helpers.py _INCOMPLETE_ESCAPE_TAIL, anchored
-// as its fullmatch is: an escape sequence cut off at the end of a streamed
-// chunk -- a bare ESC, or a CSI (ESC [) whose parameter/intermediate bytes have
-// not yet reached a final byte. The grammar is exactly that of StripANSI's
-// escape pattern (screen.py _ANSI_ESCAPE_RE): anything it would strip once
-// complete, and nothing else, is held back.
-var incompleteEscapeTailRE = regexp.MustCompile(`\A\x1b(?:\[[0-?]*[ -/]*)?\z`)
-
-// maxEscapeCarry is _MAX_ESCAPE_CARRY: the longest tail held back between
-// chunks, ESC included. A real sequence is a handful of bytes; past this the
-// "sequence" is not one (or is hostile), and it is released into the text
-// rather than carried forever.
-const maxEscapeCarry = 64
-
-// splitIncompleteEscape is _split_incomplete_escape: text split into
-// (complete, carry), carry being an unterminated trailing escape sequence the
-// caller prepends to the next chunk. StripANSI sees one chunk at a time, so
-// "\x1b[1" + "msudo" would strip to "\x1b[1" (no final byte, left alone) and
-// "msudo", and \bsudo\b would miss. Only the LAST ESC can start an
-// unterminated tail (CSI parameter bytes never include ESC). A tail longer
-// than maxEscapeCarry is not carried. The reference measures that in code
-// points and this in bytes, which agree on every tail the pattern accepts:
-// it accepts ASCII only.
-func splitIncompleteEscape(text string) (complete, carry string) {
-	start := strings.LastIndexByte(text, 0x1b)
-	if start < 0 || len(text)-start > maxEscapeCarry || !incompleteEscapeTailRE.MatchString(text[start:]) {
-		return text, ""
-	}
-	return text[:start], text[start:]
-}
-
-// maxReadAnnotationKeys is _MAX_READ_ANNOTATION_KEYS: the bound on a
-// recording's set of read-path annotation keys. Past it the set is cleared
-// and starts over: simple, and the worst case is that a snapshot repeats an
-// annotation the stream already recorded once more than 1024 distinct
-// read-path matches ago.
+// maxReadAnnotationKeys is _MAX_READ_ANNOTATION_KEYS: the bound on each of a
+// recording's sets of read-path annotation keys (readAnnotationKeys,
+// snapshotOnlyKeys). Past it the set is cleared and starts over: simple, and
+// the worst case is one repeated (or, for the snapshot-only set, one extra)
+// annotation more than 1024 distinct read-path matches after the first.
 const maxReadAnnotationKeys = 1024
 
+// addBounded is _add_bounded: key added to keys, which is cleared first when
+// it holds maxReadAnnotationKeys.
+func addBounded(keys map[string]struct{}, key string) {
+	if len(keys) >= maxReadAnnotationKeys {
+		clear(keys)
+	}
+	keys[key] = struct{}{}
+}
+
 // readAnnotationKey is _read_annotation_key: a read-path annotation's identity
-// for snapshot dedupe, rule + matched text. Annotation carries no rule id;
-// Label is the rule's category label and Description the rule's own template
-// formatted with the match (cut at 80 characters), so the pair names the rule
-// and, for every rule whose template embeds {match}, the matched text.
-// Credential rules deliberately never embed the match, so for them the key is
-// the rule alone.
+// for stream/snapshot dedupe, the detector's MatchKey -- SHA-256 of rule id +
+// NUL + full matched text (annotation.AnnotationMatchKey). It names the rule
+// AND the exact text matched, so two different AWS keys, which share a label
+// and a description (credential rules never embed the match), are two keys;
+// and it is a digest, so the dedupe sets never hold a raw secret. It is not
+// part of the recorded annotation (ToDict omits it).
 func readAnnotationKey(a annotation.Annotation) string {
-	return a.Label + "\x00" + a.Description
+	return a.MatchKey
 }
 
 // recordingRedactor is the reference's _build_recording_redactor: the hub's
@@ -159,13 +137,32 @@ type sessionRecorder struct {
 	// ended inside of, held back and prepended to the next chunk before
 	// StripANSI (see scanOutput).
 	escapeCarry string
-	// readAnnotationKeys is _read_annotation_keys. Read-path rules run twice
-	// over the same output -- once over each streamed term chunk, once over
-	// each snapshot screen -- so every read-path annotation recorded is
-	// remembered here (by readAnnotationKey) and the snapshot path skips one
-	// already in it. Both are scoped to one recording and reset with it: see
+	// Read-path rules run twice over the same output -- once over each
+	// streamed term chunk, once over each snapshot screen. Dedupe between the
+	// two is keyed by readAnnotationKey (a digest; never the raw text). THE
+	// RULE (runtime.py HostedSessionRuntime.__init__, mirrored exactly):
+	//   - readAnnotationKeys (_read_annotation_keys): every key recorded in
+	//     this recording, by either path.
+	//   - snapshotOnlyKeys (_snapshot_only_keys): keys the SNAPSHOT path
+	//     recorded since the last processed stream chunk.
+	//   Snapshot match: key in readAnnotationKeys -> skip. Otherwise record it
+	//   and add the key to BOTH sets.
+	//   Stream chunk (non-empty, while recording): for each match, key in
+	//   snapshotOnlyKeys -> remove it and skip (the snapshot already recorded
+	//   this occurrence). Otherwise record it and add the key to
+	//   readAnnotationKeys. AFTER the chunk's matches, snapshotOnlyKeys is
+	//   CLEARED: a pending key dedupes only the one stream chunk right after
+	//   the snapshot(s).
+	// So stream-then-snapshot records once, snapshot-then-next-chunk records
+	// once, a run of identical snapshots records once, and a command streamed
+	// twice is annotated twice; a pending key never suppresses a later,
+	// genuinely new match. Accepted cost: if the snapshot's text reaches the
+	// stream only in a LATER chunk, it is recorded a second time -- a
+	// duplicate is preferred over a missed annotation. Both sets are bounded
+	// (addBounded), scoped to one recording and reset with it: see
 	// AttemptEnded.
 	readAnnotationKeys map[string]struct{}
+	snapshotOnlyKeys   map[string]struct{}
 }
 
 var _ bridge.Observer = (*sessionRecorder)(nil)
@@ -184,7 +181,7 @@ func newSessionRecorder(
 	}
 	s := &sessionRecorder{
 		sessionID: sessionID, store: store, cfg: cfg, detector: detector, logger: logger,
-		readAnnotationKeys: map[string]struct{}{},
+		readAnnotationKeys: map[string]struct{}{}, snapshotOnlyKeys: map[string]struct{}{},
 	}
 	if detector != nil {
 		s.sendStream = annotation.NewStreamingDetector(detector, 0)
@@ -274,11 +271,12 @@ func (s *sessionRecorder) AttemptEnded(err error) {
 		s.warn(s.logEvent("runtime_error", map[string]any{"error": err.Error()}))
 	}
 	s.rec, s.writer = nil, nil
-	// Both belong to the recording that just ended (_stop_recording): the next
+	// All belong to the recording that just ended (_stop_recording): the next
 	// one annotates what it sees afresh, and does not begin with a stale
 	// half-sequence.
 	s.escapeCarry = ""
 	clear(s.readAnnotationKeys)
+	clear(s.snapshotOnlyKeys)
 	s.mu.Unlock()
 	if err := rec.Stop(); err != nil {
 		s.warn(err)
@@ -363,15 +361,16 @@ func (s *sessionRecorder) logSnapshot(frame map[string]any) error {
 	if s.detector == nil {
 		return nil
 	}
-	// The snapshot path DEDUPES: a match the stream (or an earlier snapshot of
-	// the same screen) already recorded is skipped, so neither a
-	// stream+snapshot pair nor a run of identical snapshots records it twice.
+	// The snapshot path DEDUPES (rule on sessionRecorder): a match already
+	// recorded by the stream or an earlier snapshot is skipped; a new one is
+	// recorded and left pending for the next stream chunk.
 	for _, a := range s.detector.Detect("read", text, s.eventSeq) {
 		key := readAnnotationKey(a)
 		if _, seen := s.readAnnotationKeys[key]; seen {
 			continue
 		}
 		s.rememberReadAnnotation(key)
+		addBounded(s.snapshotOnlyKeys, key)
 		if err := s.logEvent("annotation", a.ToDict()); err != nil {
 			return err
 		}
@@ -382,32 +381,42 @@ func (s *sessionRecorder) logSnapshot(frame map[string]any) error {
 // rememberReadAnnotation is _remember_read_annotation: key added to the bounded
 // read-path set, which is cleared first when full. Caller holds s.mu.
 func (s *sessionRecorder) rememberReadAnnotation(key string) {
-	if len(s.readAnnotationKeys) >= maxReadAnnotationKeys {
-		clear(s.readAnnotationKeys)
-	}
-	s.readAnnotationKeys[key] = struct{}{}
+	addBounded(s.readAnnotationKeys, key)
 }
 
 // scanOutput is _scan_output: read-path rules over streamed output, escape
 // sequences removed, only while recording. An escape sequence split across
 // chunks ("...\x1b[1" | "msudo ...") would leave "msudo" behind if each chunk
 // were stripped alone, so an unterminated trailing sequence is held back in
-// escapeCarry and prepended to the next chunk (bounded by maxEscapeCarry).
-// The stream path NEVER suppresses a match -- a command run twice is
-// annotated twice -- but remembers each one so the snapshot path, which sees
-// the same text again, does not record it a second time. Caller holds s.mu.
+// escapeCarry and prepended to the next chunk (screen.SplitIncompleteEscape,
+// bounded by screen.MaxEscapeCarry).
+//
+// The stream path records every match -- a command run twice is annotated
+// twice -- EXCEPT a match in the first chunk after a snapshot that already
+// recorded it (a key in snapshotOnlyKeys), which it consumes once instead;
+// the pending keys are then cleared, matched or not. Every match it records
+// is remembered so the snapshot path, which sees the same text again, does
+// not record it a second time. Full rule: sessionRecorder. Caller holds s.mu.
 func (s *sessionRecorder) scanOutput(data string) error {
 	if s.rec == nil || s.readStream == nil || data == "" {
 		return nil
 	}
 	var text string
-	text, s.escapeCarry = splitIncompleteEscape(s.escapeCarry + data)
+	text, s.escapeCarry = screen.SplitIncompleteEscape(s.escapeCarry+data, screen.MaxEscapeCarry)
 	for _, a := range s.readStream.Detect("read", screen.StripANSI(text), s.eventSeq) {
-		s.rememberReadAnnotation(readAnnotationKey(a))
+		key := readAnnotationKey(a)
+		if _, pending := s.snapshotOnlyKeys[key]; pending {
+			delete(s.snapshotOnlyKeys, key)
+			continue
+		}
+		s.rememberReadAnnotation(key)
 		if err := s.logEvent("annotation", a.ToDict()); err != nil {
 			return err
 		}
 	}
+	// Pending snapshot keys expire with the first chunk after the snapshot,
+	// matched or not, so they never suppress a later, new match.
+	clear(s.snapshotOnlyKeys)
 	return nil
 }
 

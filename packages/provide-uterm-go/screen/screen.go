@@ -13,16 +13,67 @@
 package screen
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 )
 
-// ansiEscapeRE mirrors Python's _ANSI_ESCAPE_RE:
+// The escape grammar StripANSI removes, in named parts (screen.py _ESC,
+// _CSI_INTRODUCER, ...) so the chunk-carry check (SplitIncompleteEscape) is
+// built from the SAME pieces and cannot drift:
 //
-//	\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-_])
+//	CSI: ESC "[" <parameter bytes 0x30-0x3F>* <intermediate bytes 0x20-0x2F>* <final 0x40-0x7E>
+//	Fe:  ESC <one byte 0x40-0x5F> (a two-byte escape; "[" itself is one, so a
+//	     bare "ESC [" with nothing after it is ambiguous until more arrives)
+const (
+	escByte              = "\x1b"
+	csiIntroducer        = `\[`
+	csiParameterBytes    = `[0-?]*`
+	csiIntermediateBytes = `[ -/]*`
+	csiFinalByte         = `[@-~]`
+	feFinalByte          = `[@-_]`
+)
+
+// csiPrefix is _CSI_PREFIX: a CSI up to, not including, its final byte.
+var csiPrefix = strings.Join([]string{csiIntroducer, csiParameterBytes, csiIntermediateBytes}, "")
+
+// ansiEscapeRE mirrors Python's _ANSI_ESCAPE_RE,
+// \x1b(?:\[[0-?]*[ -/]*[@-~]|[@-_]). It has no lookarounds, so it compiles
+// under RE2 unchanged.
+var ansiEscapeRE = regexp.MustCompile(fmt.Sprintf("%s(?:%s%s|%s)", escByte, csiPrefix, csiFinalByte, feFinalByte))
+
+// incompleteEscapeRE is _INCOMPLETE_ESCAPE_RE, anchored as its fullmatch is: a
+// proper prefix of something ansiEscapeRE strips -- a bare ESC, or a CSI whose
+// parameter/intermediate bytes have not yet reached a final byte.
+var incompleteEscapeRE = regexp.MustCompile(fmt.Sprintf(`\A%s(?:%s)?\z`, escByte, csiPrefix))
+
+// MaxEscapeCarry is MAX_ESCAPE_CARRY: the longest tail SplitIncompleteEscape
+// holds back, ESC included. A real sequence is a handful of bytes; past this
+// the "sequence" is not one (or is hostile), and it is released into the text
+// rather than carried forever.
+const MaxEscapeCarry = 64
+
+// SplitIncompleteEscape is split_incomplete_escape: text split into
+// (complete, carry), carry being an unterminated trailing escape sequence.
 //
-// This pattern contains no lookarounds, so it compiles under RE2 unchanged.
-var ansiEscapeRE = regexp.MustCompile("\x1b(?:\\[[0-?]*[ -/]*[@-~]|[@-_])")
+// For text that arrives in chunks: StripANSI sees one chunk at a time, so
+// "\x1b[1" + "msudo" would strip to "\x1b[1" (no final byte, left alone) and
+// "msudo". The caller strips complete now and prepends carry to the next
+// chunk, so the whole sequence is stripped once it completes.
+//
+// carry is non-empty exactly when the text from the LAST ESC to the end is a
+// proper prefix of a sequence StripANSI removes and is at most maxCarry long
+// (pass MaxEscapeCarry for the reference default). Only the last ESC can start
+// one: no byte of an incomplete sequence is ESC. The reference measures the
+// bound in code points and this in bytes, which agree on every tail the
+// pattern accepts: it accepts ASCII only.
+func SplitIncompleteEscape(text string, maxCarry int) (complete, carry string) {
+	start := strings.LastIndexByte(text, 0x1b)
+	if start < 0 || len(text)-start > maxCarry || !incompleteEscapeRE.MatchString(text[start:]) {
+		return text, ""
+	}
+	return text[:start], text[start:]
+}
 
 // actionTagRE mirrors Python's _ACTION_TAG_RE: <([^<>\r\n]{1,80})>
 var actionTagRE = regexp.MustCompile(`<([^<>\r\n]{1,80})>`)
