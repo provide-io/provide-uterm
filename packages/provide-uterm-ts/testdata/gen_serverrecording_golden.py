@@ -550,6 +550,14 @@ def main() -> None:
                 if probe["id"] == "download":
                     validators = {name: response.headers[name] for name in ("etag", "last-modified")}
                 headers, body = _unbound(response, _body(response))
+                volatile_paths = VOLATILE_PATHS.get(str(probe["id"]), ())
+                if volatile_paths and "content-length" in headers:
+                    # A masked value's LENGTH is just as volatile as the value:
+                    # ``path`` is a mkdtemp directory under the host's TMPDIR,
+                    # so the body is 133 bytes under /tmp and 161 under a macOS
+                    # /var/folders/... TMPDIR. Recording the raw length made the
+                    # corpus depend on the machine that recorded it.
+                    headers["content-length"] = VOLATILE
                 records.append(
                     {
                         "id": probe["id"],
@@ -559,7 +567,7 @@ def main() -> None:
                         "request_headers": dict(probe.get("headers", {})),
                         "status": response.status_code,
                         "headers": headers,
-                        "body": _mask(body, VOLATILE_PATHS.get(str(probe["id"]), ())),
+                        "body": _mask(body, volatile_paths),
                     }
                 )
     finally:
