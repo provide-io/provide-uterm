@@ -100,6 +100,15 @@ public sealed class SessionStatus
     /// <summary>Connector config used at connect time. Hub state, not wire state.</summary>
     [JsonIgnore]
     public Dictionary<string, object?> ConnectorConfig { get; set; } = new();
+
+    /// <summary>
+    /// Which recording <see cref="RecordingEnabled"/> refers to: bumped each
+    /// time recording turns on, so a recording that stops and starts again is a
+    /// different recording even when nothing observed it while it was off (the
+    /// per-recording annotation state keys on it). Hub state, not wire state.
+    /// </summary>
+    [JsonIgnore]
+    public long RecordingGeneration { get; set; }
 }
 
 /// <summary>
@@ -335,6 +344,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
         Tags = st.Tags.ToList(),
         RecordingEnabled = st.RecordingEnabled,
         RecordingAvailable = st.RecordingAvailable,
+        RecordingGeneration = st.RecordingGeneration,
         Owner = st.Owner,
         Visibility = st.Visibility,
         StoppedAt = st.StoppedAt,
@@ -363,6 +373,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
                     Tags = def.Tags.ToList(),
                     RecordingEnabled = recording,
                     RecordingAvailable = recording,
+                    RecordingGeneration = recording ? 1 : 0,
                     Owner = def.Owner,
                     Visibility = def.Visibility,
                 };
@@ -376,6 +387,7 @@ public sealed class InMemorySessionRegistry : ISessionRegistry
                 st.Owner = def.Owner;
                 st.Tags = def.Tags.ToList();
                 st.AutoStart = def.AutoStart;
+                if (recording && !st.RecordingEnabled) st.RecordingGeneration++;
                 st.RecordingEnabled = recording;
                 st.RecordingAvailable = recording;
             }

@@ -31,9 +31,12 @@ namespace Provide.Uterm.Server;
 ///
 /// <para>The escape carry and the read-path keys belong to one recording: the
 /// reference clears both in <c>_stop_recording</c>. This port has no separate
-/// recording object — a recording is "the session's status says recording" —
-/// so they are cleared whenever a scan finds the session not recorded, which is
-/// the first moment this annotator can see that the recording ended.</para>
+/// recording object — a recording is "the session's status says recording",
+/// identified by its <see cref="SessionStatus.RecordingGeneration"/> — so they
+/// are cleared when a scan first sees a different recording state from the last
+/// one it saw: the recording ending, or a new one (a later generation) having
+/// begun, even if no frame arrived while recording was off. A scan that sees
+/// the same state as the last one takes no lock to check it.</para>
 /// </summary>
 internal sealed class SessionAnnotator
 {
@@ -63,23 +66,51 @@ internal sealed class SessionAnnotator
     private readonly PatternDetector _detector;
     private readonly StreamingDetector _readStream;
     private readonly StreamingDetector _sendStream;
-    private readonly Func<bool> _isRecording;
+    /// <summary><see cref="ObservedRecording"/>'s value for "not recorded".</summary>
+    private const long NotRecording = -1;
+
+    private readonly Func<long?> _recording;
     private readonly Func<Dictionary<string, object?>, Task> _record;
     private readonly HashSet<string> _readAnnotationKeys = new(StringComparer.Ordinal);
     private string _escapeCarry = "";
     private int _eventSeq;
 
+    /// <summary>
+    /// The recording state the last scan saw: a recording's generation, or
+    /// <see cref="NotRecording"/>. The carry and keys belong to it. Starts as
+    /// not recorded, which has no state to clear.
+    /// </summary>
+    private long _observedRecording = NotRecording;
+
+    private int _stateResets;
+
     /// <param name="detector">Shared across sessions; it holds no state.</param>
-    /// <param name="isRecording">Read on every frame, as the reference checks its logger.</param>
+    /// <param name="isRecording">
+    /// Read on every frame, as the reference checks its logger. With no
+    /// generation to tell recordings apart, a recording that stops and starts
+    /// again between two frames reads as the same one.
+    /// </param>
     /// <param name="record">Writes one annotation payload to the session's recording.</param>
     public SessionAnnotator(
         PatternDetector detector, Func<bool> isRecording, Func<Dictionary<string, object?>, Task> record)
+        : this(detector, () => isRecording() ? 0 : null, record)
+    {
+    }
+
+    /// <param name="detector">Shared across sessions; it holds no state.</param>
+    /// <param name="recording">
+    /// Read on every frame: the generation of the session's current recording
+    /// (non-negative), or null when it is not recorded.
+    /// </param>
+    /// <param name="record">Writes one annotation payload to the session's recording.</param>
+    public SessionAnnotator(
+        PatternDetector detector, Func<long?> recording, Func<Dictionary<string, object?>, Task> record)
     {
         _detector = detector;
         // One stream per direction, so typed text never bridges into printed text.
         _readStream = new StreamingDetector(detector);
         _sendStream = new StreamingDetector(detector);
-        _isRecording = isRecording;
+        _recording = recording;
         _record = record;
     }
 
@@ -87,6 +118,12 @@ internal sealed class SessionAnnotator
     internal string EscapeCarry
     {
         get { lock (_gate) return _escapeCarry; }
+    }
+
+    /// <summary>How many times a change of recording cleared the carry and keys (tests).</summary>
+    internal int StateResets
+    {
+        get { lock (_gate) return _stateResets; }
     }
 
     /// <summary>How many read-path keys the current recording remembers (tests).</summary>
@@ -200,20 +237,29 @@ internal sealed class SessionAnnotator
     }
 
     /// <summary>
-    /// Whether the session is recorded now. When it is not, the recording the
-    /// carry and keys belonged to has ended, so they go with it (reference:
-    /// <c>_stop_recording</c>).
+    /// Whether the session is recorded now. When the recording state differs
+    /// from the last one seen — the recording ended, or another began — the
+    /// carry and keys belonged to a recording that is over, so they go with it
+    /// (reference: <c>_stop_recording</c>). Only that transition takes the lock.
     /// </summary>
     private bool IsRecording()
     {
-        if (_isRecording()) return true;
-        lock (_gate)
+        var current = _recording() ?? NotRecording;
+        if (Volatile.Read(ref _observedRecording) != current)
         {
-            _escapeCarry = "";
-            _readAnnotationKeys.Clear();
+            lock (_gate)
+            {
+                if (_observedRecording != current)
+                {
+                    _escapeCarry = "";
+                    _readAnnotationKeys.Clear();
+                    _stateResets++;
+                    Volatile.Write(ref _observedRecording, current);
+                }
+            }
         }
 
-        return false;
+        return current != NotRecording;
     }
 
     /// <summary>Record each match as an <c>annotation</c> event, payload as the reference's <c>to_dict()</c>.</summary>

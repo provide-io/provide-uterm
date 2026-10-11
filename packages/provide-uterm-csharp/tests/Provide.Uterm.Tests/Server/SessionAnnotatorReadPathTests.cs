@@ -268,4 +268,125 @@ public sealed class SessionAnnotatorReadPathTests
         Assert.Equal(0, h.Annotator.ReadAnnotationKeyCount);
         Assert.Equal("", h.Annotator.EscapeCarry);
     }
+
+    [Fact]
+    public void OnlyAChangeOfRecordingResetsTheState()
+    {
+        var h = new Harness();
+        Assert.Equal(0, h.Annotator.StateResets);
+        Assert.Equal("", h.Annotator.EscapeCarry);
+        Assert.Equal(0, h.Annotator.ReadAnnotationKeyCount);
+
+        // The first scan sees the recording begin; staying recorded resets nothing.
+        h.Annotator.ScanOutput("$ sudo ls\r\n");
+        Assert.Equal(1, h.Annotator.StateResets);
+        h.Annotator.ScanInput("x");
+        h.Annotator.ScanSnapshot(new Dictionary<string, object?> { ["screen"] = "x" });
+        h.Annotator.ScanOutput("\x1b[1");
+        Assert.Equal(1, h.Annotator.StateResets);
+        Assert.Equal(1, h.Annotator.ReadAnnotationKeyCount);
+        Assert.Equal("\x1b[1", h.Annotator.EscapeCarry);
+
+        // The recording ends: the first scan to see it resets once, and every
+        // later unrecorded scan — output, input or snapshot — leaves it be.
+        h.Recording = false;
+        h.Annotator.ScanOutput("x");
+        Assert.Equal(2, h.Annotator.StateResets);
+        for (var i = 0; i < 3; i++)
+        {
+            h.Annotator.ScanOutput("x");
+            h.Annotator.ScanInput("x");
+            h.Annotator.ScanSnapshot(new Dictionary<string, object?> { ["screen"] = "x" });
+        }
+
+        Assert.Equal(2, h.Annotator.StateResets);
+
+        // Recording again is another change.
+        h.Recording = true;
+        h.Annotator.ScanInput("x");
+        Assert.Equal(3, h.Annotator.StateResets);
+    }
+
+    [Fact]
+    public void AnEmptyUnrecordedChunkDoesNotLookAtTheRecording()
+    {
+        var h = new Harness();
+        h.Annotator.ScanOutput("\x1b[1");
+        h.Recording = false;
+
+        h.Annotator.ScanOutput("");
+
+        Assert.Equal(1, h.Annotator.StateResets);
+        Assert.Equal("\x1b[1", h.Annotator.EscapeCarry);
+    }
+
+    private sealed class GenerationHarness
+    {
+        public long? Generation = 1;
+        public readonly List<Dictionary<string, object?>> Recorded = [];
+        public readonly SessionAnnotator Annotator;
+
+        public GenerationHarness()
+        {
+            Annotator = new SessionAnnotator(new PatternDetector(), () => Generation, data =>
+            {
+                Recorded.Add(data);
+                return Task.CompletedTask;
+            });
+        }
+
+        public Task Term(string data) => Annotator.RecordAsync(Annotator.ScanOutput(data));
+
+        public Task Snapshot(string screen) => Annotator.RecordAsync(
+            Annotator.ScanSnapshot(new Dictionary<string, object?> { ["screen"] = screen }));
+
+        public List<string> Descriptions => Recorded.Select(d => (string)d["description"]!).ToList();
+    }
+
+    [Fact]
+    public async Task ARecordingThatStopsAndStartsBetweenFramesIsANewRecording()
+    {
+        var h = new GenerationHarness();
+        await h.Term("$ sudo ls\r\n\x1b[1");
+        Assert.Equal(1, h.Annotator.ReadAnnotationKeyCount);
+
+        // Off and on again with no frame in between: only the generation says so.
+        h.Generation = 2;
+        await h.Snapshot("$ sudo ls\n");
+
+        Assert.Equal([Sudo, Sudo], h.Descriptions);
+        Assert.Equal("", h.Annotator.EscapeCarry);
+        Assert.Equal(2, h.Annotator.StateResets);
+    }
+
+    [Fact]
+    public async Task TheSameGenerationIsTheSameRecording()
+    {
+        var h = new GenerationHarness { Generation = 0 };
+        await h.Term("$ sudo ls\r\n\x1b[1");
+        await h.Snapshot("$ sudo ls\n");
+
+        Assert.Equal([Sudo], h.Descriptions);
+        Assert.Equal("\x1b[1", h.Annotator.EscapeCarry);
+        Assert.Equal(1, h.Annotator.StateResets);
+
+        // Not recorded is null, never a generation: nothing is scanned.
+        h.Generation = null;
+        Assert.Empty(h.Annotator.ScanOutput("$ sudo ls\r\n"));
+        Assert.Empty(h.Annotator.ScanInput("sudo ls"));
+        Assert.Equal("", h.Annotator.EscapeCarry);
+    }
+
+    [Fact]
+    public async Task WithoutAGenerationAnUnobservedOffAndOnIsTheSameRecording()
+    {
+        // The bool form has nothing to tell two recordings apart by.
+        var h = new Harness();
+        await h.Term("$ sudo ls\r\n");
+        h.Recording = false;
+        h.Recording = true;
+        await h.Snapshot("$ sudo ls\n");
+
+        Assert.Equal([Sudo], h.Descriptions);
+    }
 }

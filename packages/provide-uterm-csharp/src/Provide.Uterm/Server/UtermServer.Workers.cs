@@ -122,7 +122,9 @@ public sealed partial class UtermServer
 
         var annotator = new SessionAnnotator(
             _annotationDetector,
-            () => _deps.Registry.TryGetStatus(sessionId, out var status) && status.RecordingEnabled,
+            () => _deps.Registry.TryGetStatus(sessionId, out var status) && status.RecordingEnabled
+                ? status.RecordingGeneration
+                : null,
             data => RecordDetectedAnnotationAsync(sessionId, data));
         var link = new LocalWorkerLink(_deps.Hub, sessionId, connector, annotator);
         if (await link.AttachAsync(def.InputMode, cancellationToken).ConfigureAwait(false))
