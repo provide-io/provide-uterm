@@ -9,10 +9,14 @@ Read-path detector rules run over every streamed ``term`` chunk and every
 snapshot screen of a recorded hosted session. The reference
 (``provide.uterm.server.runtime.HostedSessionRuntime``) strips escape sequences
 from both, carries an escape sequence cut off at a chunk boundary into the next
-chunk (``_split_incomplete_escape``), records every stream match and skips any
-snapshot match already recorded (``_read_annotation_key``). This corpus pins:
+chunk (``_split_incomplete_escape``), and dedupes the two paths on a digest of
+(rule id, full matched text) (``_read_annotation_key`` = ``Annotation.match_key``):
+a snapshot skips a match already recorded, and the stream chunk right after a
+snapshot skips a match that snapshot recorded. This corpus pins:
 
 * ``split``: ``_split_incomplete_escape`` on edge inputs, and its constants;
+* ``match_keys``: ``annotation_match_key`` on (rule id, match) pairs, and the
+  match keys the detector gives each read-path annotation of some texts;
 * ``scenarios``: a sequence of outbound ``term``/``snapshot`` frames through a
   real runtime (logger mocked) and the annotation descriptions it records, in
   order, plus the escape carry left at the end.
@@ -29,7 +33,7 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-from provide.uterm.annotation import PatternDetector
+from provide.uterm.annotation import PatternDetector, annotation_match_key
 
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.runtime import HostedSessionRuntime
@@ -60,6 +64,23 @@ SPLIT_INPUTS: list[str] = [
     "\x1b[" + "1;" * _MAX_ESCAPE_CARRY,
 ]
 
+MATCH_KEY_INPUTS: list[list[str]] = [
+    ["cred.aws_access_key", "AKIAIOSFODNN7EXAMPLE"],
+    ["", ""],
+    ["r", "caf\u00e9 \u2603 \U0001f600"],
+    ["rule.with\x00nul", "match\x00with nul"],
+]
+
+DETECT_INPUTS: list[str] = [
+    "export K=AKIAIOSFODNN7EXAMPLE",
+    "export K=AKIAJ2345678ABCDWXYZ",
+    "$ sudo ls; rm -rf build",
+    "$ curl https://example.com/" + "a" * 200,
+]
+
+_AWS_A = "AKIAIOSFODNN7EXAMPLE"
+_AWS_B = "AKIAJ2345678ABCDWXYZ"
+
 # Each step is [kind, text]; kind is "term" or "snapshot".
 SCENARIOS: dict[str, list[list[str]]] = {
     "escape_split_across_chunks": [["term", "$ \x1b[1"], ["term", "msudo rm -rf /\r\n"]],
@@ -88,6 +109,37 @@ SCENARIOS: dict[str, list[list[str]]] = {
         ["term", "$ ssh alice@alpha\r\n"],
         ["snapshot", "$ ssh bob@bravo\n"],
     ],
+    "two_credentials_of_one_rule": [
+        ["snapshot", f"$ export K={_AWS_A}\n"],
+        ["snapshot", f"$ export K={_AWS_B}\n"],
+        ["term", f"$ export K={_AWS_A}\r\n"],
+        ["term", f"$ export K={_AWS_B}\r\n"],
+    ],
+    "snapshot_then_same_text_in_next_chunk": [
+        ["snapshot", "$ sudo ls\n"],
+        ["term", "$ sudo ls\r\n"],
+        ["term", "$ sudo ls\r\n"],
+    ],
+    "pending_expires_after_no_match_chunk": [
+        ["snapshot", "$ sudo ls\n"],
+        ["term", "unrelated output\r\n"],
+        ["term", "$ sudo ls\r\n"],
+    ],
+    "later_new_sudo_recorded": [
+        ["snapshot", "$ sudo ls\n"],
+        ["term", "$ sudo ls\r\n"],
+        ["term", "$ sudo reboot\r\n"],
+    ],
+    "pending_consumed_only_by_its_own_match": [
+        ["snapshot", "$ sudo ls\n"],
+        ["term", "$ rm -rf build\r\n"],
+        ["term", "$ sudo ls\r\n"],
+    ],
+    "empty_chunk_leaves_pending": [
+        ["snapshot", "$ sudo ls\n"],
+        ["term", ""],
+        ["term", "$ sudo ls\r\n"],
+    ],
 }
 
 
@@ -108,6 +160,7 @@ async def _scenario(steps: list[list[str]]) -> dict[str, object]:
         "steps": steps,
         "annotations": [{"label": a["label"], "description": a["description"]} for a in recorded],
         "carry": runtime._escape_carry,
+        "pending_snapshot_keys": len(runtime._snapshot_only_keys),
     }
 
 
@@ -125,6 +178,20 @@ def main() -> int:
             {"input": text, "complete": complete, "carry": carry}
             for text in SPLIT_INPUTS
             for complete, carry in [_split_incomplete_escape(text)]
+        ],
+        "match_keys": [
+            {"rule_id": rule_id, "match": match, "key": annotation_match_key(rule_id, match)}
+            for rule_id, match in MATCH_KEY_INPUTS
+        ],
+        "detected_match_keys": [
+            {
+                "text": text,
+                "annotations": [
+                    {"label": a.label, "description": a.description, "match_key": a.match_key}
+                    for a in PatternDetector().detect("read", text, seq=1)
+                ],
+            }
+            for text in DETECT_INPUTS
         ],
         "scenarios": asyncio.run(_scenarios()),
     }
