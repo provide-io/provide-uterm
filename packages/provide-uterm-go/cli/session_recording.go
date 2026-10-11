@@ -126,13 +126,14 @@ func recordingRedactor(enabled bool) redaction.Redactor {
 // itself is stateless and shared by every session.
 //
 // Store writes never happen on the bridge's send/receive goroutines nor under
-// mu: the recording's SessionLogger writes through writer, which hands full
-// batches to a background goroutine (see batchWriter). Opening and closing a
-// recording do their store I/O on the bridge's run goroutine, between
-// connections, outside mu, as the reference awaits them in its run loop.
+// mu: the recording's SessionLogger writes through its own writer, which hands
+// full batches to a background goroutine (see batchWriter). Opening and
+// closing a recording do their store I/O on the bridge's run goroutine,
+// between connections, outside mu, as the reference awaits them in its run
+// loop.
 type sessionRecorder struct {
 	sessionID string
-	writer    *batchWriter
+	store     recording.Store
 	cfg       serverconfig.RecordingConfig
 	logger    *slog.Logger
 
@@ -140,9 +141,18 @@ type sessionRecorder struct {
 	sendStream *annotation.StreamingDetector
 	readStream *annotation.StreamingDetector
 
-	mu               sync.Mutex
-	enabled          bool
-	rec              *sessionlogger.SessionLogger
+	mu      sync.Mutex
+	enabled bool
+	rec     *sessionlogger.SessionLogger
+	// writer is rec's batchWriter, set and cleared with it: a new recording
+	// starts with nothing queued and no failure.
+	writer *batchWriter
+	// unclosed is the last recording, and its writer, when closing it failed:
+	// its unwritten entries are still queued for that recording alone. The
+	// next attempt's start retries the close before it opens anything (see
+	// AttemptStarted).
+	unclosed         *sessionlogger.SessionLogger
+	unclosedWriter   *batchWriter
 	eventSeq         int
 	atPasswordPrompt bool
 	// escapeCarry is _escape_carry: an escape sequence the last streamed chunk
@@ -173,7 +183,7 @@ func newSessionRecorder(
 		logger = ptel.GetLogger(context.Background(), "provide.uterm.server.runtime")
 	}
 	s := &sessionRecorder{
-		sessionID: sessionID, writer: newBatchWriter(store), cfg: cfg, detector: detector, logger: logger,
+		sessionID: sessionID, store: store, cfg: cfg, detector: detector, logger: logger,
 		readAnnotationKeys: map[string]struct{}{},
 	}
 	if detector != nil {
@@ -202,14 +212,31 @@ func (s *sessionRecorder) isEnabled() bool {
 // Port of _start_recording, including both flush knobs. The store calls Start
 // makes run outside mu; the bridge calls this from its run goroutine before
 // it dials, so nothing else observes the attempt until it returns.
+//
+// A recording the last attempt could not close is settled first, whether or
+// not this attempt records: its close is retried, writing what it still owes
+// into it and then its log_stop, so all of it lands before this recording's
+// log_start. If the store refuses it again it is dropped, with a warning
+// naming how many entries were lost; it is never written after, or into, the
+// recording opened here. Each recording gets a fresh writer, so a failure the
+// last one met is not this connection's.
 func (s *sessionRecorder) AttemptStarted() {
 	s.mu.Lock()
 	skip := s.rec != nil || !s.enabled
+	unclosed, unclosedWriter := s.unclosed, s.unclosedWriter
+	s.unclosed, s.unclosedWriter = nil, nil
 	s.mu.Unlock()
+	if unclosed != nil {
+		if err := unclosed.Stop(); err != nil {
+			s.logger.Warn("hosted_session_recording_dropped", "session_id", s.sessionID,
+				"unwritten_entries", unclosedWriter.unwritten(), "error", err.Error())
+		}
+	}
 	if skip {
 		return
 	}
-	rec := sessionlogger.New(s.writer, sessionlogger.Options{
+	writer := newBatchWriter(s.store)
+	rec := sessionlogger.New(writer, sessionlogger.Options{
 		MaxBytes:           int(s.cfg.MaxBytes),
 		ControlChannelMode: sessionlogger.ControlChannelMode(s.cfg.ControlChannelMode),
 		Redactor:           recordingRedactor(s.cfg.RedactSensitive),
@@ -223,20 +250,22 @@ func (s *sessionRecorder) AttemptStarted() {
 		return
 	}
 	s.mu.Lock()
-	s.rec = rec
+	s.rec, s.writer = rec, writer
 	s.mu.Unlock()
 }
 
 // AttemptEnded closes the attempt's recording, logging what ended it first
 // when something did (the reference logs runtime_error before its finally
 // block stops the recording). A recording that cannot take even that is
-// closed all the same; the warning is all that is left to say. The recording
-// is detached under mu and stopped outside it: Stop drains the writer and
-// closes the recording in the store, on the bridge's run goroutine, after the
-// connection's send and receive goroutines are done with it.
+// detached all the same, with a warning. The recording is detached under mu
+// and stopped outside it: Stop drains the writer and closes the recording in
+// the store, on the bridge's run goroutine, after the connection's send and
+// receive goroutines are done with it. A Stop that fails leaves the recording
+// open in the store with entries still queued; it is kept as unclosed for the
+// next attempt's start to settle.
 func (s *sessionRecorder) AttemptEnded(err error) {
 	s.mu.Lock()
-	rec := s.rec
+	rec, writer := s.rec, s.writer
 	if rec == nil {
 		s.mu.Unlock()
 		return
@@ -244,22 +273,29 @@ func (s *sessionRecorder) AttemptEnded(err error) {
 	if err != nil {
 		s.warn(s.logEvent("runtime_error", map[string]any{"error": err.Error()}))
 	}
-	s.rec = nil
+	s.rec, s.writer = nil, nil
 	// Both belong to the recording that just ended (_stop_recording): the next
 	// one annotates what it sees afresh, and does not begin with a stale
 	// half-sequence.
 	s.escapeCarry = ""
 	clear(s.readAnnotationKeys)
 	s.mu.Unlock()
-	s.warn(rec.Stop())
+	if err := rec.Stop(); err != nil {
+		s.warn(err)
+		s.mu.Lock()
+		s.unclosed, s.unclosedWriter = rec, writer
+		s.mu.Unlock()
+	}
 }
 
 // failed is the open recording's store failure, if its writer is stuck on
 // one: a batch already handed over could not be written. Reported at the next
 // observed point, before anything else is logged or acted on, as the write
-// that raised ends the reference's method. Caller holds s.mu.
+// that raised ends the reference's method. It is the open recording's alone:
+// one that ended unwritten is not this connection's to report. Caller holds
+// s.mu.
 func (s *sessionRecorder) failed() error {
-	if s.rec == nil {
+	if s.writer == nil {
 		return nil
 	}
 	return s.writer.failure()
@@ -456,7 +492,7 @@ func (s *sessionRecorder) recordAnnotation(data map[string]any) error {
 // outside it, so a slow store holds up this caller and nothing on the bridge.
 func (s *sessionRecorder) flush() error {
 	s.mu.Lock()
-	rec := s.rec
+	rec, writer := s.rec, s.writer
 	s.mu.Unlock()
 	if rec == nil {
 		return nil
@@ -464,7 +500,7 @@ func (s *sessionRecorder) flush() error {
 	// Flush cannot fail here: it only hands the buffer to the writer, whose
 	// AppendEvents queues it and never fails. drain is where a write fails.
 	_ = rec.Flush()
-	return s.writer.drain()
+	return writer.drain()
 }
 
 // logEvent is _log_event. Caller holds s.mu.

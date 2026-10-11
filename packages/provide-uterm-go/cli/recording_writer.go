@@ -11,9 +11,12 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 )
 
-// batchWriter takes a hosted session's recording writes off the bridge's
-// goroutines. It wraps the session's recording.Store, and is the store its
-// SessionLoggers write through.
+// batchWriter takes one recording's writes off the bridge's goroutines. It
+// wraps the session's recording.Store, and is the store that recording's
+// SessionLogger writes through. Each recording gets its own (see
+// sessionRecorder.AttemptStarted), so its queue and its error belong to that
+// recording alone: a recording that could not be written never puts its
+// batches behind another's log_start, nor its failure on another connection.
 //
 // The reference awaits each full batch's flush on its own event loop
 // (session_logger.py _write_event -> _flush), which costs that coroutine the
@@ -26,17 +29,21 @@ import (
 //   - Order: SessionLogger hands batches over under its own lock, in the
 //     order its entries were logged; they are queued in that order and only
 //     one writer runs, so they reach the store in it.
-//   - Nothing is dropped: a batch leaves the queue only once the store has
-//     taken it. A failed write leaves it at the head, and the next batch
-//     queued, the next periodic flush, or the next drain retries it, as
-//     SessionLogger keeps a batch that failed to flush for its next attempt.
+//   - Nothing is dropped here: a batch leaves the queue only once the store
+//     has taken it. A failed write leaves it at the head, and the writer
+//     stops; the next batch handed over or the next drain retries it. Nothing
+//     retries it on a timer: the failure is reported, the bridge ends the
+//     connection on it, and the recording's end drains again. A recording
+//     whose end still fails is retried once more, and otherwise dropped with
+//     a warning, by the next attempt's start (sessionRecorder.AttemptStarted).
 //   - Failure is reported: while the head cannot be written, failure returns
 //     the error, and the recorder hands it to the bridge at the next point it
 //     observes (the reference raises it from the write that filled the batch;
 //     here that write has already returned).
-//   - Lifecycle calls keep their place: StartSession and EndSession drain the
-//     queue first, so log_start/log_stop stay outside the entries between them,
-//     and flush (FlushRecording) drains it, so a reader sees what was logged.
+//   - Lifecycle calls keep their place: EndSession drains the queue first, so
+//     log_stop lands after every entry, and flush (FlushRecording) drains it,
+//     so a reader sees what was logged. StartSession needs no drain: it is the
+//     first thing a recording writes, to a writer with nothing queued.
 //
 // The queue is unbounded: a store that has stopped answering holds every
 // batch in memory rather than losing one. The recording's own max_bytes quota,
@@ -126,12 +133,16 @@ func (w *batchWriter) failure() error {
 	return w.err
 }
 
-// StartSession drains first, so a batch still owed from an earlier recording
-// lands before this one's log_start. A drain that fails does not stop the new
-// recording opening: its batches stay queued, behind which this one's follow.
-func (w *batchWriter) StartSession(sessionID string, metadata map[string]any) error {
-	_ = w.drain()
-	return w.Store.StartSession(sessionID, metadata)
+// unwritten is how many entries are still queued: what is lost if the writer
+// is abandoned now.
+func (w *batchWriter) unwritten() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	n := 0
+	for _, b := range w.queue {
+		n += len(b.events)
+	}
+	return n
 }
 
 // EndSession drains first, so log_stop lands after every entry before it. A
