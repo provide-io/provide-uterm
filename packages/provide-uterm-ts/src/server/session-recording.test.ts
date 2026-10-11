@@ -47,6 +47,7 @@ interface RecordingGolden {
   session_id: string;
   script: Step[];
   annotated_script: Step[];
+  dedupe_scripts: Record<string, Step[]>;
   configs: Record<string, Record<string, unknown>>;
   recorded: Record<string, RecordingEvent[]>;
 }
@@ -130,6 +131,19 @@ describe("annotating what is recorded", () => {
     }
     await recording.stop();
     expect(strip(await store.getEntries(golden.session_id, { limit: 500 }))).toStrictEqual(golden.recorded.annotated);
+  });
+
+  it.each(Object.keys(golden.dedupe_scripts))("dedupes the read path as the reference does: %s", async (name) => {
+    const store = new InMemoryRecordingStore();
+    const recording = new SessionRecording(golden.session_id, store, settings(), { detector: new PatternDetector() });
+    await recording.start(true);
+    for (const step of golden.dedupe_scripts[name] as Step[]) {
+      await replay(recording, step);
+    }
+    await recording.stop();
+    expect(strip(await store.getEntries(golden.session_id, { limit: 500 }))).toStrictEqual(
+      golden.recorded[`dedupe_${name}`],
+    );
   });
 
   // The three below mirror the reference's tests/server/test_output_annotation.py.

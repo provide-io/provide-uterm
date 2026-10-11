@@ -29,7 +29,7 @@ import {
   type RecordingStore,
 } from "../recording/index.ts";
 import { defaultRedactionRules, type Redactor, StreamRedactor } from "../redaction/index.ts";
-import { encodeCp437, stripAnsi } from "../screen/index.ts";
+import { encodeCp437, MAX_ESCAPE_CARRY, splitIncompleteEscape, stripAnsi } from "../screen/index.ts";
 import { type ControlChannelMode, SessionLogger } from "../session-logger/index.ts";
 
 /** The `[recording]` section, as the runtime reads it. */
@@ -111,66 +111,46 @@ export function atPasswordPrompt(screen: string): boolean {
 }
 
 /**
- * An escape sequence cut off at the end of a streamed chunk: a bare ESC, or a
- * CSI (ESC [) whose parameter/intermediate bytes have not yet reached a final
- * byte. The reference's `_INCOMPLETE_ESCAPE_TAIL` (runtime_helpers.py), whose
- * grammar is exactly that of `strip_ansi`'s `_ANSI_ESCAPE_RE`: anything that
- * pattern would strip once complete, and nothing else, is held back.
+ * The chunk-boundary escape carry lives with `stripAnsi`, built from the same
+ * grammar constants, so a change to what `stripAnsi` strips keeps the carry
+ * correct. Re-exported under the names this module has always offered, as
+ * the reference keeps `_split_incomplete_escape` as an alias.
  */
-const INCOMPLETE_ESCAPE_TAIL = /\x1b(?:\[[0-?]*[ -/]*)?$/;
+export { MAX_ESCAPE_CARRY, splitIncompleteEscape };
 
 /**
- * Longest tail held back between chunks, in characters, ESC included. The
- * reference's `_MAX_ESCAPE_CARRY`: a real sequence is a handful of bytes, and
- * past this the "sequence" is not one (or is hostile), so it is released into
- * the text rather than carried forever.
- */
-export const MAX_ESCAPE_CARRY = 64;
-
-/**
- * Split `text` into `[complete, carry]`, where `carry` is an unterminated
- * trailing escape sequence. The reference's `_split_incomplete_escape`.
- *
- * `stripAnsi` sees one chunk at a time, so `"\x1b[1"` + `"msudo"` would strip
- * to `"\x1b[1"` (no final byte, left alone) and `"msudo"`, and `\bsudo\b`
- * would miss. The caller prepends the carry to the next chunk.
- *
- * The reference finds the last ESC with `rfind` and `fullmatch`es the pattern
- * from there. Searching for the end-anchored pattern is the same test: only
- * the LAST ESC can start a match that reaches the end, because CSI parameter
- * and intermediate bytes never include ESC — so the match, when there is one,
- * starts exactly where `rfind` would have. And the tail it measures is all
- * ASCII, so its length is the same in UTF-16 units as in the reference's code
- * points.
- */
-export function splitIncompleteEscape(text: string): [string, string] {
-  const match = INCOMPLETE_ESCAPE_TAIL.exec(text);
-  if (match === null || text.length - match.index > MAX_ESCAPE_CARRY) {
-    return [text, ""];
-  }
-  return [text.slice(0, match.index), text.slice(match.index)];
-}
-
-/**
- * Bound on the per-recording set of read-path annotation keys. The
+ * Bound on each per-recording set of read-path annotation keys. The
  * reference's `_MAX_READ_ANNOTATION_KEYS`: past it the set is cleared and
- * starts over, and the worst case is that a snapshot repeats an annotation the
- * stream already recorded once more than 1024 distinct read-path matches ago.
+ * starts over — simple, and the worst case is one repeated (or, for the
+ * snapshot-only set, one extra) annotation more than 1024 distinct read-path
+ * matches after the first.
  */
 export const MAX_READ_ANNOTATION_KEYS = 1024;
 
 /**
- * Identity of a read-path annotation for snapshot dedupe: rule + matched text.
- * The reference's `_read_annotation_key`.
+ * Add `key` to `keys`, first clearing the set when it is full. The
+ * reference's `_add_bounded`.
+ */
+export function addBounded(keys: Set<string>, key: string): void {
+  if (keys.size >= MAX_READ_ANNOTATION_KEYS) {
+    keys.clear();
+  }
+  keys.add(key);
+}
+
+/**
+ * Identity of a read-path annotation for stream/snapshot dedupe. The
+ * reference's `_read_annotation_key`.
  *
- * An annotation carries no rule id; `label` is the rule's category label and
- * `description` is the rule's own template formatted with the match (cut at
- * 80 characters). So the pair names the rule and, for every rule whose
- * template embeds `{match}`, the matched text. Credential rules deliberately
- * never embed the match, so for them the key is the rule alone.
+ * The detector's {@link Annotation.matchKey}: a SHA-256 of the rule id and the
+ * full matched text. It names the rule AND the exact text matched — so two
+ * different AWS keys, which share a label and a description (credential rules
+ * never embed the match), are two keys — and it is a digest, so the dedupe
+ * sets never hold a raw secret. An annotation the detector did not make has
+ * none, and keys as the empty string, as the reference's default does.
  */
 export function readAnnotationKey(annotation: Annotation): string {
-  return `${annotation.label}\x00${annotation.description}`;
+  return annotation.matchKey ?? "";
 }
 
 /** What a recording is built with beyond its store and settings. */
@@ -220,16 +200,36 @@ export class SessionRecording {
   #escapeCarry = "";
   /**
    * Read-path rules run twice over the same output — once over each streamed
-   * `term` chunk, once over each snapshot screen — so every read-path
-   * annotation recorded is remembered here (by {@link readAnnotationKey}) and
-   * the snapshot path skips one already in it. The reference's
-   * `_read_annotation_keys`.
+   * `term` chunk, once over each snapshot screen. Dedupe between the two is
+   * keyed by {@link readAnnotationKey} (a digest; never the raw text). The
+   * reference's rule, from `HostedSessionRuntime.__init__`, exactly:
    *
-   * This and {@link #escapeCarry} are scoped to one recording and reset with
-   * it, in {@link stop} — unlike the streams and the sequence above, which the
-   * reference keeps across recordings.
+   * - `#readAnnotationKeys`: every key recorded in this recording, by either
+   *   path.
+   * - `#snapshotOnlyKeys`: keys the SNAPSHOT path recorded since the last
+   *   processed stream chunk.
+   * - Snapshot match: key in `#readAnnotationKeys` → skip. Otherwise record
+   *   it and add the key to BOTH sets.
+   * - Stream chunk (non-empty, while recording): for each match, key in
+   *   `#snapshotOnlyKeys` → remove it and skip. Otherwise record it and add
+   *   the key to `#readAnnotationKeys`. AFTER the chunk's matches are
+   *   handled, `#snapshotOnlyKeys` is CLEARED: a pending key dedupes only the
+   *   one stream chunk that immediately follows the snapshot(s).
+   *
+   * So stream-then-snapshot records once, snapshot-then-next-chunk records
+   * once, a run of identical snapshots records once, and a command streamed
+   * twice is annotated twice; a pending key can never suppress a later,
+   * genuinely new match. If the snapshot's text reaches the stream only in a
+   * LATER chunk it is recorded a second time — a duplicate is preferred over
+   * a missed annotation.
+   *
+   * Both are bounded ({@link addBounded}), scoped to one recording and reset
+   * with it, in {@link stop} — as {@link #escapeCarry} is, and unlike the
+   * streams and the sequence above, which the reference keeps across
+   * recordings.
    */
   readonly #readAnnotationKeys = new Set<string>();
+  readonly #snapshotOnlyKeys = new Set<string>();
 
   constructor(
     sessionId: string,
@@ -289,6 +289,7 @@ export class SessionRecording {
     this.#logger = undefined;
     this.#escapeCarry = "";
     this.#readAnnotationKeys.clear();
+    this.#snapshotOnlyKeys.clear();
     await logger?.stop();
   }
 
@@ -370,24 +371,17 @@ export class SessionRecording {
     await logger.logScreen(message, encodeCp437(screen));
     this.#eventSeq += 1;
     for (const annotation of this.#detector?.detect("read", text, this.#eventSeq) ?? []) {
-      // The snapshot path DEDUPES: a match the stream (or an earlier snapshot
-      // of the same screen) already recorded is skipped, so neither a
-      // stream+snapshot pair nor a run of identical snapshots records it twice.
+      // The snapshot path DEDUPES (the rule is on the key sets): a match the
+      // stream or an earlier snapshot already recorded is skipped; a new one
+      // is recorded and left pending for the next stream chunk.
       const key = readAnnotationKey(annotation);
       if (this.#readAnnotationKeys.has(key)) {
         continue;
       }
-      this.#rememberReadAnnotation(key);
+      addBounded(this.#readAnnotationKeys, key);
+      addBounded(this.#snapshotOnlyKeys, key);
       await logger.logEvent("annotation", annotationToWire(annotation));
     }
-  }
-
-  /** Add `key` to the bounded read-path set, clearing it first when full. */
-  #rememberReadAnnotation(key: string): void {
-    if (this.#readAnnotationKeys.size >= MAX_READ_ANNOTATION_KEYS) {
-      this.#readAnnotationKeys.clear();
-    }
-    this.#readAnnotationKeys.add(key);
   }
 
   /**
@@ -403,25 +397,34 @@ export class SessionRecording {
    * unterminated trailing sequence is held back in {@link #escapeCarry} and
    * prepended to the next chunk (bounded by {@link MAX_ESCAPE_CARRY}).
    *
-   * The stream path NEVER suppresses a match — a command run twice is
-   * annotated twice — but remembers each one so the snapshot path, which sees
-   * the same text again, does not record it a second time.
+   * The stream path records every match — a command run twice is annotated
+   * twice — EXCEPT a match in the first chunk after a snapshot that already
+   * recorded it (a key in `#snapshotOnlyKeys`), which it consumes once
+   * instead; the pending keys are then cleared, matched or not. Every match it
+   * records is remembered so the snapshot path, which sees the same text
+   * again, does not record it a second time. The full rule is on the key sets.
    */
   async #scanOutput(data: string): Promise<void> {
     const logger = this.#logger;
     const stream = this.#readStream;
-    // The reference also returns on an empty frame. That needs no case of its
-    // own here: an empty chunk leaves the carry as it was (the split hands the
-    // same tail back) and the stream skips empty text.
-    if (logger === undefined || stream === undefined) {
+    // An empty frame is not a chunk: it leaves the carry and the pending
+    // snapshot keys exactly as they were, as the reference's early return does.
+    if (logger === undefined || stream === undefined || data === "") {
       return;
     }
     const [text, carry] = splitIncompleteEscape(this.#escapeCarry + data);
     this.#escapeCarry = carry;
     for (const annotation of stream.detect("read", stripAnsi(text), this.#eventSeq)) {
-      this.#rememberReadAnnotation(readAnnotationKey(annotation));
+      const key = readAnnotationKey(annotation);
+      if (this.#snapshotOnlyKeys.delete(key)) {
+        continue;
+      }
+      addBounded(this.#readAnnotationKeys, key);
       await logger.logEvent("annotation", annotationToWire(annotation));
     }
+    // Pending snapshot keys expire with the first chunk after the snapshot,
+    // matched or not, so they never suppress a later, new match.
+    this.#snapshotOnlyKeys.clear();
   }
 
   /** Record each annotation, in the reference's `to_dict` shape. */
