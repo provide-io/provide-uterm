@@ -1,3 +1,8 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -63,7 +68,10 @@ public sealed partial class UtermServer
             }
 
             using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
-            var baseUrl = _deps.Config.Server.PublicBaseUrl ?? $"http://127.0.0.1:{_deps.Config.Server.Port}";
+            // PublicBaseUrl is "" (never null) when unset, so test for empty, not null.
+            var baseUrl = string.IsNullOrEmpty(_deps.Config.Server.PublicBaseUrl)
+                ? $"http://127.0.0.1:{_deps.Config.Server.Port}"
+                : _deps.Config.Server.PublicBaseUrl;
             var client = string.IsNullOrEmpty(token) ? new HijackClient(baseUrl) : HijackClient.WithBearer(baseUrl, token);
             var target = new McpToolsTarget(client);
 

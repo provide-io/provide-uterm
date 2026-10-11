@@ -85,44 +85,43 @@ public static class ProxyCommand
         try
         {
             await app.StartAsync(cancellationToken).ConfigureAwait(false);
-            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
-            // Expected on Ctrl-C / test cancellation.
+            // Cancelled before the listener came up (Ctrl-C / test cancellation).
+            return;
         }
-        finally
+
+        // Cancellation is the normal end: wait for it without an exception.
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using (cancellationToken.Register(() => cancelled.TrySetResult()).ConfigureAwait(false))
         {
-            try
-            {
-                await app.StopAsync(CancellationToken.None).ConfigureAwait(false);
-            }
-            catch
-            {
-                // ignore stop races after cancel
-            }
+            await cancelled.Task.ConfigureAwait(false);
         }
+
+        await app.StopAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
-    internal static async Task BridgeAsync(WebSocket ws, Options opts, CancellationToken ct)
+    /// <summary>
+    /// Builds the upstream transport for <paramref name="opts"/>. A seam so the
+    /// bridge can be driven against an in-memory transport; defaults to
+    /// <see cref="CreateTransport"/>.
+    /// </summary>
+    internal static Func<Options, (IConnectionTransport Transport, ConnectOptions Connect)> TransportFactory { get; set; } = CreateTransport;
+
+    internal static (IConnectionTransport Transport, ConnectOptions Connect) CreateTransport(Options opts)
     {
-        IConnectionTransport tr;
         var connectOpts = new ConnectOptions();
         var transport = opts.Transport.ToLowerInvariant();
         if (transport is "websocket" or "ws" or "wss")
         {
-            tr = new WebSocketTransport();
-            var url = opts.UpstreamWsUrl;
-            if (string.IsNullOrEmpty(url))
-            {
-                url = $"wss://{opts.Host}:{opts.BbsPort}";
-            }
-
+            var url = string.IsNullOrEmpty(opts.UpstreamWsUrl) ? $"wss://{opts.Host}:{opts.BbsPort}" : opts.UpstreamWsUrl;
             connectOpts.Ws = new WsOptions { Url = url, SendBinary = false };
+            return (new WebSocketTransport(), connectOpts);
         }
-        else if (transport == "ssh")
+
+        if (transport == "ssh")
         {
-            tr = new SshTransport();
             connectOpts.Ssh = new SshOptions
             {
                 User = opts.SshUser,
@@ -130,12 +129,15 @@ public static class ProxyCommand
                 KnownHostsFiles = opts.KnownHostsFiles.ToList(),
                 InsecureSkipHostKeyVerify = opts.InsecureSkipHostKeyVerify,
             };
-        }
-        else
-        {
-            tr = new TelnetTransport();
+            return (new SshTransport(), connectOpts);
         }
 
+        return (new TelnetTransport(), connectOpts);
+    }
+
+    internal static async Task BridgeAsync(WebSocket ws, Options opts, CancellationToken ct)
+    {
+        var (tr, connectOpts) = TransportFactory(opts);
         try
         {
             await tr.ConnectAsync(opts.Host, opts.BbsPort, connectOpts, ct).ConfigureAwait(false);
@@ -181,7 +183,7 @@ public static class ProxyCommand
             {
                 linked.Cancel();
             }
-        }, token);
+        }, CancellationToken.None);
 
         var remoteToBrowser = Task.Run(async () =>
         {
@@ -218,24 +220,20 @@ public static class ProxyCommand
             {
                 linked.Cancel();
             }
-        }, token);
+        }, CancellationToken.None);
 
-        try
+        // Either pump ending cancels the other (each cancels the linked source
+        // on its way out) and both swallow their own faults, so the join
+        // cannot throw and the linked source outlives them.
+        await Task.WhenAll(browserToRemote, remoteToBrowser).ConfigureAwait(false);
+        try { await tr.DisconnectAsync().ConfigureAwait(false); } catch { /* ignore */ }
+        if (tr is IAsyncDisposable ad)
         {
-            await Task.WhenAny(browserToRemote, remoteToBrowser).ConfigureAwait(false);
+            await ad.DisposeAsync().ConfigureAwait(false);
         }
-        finally
+        else if (tr is IDisposable d)
         {
-            linked.Cancel();
-            try { await tr.DisconnectAsync().ConfigureAwait(false); } catch { /* ignore */ }
-            if (tr is IAsyncDisposable ad)
-            {
-                await ad.DisposeAsync().ConfigureAwait(false);
-            }
-            else if (tr is IDisposable d)
-            {
-                d.Dispose();
-            }
+            d.Dispose();
         }
     }
 }

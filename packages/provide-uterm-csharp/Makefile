@@ -4,31 +4,19 @@
 # Quality gate for the C# port. Mirrors packages/provide-uterm-go/Makefile.
 
 DOTNET ?= dotnet
-# 97.0 (not 100): pure library packages are near-full. Remaining misses are the
-# same residual class Go documents (COVER_THRESHOLD 97.2 with per-package notes):
-#   - Cli/Manager DefaultWaitCancel: real Console.CancelKeyPress wait (tests inject
-#     WaitForCancel no-op to exercise non--once paths without blocking).
-#   - Server/UtermServer: browser/worker WS accept loops + rare authz edge arms.
-#   - Gateway: ObjectDisposedException on accept during Stop (file excluded in
-#     ci/coverage_gate.py residual list).
-#   - Cli/Proxy BridgeAsync: live socket cancel/stop races + SSH dispose path
-#     (file excluded in ci/coverage_gate.py residual list).
-#   - CtrlMsg CanonicalJson FallbackScientific: [ExcludeFromCodeCoverage] — only
-#     when R→sci round-trip fails (platform float residual).
-#   - Live OS transports (Pty/Telnet/Ssh/WebSocket) excluded from denominator
-#     entirely (unit tests cannot drive real PTY/SSH handshakes fully).
-# Residual policy: drop an exclusion only when a dedicated OS/harness job
-# exercises that path; conformance/live Layer B is a separate gate (not coverlet).
-# Also residual: NativeUnixPty (posix_spawn), SshWsGateway (FxSsh accept pump),
-# RfbClient (live RFB TCP). Embed/TelnetUpstream live TCP residual (scripted IAC tested).
-# Opt into native PTY via PreferNativePty / UTERM_NATIVE_PTY=1.
-# MCP is not part of the C# port (operator de-scope); sources and binary removed.
-# 97.6 floors residual rare arms after Wave8–10 harness + human-VNC/JWKS work.
-# Residual class: UtermServer WS disconnect/CloseAsync, Gui RFB attach catch,
-# HumanRelay dual-pump cancel races, Embed Session dispose, Tunnel/HostRest
-# rare arms, CanonicalJson FallbackScientific, dual-OS FileIo SetUnixFileMode.
-# Live residuals excluded in ci/coverage_gate.py (RfbClient, HumanVnc WS, MCP
-# StreamJsonRpc, WsBinaryStreams, Pty/Ssh/Telnet transports, Gateway/Proxy).
+# Coverage residual (what keeps the floor below 100):
+#   - Excluded from the denominator in ci/coverage_gate.py: only the native PTY
+#     (Pty/PtyTransport.cs, Pty/NativeUnixPty.cs) -- Unix P/Invoke the Windows
+#     host cannot run, whose remaining arms are libc failure returns. The pty
+#     batch (3d) is also skipped by `cover` on CI. Opt into native PTY via
+#     PreferNativePty / UTERM_NATIVE_PTY=1.
+#   - Everything else is measured. The live-socket files that used to be
+#     excluded (telnet/SSH/WebSocket transports, SSH and TCP gateways, RFB
+#     client, MCP endpoint, proxy, embed telnet upstream, human-VNC stream
+#     adapters) are covered by loopback tests in tests/.../Coverage100/.
+#   - Platform-conditional arms (OsPlatform.IsWindows-gated FileIo/DevIdp/
+#     TunnelClient/Connector branches) count on both OSes but each OS can only
+#     execute its own side, so neither run alone reaches 100%.
 # Pure library batches still track ~99%+. Raise only with ≥0.2pt headroom on
 # BOTH csharp-quality and csharp-quality-windows after a full cover run.
 # Floor is set by the Windows run: platform-conditional Linux-only arms

@@ -23,30 +23,6 @@ public sealed class Coverage100GuiTargetsTests
         public Task SendTextAsync(string payload, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
-    /// <summary>A target registry that returns one canned answer or throws.</summary>
-    private sealed class StubTargets : IGraphicalTargetRegistry
-    {
-        public Func<string, GraphicalTargetDefinition?> Get { get; set; } = _ => null;
-
-        public Task<GraphicalTargetDefinition?> GetAsync(GraphicalTargetScope scope, string targetId, CancellationToken ct = default) =>
-            Task.FromResult(Get(targetId));
-
-        public Task<IReadOnlyList<GraphicalTargetDefinition>> ListAsync(GraphicalTargetScope scope, CancellationToken ct = default) =>
-            throw new GraphicalTargetException(GraphicalTargetErrorCode.Closed, "closed");
-
-        public Task<GraphicalTargetDefinition> CreateAsync(GraphicalTargetScope scope, GraphicalTargetDefinition target, CancellationToken ct = default) =>
-            throw new NotSupportedException();
-
-        public Task<GraphicalTargetDefinition> UpdateAsync(GraphicalTargetScope scope, GraphicalTargetDefinition target, CancellationToken ct = default) =>
-            throw new NotSupportedException();
-
-        public Task DeleteAsync(GraphicalTargetScope scope, string targetId, CancellationToken ct = default) =>
-            throw new NotSupportedException();
-
-        public Task AddStaticAsync(GraphicalTargetDefinition target, CancellationToken ct = default) =>
-            throw new NotSupportedException();
-    }
-
     private sealed class ThrowingDisposeSession : IGraphicalSession, IAsyncDisposable
     {
         public bool Disposed { get; private set; }

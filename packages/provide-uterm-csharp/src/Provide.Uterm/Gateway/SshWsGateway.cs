@@ -9,7 +9,6 @@ using System.Net.Sockets;
 using System.Text;
 using FxSsh;
 using FxSsh.Services;
-using Provide.Uterm.Defaults;
 
 namespace Provide.Uterm.Gateway;
 
@@ -33,18 +32,23 @@ public sealed class SshWsGateway : IAsyncDisposable
 
     public int Port { get; private set; }
 
+    /// <summary>Sessions currently connected (a session leaves once FxSsh reports it disconnected).</summary>
+    internal int SessionCount => _sessions.Count;
+
+    /// <summary>
+    /// Pumps one SSH channel (as a duplex stream) against the WebSocket URL until
+    /// either side ends. A seam over <see cref="GatewayDrive.RunAsync(Stream, string, CancellationToken)"/>.
+    /// </summary>
+    internal Func<Stream, string, CancellationToken, Task> Drive { get; set; } = GatewayDrive.RunAsync;
+
     public void Start(string host = "127.0.0.1", int port = 0)
     {
-        if (port == 0)
-        {
-            port = TerminalDefaults.GatewaySshPort;
-        }
-
         GatewayBindPolicy.RequireUnauthenticatedAllowed(host, _allowUnauthenticated);
 
         var ip = host is "0.0.0.0" or "" ? IPAddress.Any : IPAddress.Parse(host);
-        // Ephemeral: bind port 0 by probing a free port first when requested.
-        if (port == 0 || port < 0)
+        // Ephemeral: FxSsh needs a concrete bind port, so port 0 (or less)
+        // probes a free one first.
+        if (port <= 0)
         {
             var probe = new TcpListener(ip, 0);
             probe.Start();
@@ -58,15 +62,7 @@ public sealed class SshWsGateway : IAsyncDisposable
         var rsa = KeyGenerator.GenerateRsaKeyPem(2048);
         server.AddHostKey("rsa-sha2-256", rsa);
         server.AddHostKey("rsa-sha2-512", rsa);
-        try
-        {
-            var ecdsa = KeyGenerator.GenerateECDsaKeyPem("nistp256");
-            server.AddHostKey("ecdsa-sha2-nistp256", ecdsa);
-        }
-        catch
-        {
-            // RSA alone is enough for interoperability tests.
-        }
+        server.AddHostKey("ecdsa-sha2-nistp256", KeyGenerator.GenerateECDsaKeyPem("nistp256"));
 
         server.ConnectionAccepted += OnConnectionAccepted;
         server.Start();
@@ -92,11 +88,12 @@ public sealed class SshWsGateway : IAsyncDisposable
         }
         else if (service is ConnectionService conn)
         {
-            conn.CommandOpened += OnCommandOpened;
+            var session = (FxSsh.Session)sender!; // FxSsh raises ServiceRegistered from the session
+            conn.CommandOpened += (_, e) => OnCommandOpened(session, e);
         }
     }
 
-    private void OnCommandOpened(object? sender, CommandRequestedArgs e)
+    private void OnCommandOpened(FxSsh.Session session, CommandRequestedArgs e)
     {
         if (!string.Equals(e.ShellType, "shell", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(e.ShellType, "exec", StringComparison.OrdinalIgnoreCase))
@@ -104,16 +101,23 @@ public sealed class SshWsGateway : IAsyncDisposable
             return;
         }
 
+        // FxSsh answers the request with failure unless the handler agrees;
+        // without this no client ever got a shell.
+        e.Agreed = true;
+
         // Bridge SSH channel ↔ remote WS (same control-channel path as telnet).
         var channel = e.Channel;
         var pumpCts = new CancellationTokenSource();
+        // A session that goes away without closing its channel (client drop,
+        // gateway stop) ends the pump too, rather than leaving it to the far side.
+        session.Disconnected += (_, _) => pumpCts.Cancel();
         var local = new ChannelStream(channel, pumpCts);
 
         _ = Task.Run(async () =>
         {
             try
             {
-                await GatewayDrive.RunAsync(local, _wsUrl, pumpCts.Token).ConfigureAwait(false);
+                await Drive(local, _wsUrl, pumpCts.Token).ConfigureAwait(false);
             }
             catch
             {
@@ -136,14 +140,9 @@ public sealed class SshWsGateway : IAsyncDisposable
 
     public Task StopAsync()
     {
-        try
-        {
-            _server?.Stop();
-        }
-        catch
-        {
-        }
-
+        // Stop disconnects live sessions; FxSsh throws from it only for a server
+        // that was never started, and _server is set only once Start succeeded.
+        _server?.Stop();
         _server?.Dispose();
         _server = null;
         return Task.CompletedTask;
@@ -176,38 +175,19 @@ public sealed class SshWsGateway : IAsyncDisposable
                     // callback, so anything enqueued has to be our own copy —
                     // this is a correctness requirement, not a type workaround.
                     _inbox.Enqueue(data.ToArray());
-                    try
-                    {
-                        _data.Release();
-                    }
-                    catch
-                    {
-                    }
+                    _data.Release(); // unbounded, never disposed: cannot throw
                 }
             };
             channel.CloseReceived += (_, _) =>
             {
                 _closed = true;
-                try
-                {
-                    _data.Release();
-                }
-                catch
-                {
-                }
-
+                _data.Release();
                 _cts.Cancel();
             };
             channel.EofReceived += (_, _) =>
             {
                 _closed = true;
-                try
-                {
-                    _data.Release();
-                }
-                catch
-                {
-                }
+                _data.Release();
             };
         }
 
@@ -304,14 +284,7 @@ public sealed class SshWsGateway : IAsyncDisposable
         protected override void Dispose(bool disposing)
         {
             _closed = true;
-            try
-            {
-                _cts.Cancel();
-            }
-            catch
-            {
-            }
-
+            _cts.Cancel(); // the pump's source, never disposed
             base.Dispose(disposing);
         }
 

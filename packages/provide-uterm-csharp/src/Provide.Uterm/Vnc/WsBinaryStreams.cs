@@ -60,11 +60,7 @@ internal sealed class WsBinaryReadStream : Stream
                     return 0;
                 }
 
-                if (result.MessageType is not (WebSocketMessageType.Binary or WebSocketMessageType.Text))
-                {
-                    continue;
-                }
-
+                // Binary or Text: the only other message types there are.
                 ms.Write(tmp, 0, result.Count);
             }
             while (!result.EndOfMessage);

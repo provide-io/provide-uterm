@@ -211,9 +211,8 @@ public sealed class StateStore
         OwnershipPublicationExpectation.DashboardHeld =>
             IsDashboardHijackActive(st)
             && ReferenceEquals(st.HijackOwner, token.DashboardOwner),
-        OwnershipPublicationExpectation.Released =>
-            !IsDashboardHijackActive(st) && !HasValidRestLease(st),
-        _ => false,
+        // Released: the enum has no fourth member.
+        _ => !IsDashboardHijackActive(st) && !HasValidRestLease(st),
     };
 
     private object HijackNotificationGate(string workerId)

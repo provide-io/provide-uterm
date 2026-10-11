@@ -95,23 +95,6 @@ logic, IsBlockedPrivate's CIDR match), which is why it is not deleted — only \
 this one call site's use of it is redundant."""
 
 [[stryker_equivalent]]
-file = "Server/EgressAddressPolicy.cs"
-mutator = "Boolean mutation"
-code = "return false;"
-original = "false"
-replacement = "true"
-occurrence = 4
-reason = """\
-Cidr.Contains: `if (address.Length != _network.Length) return false;`. `Cidr` \
-is a `private` nested struct (not `internal`), so it is unreachable from any \
-test regardless of InternalsVisibleTo. Its only two callers in the entire \
-codebase (`IsBlockedPrivate` for BlockedPrivateV4/V6, both length-homogeneous \
-lists compared against a same-family address) never construct a length \
-mismatch, so this defensive branch cannot be driven to either outcome from any \
-public entry point — a coverage gap that is also a reachability fact, not a \
-missing test."""
-
-[[stryker_equivalent]]
 file = "Server/WebhookEgress.cs"
 mutator = "Boolean mutation"
 code = "await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);"
@@ -348,31 +331,6 @@ DeliveryWorker.Release: `_cancel.Dispose();`. A private CancellationTokenSource 
 with no accessor; disposing it after both this worker's and the parent's \
 cancellation have already been requested has no effect any test can observe \
 (same class as lines 430/431)."""
-
-[[stryker_equivalent]]
-file = "Server/Webhooks.Delivery.cs"
-mutator = "Statement mutation"
-code = "return;"
-original = "return;"
-replacement = ";"
-occurrence = 5
-reason = """\
-DeliveryWorker.Release's idempotency guard: `return;` inside \
-`if (Interlocked.Exchange(ref _released, 1) != 0)`. Removing it would only be \
-observable if `Release()` could run twice on the same worker, and it cannot: \
-the two call sites (`Webhooks.cs`'s `Unregister`, and this file's \
-`ShutdownAsync`) both remove the worker from `_workers` under the SAME \
-`_gate` lock before calling `Release()` outside that lock — whichever call \
-site's lock section runs first is the only one that ever sees a non-null \
-worker for that id, since `Dictionary.Remove` returns nothing once the key is \
-already gone. So the guard's true-branch is not merely untested, it is \
-unreachable through any interleaving of the current two call sites — an \
-equivalence claim about observability, not about coverage (see \
-ci/stryker_gate.py's own allowance for this). Confirmed empirically, not just \
-analytically: hand-removing the `return;` and running the full webhook test \
-suite (135 tests, `--filter FullyQualifiedName~Webhook`) leaves every test \
-green. If a third call site to `Release()` is ever added outside this lock \
-discipline, this entry should be revisited."""
 
 [[stryker_equivalent]]
 file = "ServerConfig/Load.cs"

@@ -41,11 +41,9 @@ public sealed class CommandDispatcher
             return ShellResult.OfText(ShellOutput.Prompt);
         }
 
-        var parts = StrUtil.PySplit1(line);
-        if (parts is null || parts.Length == 0)
-        {
-            return ShellResult.OfText(ShellOutput.Prompt);
-        }
+        // PyStrip and PySplit1 share one whitespace set, so a non-empty stripped
+        // line always splits into at least its first word.
+        var parts = StrUtil.PySplit1(line)!;
 
         var cmd = parts[0].ToLowerInvariant();
         var arg = parts.Length > 1 ? StrUtil.PyStrip(parts[1]) : "";

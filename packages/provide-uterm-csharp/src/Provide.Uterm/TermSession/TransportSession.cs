@@ -205,14 +205,8 @@ public sealed class TransportSession : IAsyncDisposable
             cancellationToken.ThrowIfCancellationRequested();
             var text = ANSIScreen();
             if (rx.IsMatch(text)) return true;
-            try
-            {
-                await WaitForUpdateAsync(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
-            }
-            catch (TimeoutException)
-            {
-                // continue
-            }
+            // An update or a 100 ms tick, whichever is first: either way look again.
+            _ = await WaitForUpdate(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
         }
 
         return false;
@@ -257,28 +251,22 @@ public sealed class TransportSession : IAsyncDisposable
 
     public async Task WaitForUpdateAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
-        TaskCompletionSource tcs;
-        lock (_gate) tcs = _updateTcs;
-        var delay = timeout ?? TimeSpan.FromSeconds(5);
-        var completed = await Task.WhenAny(tcs.Task, Task.Delay(delay, cancellationToken)).ConfigureAwait(false);
-        if (completed != tcs.Task)
+        if (!await WaitForUpdate(timeout ?? TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false))
         {
             throw new TimeoutException("WaitForUpdate timed out");
         }
     }
 
-    /// <summary>Go/spec-compatible wait; returns false on timeout instead of throwing.</summary>
+    /// <summary>
+    /// Go/spec-compatible wait; returns false on timeout instead of throwing. A
+    /// cancelled token also ends the wait as "no update" (as it always has).
+    /// </summary>
     public async Task<bool> WaitForUpdate(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            await WaitForUpdateAsync(timeout, cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
+        TaskCompletionSource tcs;
+        lock (_gate) tcs = _updateTcs;
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(timeout, cancellationToken)).ConfigureAwait(false);
+        return completed == tcs.Task;
     }
 
     public async Task WaitForScreenChangeAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
@@ -286,7 +274,7 @@ public sealed class TransportSession : IAsyncDisposable
         int start;
         lock (_gate) start = _changeSeq;
         var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
-        while (DateTime.UtcNow < deadline)
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
@@ -294,17 +282,14 @@ public sealed class TransportSession : IAsyncDisposable
                 if (_changeSeq != start) return;
             }
 
-            try
+            if (DateTime.UtcNow >= deadline)
             {
-                await WaitForUpdateAsync(TimeSpan.FromMilliseconds(50), cancellationToken).ConfigureAwait(false);
+                throw new TimeoutException("WaitForScreenChange timed out");
             }
-            catch (TimeoutException)
-            {
-                // keep looping
-            }
-        }
 
-        throw new TimeoutException("WaitForScreenChange timed out");
+            // An update or a 50 ms tick, whichever is first: either way look again.
+            _ = await WaitForUpdate(TimeSpan.FromMilliseconds(50), cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <summary>

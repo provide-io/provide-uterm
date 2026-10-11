@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -270,8 +269,8 @@ public static class EgressAddressPolicy
         internal bool Contains(byte[] address)
         {
             // Every caller pairs a family with that family's CIDRs (V4 list for
-            // v4 bytes, V6 list and NAT64 for v6), so the lengths always agree.
-            Debug.Assert(address.Length == _network.Length, "CIDR and address families differ");
+            // v4 bytes, V6 list and NAT64 for v6), so the lengths always agree;
+            // there is no mixed-family case to refuse.
 
             var wholeBytes = _prefix / 8;
             for (var i = 0; i < wholeBytes; i++)

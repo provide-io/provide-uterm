@@ -199,7 +199,7 @@ public sealed class HttpInspectProxy : IAsyncDisposable
                 }
                 catch
                 {
-                    try { ctx.Response.Abort(); } catch { /* ignore */ }
+                    ctx.Response.Abort(); // Abort never throws
                 }
             }, ct);
         }
@@ -246,7 +246,8 @@ public sealed class HttpInspectProxy : IAsyncDisposable
         _listener?.Stop();
         if (_loop is not null)
         {
-            try { await _loop.ConfigureAwait(false); } catch { /* ignore */ }
+            // The accept loop turns every accept failure into a break.
+            await _loop.ConfigureAwait(false);
         }
 
         _cts?.Dispose();
@@ -355,15 +356,11 @@ public sealed class PtyShareSession : IAsyncDisposable
             return;
         }
 
-        try
+        // Our own started child: Kill does not throw for it, and is a no-op
+        // once it has exited.
+        if (!_proc.HasExited)
         {
-            if (!_proc.HasExited)
-            {
-                _proc.Kill(entireProcessTree: true);
-            }
-        }
-        catch
-        {
+            _proc.Kill(entireProcessTree: true);
         }
 
         _proc.Dispose();

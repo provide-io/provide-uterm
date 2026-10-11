@@ -19,7 +19,6 @@ public sealed class TelnetUpstream : IUpstreamPipe, IAsyncDisposable
     private readonly ITelnetPolicy _policy;
     private readonly TimeSpan _connectTimeout;
     private readonly byte[] _rxBuf = new byte[8192];
-    private readonly List<byte> _pending = new();
     private readonly object _gate = new();
     private TcpClient? _client;
     private NetworkStream? _stream;
@@ -88,7 +87,6 @@ public sealed class TelnetUpstream : IUpstreamPipe, IAsyncDisposable
         {
             _client = client;
             _stream = stream;
-            _pending.Clear();
         }
 
         Volatile.Write(ref _connected, 1);
@@ -103,7 +101,6 @@ public sealed class TelnetUpstream : IUpstreamPipe, IAsyncDisposable
             _client?.Dispose();
             _stream = null;
             _client = null;
-            _pending.Clear();
         }
 
         Volatile.Write(ref _connected, 0);
@@ -124,37 +121,22 @@ public sealed class TelnetUpstream : IUpstreamPipe, IAsyncDisposable
 
     public async Task<byte[]> ReceiveAsync(CancellationToken cancellationToken = default)
     {
+        NetworkStream stream;
+        lock (_gate)
+        {
+            stream = _stream ?? throw new InvalidOperationException("not connected");
+        }
+
         while (true)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            // Drain any pending app bytes first
-            lock (_gate)
-            {
-                if (_pending.Count > 0)
-                {
-                    var outb = _pending.ToArray();
-                    _pending.Clear();
-                    return outb;
-                }
-            }
-
-            NetworkStream stream;
-            lock (_gate)
-            {
-                stream = _stream ?? throw new InvalidOperationException("not connected");
-            }
-
             int n;
             try
             {
                 n = await stream.ReadAsync(_rxBuf.AsMemory(), cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                throw;
-            }
-            catch
-            {
+                // Reset or torn down under the read: the upstream is gone.
                 Volatile.Write(ref _connected, 0);
                 return Array.Empty<byte>();
             }
@@ -165,14 +147,14 @@ public sealed class TelnetUpstream : IUpstreamPipe, IAsyncDisposable
                 return Array.Empty<byte>();
             }
 
-            var (payload, events, consumed) = TelnetIac.Parse(_rxBuf.AsSpan(0, n));
-            _ = consumed;
-
+            var (payload, events, _) = TelnetIac.Parse(_rxBuf.AsSpan(0, n));
             foreach (var ev in events)
             {
-                await HandleControlAsync(ev, cancellationToken).ConfigureAwait(false);
+                await HandleControlAsync(stream, ev, cancellationToken).ConfigureAwait(false);
             }
 
+            // A read that was only negotiation carries no application bytes:
+            // keep reading rather than hand back an empty chunk (which means EOF).
             if (payload.Length > 0)
             {
                 return payload;
@@ -180,7 +162,7 @@ public sealed class TelnetUpstream : IUpstreamPipe, IAsyncDisposable
         }
     }
 
-    private async Task HandleControlAsync(TelnetControlEvent ev, CancellationToken ct)
+    private async Task HandleControlAsync(NetworkStream stream, TelnetControlEvent ev, CancellationToken ct)
     {
         if (OnWire is not null)
         {
@@ -194,28 +176,13 @@ public sealed class TelnetUpstream : IUpstreamPipe, IAsyncDisposable
             }
         }
 
-        ReadOnlyMemory<byte> reply = default;
-        if (ev.IsSubnegotiation)
+        var reply = ev.IsSubnegotiation
+            ? _policy.OnSubnegotiation(ev.Option, ev.SubPayload)
+            : _policy.OnOption(ev.Command, ev.Option);
+        if (!reply.IsEmpty)
         {
-            reply = _policy.OnSubnegotiation(ev.Option, ev.SubPayload);
+            await stream.WriteAsync(reply, ct).ConfigureAwait(false);
         }
-        else
-        {
-            reply = _policy.OnOption(ev.Command, ev.Option);
-        }
-
-        if (reply.IsEmpty)
-        {
-            return;
-        }
-
-        NetworkStream stream;
-        lock (_gate)
-        {
-            stream = _stream ?? throw new InvalidOperationException("not connected");
-        }
-
-        await stream.WriteAsync(reply, ct).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync() => await DisconnectAsync().ConfigureAwait(false);
