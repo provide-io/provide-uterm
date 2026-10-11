@@ -280,10 +280,8 @@ func (r *MessageRouter) sendHijackStateTo(
 		if err != nil {
 			return nil, err
 		}
-		payload, err := encodeBrowserFrame(m)
-		if err != nil {
-			return nil, err
-		}
+		// m was just decoded from JSON, so it always re-encodes.
+		payload, _ := encodeBrowserFrame(m)
 		if serr := sendToBrowser(ctx, ws, payload); serr != nil {
 			if !suppressErrors {
 				hub.logger.Debug("broadcast_hijack_state_send_failed", "worker_id", workerID, "error", serr)

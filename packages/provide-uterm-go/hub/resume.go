@@ -44,9 +44,8 @@ type tokenGen func() string
 // defaultTokenGen returns 32 random bytes as URL-safe base64 without padding.
 func defaultTokenGen() string {
 	var b [32]byte
-	if _, err := rand.Read(b[:]); err != nil { //nolint:staticcheck // rand.Read never errors on supported platforms
-		panic(err)
-	}
+	// crypto/rand.Read never returns an error (it aborts the program instead).
+	_, _ = rand.Read(b[:])
 	return base64.RawURLEncoding.EncodeToString(b[:])
 }
 
