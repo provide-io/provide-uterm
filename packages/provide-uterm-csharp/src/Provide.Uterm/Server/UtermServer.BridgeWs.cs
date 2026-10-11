@@ -215,26 +215,15 @@ public sealed partial class UtermServer
                     },
                     CancellationToken.None).ConfigureAwait(false);
             }
-            try
-            {
-                await _deckMux.OnBrowserDisconnectAsync(workerId, conn, CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
-            catch
-            {
-                // best-effort
-            }
+            // Neither call can throw: both fan out through the hub's bounded
+            // per-browser sends, which absorb peer failures, and
+            // CancellationToken.None leaves nothing to cancel.
+            await _deckMux.OnBrowserDisconnectAsync(workerId, conn, CancellationToken.None)
+                .ConfigureAwait(false);
 
             // Fan out released state when the owner drops, matching Python/Go cleanup.
-            try
-            {
-                await _deps.Hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
-            catch
-            {
-                // best-effort on disconnect
-            }
+            await _deps.Hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
+                .ConfigureAwait(false);
 
             await WebSocketCloseHandler.CloseAndTerminateAsync(
                     ws, WebSocketCloseStatus.NormalClosure, "bye")

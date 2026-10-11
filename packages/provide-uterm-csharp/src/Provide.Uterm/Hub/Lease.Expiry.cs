@@ -385,17 +385,12 @@ public sealed partial class HijackLeaseManager
         if (publication is not null)
         {
             _hub.NotifyHijackChanged(publication);
-            try
+            // Cannot throw: per-browser send failures are absorbed inside, and
+            // CancellationToken.None leaves nothing to cancel.
+            if (!workerReconciled)
             {
-                if (!workerReconciled)
-                {
-                    await _hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
-                        .ConfigureAwait(false);
-                }
-            }
-            catch
-            {
-                // Expiry publication is best-effort after lifecycle release.
+                await _hub.BroadcastHijackStateAsync(workerId, CancellationToken.None)
+                    .ConfigureAwait(false);
             }
         }
         if (browserExpired)

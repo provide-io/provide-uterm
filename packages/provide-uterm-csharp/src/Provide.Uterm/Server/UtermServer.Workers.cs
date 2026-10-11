@@ -94,8 +94,6 @@ public sealed partial class UtermServer
         var connector = new Shell.UshellConnector(sessionId, new Shell.UshellConnectorConfig
         {
             DisplayName = def.DisplayName,
-            PollDelay = TimeSpan.FromMilliseconds(1),
-            PollSleep = static _ => { },
         });
         connector.Start();
         _liveConnectors[sessionId] = connector;
@@ -106,18 +104,13 @@ public sealed partial class UtermServer
             ["shell"] = true,
             ["live"] = true,
         });
-        // Welcome path returns immediately (no idle sleep).
+        // A fresh connector's first poll is its welcome (worker_hello + banner),
+        // returned immediately: it never reaches the idle sleep, and neither
+        // frame nests its payload under a `data` dictionary.
         foreach (var frame in connector.PollMessages())
         {
             var et = frame.TryGetValue("type", out var t) ? t?.ToString() ?? "term" : "term";
-            if (frame.TryGetValue("data", out var d) && d is Dictionary<string, object?> data)
-            {
-                _deps.Hub.AppendEventData(sessionId, et, data);
-            }
-            else
-            {
-                _deps.Hub.AppendEventData(sessionId, et, frame);
-            }
+            _deps.Hub.AppendEventData(sessionId, et, frame);
         }
 
         var annotator = new SessionAnnotator(

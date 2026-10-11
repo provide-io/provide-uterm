@@ -68,7 +68,8 @@ public static class SecurityHeaders
         return resolved;
     }
 
-    private static string? ReadOverride(SecurityConfig cfg, string field) => field switch
+    // Internal so the no-override answer for a field outside SecurityHeaderFields is testable.
+    internal static string? ReadOverride(SecurityConfig cfg, string field) => field switch
     {
         "csp" => cfg.Csp,
         "hsts" => cfg.Hsts,

@@ -57,6 +57,15 @@ public sealed class EventBus
         }
     }
 
+    /// <summary>Live subscriptions for <paramref name="workerId"/> (lets tests observe an unsubscribe).</summary>
+    internal int SubscriberCount(string workerId)
+    {
+        lock (_gate)
+        {
+            return _subs.TryGetValue(workerId, out var list) ? list.Count : 0;
+        }
+    }
+
     /// <summary>Signal end-of-stream to all watchers of <paramref name="workerId"/>.</summary>
     public void CloseWorker(string workerId)
     {

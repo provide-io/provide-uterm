@@ -41,6 +41,14 @@ namespace Provide.Uterm.Server;
 /// </remarks>
 public static class EgressGuard
 {
+    /// <summary>
+    /// Name resolution, a test seam defaulting to <see cref="Dns.GetHostAddressesAsync(string, CancellationToken)"/>,
+    /// so the empty-answer refusal can be exercised without a resolver that
+    /// actually answers with no addresses.
+    /// </summary>
+    internal static Func<string, CancellationToken, Task<IPAddress[]>> ResolveHostAsync { get; set; } =
+        Dns.GetHostAddressesAsync;
+
     public static async Task AssertConnectorTargetAllowedAsync(
         string host,
         bool blockPrivate = true,
@@ -61,7 +69,7 @@ public static class EgressGuard
         IPAddress[] addrs;
         try
         {
-            addrs = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+            addrs = await ResolveHostAsync(host, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

@@ -643,10 +643,10 @@ public static class ConfigLoader
         if (t.TryGetValue("authz_webhook_timeout_s", out var timeout)) g.AuthzWebhookTimeoutS = ToDouble(timeout, g.AuthzWebhookTimeoutS);
     }
 
+    // TOML values arrive as long, double, string or bool (never int).
     private static int ToInt(object? v, int fallback) => v switch
     {
         long l => (int)l,
-        int i => i,
         double d => (int)d,
         string s when int.TryParse(s, out var n) => n,
         _ => fallback,
@@ -662,7 +662,6 @@ public static class ConfigLoader
     {
         double d => d,
         long l => l,
-        int i => i,
         string s when double.TryParse(
             s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n)
             => n,
@@ -673,7 +672,6 @@ public static class ConfigLoader
     {
         double d => d,
         long l => l,
-        int i => i,
         string s when double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n) => n,
         _ => fallback,
     };

@@ -368,15 +368,9 @@ public sealed class UshellConnector : IConnector
             _animTask = Task.Run(() => StreamAnimationAsync(result, ct), CancellationToken.None);
         }
 
-        try
-        {
-            old?.Cancel();
-        }
-        catch
-        {
-            // ignore
-        }
-
+        // Cancel cannot throw here: old is disposed only on the next line, and
+        // its only registration is the animation's Task.Delay.
+        old?.Cancel();
         old?.Dispose();
     }
 

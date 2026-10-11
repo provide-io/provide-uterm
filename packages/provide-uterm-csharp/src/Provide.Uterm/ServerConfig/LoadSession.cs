@@ -103,10 +103,10 @@ internal static class SessionLoader
     private static bool? Bool(TomlTable table, string key) =>
         table.TryGetValue(key, out var value) && value is bool flag ? flag : null;
 
+    // TOML numbers arrive as long or double (never int).
     private static int? Int(object? value) => value switch
     {
         long l => (int)l,
-        int i => i,
         double d => (int)d,
         _ => null,
     };

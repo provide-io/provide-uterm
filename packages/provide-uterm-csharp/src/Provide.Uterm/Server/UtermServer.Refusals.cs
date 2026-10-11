@@ -40,17 +40,20 @@ public sealed partial class UtermServer
     /// past it and is left exactly as it was.
     /// </summary>
     private static void UseFrameworkRefusalBodies(WebApplication app) =>
-        app.UseStatusCodePages(async context =>
-        {
-            var status = context.HttpContext.Response.StatusCode;
-            var reason = ReasonPhrases.GetReasonPhrase(status);
-            if (reason.Length == 0)
-            {
-                // A status .NET has no phrase for is one this server never
-                // raises; inventing wording for it would be a third error shape.
-                return;
-            }
+        app.UseStatusCodePages(context => WriteFrameworkRefusalBodyAsync(context.HttpContext));
 
-            await DetailError(status, reason).ExecuteAsync(context.HttpContext).ConfigureAwait(false);
-        });
+    /// <summary>The body for one bodiless refusal (internal so tests can hand it any status).</summary>
+    internal static async Task WriteFrameworkRefusalBodyAsync(HttpContext http)
+    {
+        var status = http.Response.StatusCode;
+        var reason = ReasonPhrases.GetReasonPhrase(status);
+        if (reason.Length == 0)
+        {
+            // A status .NET has no phrase for is one this server never
+            // raises; inventing wording for it would be a third error shape.
+            return;
+        }
+
+        await DetailError(status, reason).ExecuteAsync(http).ConfigureAwait(false);
+    }
 }

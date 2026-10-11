@@ -427,17 +427,10 @@ public sealed partial class UtermServer
                         .ConfigureAwait(false);
                     break;
                 }
+                // DecodeFrame refuses only payloads shorter than its 2-byte header.
                 if (message.Payload.Length < 2) continue;
 
-                TunnelFrame frame;
-                try
-                {
-                    frame = TunnelCodec.DecodeFrame(message.Payload);
-                }
-                catch
-                {
-                    continue;
-                }
+                var frame = TunnelCodec.DecodeFrame(message.Payload);
 
                 if (frame.IsEof) continue;
                 if (!await ProcessTunnelFrameAsync(workerId, conn, frame, ctx.RequestAborted)
