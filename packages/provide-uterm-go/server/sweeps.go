@@ -36,6 +36,11 @@ func (s *Server) StartSweeps(ctx context.Context) {
 	})
 }
 
+// defaultRegistryHeartbeatInterval applies when no positive
+// registry_webhook_interval_s is configured. A var so a test can see the
+// fallback cadence fire without waiting a minute.
+var defaultRegistryHeartbeatInterval = 60 * time.Second
+
 // startNodeRegistryHeartbeat launches the discovery announcer on the governance-
 // configured cadence, but only when a webhook provider is actually configured
 // (matching factory_sweeps.node_registry_heartbeat, which returns early for the
@@ -47,7 +52,7 @@ func (s *Server) startNodeRegistryHeartbeat(ctx context.Context) {
 	}
 	interval := time.Duration(s.cfg.Governance.RegistryWebhookIntervalS * float64(time.Second))
 	if interval <= 0 {
-		interval = 60 * time.Second
+		interval = defaultRegistryHeartbeatInterval
 	}
 	s.launchSweep(ctx, interval, func(ctx context.Context) {
 		if err := provider.Announce(ctx, s.nodeStatus(ctx)); err != nil {

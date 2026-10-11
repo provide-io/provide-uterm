@@ -63,11 +63,7 @@ func (s *Server) handleHijackSend(w http.ResponseWriter, r *http.Request) {
 	result, _ := s.deps.Hub.SendRESTOwnedInput(ctx, workerID, hijackID,
 		map[string]any{"type": "input", "data": keys, "ts": s.clock.Wall()})
 	if !result.Sent {
-		if result.Reason == hub.OwnedInputInvalidHijack {
-			bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
-			return
-		}
-		bridgeError(w, http.StatusConflict, "No worker connected for this session.")
+		writeOwnedInputRefusal(w, result)
 		return
 	}
 	_, _ = s.deps.Hub.AppendEventData(ctx, workerID, "hijack_send", map[string]any{
@@ -88,6 +84,17 @@ func (s *Server) handleHijackSend(w http.ResponseWriter, r *http.Request) {
 		"matched_prompt_id": extractPromptID(snapshot),
 		"lease_expires_at":  s.monoToWall(freshExpires),
 	})
+}
+
+// writeOwnedInputRefusal answers a REST send/step whose owned input did not go
+// out: a lease that lapsed or changed hands is 404, anything else (no worker,
+// a failed delivery) is 409.
+func writeOwnedInputRefusal(w http.ResponseWriter, result hub.OwnedInputResult) {
+	if result.Reason == hub.OwnedInputInvalidHijack {
+		bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
+		return
+	}
+	bridgeError(w, http.StatusConflict, "No worker connected for this session.")
 }
 
 func (s *Server) handleHijackStep(w http.ResponseWriter, r *http.Request) {
@@ -112,11 +119,7 @@ func (s *Server) handleHijackStep(w http.ResponseWriter, r *http.Request) {
 	result, _ := s.deps.Hub.SendRESTOwnedInput(ctx, workerID, hijackID,
 		controlMsg("step", hs.Owner, 0, s.clock.Wall(), ""))
 	if !result.Sent {
-		if result.Reason == hub.OwnedInputInvalidHijack {
-			bridgeError(w, http.StatusNotFound, "Invalid or expired hijack session.")
-			return
-		}
-		bridgeError(w, http.StatusConflict, "No worker connected for this session.")
+		writeOwnedInputRefusal(w, result)
 		return
 	}
 	_, _ = s.deps.Hub.AppendEventData(ctx, workerID, "hijack_step", map[string]any{"hijack_id": hijackID})

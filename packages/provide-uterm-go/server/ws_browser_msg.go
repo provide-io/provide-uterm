@@ -94,10 +94,7 @@ func (s *Server) browserResume(ctx context.Context, conn *websocket.Conn, worker
 		_ = store.Revoke(opCtx, newTok)
 		return
 	}
-	state := s.deps.Hub.RegisterBrowserStateSnapshot(workerID, bc)
-	if state == nil {
-		state = map[string]any{}
-	}
+	state := s.deps.Hub.RegisterBrowserStateSnapshot(workerID, bc) // never nil
 	state["resume_token"] = newTok
 	hello := s.buildHelloFrame(workerID, role, role == "admin", state)
 	hello.Resumed = frames.Ptr(true)

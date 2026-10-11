@@ -6,12 +6,15 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/gui"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/policy"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vnc"
@@ -173,6 +176,30 @@ func principalPolicyRole(p *serverauth.Principal) string {
 	return "viewer"
 }
 
+// litevirtSession is what buildLitevirtSession drives: the headless AI VNC
+// client's handshake loop and readiness wait, plus the GraphicalSession it is
+// handed out as.
+type litevirtSession interface {
+	gui.GraphicalSession
+	RunHandshakeAndLoop() error
+	WaitReady(ctx context.Context) error
+}
+
+// newLitevirtSession builds the AI VNC client; swappable in tests so a loop
+// that outlives its cancellation (which a real stream does not do on demand)
+// can exercise the bounded drain.
+var newLitevirtSession = func(ctx context.Context, cc grpc.ClientConnInterface, vmName string) (litevirtSession, error) {
+	return vnc.NewLitevirtAIClient(ctx, cc, vmName)
+}
+
+// litevirtDrainTimeout bounds how long a failed handshake waits for its loop
+// goroutine to exit.
+var litevirtDrainTimeout = time.Second
+
+// lookupIP resolves an insecure_no_tls litevirt host; swappable in tests so the
+// loopback-only check does not depend on the machine's resolver.
+var lookupIP = net.LookupIP
+
 // dialLitevirtTarget dials a registry-backed litevirt gRPC endpoint after the
 // same egress-guard + TLS policy used by buildLitevirtSession / handleGUIAttach.
 // On failure it writes the HTTP error and returns ok=false.
@@ -215,7 +242,7 @@ func (s *Server) dialLitevirtTarget(
 	}
 	if insecureNoTLS {
 		if err := AssertIPAllowed(host, false); err != nil {
-			ips, lerr := net.LookupIP(host)
+			ips, lerr := lookupIP(host)
 			if lerr != nil || len(ips) == 0 {
 				detailError(w, http.StatusForbidden, "insecure_no_tls requires resolvable loopback endpoint")
 				return nil, "", false

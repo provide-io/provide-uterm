@@ -174,15 +174,15 @@ func recordingPathAllowed(path, dir string) bool {
 	if err != nil {
 		return false
 	}
-	absPath, err := filepath.Abs(resolvedPath)
+	absPath, err := filepathAbs(resolvedPath)
 	if err != nil {
 		return false
 	}
-	absDir, err := filepath.Abs(resolvedDir)
+	absDir, err := filepathAbs(resolvedDir)
 	if err != nil {
 		return false
 	}
-	rel, err := filepath.Rel(absDir, absPath)
+	rel, err := filepathRel(absDir, absPath)
 	if err != nil {
 		return false
 	}

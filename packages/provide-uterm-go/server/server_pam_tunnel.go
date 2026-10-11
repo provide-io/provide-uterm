@@ -280,15 +280,12 @@ func (p *PamIntegration) createRelayTunnel(ctx context.Context, sessionID, displ
 		p.logger.Warn("create_relay_tunnel_failed", "url", url, "error", err)
 		return "", "", err
 	}
-	body, err := json.Marshal(map[string]any{
+	// Three strings: json.Marshal cannot fail.
+	body, _ := json.Marshal(map[string]any{
 		"session_id":   sessionID,
 		"display_name": displayName,
 		"tunnel_type":  "terminal",
 	})
-	if err != nil {
-		p.logger.Warn("create_relay_tunnel_failed", "url", url, "error", err)
-		return "", "", err
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		p.logger.Warn("create_relay_tunnel_failed", "url", url, "error", err)

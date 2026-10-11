@@ -83,7 +83,9 @@ func (s *Server) tunnelRecvLoop(ctx context.Context, conn *websocket.Conn, worke
 	bg := context.Background()
 	max := s.deps.Hub.MaxWSMessageBytes()
 	for {
-		msgType, raw, err := conn.Read(ctx)
+		// Read only ever yields text or binary data messages (control frames
+		// are handled inside the library), and both carry tunnel frames.
+		_, raw, err := conn.Read(ctx)
 		if err != nil {
 			return
 		}
@@ -91,16 +93,11 @@ func (s *Server) tunnelRecvLoop(ctx context.Context, conn *websocket.Conn, worke
 			_ = conn.Close(websocket.StatusNormalClosure, "")
 			return
 		}
-		if msgType != websocket.MessageBinary && msgType != websocket.MessageText {
-			continue
-		}
 		if len(raw) > max || len(raw) < 2 {
 			continue
 		}
-		frame, err := tunnelclient.DecodeFrame(raw)
-		if err != nil {
-			continue
-		}
+		// DecodeFrame fails only below two bytes, which was skipped above.
+		frame, _ := tunnelclient.DecodeFrame(raw)
 		if frame.IsEOF() {
 			continue
 		}
