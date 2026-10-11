@@ -13,6 +13,7 @@ import time
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from provide.telemetry import get_logger
+from provide.uterm import split_incomplete_escape, strip_ansi
 from provide.uterm.control_channel import (
     ControlFrameDecoder,
     ControlFrameProtocolError,
@@ -84,6 +85,10 @@ class HostedSessionRuntime:
         self._state: SessionLifecycle = "stopped"
         self._stopped_at: float | None = None
         self._last_error: str | None = None
+        # A recording close that failed while the run loop was being STOPPED: the
+        # loop swallows it (it must still reach cleanup), and stop() raises it
+        # once everything is down. See _end_connection_recording.
+        self._pending_close_failure: Exception | None = None
         self._recording_path: Path | None = None
         self._logger: SessionLogger | None = None
         self._detector = detector
@@ -109,25 +114,30 @@ class HostedSessionRuntime:
         # streamed `term` chunk, once over each snapshot screen. Dedupe between
         # the two, keyed by _read_annotation_key (a sha256 of rule id + matched
         # text; never the raw text). THE RULE (ports mirror it exactly):
-        #   * _read_annotation_keys: every key recorded in this recording, by
-        #     either path.
-        #   * _snapshot_only_keys: keys the SNAPSHOT path recorded since the last
-        #     processed stream chunk.
+        #   * _read_annotation_keys: every non-empty key recorded in this
+        #     recording, by either path.
+        #   * _snapshot_only_keys: non-empty keys the SNAPSHOT path recorded
+        #     since the last processed stream chunk.
+        #   EMPTY key (an annotation the detector did not build carries
+        #     match_key ""): never deduped on either path -- always recorded,
+        #     and added to neither set.
         #   Snapshot match: key in _read_annotation_keys -> skip. Otherwise
         #     record it and add the key to BOTH sets.
         #   Stream chunk (non-empty, while recording): for each match, key in
         #     _snapshot_only_keys -> remove it and skip (the snapshot already
         #     recorded this occurrence). Otherwise record it and add the key to
         #     _read_annotation_keys. AFTER the chunk's matches are handled,
-        #     _snapshot_only_keys is CLEARED: a pending key dedupes only the one
-        #     stream chunk that immediately follows the snapshot(s).
-        # So stream-then-snapshot records once, snapshot-then-next-chunk records
+        #     _snapshot_only_keys is CLEARED, matched or not.
+        # So a pending key absorbs AT MOST ONE same-key match, and only in the
+        # very next stream chunk after the snapshot(s). Inside that one chunk a
+        # genuinely new occurrence of the same text is indistinguishable from the
+        # snapshot's and is absorbed; in any later chunk every match records.
+        # Stream-then-snapshot records once, snapshot-then-next-chunk records
         # once, a run of identical snapshots records once, and a command streamed
-        # twice is annotated twice; a pending key can never suppress a later,
-        # genuinely new match. Accepted cost: if the snapshot's text reaches the
-        # stream only in a LATER chunk (split over several, or after unrelated
-        # output), that match is recorded a second time -- a duplicate is
-        # preferred over a missed annotation. Both sets are bounded
+        # twice (in separate chunks) is annotated twice. Accepted cost: if the
+        # snapshot's text reaches the stream only in a LATER chunk (split over
+        # several, or after unrelated output), it is recorded a second time -- a
+        # duplicate is preferred over a missed annotation. Both sets are bounded
         # (_MAX_READ_ANNOTATION_KEYS, cleared when full), scoped to one recording
         # and reset with it: see _stop_recording.
         self._read_annotation_keys: set[str] = set()
@@ -173,6 +183,7 @@ class HostedSessionRuntime:
         self._state = "starting"
         self._stopped_at = None
         self._last_error = None
+        self._pending_close_failure = None
         self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
@@ -184,6 +195,12 @@ class HostedSessionRuntime:
         running/connected. Now the first failure is kept, the connector is
         discarded and the state is set to stopped regardless, the failure is
         recorded in ``_last_error``, and only then is it re-raised to the caller.
+
+        Which failure is raised, in priority order: (1) the run task's own
+        failure; (2) a recording close that failed inside the run loop while it
+        was being stopped (``_pending_close_failure``, set by
+        ``_end_connection_recording``); (3) a failure closing a recording that
+        was still open here.
         """
         self._stop.set()
         failure: Exception | None = None
@@ -191,6 +208,8 @@ class HostedSessionRuntime:
             await self._finish_run_task()
         except Exception as exc:
             failure = exc
+        failure = failure or self._pending_close_failure
+        self._pending_close_failure = None
         try:
             await self._stop_recording()
         except Exception as exc:
@@ -377,15 +396,24 @@ class HostedSessionRuntime:
             self._read_annotation_keys.clear()
             self._snapshot_only_keys.clear()
 
-    async def _end_connection_recording(self) -> None:
+    async def _end_connection_recording(self, connection_error: str | None = None) -> None:
         """Close the recording at the end of one worker connection, never raising.
 
         A failed final flush here used to escape ``_run``'s ``finally`` and end
-        the task: the session died silently, its state still read
-        running/starting and its connector stayed alive with nobody to stop it.
-        The failure is now recorded (``_last_error``, ``_state = "error"``, a
-        warning log) and the loop carries on as after any other connection end:
-        reconnect, or -- when stopping -- fall through to ``_stop_connector``.
+        the task: the session died silently and its connector stayed alive with
+        nobody to stop it. Now the loop always carries on -- reconnecting, or,
+        when stopping, falling through to cleanup -- and the failure is:
+
+        * logged (``hosted_session_recording_close_failed``);
+        * recorded in ``_last_error`` WITHOUT losing the error that ended the
+          connection: *connection_error* (``str`` of it, or None after a clean
+          end) is kept first and the close failure appended as
+          ``"<connection error>; recording close failed: <close error>"``, or
+          ``"recording close failed: <close error>"`` alone;
+        * when the loop is being stopped (``_stop`` set), also kept in
+          ``_pending_close_failure`` for ``stop()`` to raise after cleanup. A
+          close failure on an ordinary reconnect is not raised anywhere.
+
         No ``runtime_error`` event is written: the recording it would go to is
         the one that just failed to close (``_stop_recording`` has dropped it).
         """
@@ -393,10 +421,30 @@ class HostedSessionRuntime:
         try:
             await self._stop_recording()
         except Exception as exc:
-            self._state = "error"
-            self._last_error = str(exc)
             logger.warning(
                 "hosted_session_recording_close_failed session_id=%s error=%s",
+                self.definition.session_id,
+                exc,
+            )
+            close_error = f"recording close failed: {exc}"
+            self._last_error = f"{connection_error}; {close_error}" if connection_error else close_error
+            if self._stop.is_set():
+                self._pending_close_failure = exc
+
+    async def _log_runtime_error(self, payload: dict[str, Any]) -> None:
+        """Write a ``runtime_error`` event to the recording, best-effort.
+
+        The recording is often the very thing that failed (a store that keeps
+        failing re-raises on every write, since the logger keeps the unflushed
+        batch). A failure here must never escape the run loop's error handler,
+        or ``_run`` dies without reconnecting or releasing the connector.
+        """
+
+        try:
+            await self._log_event("runtime_error", payload)
+        except Exception as exc:
+            logger.warning(
+                "hosted_session_runtime_error_log_failed session_id=%s error=%s",
                 self.definition.session_id,
                 exc,
             )
@@ -426,8 +474,6 @@ class HostedSessionRuntime:
         # Read as text. A rendered screen carries SGR codes and ends each row
         # with a reset, which hides a trailing "Password:" from the prompt check
         # and splits a styled match from the read-path rules.
-        from provide.uterm import strip_ansi
-
         text = strip_ansi(screen)
         self._at_password_prompt = bool(re.search(r"(?i)(?:password|passphrase)[^\n]*:\s*$", text.rstrip()))
         if self._logger is None:
@@ -438,12 +484,14 @@ class HostedSessionRuntime:
             for annotation in self._detector.detect("read", text, seq=self._event_seq):
                 # The snapshot path DEDUPES (rule in __init__): a match already
                 # recorded by the stream or an earlier snapshot is skipped; a new
-                # one is recorded and left owing to the stream once.
+                # one is recorded and left pending for the next stream chunk. An
+                # empty key is never deduped and never remembered.
                 key = _read_annotation_key(annotation)
-                if key in self._read_annotation_keys:
-                    continue
-                self._remember_read_annotation(key)
-                _add_bounded(self._snapshot_only_keys, key)
+                if key:
+                    if key in self._read_annotation_keys:
+                        continue
+                    self._remember_read_annotation(key)
+                    _add_bounded(self._snapshot_only_keys, key)
                 await self._logger.log_event("annotation", annotation.to_dict())
 
     def _remember_read_annotation(self, key: str) -> None:
@@ -470,15 +518,14 @@ class HostedSessionRuntime:
         """
         if self._logger is None or self._read_stream is None or not data:
             return
-        from provide.uterm import split_incomplete_escape, strip_ansi
-
         text, self._escape_carry = split_incomplete_escape(self._escape_carry + data)
         for annotation in self._read_stream.detect("read", strip_ansi(text), seq=self._event_seq):
             key = _read_annotation_key(annotation)
-            if key in self._snapshot_only_keys:
-                self._snapshot_only_keys.discard(key)
-                continue
-            self._remember_read_annotation(key)
+            if key:
+                if key in self._snapshot_only_keys:
+                    self._snapshot_only_keys.discard(key)
+                    continue
+                self._remember_read_annotation(key)
             await self._logger.log_event("annotation", annotation.to_dict())
         # Pending snapshot keys expire with the first chunk after the snapshot,
         # matched or not, so they never suppress a later, new match.
@@ -637,6 +684,7 @@ class HostedSessionRuntime:
         attempt = 0
         while not self._stop.is_set():
             self._state = "starting"
+            connection_error: str | None = None
             try:
                 # Kept across worker reconnects rather than rebuilt with each
                 # one. A capture connector's socket is a rendezvous point that
@@ -665,7 +713,7 @@ class HostedSessionRuntime:
                     break
                 self._state = "error"
                 self._connected = False
-                self._last_error = str(exc)
+                self._last_error = connection_error = str(exc)
                 if outcome == "permanent":
                     if isinstance(exc, ValueError):
                         logger.error(
@@ -673,7 +721,7 @@ class HostedSessionRuntime:
                             self.definition.session_id,
                             exc,
                         )
-                        await self._log_event("runtime_error", {"error": str(exc), "permanent": True})
+                        await self._log_runtime_error({"error": str(exc), "permanent": True})
                     else:
                         # Permanent HTTP failure (401/403/404). Log the warning
                         # event first so observers see what failed, then the
@@ -683,7 +731,7 @@ class HostedSessionRuntime:
                             self.definition.session_id,
                             exc,
                         )
-                        await self._log_event("runtime_error", {"error": str(exc)})
+                        await self._log_runtime_error({"error": str(exc)})
                         _status = getattr(exc, "status_code", None) or getattr(
                             getattr(exc, "response", None), "status_code", None
                         )
@@ -694,7 +742,7 @@ class HostedSessionRuntime:
                         )
                     break
                 logger.warning("hosted_session_runtime_failed session_id=%s error=%s", self.definition.session_id, exc)
-                await self._log_event("runtime_error", {"error": str(exc)})
+                await self._log_runtime_error({"error": str(exc)})
                 delay = backoff_s[min(attempt, len(backoff_s) - 1)]
                 attempt += 1
                 await asyncio.sleep(delay)
@@ -702,7 +750,7 @@ class HostedSessionRuntime:
                 self._connected = False
                 # The recording belongs to the connection that just ended; the
                 # connector belongs to the session and outlives it.
-                await self._end_connection_recording()
+                await self._end_connection_recording(connection_error)
         await self._stop_connector()
         self._state = "stopped"
         self._stopped_at = time.time()
