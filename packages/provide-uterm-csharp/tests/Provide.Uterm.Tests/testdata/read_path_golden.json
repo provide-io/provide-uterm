@@ -84,6 +84,75 @@
    "carry": ""
   }
  ],
+ "match_keys": [
+  {
+   "rule_id": "cred.aws_access_key",
+   "match": "AKIAIOSFODNN7EXAMPLE",
+   "key": "20bd90bc2ba44c0adc32865220779e6422613e611595d089067d8e15d640fb4a"
+  },
+  {
+   "rule_id": "",
+   "match": "",
+   "key": "6e340b9cffb37a989ca544e6bb780a2c78901d3fb33738768511a30617afa01d"
+  },
+  {
+   "rule_id": "r",
+   "match": "café ☃ 😀",
+   "key": "2817d69e5aabcfe95b2ded939ffe31144c56fee4ca55f86a54e3a035a948905c"
+  },
+  {
+   "rule_id": "rule.with\u0000nul",
+   "match": "match\u0000with nul",
+   "key": "62b07838b15c9ea2a3d1ab3f8ebde3de7284bfa03d7c811b603e1a44fae4e473"
+  }
+ ],
+ "detected_match_keys": [
+  {
+   "text": "export K=AKIAIOSFODNN7EXAMPLE",
+   "annotations": [
+    {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read",
+     "match_key": "6f4fb1e7a73222e0e80388d1ed3b93d9921cf3add57ced0eb90bc78bfa5c962e"
+    }
+   ]
+  },
+  {
+   "text": "export K=AKIAJ2345678ABCDWXYZ",
+   "annotations": [
+    {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read",
+     "match_key": "7440ffd6d2bb00f5dd198b9b08964d300d7d47c6de58c9062615991696304653"
+    }
+   ]
+  },
+  {
+   "text": "$ sudo ls; rm -rf build",
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo",
+     "match_key": "2bf579bebdca3436f8280f97bea2c5a8f4bc3686637318f5a2ed60adc61bf25a"
+    },
+    {
+     "label": "destructive_command",
+     "description": "Recursive force-remove detected: rm -rf",
+     "match_key": "7802affb9a1c75947bed56b018fcdc8082765de688a510a4dbcbbadc635562b2"
+    }
+   ]
+  },
+  {
+   "text": "$ curl https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "annotations": [
+    {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl https://",
+     "match_key": "3d864f2dbb23ff88f17a76e8b1009e0dc83938d54d9ed4078a66672a19dbe045"
+    }
+   ]
+  }
+ ],
  "scenarios": {
   "escape_split_across_chunks": {
    "steps": [
@@ -106,7 +175,8 @@
      "description": "Recursive force-remove detected: rm -rf"
     }
    ],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 0
   },
   "bare_esc_carried": {
    "steps": [
@@ -125,7 +195,8 @@
      "description": "sudo command detected: sudo"
     }
    ],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 0
   },
   "carry_left_at_end": {
    "steps": [
@@ -140,7 +211,8 @@
      "description": "sudo command detected: sudo"
     }
    ],
-   "carry": "\u001b[1"
+   "carry": "\u001b[1",
+   "pending_snapshot_keys": 0
   },
   "overlong_sequence_released": {
    "steps": [
@@ -150,7 +222,8 @@
     ]
    ],
    "annotations": [],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 0
   },
   "snapshot_after_stream_deduped": {
    "steps": [
@@ -169,7 +242,8 @@
      "description": "sudo command detected: sudo"
     }
    ],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 0
   },
   "identical_snapshots_once": {
    "steps": [
@@ -192,7 +266,8 @@
      "description": "Recursive force-remove detected: rm -rf"
     }
    ],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 1
   },
   "stream_twice_annotated_twice": {
    "steps": [
@@ -219,7 +294,8 @@
      "description": "sudo command detected: sudo"
     }
    ],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 0
   },
   "snapshot_records_what_stream_missed": {
    "steps": [
@@ -242,7 +318,8 @@
      "description": "Recursive force-remove detected: rm -rf"
     }
    ],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 1
   },
   "styled_snapshot_is_stripped": {
    "steps": [
@@ -257,7 +334,8 @@
      "description": "sudo command detected: sudo"
     }
    ],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 1
   },
   "different_matches_same_rule_not_deduped": {
    "steps": [
@@ -280,7 +358,188 @@
      "description": "SSH connection detected: ssh bob@"
     }
    ],
-   "carry": ""
+   "carry": "",
+   "pending_snapshot_keys": 1
+  },
+  "two_credentials_of_one_rule": {
+   "steps": [
+    [
+     "snapshot",
+     "$ export K=AKIAIOSFODNN7EXAMPLE\n"
+    ],
+    [
+     "snapshot",
+     "$ export K=AKIAJ2345678ABCDWXYZ\n"
+    ],
+    [
+     "term",
+     "$ export K=AKIAIOSFODNN7EXAMPLE\r\n"
+    ],
+    [
+     "term",
+     "$ export K=AKIAJ2345678ABCDWXYZ\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read"
+    },
+    {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read"
+    },
+    {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read"
+    }
+   ],
+   "carry": "",
+   "pending_snapshot_keys": 0
+  },
+  "snapshot_then_same_text_in_next_chunk": {
+   "steps": [
+    [
+     "snapshot",
+     "$ sudo ls\n"
+    ],
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ],
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    },
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": "",
+   "pending_snapshot_keys": 0
+  },
+  "pending_expires_after_no_match_chunk": {
+   "steps": [
+    [
+     "snapshot",
+     "$ sudo ls\n"
+    ],
+    [
+     "term",
+     "unrelated output\r\n"
+    ],
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    },
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": "",
+   "pending_snapshot_keys": 0
+  },
+  "later_new_sudo_recorded": {
+   "steps": [
+    [
+     "snapshot",
+     "$ sudo ls\n"
+    ],
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ],
+    [
+     "term",
+     "$ sudo reboot\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    },
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    },
+    {
+     "label": "session_lifecycle",
+     "description": "reboot command detected: reboot"
+    }
+   ],
+   "carry": "",
+   "pending_snapshot_keys": 0
+  },
+  "pending_consumed_only_by_its_own_match": {
+   "steps": [
+    [
+     "snapshot",
+     "$ sudo ls\n"
+    ],
+    [
+     "term",
+     "$ rm -rf build\r\n"
+    ],
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    },
+    {
+     "label": "destructive_command",
+     "description": "Recursive force-remove detected: rm -rf"
+    },
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": "",
+   "pending_snapshot_keys": 0
+  },
+  "empty_chunk_leaves_pending": {
+   "steps": [
+    [
+     "snapshot",
+     "$ sudo ls\n"
+    ],
+    [
+     "term",
+     ""
+    ],
+    [
+     "term",
+     "$ sudo ls\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": "",
+   "pending_snapshot_keys": 0
   }
  }
 }

@@ -94,6 +94,7 @@ public sealed class SessionAnnotatorReadPathTests
             var got = h.Recorded.Select(d => $"{d["label"]}|{d["description"]}").ToList();
             Assert.True(want.SequenceEqual(got), $"{name}: want [{string.Join(", ", want)}] got [{string.Join(", ", got)}]");
             Assert.Equal((string)scenario["carry"]!, h.Annotator.EscapeCarry);
+            Assert.Equal((int)scenario["pending_snapshot_keys"]!, h.Annotator.PendingSnapshotKeyCount);
         }
     }
 
@@ -200,15 +201,133 @@ public sealed class SessionAnnotatorReadPathTests
     }
 
     [Fact]
-    public void TheKeyIsTheRuleLabelAndItsDescribedMatch()
+    public void TheKeyIsTheDetectorsMatchKey()
     {
-        var annotation = new Provide.Uterm.Annotation.Annotation
-        {
-            Label = "privilege_escalation",
-            Description = "sudo command detected: sudo",
-        };
+        var annotation = Assert.Single(new PatternDetector().Detect("read", "$ sudo ls", 1));
 
-        Assert.Equal("privilege_escalation\0sudo command detected: sudo", SessionAnnotator.ReadAnnotationKey(annotation));
+        Assert.Equal(
+            Provide.Uterm.Annotation.Annotation.ComputeMatchKey("esc.sudo", "sudo"),
+            SessionAnnotator.ReadAnnotationKey(annotation));
+        Assert.Equal(annotation.MatchKey, SessionAnnotator.ReadAnnotationKey(annotation));
+    }
+
+    private const string AwsA = "AKIAIOSFODNN7EXAMPLE"; // pragma: allowlist secret
+    private const string AwsB = "AKIAJ2345678ABCDWXYZ"; // pragma: allowlist secret
+    private const string Aws = "AWS access key detected in read";
+
+    [Fact]
+    public async Task DifferentCredentialsOfOneRuleInSuccessiveSnapshotsAreAllRecorded()
+    {
+        // They share a label and a description; only the match key tells them apart.
+        var h = new Harness();
+
+        await h.Snapshot($"$ export K={AwsA}\n");
+        await h.Snapshot($"$ export K={AwsB}\n");
+        await h.Snapshot($"$ export K={AwsA}\n");
+
+        Assert.Equal([Aws, Aws], h.Descriptions);
+    }
+
+    [Fact]
+    public async Task AStreamMatchASnapshotAlreadyRecordedIsNotRecordedAgain()
+    {
+        var h = new Harness();
+
+        await h.Snapshot("$ sudo ls\n");
+        await h.Term("$ sudo ls\r\n");
+        // A later run of the same command is a new occurrence.
+        await h.Term("$ sudo ls\r\n");
+
+        Assert.Equal([Sudo, Sudo], h.Descriptions);
+    }
+
+    [Fact]
+    public async Task ASnapshotThenItsChunkRecordsOnceAndALaterNewMatchRecordsAgain()
+    {
+        var h = new Harness();
+
+        await h.Snapshot("$ sudo ls\n");
+        await h.Term("$ sudo ls\r\n");
+        Assert.Equal([Sudo], h.Descriptions);
+
+        await h.Term("$ sudo reboot\r\n");
+        Assert.Equal([Sudo, Sudo, "reboot command detected: reboot"], h.Descriptions);
+    }
+
+    [Fact]
+    public async Task PendingSnapshotKeysExpireWithTheNextChunkEvenWithoutAMatch()
+    {
+        // A missed annotation is worse than an occasional duplicate.
+        var h = new Harness();
+
+        await h.Snapshot("$ sudo ls\n");
+        Assert.Equal(1, h.Annotator.PendingSnapshotKeyCount);
+        await h.Term("unrelated output\r\n");
+        Assert.Equal(0, h.Annotator.PendingSnapshotKeyCount);
+        await h.Term("$ sudo ls\r\n");
+
+        Assert.Equal([Sudo, Sudo], h.Descriptions);
+    }
+
+    [Fact]
+    public async Task APendingKeyIsConsumedOnlyByItsOwnMatch()
+    {
+        var h = new Harness();
+
+        await h.Snapshot("$ sudo ls\n");
+        await h.Term("$ rm -rf build\r\n");
+
+        Assert.Equal([Sudo, Rm], h.Descriptions);
+        Assert.Equal(0, h.Annotator.PendingSnapshotKeyCount);
+    }
+
+    [Fact]
+    public async Task AnEmptyChunkLeavesPendingKeysAlone()
+    {
+        var h = new Harness();
+
+        await h.Snapshot("$ sudo ls\n");
+        await h.Term("");
+        Assert.Equal(1, h.Annotator.PendingSnapshotKeyCount);
+        await h.Term("$ sudo ls\r\n");
+
+        Assert.Equal([Sudo], h.Descriptions);
+    }
+
+    [Fact]
+    public async Task AnUnrecordedChunkLeavesPendingKeysToTheRecordingChange()
+    {
+        var h = new Harness();
+        await h.Snapshot("$ sudo ls\n");
+
+        h.Recording = false;
+        await h.Term("$ sudo ls\r\n");
+        Assert.Equal(0, h.Annotator.PendingSnapshotKeyCount);
+
+        // The new recording owes nothing: the stream's sudo is recorded.
+        h.Recording = true;
+        await h.Term("$ sudo ls\r\n");
+        Assert.Equal([Sudo, Sudo], h.Descriptions);
+    }
+
+    [Fact]
+    public async Task ThePendingSetIsBoundedAndStartsOverWhenFull()
+    {
+        var h = new Harness();
+        for (var i = 0; i < SessionAnnotator.MaxReadAnnotationKeys; i++)
+        {
+            await h.Snapshot($"$ ssh u{i}@host\n");
+        }
+
+        Assert.Equal(SessionAnnotator.MaxReadAnnotationKeys, h.Annotator.PendingSnapshotKeyCount);
+
+        await h.Snapshot("$ ssh next@host\n");
+
+        Assert.Equal(1, h.Annotator.PendingSnapshotKeyCount);
+        // u0 is no longer pending, so the stream records it.
+        var before = h.Recorded.Count;
+        await h.Term("$ ssh u0@host\r\n");
+        Assert.Equal(before + 1, h.Recorded.Count);
     }
 
     [Fact]

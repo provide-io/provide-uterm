@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-using System.Text.RegularExpressions;
 using Provide.Uterm.Annotation;
 using Provide.Uterm.Screen;
 
@@ -15,7 +14,7 @@ namespace Provide.Uterm.Server;
 /// <list type="bullet">
 /// <item><c>_log_snapshot</c>: every snapshot's screen, escape sequences
 /// removed, as "read", through the shared stateless detector (a snapshot is a
-/// whole screen), skipping any match already recorded;</item>
+/// whole screen);</item>
 /// <item><c>_scan_output</c>: every streamed <c>term</c> frame, escape
 /// sequences removed, as "read", through this session's output stream;</item>
 /// <item><c>_log_send</c>: every chunk of input, as "send", through this
@@ -29,8 +28,31 @@ namespace Provide.Uterm.Server;
 /// value. Scanning is synchronous and serialised here so it can run inside a
 /// caller's lock; <see cref="RecordAsync"/> writes the matches afterwards.</para>
 ///
-/// <para>The escape carry and the read-path keys belong to one recording: the
-/// reference clears both in <c>_stop_recording</c>. This port has no separate
+/// <para>Read-path dedupe (the reference's rule in
+/// <c>HostedSessionRuntime.__init__</c>, mirrored exactly), keyed by each
+/// annotation's <see cref="Annotation.Annotation.MatchKey"/> — a SHA-256 of the
+/// rule id and the full matched text, never the text itself:
+/// <list type="bullet">
+/// <item><c>_readAnnotationKeys</c>: every key recorded in this recording, by
+/// either path.</item>
+/// <item><c>_snapshotOnlyKeys</c>: keys the snapshot path recorded since the
+/// last processed stream chunk.</item>
+/// <item>Snapshot match: key in <c>_readAnnotationKeys</c> → skip; otherwise
+/// record it and add the key to BOTH sets.</item>
+/// <item>Stream chunk (non-empty, while recording): for each match, key in
+/// <c>_snapshotOnlyKeys</c> → remove it and skip; otherwise record it and add
+/// the key to <c>_readAnnotationKeys</c>. After the chunk's matches,
+/// <c>_snapshotOnlyKeys</c> is cleared, matched or not.</item>
+/// </list>
+/// So stream-then-snapshot records once, snapshot-then-next-chunk records once,
+/// identical snapshots record once, a command streamed twice is annotated
+/// twice, and a pending key never suppresses a later, genuinely new match. If a
+/// snapshot's text reaches the stream only in a later chunk it is recorded a
+/// second time: a duplicate is preferred over a missed annotation. Both sets
+/// are bounded by <see cref="MaxReadAnnotationKeys"/> (cleared when full).</para>
+///
+/// <para>The escape carry and both key sets belong to one recording: the
+/// reference clears them in <c>_stop_recording</c>. This port has no separate
 /// recording object — a recording is "the session's status says recording",
 /// identified by its <see cref="SessionStatus.RecordingGeneration"/> — so they
 /// are cleared when a scan first sees a different recording state from the last
@@ -41,26 +63,17 @@ namespace Provide.Uterm.Server;
 internal sealed class SessionAnnotator
 {
     /// <summary>
-    /// Longest escape tail held back between chunks, ESC included. Reference:
-    /// <c>_MAX_ESCAPE_CARRY = 64</c> (<c>server/runtime_helpers.py</c>). A real
-    /// sequence is a handful of bytes; past this it is not one (or is hostile),
-    /// and it is released into the text rather than carried forever.
+    /// Longest escape tail held back between chunks: core's
+    /// <see cref="ScreenNormalize.MaxEscapeCarry"/> (reference: runtime_helpers'
+    /// <c>_MAX_ESCAPE_CARRY</c> alias of <c>MAX_ESCAPE_CARRY</c>).
     /// </summary>
-    internal const int MaxEscapeCarry = 64;
+    internal const int MaxEscapeCarry = ScreenNormalize.MaxEscapeCarry;
 
     /// <summary>
-    /// Bound on the per-recording set of read-path annotation keys; past it the
+    /// Bound on each per-recording set of read-path annotation keys; past it the
     /// set is cleared and starts over. Reference: <c>_MAX_READ_ANNOTATION_KEYS = 1024</c>.
     /// </summary>
     internal const int MaxReadAnnotationKeys = 1024;
-
-    /// <summary>
-    /// An escape sequence cut off at the end of a chunk: a bare ESC, or a CSI
-    /// whose parameter/intermediate bytes have not reached a final byte.
-    /// Reference: <c>_INCOMPLETE_ESCAPE_TAIL</c>, matched with <c>fullmatch</c>
-    /// (hence the anchors).
-    /// </summary>
-    private static readonly Regex IncompleteEscapeTail = new(@"^\x1b(?:\[[0-?]*[ -/]*)?\z", RegexOptions.Compiled);
 
     private readonly object _gate = new();
     private readonly PatternDetector _detector;
@@ -72,6 +85,7 @@ internal sealed class SessionAnnotator
     private readonly Func<long?> _recording;
     private readonly Func<Dictionary<string, object?>, Task> _record;
     private readonly HashSet<string> _readAnnotationKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _snapshotOnlyKeys = new(StringComparer.Ordinal);
     private string _escapeCarry = "";
     private int _eventSeq;
 
@@ -132,15 +146,21 @@ internal sealed class SessionAnnotator
         get { lock (_gate) return _readAnnotationKeys.Count; }
     }
 
+    /// <summary>How many snapshot keys wait for the next stream chunk (tests).</summary>
+    internal int PendingSnapshotKeyCount
+    {
+        get { lock (_gate) return _snapshotOnlyKeys.Count; }
+    }
+
     /// <summary>
     /// A snapshot frame being sent: its whole screen, escape sequences removed,
     /// as "read". A rendered screen carries SGR codes and ends each row with a
     /// reset, which would split a styled match from the read-path rules
     /// (reference: <c>_log_snapshot</c> strips before detecting).
     ///
-    /// <para>The snapshot path DEDUPES: a match the stream (or an earlier
-    /// snapshot of the same screen) already recorded is skipped, so neither a
-    /// stream+snapshot pair nor a run of identical snapshots records it twice.</para>
+    /// <para>The snapshot path DEDUPES (rule in the class remarks): a match
+    /// already recorded by the stream or an earlier snapshot is skipped; a new
+    /// one is recorded and left pending for the next stream chunk.</para>
     /// </summary>
     public IReadOnlyList<Annotation.Annotation> ScanSnapshot(IReadOnlyDictionary<string, object?> frame)
     {
@@ -155,7 +175,8 @@ internal sealed class SessionAnnotator
             {
                 var key = ReadAnnotationKey(annotation);
                 if (_readAnnotationKeys.Contains(key)) continue;
-                RememberReadAnnotation(key);
+                AddBounded(_readAnnotationKeys, key);
+                AddBounded(_snapshotOnlyKeys, key);
                 fresh.Add(annotation);
             }
 
@@ -171,9 +192,12 @@ internal sealed class SessionAnnotator
     /// stripped alone, so an unterminated trailing sequence is held back and
     /// prepended to the next chunk (reference: <c>_scan_output</c>).</para>
     ///
-    /// <para>The stream path NEVER suppresses a match — a command run twice is
-    /// annotated twice — but remembers each one so the snapshot path, which
-    /// sees the same text again, does not record it a second time.</para>
+    /// <para>The stream path records every match — a command run twice is
+    /// annotated twice — EXCEPT a match in the first chunk after a snapshot
+    /// that already recorded it, which it consumes once instead; the pending
+    /// keys are then cleared, matched or not. Every match it records is
+    /// remembered so the snapshot path, which sees the same text again, does
+    /// not record it a second time.</para>
     /// </summary>
     public IReadOnlyList<Annotation.Annotation> ScanOutput(string data)
     {
@@ -181,13 +205,19 @@ internal sealed class SessionAnnotator
         lock (_gate)
         {
             (var text, _escapeCarry) = SplitIncompleteEscape(_escapeCarry + data);
-            var found = _readStream.Detect("read", ScreenNormalize.StripAnsi(text), _eventSeq);
-            foreach (var annotation in found)
+            var fresh = new List<Annotation.Annotation>();
+            foreach (var annotation in _readStream.Detect("read", ScreenNormalize.StripAnsi(text), _eventSeq))
             {
-                RememberReadAnnotation(ReadAnnotationKey(annotation));
+                var key = ReadAnnotationKey(annotation);
+                if (_snapshotOnlyKeys.Remove(key)) continue;
+                AddBounded(_readAnnotationKeys, key);
+                fresh.Add(annotation);
             }
 
-            return found;
+            // Pending snapshot keys expire with the first chunk after the
+            // snapshot, matched or not, so they never suppress a later match.
+            _snapshotOnlyKeys.Clear();
+            return fresh;
         }
     }
 
@@ -203,37 +233,27 @@ internal sealed class SessionAnnotator
     }
 
     /// <summary>
-    /// Split <paramref name="text"/> into (complete, carry): carry is an
-    /// unterminated trailing escape. Reference: <c>_split_incomplete_escape</c>.
-    /// Only the LAST ESC can start an unterminated tail (CSI parameter bytes
-    /// never include ESC). A tail longer than <see cref="MaxEscapeCarry"/> is
-    /// not carried. (Lengths are UTF-16 units, the reference's code points: a
-    /// tail the grammar accepts is all ASCII, and any other tail is not carried
-    /// under either count.)
+    /// Core's <see cref="ScreenNormalize.SplitIncompleteEscape"/> at
+    /// <see cref="MaxEscapeCarry"/> (reference: runtime_helpers'
+    /// <c>_split_incomplete_escape</c> alias).
     /// </summary>
-    internal static (string Complete, string Carry) SplitIncompleteEscape(string text)
-    {
-        var start = text.LastIndexOf('\x1b');
-        if (start < 0 || text.Length - start > MaxEscapeCarry) return (text, "");
-        if (!IncompleteEscapeTail.IsMatch(text.AsSpan(start))) return (text, "");
-        return (text[..start], text[start..]);
-    }
+    internal static (string Complete, string Carry) SplitIncompleteEscape(string text) =>
+        ScreenNormalize.SplitIncompleteEscape(text);
 
     /// <summary>
-    /// Identity of a read-path annotation for snapshot dedupe: rule + matched
-    /// text. Reference: <c>_read_annotation_key</c> — the label is the rule's
-    /// category and the description is the rule's template formatted with the
-    /// match, so the pair names the rule and (for every rule that embeds the
-    /// match) the matched text.
+    /// Identity of a read-path annotation for stream/snapshot dedupe: the
+    /// detector's <see cref="Annotation.Annotation.MatchKey"/> (SHA-256 of rule
+    /// id + full matched text). It tells apart two different credentials of one
+    /// rule, which share a label and description, and it is a digest, so the
+    /// key sets never hold a raw secret. Reference: <c>_read_annotation_key</c>.
     /// </summary>
-    internal static string ReadAnnotationKey(Annotation.Annotation annotation) =>
-        annotation.Label + "\0" + annotation.Description;
+    internal static string ReadAnnotationKey(Annotation.Annotation annotation) => annotation.MatchKey;
 
-    /// <summary>Add a key to the bounded read-path set, clearing it first when full.</summary>
-    private void RememberReadAnnotation(string key)
+    /// <summary>Add a key to a bounded key set, clearing it first when full.</summary>
+    private static void AddBounded(HashSet<string> keys, string key)
     {
-        if (_readAnnotationKeys.Count >= MaxReadAnnotationKeys) _readAnnotationKeys.Clear();
-        _readAnnotationKeys.Add(key);
+        if (keys.Count >= MaxReadAnnotationKeys) keys.Clear();
+        keys.Add(key);
     }
 
     /// <summary>
@@ -253,6 +273,7 @@ internal sealed class SessionAnnotator
                 {
                     _escapeCarry = "";
                     _readAnnotationKeys.Clear();
+                    _snapshotOnlyKeys.Clear();
                     _stateResets++;
                     Volatile.Write(ref _observedRecording, current);
                 }

@@ -86,6 +86,7 @@ public sealed partial class PatternDetector
                 Source = "detector",
                 Principal = "system",
                 Span = new AnnotationSpan { FromSeq = seq, ToSeq = seq },
+                MatchKey = Annotation.ComputeMatchKey(rule.RuleId, match.Value),
             });
         }
 

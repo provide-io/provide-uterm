@@ -11,8 +11,64 @@ namespace Provide.Uterm.Screen;
 /// <summary>ANSI stripping and bare-SGR cleanup.</summary>
 public static partial class ScreenNormalize
 {
-    [GeneratedRegex("\x1b(?:\\[[0-?]*[ -/]*[@-~]|[@-_])")]
+    // The escape grammar StripAnsi removes, in named parts so the chunk-carry
+    // check (SplitIncompleteEscape) is built from the SAME pieces and cannot
+    // drift. Reference: screen.py's _ESC / _CSI_* / _FE_FINAL_BYTE.
+    //   CSI: ESC "[" <parameter bytes 0x30-0x3F>* <intermediate bytes 0x20-0x2F>* <final 0x40-0x7E>
+    //   Fe:  ESC <one byte 0x40-0x5F> ("[" is one, so a bare "ESC [" is
+    //        ambiguous until more arrives)
+    internal const string Esc = "\u001b";
+    internal const string CsiIntroducer = @"\[";
+    internal const string CsiParameterBytes = "[0-?]*";
+    internal const string CsiIntermediateBytes = "[ -/]*";
+    internal const string CsiFinalByte = "[@-~]";
+    internal const string FeFinalByte = "[@-_]";
+    internal const string CsiPrefix = CsiIntroducer + CsiParameterBytes + CsiIntermediateBytes;
+
+    /// <summary>Everything StripAnsi removes. Reference: <c>_ANSI_ESCAPE_RE</c>.</summary>
+    internal const string AnsiEscapePattern = Esc + "(?:" + CsiPrefix + CsiFinalByte + "|" + FeFinalByte + ")";
+
+    /// <summary>
+    /// A proper prefix of something <see cref="AnsiEscapePattern"/> strips: a
+    /// bare ESC, or a CSI whose parameter/intermediate bytes have not reached a
+    /// final byte. Anchored, as the reference's <c>fullmatch</c>. Reference:
+    /// <c>_INCOMPLETE_ESCAPE_RE</c>.
+    /// </summary>
+    internal const string IncompleteEscapePattern = "^" + Esc + "(?:" + CsiPrefix + @")?\z";
+
+    /// <summary>
+    /// Longest tail <see cref="SplitIncompleteEscape"/> holds back, ESC
+    /// included. A real sequence is a handful of characters; past this it is
+    /// not one (or is hostile), and it is released into the text rather than
+    /// carried forever. Reference: <c>MAX_ESCAPE_CARRY</c>.
+    /// </summary>
+    public const int MaxEscapeCarry = 64;
+
+    [GeneratedRegex(AnsiEscapePattern)]
     private static partial Regex AnsiEscapeRe();
+
+    [GeneratedRegex(IncompleteEscapePattern)]
+    private static partial Regex IncompleteEscapeRe();
+
+    /// <summary>
+    /// Split <paramref name="text"/> into (complete, carry): carry is an
+    /// unterminated trailing escape, for text that arrives in chunks. The
+    /// caller strips <c>Complete</c> now and prepends <c>Carry</c> to the next
+    /// chunk, so a sequence cut at a boundary (<c>\x1b[1</c> | <c>msudo</c>) is
+    /// stripped whole once it completes. Carry is non-empty exactly when the
+    /// text from the LAST ESC is a proper prefix of a sequence StripAnsi
+    /// removes and is at most <paramref name="maxCarry"/> long (no byte of an
+    /// incomplete sequence is ESC, so only the last can start one). Lengths are
+    /// UTF-16 units, the reference's code points: a tail the grammar accepts is
+    /// all ASCII. Reference: <c>split_incomplete_escape</c>.
+    /// </summary>
+    public static (string Complete, string Carry) SplitIncompleteEscape(string text, int maxCarry = MaxEscapeCarry)
+    {
+        var start = text.LastIndexOf('\u001b');
+        if (start < 0 || text.Length - start > maxCarry) return (text, "");
+        if (!IncompleteEscapeRe().IsMatch(text.AsSpan(start))) return (text, "");
+        return (text[..start], text[start..]);
+    }
 
     [GeneratedRegex(@"<([^<>\r\n]{1,80})>")]
     private static partial Regex ActionTagRe();
