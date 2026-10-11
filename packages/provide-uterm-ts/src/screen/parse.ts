@@ -13,8 +13,41 @@
 
 import { compilePyPattern } from "../pycompat/index.ts";
 
+/*
+ * The escape grammar `stripAnsi` removes, in named parts, so that
+ * {@link splitIncompleteEscape} is built from the SAME pieces and cannot drift
+ * from it. The reference's `screen.py` constants, one for one:
+ *
+ *   CSI: ESC "[" <parameter bytes 0x30-0x3F>* <intermediate bytes 0x20-0x2F>* <final 0x40-0x7E>
+ *   Fe:  ESC <one byte 0x40-0x5F> (a two-byte escape; "[" is itself one, so a
+ *        bare "ESC [" with nothing after it is ambiguous until more arrives)
+ */
+const ESC = "\x1b";
+const CSI_INTRODUCER = "\\[";
+const CSI_PARAMETER_BYTES = "[0-?]*";
+const CSI_INTERMEDIATE_BYTES = "[ -/]*";
+const CSI_FINAL_BYTE = "[@-~]";
+const FE_FINAL_BYTE = "[@-_]";
+const CSI_PREFIX = CSI_INTRODUCER + CSI_PARAMETER_BYTES + CSI_INTERMEDIATE_BYTES;
+
 /** A full ANSI escape sequence: CSI with a final byte, or a two-character form. */
-const ANSI_ESCAPE_PATTERN = /\x1b(?:\[[0-?]*[ -/]*[@-~]|[@-_])/g;
+export const ANSI_ESCAPE_SOURCE = `${ESC}(?:${CSI_PREFIX}${CSI_FINAL_BYTE}|${FE_FINAL_BYTE})`;
+const ANSI_ESCAPE_PATTERN = new RegExp(ANSI_ESCAPE_SOURCE, "g");
+
+/**
+ * A proper prefix of something {@link ANSI_ESCAPE_PATTERN} strips: a bare ESC,
+ * or a CSI whose parameter/intermediate bytes have not yet reached a final
+ * byte. Anchored at both ends, as the reference `fullmatch`es it.
+ */
+const INCOMPLETE_ESCAPE_PATTERN = new RegExp(`^${ESC}(?:${CSI_PREFIX})?$`);
+
+/**
+ * Longest tail {@link splitIncompleteEscape} holds back, in characters, ESC
+ * included. A real sequence is a handful of bytes; past this the "sequence"
+ * is not one (or is hostile), and it is released into the text rather than
+ * carried forever. The reference's `MAX_ESCAPE_CARRY`.
+ */
+export const MAX_ESCAPE_CARRY = 64;
 
 /**
  * Some BBS/telnet servers occasionally leak bare SGR fragments like `1;31m`
@@ -51,6 +84,38 @@ export function normalizeTerminalText(text: string): string {
 /** Remove ANSI escape codes from text. Alias of {@link normalizeTerminalText}. */
 export function stripAnsi(text: string): string {
   return normalizeTerminalText(text);
+}
+
+/**
+ * Split `text` into `[complete, carry]`, where `carry` is an unterminated
+ * trailing escape sequence. The reference's `split_incomplete_escape`.
+ *
+ * For text that arrives in chunks: {@link stripAnsi} sees one chunk at a
+ * time, so `"\x1b[1"` + `"msudo"` would strip to `"\x1b[1"` (no final byte,
+ * left alone) and `"msudo"`. The caller strips `complete` now and prepends
+ * `carry` to the next chunk, so the whole sequence is stripped once it
+ * completes.
+ *
+ * `carry` is non-empty exactly when the text from the LAST ESC to the end is a
+ * proper prefix of a sequence `stripAnsi` removes and is at most `maxCarry`
+ * characters long. Only the last ESC can start one: no byte of an incomplete
+ * sequence is ESC. The tail measured is all ASCII whenever it can be carried,
+ * so its length in UTF-16 units is the reference's in code points.
+ */
+export function splitIncompleteEscape(text: string, maxCarry: number = MAX_ESCAPE_CARRY): [string, string] {
+  // With no ESC at all, `lastIndexOf` is -1 and the tail below is the last
+  // character (or nothing): never an ESC, so the pattern refuses it and the
+  // text is returned whole — the reference's `start < 0` case, without a
+  // separate test that could only ever agree with this one.
+  const start = text.lastIndexOf(ESC);
+  if (text.length - start > maxCarry) {
+    return [text, ""];
+  }
+  const tail = text.slice(start);
+  if (!INCOMPLETE_ESCAPE_PATTERN.test(tail)) {
+    return [text, ""];
+  }
+  return [text.slice(0, start), tail];
 }
 
 /**

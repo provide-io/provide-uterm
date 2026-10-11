@@ -237,6 +237,158 @@
    }
   ]
  ],
+ "dedupe_scripts": {
+  "different_credentials": [
+   [
+    "outbound",
+    {
+     "type": "snapshot",
+     "screen": "AKIAIOSFODNN7EXAMPLE first\n",
+     "ts": 1.5
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "snapshot",
+     "screen": "AKIAJ2345678ABCDWXYZ second\n",
+     "ts": 1.75
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "snapshot",
+     "screen": "AKIAJ2345678ABCDWXYZ second\n",
+     "ts": 2.25
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "AKIAIOSFODNN7EXAMPLE again\r\n",
+     "ts": 2.5
+    }
+   ]
+  ],
+  "snapshot_then_stream": [
+   [
+    "outbound",
+    {
+     "type": "snapshot",
+     "screen": "$ sudo ls\n",
+     "ts": 1.5
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "$ sudo ls\r\n",
+     "ts": 1.75
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "$ sudo ls\r\n",
+     "ts": 2.25
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "$ sudo reboot\r\n",
+     "ts": 2.5
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "snapshot",
+     "screen": "$ sudo ls\n$ sudo reboot\n",
+     "ts": 2.75
+    }
+   ]
+  ],
+  "expiry": [
+   [
+    "outbound",
+    {
+     "type": "snapshot",
+     "screen": "# rm -rf /tmp/y\n",
+     "ts": 1.5
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "",
+     "ts": 1.75
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "# rm -rf /tmp/y\r\n",
+     "ts": 2.25
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "snapshot",
+     "screen": "$ sudo ls\n",
+     "ts": 2.5
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "unrelated output\r\n",
+     "ts": 2.75
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "$ sudo ls\r\n",
+     "ts": 3.25
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "snapshot",
+     "screen": "$ shutdown now\n",
+     "ts": 3.5
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "$ rm -rf /\r\n",
+     "ts": 3.75
+    }
+   ],
+   [
+    "outbound",
+    {
+     "type": "term",
+     "data": "$ shutdown now\r\n",
+     "ts": 4.25
+    }
+   ]
+  ]
+ },
  "configs": {
   "exclude": {},
   "wire": {
@@ -989,6 +1141,316 @@
      "span": {
       "from_seq": 8,
       "to_seq": 8
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "rec"
+   }
+  ],
+  "dedupe_different_credentials": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "[AWS_ACCESS_KEY_REDACTED] first\n",
+     "ts": 1.5,
+     "raw": "[AWS_ACCESS_KEY_REDACTED] first\n",
+     "raw_bytes_b64": "W0FXU19BQ0NFU1NfS0VZX1JFREFDVEVEXSBmaXJzdAo="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 1
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "[AWS_ACCESS_KEY_REDACTED] second\n",
+     "ts": 1.75,
+     "raw": "[AWS_ACCESS_KEY_REDACTED] second\n",
+     "raw_bytes_b64": "W0FXU19BQ0NFU1NfS0VZX1JFREFDVEVEXSBzZWNvbmQK"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 2,
+      "to_seq": 2
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "[AWS_ACCESS_KEY_REDACTED] second\n",
+     "ts": 2.25,
+     "raw": "[AWS_ACCESS_KEY_REDACTED] second\n",
+     "raw_bytes_b64": "W0FXU19BQ0NFU1NfS0VZX1JFREFDVEVEXSBzZWNvbmQK"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "rec"
+   }
+  ],
+  "dedupe_snapshot_then_stream": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ sudo ls\n",
+     "ts": 1.5,
+     "raw": "$ sudo ls\n",
+     "raw_bytes_b64": "JCBzdWRvIGxzCg=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 1
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 1
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 1
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "session_lifecycle",
+     "description": "reboot command detected: reboot",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 1
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ sudo ls\n$ sudo reboot\n",
+     "ts": 2.75,
+     "raw": "$ sudo ls\n$ sudo reboot\n",
+     "raw_bytes_b64": "JCBzdWRvIGxzCiQgc3VkbyByZWJvb3QK"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "rec"
+   }
+  ],
+  "dedupe_expiry": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "# rm -rf /tmp/y\n",
+     "ts": 1.5,
+     "raw": "# rm -rf /tmp/y\n",
+     "raw_bytes_b64": "IyBybSAtcmYgL3RtcC95Cg=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "destructive_command",
+     "description": "Recursive force-remove detected: rm -rf",
+     "severity": "critical",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 1
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ sudo ls\n",
+     "ts": 2.5,
+     "raw": "$ sudo ls\n",
+     "raw_bytes_b64": "JCBzdWRvIGxzCg=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 2,
+      "to_seq": 2
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "privilege_escalation",
+     "description": "sudo command detected: sudo",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 2,
+      "to_seq": 2
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ shutdown now\n",
+     "ts": 3.5,
+     "raw": "$ shutdown now\n",
+     "raw_bytes_b64": "JCBzaHV0ZG93biBub3cK"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "session_lifecycle",
+     "description": "shutdown command detected: shutdown",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 3,
+      "to_seq": 3
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "destructive_command",
+     "description": "Recursive force-remove detected: rm -rf",
+     "severity": "critical",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 3,
+      "to_seq": 3
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "session_lifecycle",
+     "description": "shutdown command detected: shutdown",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 3,
+      "to_seq": 3
      }
     },
     "session_id": "rec"

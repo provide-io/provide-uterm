@@ -23,7 +23,10 @@ is how the server factory builds every runtime: each match is an
 streamed ``term`` frame with escape sequences removed (carrying a partial
 match, and an unterminated escape sequence, across frames), and send-path
 rules on typed input (carrying likewise). The snapshot path skips a read-path
-match this recording already holds, from the stream or an earlier snapshot. Every ``ts`` in the script has a
+match this recording already holds, from the stream or an earlier snapshot.
+Further scripts, one recording each, pin the stream/snapshot dedupe rule:
+different credentials of one rule, a snapshot followed by the stream, and a
+pending snapshot key expiring after the next chunk. Every ``ts`` in the script has a
 fractional part: an integral float is ``4.0`` on CPython's wire and ``4`` on
 JavaScript's, a difference in number models rather than in recording, and a
 connector's stamps are never integral anyway. Wall-clock ``ts`` fields and the
@@ -115,6 +118,45 @@ ANNOTATED_SCRIPT: list[list[Any]] = [
     ["outbound", {"type": "hijack_state", "enabled": True, "owner": "ops"}],
 ]
 
+_KEY_A = "AKIAIOSFODNN7EXAMPLE"  # pragma: allowlist secret
+_KEY_B = "AKIAJ2345678ABCDWXYZ"  # pragma: allowlist secret
+
+# The read-path dedupe rule (HostedSessionRuntime.__init__), one scenario per
+# recording so each starts with empty key sets. Each runs with the detector.
+DEDUPE_SCRIPTS: dict[str, list[list[Any]]] = {
+    # Credential rules never embed the match in the description: the key is a
+    # digest of the full match, so a different key is a different annotation,
+    # and the same one again is not.
+    "different_credentials": [
+        ["outbound", {"type": "snapshot", "screen": f"{_KEY_A} first\n", "ts": 1.5}],
+        ["outbound", {"type": "snapshot", "screen": f"{_KEY_B} second\n", "ts": 1.75}],
+        ["outbound", {"type": "snapshot", "screen": f"{_KEY_B} second\n", "ts": 2.25}],
+        ["outbound", {"type": "term", "data": f"{_KEY_A} again\r\n", "ts": 2.5}],
+    ],
+    # A snapshot's match is consumed by the next chunk carrying it; a later
+    # repeat on the stream is a new occurrence, and so is a new match.
+    "snapshot_then_stream": [
+        ["outbound", {"type": "snapshot", "screen": "$ sudo ls\n", "ts": 1.5}],
+        ["outbound", {"type": "term", "data": "$ sudo ls\r\n", "ts": 1.75}],
+        ["outbound", {"type": "term", "data": "$ sudo ls\r\n", "ts": 2.25}],
+        ["outbound", {"type": "term", "data": "$ sudo reboot\r\n", "ts": 2.5}],
+        ["outbound", {"type": "snapshot", "screen": "$ sudo ls\n$ sudo reboot\n", "ts": 2.75}],
+    ],
+    # A pending key expires with the next chunk, matched or not; an empty
+    # frame is not a chunk and leaves it pending.
+    "expiry": [
+        ["outbound", {"type": "snapshot", "screen": "# rm -rf /tmp/y\n", "ts": 1.5}],
+        ["outbound", {"type": "term", "data": "", "ts": 1.75}],
+        ["outbound", {"type": "term", "data": "# rm -rf /tmp/y\r\n", "ts": 2.25}],
+        ["outbound", {"type": "snapshot", "screen": "$ sudo ls\n", "ts": 2.5}],
+        ["outbound", {"type": "term", "data": "unrelated output\r\n", "ts": 2.75}],
+        ["outbound", {"type": "term", "data": "$ sudo ls\r\n", "ts": 3.25}],
+        ["outbound", {"type": "snapshot", "screen": "$ shutdown now\n", "ts": 3.5}],
+        ["outbound", {"type": "term", "data": "$ rm -rf /\r\n", "ts": 3.75}],
+        ["outbound", {"type": "term", "data": "$ shutdown now\r\n", "ts": 4.25}],
+    ],
+}
+
 CONFIGS: dict[str, dict[str, Any]] = {
     "exclude": {},
     "wire": {"control_channel_mode": "wire"},
@@ -167,6 +209,8 @@ async def _run() -> dict[str, Any]:
     """Build every section of the corpus."""
     recorded = {name: await _drive(overrides) for name, overrides in CONFIGS.items()}
     recorded["annotated"] = await _drive({}, ANNOTATED_SCRIPT, annotated=True)
+    for name, script in DEDUPE_SCRIPTS.items():
+        recorded[f"dedupe_{name}"] = await _drive({}, script, annotated=True)
     return recorded
 
 
@@ -178,6 +222,7 @@ def main() -> int:
         "session_id": SESSION_ID,
         "script": SCRIPT,
         "annotated_script": ANNOTATED_SCRIPT,
+        "dedupe_scripts": DEDUPE_SCRIPTS,
         "configs": CONFIGS,
         "recorded": recorded,
     }

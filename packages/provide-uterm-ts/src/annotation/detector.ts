@@ -13,7 +13,7 @@
  * itself ends up in the annotation, which flows to telemetry and logs.
  */
 
-import type { Annotation, DetectionRule } from "./models.ts";
+import { type Annotation, annotationMatchKey, type DetectionRule } from "./models.ts";
 import { BUILTIN_RULES } from "./rules.ts";
 
 /** How much of a match reaches the description. */
@@ -102,14 +102,18 @@ export class PatternDetector {
       // secret — into a description that flows to telemetry and logs.
       const description =
         formatDescription(rule.descriptionTemplate, matchText, eventType) ?? `${rule.label}: ${FALLBACK_PLACEHOLDER}`;
-      annotations.push({
+      const annotation: Annotation = {
         label: rule.label,
         description,
         severity: rule.severity,
         source: "detector",
         principal: "system",
         span: { fromSeq: seq, toSeq: seq },
-      });
+      };
+      // Non-enumerable, as the reference's field is out of `to_dict`, `repr`
+      // and equality: it identifies the match without being recorded data.
+      Object.defineProperty(annotation, "matchKey", { value: annotationMatchKey(rule.ruleId, match[0]) });
+      annotations.push(annotation);
     }
 
     return { annotations, matchEnd };

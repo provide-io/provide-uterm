@@ -15,11 +15,14 @@
 
 export { CP437_TABLE, decodeCp437, encodeCp437 } from "./cp437.ts";
 export {
+  ANSI_ESCAPE_SOURCE,
   cleanScreenForDisplay,
   extractActionTags,
   extractKeyValuePairs,
   extractMenuOptions,
   extractNumberedList,
+  MAX_ESCAPE_CARRY,
   normalizeTerminalText,
+  splitIncompleteEscape,
   stripAnsi,
 } from "./parse.ts";

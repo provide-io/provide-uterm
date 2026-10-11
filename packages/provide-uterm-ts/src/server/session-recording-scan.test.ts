@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { type Annotation, PatternDetector } from "../annotation/index.ts";
+import { type Annotation, annotationMatchKey, PatternDetector } from "../annotation/index.ts";
 import { InMemoryRecordingStore } from "../recording/index.ts";
 import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import {
@@ -91,7 +91,15 @@ describe("splitting off an unterminated escape sequence", () => {
 });
 
 describe("the identity of a read-path annotation", () => {
-  it("is the rule's label and its formatted description, NUL-separated", () => {
+  it("is the detector's match key, which holds no raw text", () => {
+    const [annotation] = new PatternDetector().detect("read", "AKIAIOSFODNN7EXAMPLE", 1) as [Annotation];
+    const key = readAnnotationKey(annotation);
+    expect(key).toBe(annotationMatchKey("cred.aws_access_key", "AKIAIOSFODNN7EXA"));
+    expect(key).not.toContain("AKIA");
+    expect(key).toHaveLength(64);
+  });
+
+  it("is empty for an annotation the detector did not make, as the reference's default is", () => {
     const annotation: Annotation = {
       label: "privilege_escalation",
       description: "sudo command detected: sudo",
@@ -99,7 +107,7 @@ describe("the identity of a read-path annotation", () => {
       source: "detector",
       principal: "",
     };
-    expect(readAnnotationKey(annotation)).toBe("privilege_escalation\x00sudo command detected: sudo");
+    expect(readAnnotationKey(annotation)).toBe("");
   });
 });
 
@@ -169,16 +177,12 @@ describe("recording each read-path match once", () => {
     expect(await descriptions(store)).toStrictEqual(["Recursive force-remove detected: rm -rf"]);
   });
 
-  it("never suppresses the stream: a command run twice is annotated twice", async () => {
+  it("annotates a command streamed twice twice, and the snapshot of both not again", async () => {
     const { store, recording } = await annotating();
-    await recording.logOutbound({ type: "snapshot", screen: "$ sudo ls" });
     await recording.logOutbound({ type: "term", data: "$ sudo ls\r\n" });
     await recording.logOutbound({ type: "term", data: "$ sudo ls\r\n" });
-    expect(await descriptions(store)).toStrictEqual([
-      "sudo command detected: sudo",
-      "sudo command detected: sudo",
-      "sudo command detected: sudo",
-    ]);
+    await recording.logOutbound({ type: "snapshot", screen: "$ sudo ls\n$ sudo ls\n" });
+    expect(await descriptions(store)).toStrictEqual(["sudo command detected: sudo", "sudo command detected: sudo"]);
   });
 
   it("does not dedupe typed input against what was read", async () => {
@@ -203,7 +207,14 @@ describe("recording each read-path match once", () => {
       text
         .split(" ")
         .filter((word) => word !== "")
-        .map((word) => ({ label: "word", description: word, severity: "info", source: "t", principal: "" }));
+        .map((word) => ({
+          label: "word",
+          description: word,
+          severity: "info",
+          source: "t",
+          principal: "",
+          matchKey: word,
+        }));
     const detector = {
       detect: (_eventType: string, text: string) => each(text),
       scan: (_eventType: string, text: string) => ({ annotations: each(text), matchEnd: text.length }),
