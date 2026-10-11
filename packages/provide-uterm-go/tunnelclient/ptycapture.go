@@ -14,6 +14,10 @@ import (
 	"golang.org/x/term"
 )
 
+// makeRaw is term.MakeRaw, swappable in tests: on a real terminal fd the
+// tcgetattr/tcsetattr pair does not fail on demand.
+var makeRaw = term.MakeRaw
+
 // PTYSource is the read/write side of a terminal the share bridge pumps to and
 // from the tunnel. Both SpawnedPty (spawned child PTY) and TtyProxy (local TTY
 // in raw mode) satisfy it, so the bridge loop is source-agnostic:
@@ -141,7 +145,7 @@ func (t *TtyProxy) Start() (cols, rows int, err error) {
 	if !term.IsTerminal(fd) {
 		return 0, 0, os.ErrInvalid
 	}
-	state, err := term.MakeRaw(fd)
+	state, err := makeRaw(fd)
 	if err != nil {
 		return 0, 0, err
 	}
