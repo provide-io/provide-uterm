@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from provide.uterm.annotation._detector import PatternDetector
+from provide.uterm.annotation._masking import SECRET_MARKER, SECRET_MASKS, mask_secrets
 from provide.uterm.annotation._models import Annotation, AnnotationSpan, DetectionRule, annotation_match_key
 from provide.uterm.annotation._rules import BUILTIN_RULES
 from provide.uterm.annotation._streaming import StreamingDetector
@@ -16,8 +17,11 @@ __all__ = [
     "Annotation",
     "AnnotationSpan",
     "BUILTIN_RULES",
+    "SECRET_MARKER",
+    "SECRET_MASKS",
     "DetectionRule",
     "PatternDetector",
     "StreamingDetector",
     "annotation_match_key",
+    "mask_secrets",
 ]

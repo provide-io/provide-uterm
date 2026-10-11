@@ -277,6 +277,42 @@
    }
   ],
   [
+   "send",
+   "curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl' https://api.example.com\r"
+  ],
+  [
+   "send",
+   "curl -d key=AKIAIOSFODNN7EXAMPLE https://x.example\r"
+  ],
+  [
+   "send",
+   "wget --header=X-Gh:ghp_Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1 https://api.github.com/x\r"
+  ],
+  [
+   "send",
+   "curl -d 'user=bob&password=hunter2-correct-horse' https://login.example\r"
+  ],
+  [
+   "send",
+   "curl -d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=AKIAIOSFODNN7EXAMPLE https://x.example\r"
+  ],
+  [
+   "outbound",
+   {
+    "type": "term",
+    "data": "$ curl -u alice:hunter2 https://x.example\r\n",
+    "ts": 11.25
+   }
+  ],
+  [
+   "outbound",
+   {
+    "type": "snapshot",
+    "screen": "$ wget --password=hunter2 https://y.example\n$ ",
+    "ts": 11.5
+   }
+  ],
+  [
    "outbound",
    {
     "type": "hijack_state",
@@ -1186,6 +1222,252 @@
      "span": {
       "from_seq": 12,
       "to_seq": 12
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "curl -H 'Authorization: Bearer [REDACTED]' https://api.example.com\r",
+     "bytes_b64": "Y3VybCAtSCAnQXV0aG9yaXphdGlvbjogQmVhcmVyIFtSRURBQ1RFRF0nIGh0dHBzOi8vYXBpLmV4YW1wbGUuY29tDQ=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "Bearer token detected in send",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 13,
+      "to_seq": 13
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl -H 'Authorization: [SECRET]' https://",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 13,
+      "to_seq": 13
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "curl -d key=[AWS_ACCESS_KEY_REDACTED] https://x.example\r",
+     "bytes_b64": "Y3VybCAtZCBrZXk9W0FXU19BQ0NFU1NfS0VZX1JFREFDVEVEXSBodHRwczovL3guZXhhbXBsZQ0="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in send",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 14,
+      "to_seq": 14
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl -d key=[SECRET] https://",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 14,
+      "to_seq": 14
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "wget --header=X-Gh:[GITHUB_TOKEN_REDACTED] https://api.github.com/x\r",
+     "bytes_b64": "d2dldCAtLWhlYWRlcj1YLUdoOltHSVRIVUJfVE9LRU5fUkVEQUNURURdIGh0dHBzOi8vYXBpLmdpdGh1Yi5jb20veA0="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "GitHub token detected in send",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 15,
+      "to_seq": 15
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "outbound_connection",
+     "description": "wget HTTP request detected: wget --header=X-Gh:[SECRET] https://",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 15,
+      "to_seq": 15
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "curl -d 'user=bob&[PASSWORD_REDACTED] https://login.example\r",
+     "bytes_b64": "Y3VybCAtZCAndXNlcj1ib2ImW1BBU1NXT1JEX1JFREFDVEVEXSBodHRwczovL2xvZ2luLmV4YW1wbGUN"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "Secret assignment detected in send",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 16,
+      "to_seq": 16
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl -d 'user=bob&password=[SECRET]' https://",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 16,
+      "to_seq": 16
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "send",
+    "data": {
+     "keys": "curl -d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=[AWS_ACCESS_KEY_REDACTED] https://x.example\r",
+     "bytes_b64": "Y3VybCAtZCB4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4PVtBV1NfQUNDRVNTX0tFWV9SRURBQ1RFRF0gaHR0cHM6Ly94LmV4YW1wbGUN"
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in send",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 17,
+      "to_seq": 17
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl -d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=[SECRET] h",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 17,
+      "to_seq": 17
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl -u [SECRET] https://",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 17,
+      "to_seq": 17
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "read",
+    "data": {
+     "type": "snapshot",
+     "screen": "$ wget --[PASSWORD_REDACTED] https://y.example\n$ ",
+     "ts": 11.5,
+     "raw": "$ wget --[PASSWORD_REDACTED] https://y.example\n$ ",
+     "raw_bytes_b64": "JCB3Z2V0IC0tW1BBU1NXT1JEX1JFREFDVEVEXSBodHRwczovL3kuZXhhbXBsZQokIA=="
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "credential_exposure",
+     "description": "Secret assignment detected in read",
+     "severity": "high",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 18,
+      "to_seq": 18
+     }
+    },
+    "session_id": "rec"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "outbound_connection",
+     "description": "wget HTTP request detected: wget --password=[SECRET] https://",
+     "severity": "info",
+     "source": "detector",
+     "principal": "system",
+     "span": {
+      "from_seq": 18,
+      "to_seq": 18
      }
     },
     "session_id": "rec"

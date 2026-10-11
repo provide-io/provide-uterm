@@ -19,6 +19,12 @@ Three behaviours carry the weight:
 * **A description that never contains what it could not format.** When a
   template is malformed the fallback deliberately omits the match rather than
   interpolating it, because the match is the secret.
+* **No credential in a description.** A template that embeds ``{match}``
+  receives the match with every credential-shaped substring replaced by
+  ``[SECRET]``, masked BEFORE the 80-character cut (``_masking``). ``conn.curl``
+  and ``conn.wget`` match from the command to the last URL scheme on the line,
+  so without it every header, ``-u`` credential and form field on a curl line
+  was copied into the recording.
 * **Bridging a chunk boundary.** A detector that scans one chunk at a time
   misses an AWS key split across two reads. The streaming wrapper carries a
   bounded tail — but only the part *after* the furthest match, so a completed
@@ -37,6 +43,7 @@ from pathlib import Path
 from typing import Any
 
 from provide.uterm.annotation._detector import PatternDetector
+from provide.uterm.annotation._masking import SECRET_MARKER, SECRET_MASKS, mask_secrets
 from provide.uterm.annotation._models import Annotation, AnnotationSpan, DetectionRule
 from provide.uterm.annotation._rules import BUILTIN_RULES
 from provide.uterm.annotation._streaming import StreamingDetector
@@ -44,6 +51,12 @@ from provide.uterm.annotation._streaming import StreamingDetector
 OUT = Path(__file__).with_name("annotation_golden.json")
 
 AWS_KEY = "AKIA" + "ABCDEFGHIJKL"
+
+# Credentials a command line can carry. None may reach a description.
+JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl"  # pragma: allowlist secret
+FULL_AWS_KEY = "AKIAIOSFODNN7EXAMPLE"  # pragma: allowlist secret
+GH_TOKEN = "ghp_" + "Ab1" * 12  # pragma: allowlist secret
+PASSWORD = "hunter2-correct-horse"  # noqa: S105  # pragma: allowlist secret
 
 # (name, event_type, text) — what a single scan makes of one chunk.
 SCAN_CASES: list[tuple[str, str, str]] = [
@@ -66,7 +79,52 @@ SCAN_CASES: list[tuple[str, str, str]] = [
     ("a later rule matches further", "send", f"{AWS_KEY} then sudo reboot"),
     ("a very long match", "read", "-----BEGIN OPENSSH PRIVATE KEY-----" + "x" * 200),
     ("an event type nothing applies to", "resize", f"sudo {AWS_KEY}"),
+    # Rules that embed {match} see it masked, then cut.
+    ("a bearer header on a curl line", "send", f"curl -H 'Authorization: Bearer {JWT}' https://api.example.com/v1"),
+    ("a bare bearer on a curl line", "send", f"curl -H 'X-Auth: Bearer {JWT}' https://api.example.com"),
+    ("an aws key on a curl line", "send", f"curl -d key={FULL_AWS_KEY} https://x.example"),
+    ("a github token on a wget line", "send", f"wget --header=X-Gh:{GH_TOKEN} https://api.github.com/x"),
+    ("a password assignment on a curl line", "send", f"curl -d 'user=bob&password={PASSWORD}' https://login.example"),
+    ("a curl -u credential", "send", f"curl -u alice:{PASSWORD} https://x.example"),
+    ("url userinfo before the last url", "send", f"curl https://alice:{PASSWORD}@a.example/x -o y https://b.example"),
+    ("the cut would have split a key", "send", "curl -d " + "x" * 61 + "=" + FULL_AWS_KEY + " https://x.example"),
 ]
+
+# mask_secrets on its own: every mask, and what each must leave alone. The
+# non-ASCII cases pin that the four regex engines agree (no \s, no (?i)).
+MASK_CASES: list[str] = [
+    "",
+    "nothing to see here",
+    "tokens: 5",
+    "AKIA1234",
+    "gho_short",
+    "user@host",
+    f"x {FULL_AWS_KEY} y {FULL_AWS_KEY}",
+    "Token = 'abc' rest",
+    '"api_key": "k-123"',
+    "API-KEY:v",
+    "passwd:pw secret=s",
+    "basic dXNlcjpwYXNz",
+    "Authorization: Bearer abc def",
+    "authorization:token abc def",
+    f"jwt {JWT}",
+    "ftp://bob:pw@h",
+    "-U proxy:pw",
+    "-ualice:pw",
+    "--proxy-user p:q --ftp-password=z --proxy-password y",
+    "--user-agent foo",
+    "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----",
+    "-----BEGIN OPENSSH PRIVATE KEY-----",
+    f"{GH_TOKEN}ghs_{'z' * 8}",
+    SECRET_MARKER,
+    # The Kelvin sign and the long s fold to k/s under CPython's and RE2's (?i)
+    # but not ECMAScript's: spelled-out case keeps all four engines agreeing.
+    "to\u212aen=abc pa\u017fsword=abc",
+    # Only ASCII whitespace separates a scheme from its value, in every engine.
+    "Bearer\u00a0abc Bearer\tdef",
+    "caf\u00e9 token=\u00e9t\u00e9 \U0001f600 AKIA0123456789ABCDEF",
+]
+
 
 # (name, chunks) — a stream, one chunk per detect() call.
 STREAM_CASES: list[tuple[str, list[str]]] = [
@@ -154,6 +212,15 @@ def _record_carry() -> dict[str, Any]:
     }
 
 
+def _record_masks() -> dict[str, Any]:
+    """The masking rule: its marker, its patterns in order, and what it makes of each case."""
+    return {
+        "marker": SECRET_MARKER,
+        "patterns": [mask.pattern for mask in SECRET_MASKS],
+        "cases": [{"text": text, "masked": mask_secrets(text)} for text in MASK_CASES],
+    }
+
+
 def _record_templates() -> dict[str, Any]:
     """What a malformed description template does."""
     good = DetectionRule(
@@ -223,6 +290,7 @@ def main() -> int:
         "carry": _record_carry(),
         "bounded_carry": _record_bounded_carry(),
         "templates": _record_templates(),
+        "masks": _record_masks(),
         "empty_annotation": Annotation(label="l", description="d", severity="s", source="src", principal="p").to_dict(),
         "annotation_with_span": Annotation(
             label="l", description="d", severity="s", source="src", principal="p", span=AnnotationSpan(1, 2)

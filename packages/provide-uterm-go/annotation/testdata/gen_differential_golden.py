@@ -24,11 +24,24 @@ carry to nothing and silently change what the streaming cases prove.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import pathlib
 from typing import Any
 
-from provide.uterm.annotation import PatternDetector, StreamingDetector
+from provide.uterm.annotation import SECRET_MARKER, SECRET_MASKS, PatternDetector, StreamingDetector, mask_secrets
+
+
+def _shared_mask_cases() -> list[str]:
+    """The mask inputs the TypeScript/C# corpus records, so all ports share one list."""
+    path = pathlib.Path(__file__).resolve().parents[3] / "provide-uterm-ts" / "testdata" / "gen_annotation_golden.py"
+    spec = importlib.util.spec_from_file_location("gen_annotation_golden", path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return list(module.MASK_CASES)
+
 
 # (event_type, text, seq) -> annotations + furthest match end.
 DETECT_CASES: list[dict[str, Any]] = [
@@ -68,6 +81,23 @@ DETECT_CASES: list[dict[str, Any]] = [
     {"event_type": "read", "text": "café AKIAIOSFODNN7EXAMPLE", "seq": 80},
     {"event_type": "read", "text": "ééé password=secretvalue123 AKIAIOSFODNN7EXAMPLE", "seq": 81},
     {"event_type": "read", "text": "please curl https://a.example and sudo rm -rf /var", "seq": 90},
+    # A rule that embeds {match} sees it with credentials masked, BEFORE the
+    # 80-character cut (provide.uterm.annotation._masking).
+    {
+        "event_type": "send",
+        "text": "curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl' https://api.example.com",
+        "seq": 100,
+    },
+    {"event_type": "send", "text": "curl -d key=AKIAIOSFODNN7EXAMPLE https://x.example", "seq": 101},
+    {"event_type": "send", "text": "wget --header=X-Gh:ghp_" + "Ab1" * 12 + " https://api.github.com/x", "seq": 102},
+    {
+        "event_type": "send",
+        "text": "curl -d 'user=bob&password=hunter2-correct-horse' https://login.example",
+        "seq": 103,
+    },
+    {"event_type": "send", "text": "curl -u alice:hunter2 https://x.example", "seq": 104},
+    {"event_type": "send", "text": "curl -d " + "x" * 61 + "=AKIAIOSFODNN7EXAMPLE https://x.example", "seq": 105},
+    {"event_type": "read", "text": "café curl -H 'X-Auth: Bearer tok-ÉÉÉ' https://ü.example", "seq": 106},
 ]
 
 # A stream is fed chunk by chunk; outputs[i] is what chunk i reported. The point
@@ -149,7 +179,12 @@ def build() -> dict[str, Any]:
         ]
         stream_cases.append({**case, "outputs": outputs})
 
-    return {"detect_cases": detect_cases, "stream_cases": stream_cases}
+    masks = {
+        "marker": SECRET_MARKER,
+        "patterns": [mask.pattern for mask in SECRET_MASKS],
+        "cases": [{"text": text, "masked": mask_secrets(text)} for text in _shared_mask_cases()],
+    }
+    return {"detect_cases": detect_cases, "stream_cases": stream_cases, "masks": masks}
 
 
 def main() -> None:

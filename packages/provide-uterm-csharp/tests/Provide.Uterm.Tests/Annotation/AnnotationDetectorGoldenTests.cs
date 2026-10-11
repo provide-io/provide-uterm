@@ -54,6 +54,23 @@ public sealed class AnnotationDetectorGoldenTests
     }
 
     [Fact]
+    public void SecretMasksMatchTheReference()
+    {
+        var masks = Golden["masks"]!;
+        Assert.Equal(SecretMasking.Marker, masks["marker"]!.GetValue<string>());
+        AssertSame(masks["patterns"], JsonSerializer.SerializeToNode(SecretMasking.Patterns)!, "mask patterns");
+        var cases = masks["cases"]!.AsArray();
+        Assert.NotEmpty(cases);
+        foreach (var entry in cases)
+        {
+            var text = entry!["text"]!.GetValue<string>();
+            Assert.True(
+                entry["masked"]!.GetValue<string>() == SecretMasking.Mask(text),
+                $"mask {text}: got {SecretMasking.Mask(text)}");
+        }
+    }
+
+    [Fact]
     public void EveryScanCaseMatchesTheReference()
     {
         var detector = new PatternDetector();

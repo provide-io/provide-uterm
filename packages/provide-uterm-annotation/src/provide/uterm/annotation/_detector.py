@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from provide.uterm.annotation._masking import mask_secrets
 from provide.uterm.annotation._models import Annotation, AnnotationSpan, DetectionRule, annotation_match_key
 from provide.uterm.annotation._rules import BUILTIN_RULES
 
@@ -65,7 +66,10 @@ class PatternDetector:
 
             seen_categories.add(rule.category)
             max_end = max(max_end, m.end())
-            match_text = m.group(0)[:_DESCRIPTION_TRUNCATE]
+            # Mask credential-shaped text in the FULL match, then cut: cutting
+            # first could leave the head of a key too short to be recognised.
+            # The rule is in _masking; match_key below still hashes the raw match.
+            match_text = mask_secrets(m.group(0))[:_DESCRIPTION_TRUNCATE]
             try:
                 description = rule.description_template.format(match=match_text, event_type=event_type)
             except (KeyError, IndexError):

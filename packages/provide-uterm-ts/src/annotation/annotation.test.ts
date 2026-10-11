@@ -11,7 +11,10 @@ import {
   BUILTIN_RULES,
   DEFAULT_MAX_CARRY,
   type DetectionRule,
+  maskSecrets,
   PatternDetector,
+  SECRET_MARKER,
+  SECRET_MASK_PATTERNS,
   StreamingDetector,
 } from "./index.ts";
 
@@ -44,6 +47,7 @@ interface AnnotationGolden {
     default_max_carry: number;
   };
   templates: Record<string, string | number>;
+  masks: { marker: string; patterns: string[]; cases: Array<{ text: string; masked: string }> };
   empty_annotation: Record<string, unknown>;
   annotation_with_span: Record<string, unknown>;
 }
@@ -225,6 +229,27 @@ describe("the description", () => {
     expect(String(golden.templates.a_long_match_is_truncated).replace("found ", "")).toHaveLength(
       golden.templates.truncate_at as number,
     );
+  });
+});
+
+describe("masking credentials out of a description", () => {
+  it("uses the reference's marker and patterns, byte for byte and in order", () => {
+    expect(SECRET_MARKER).toBe(golden.masks.marker);
+    expect(SECRET_MASK_PATTERNS).toStrictEqual(golden.masks.patterns);
+  });
+
+  it.each(golden.masks.cases.map((entry) => [entry.text, entry.masked]))(
+    "masks %j as the reference does",
+    (text, masked) => {
+      expect(maskSecrets(text)).toBe(masked);
+    },
+  );
+
+  it("masks before the cut, so no fragment of a key survives it", () => {
+    const text = `curl -d ${"x".repeat(61)}=AKIAIOSFODNN7EXAMPLE https://x.example`;
+    const curl = BUILTIN_RULES.filter((entry) => entry.ruleId === "conn.curl");
+    const [annotation] = new PatternDetector(curl).detect("send", text, 1);
+    expect(must(annotation, "the curl annotation").description).not.toContain("AKIA");
   });
 });
 

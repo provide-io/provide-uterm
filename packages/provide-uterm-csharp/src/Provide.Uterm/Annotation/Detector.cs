@@ -73,7 +73,11 @@ public sealed partial class PatternDetector
 
             seenCategories.Add(rule.Category);
             matchEnd = Math.Max(matchEnd, match.Index + match.Length);
-            var matchText = match.Value.Length > DescriptionTruncate ? match.Value[..DescriptionTruncate] : match.Value;
+            // Mask credential-shaped text in the FULL match, then cut: cutting
+            // first could leave the head of a key too short to be recognised.
+            // The rule is in SecretMasking; MatchKey below still hashes the raw match.
+            var masked = SecretMasking.Mask(match.Value);
+            var matchText = masked.Length > DescriptionTruncate ? masked[..DescriptionTruncate] : masked;
             // A malformed template must not leak the raw match -- the secret --
             // into a description that flows to recordings and logs.
             var description = FormatDescription(rule.DescriptionTemplate, matchText, eventType)

@@ -10,6 +10,7 @@
  */
 
 export * from "./detector.ts";
+export * from "./masking.ts";
 export * from "./models.ts";
 export * from "./rules.ts";
 export * from "./streaming.ts";

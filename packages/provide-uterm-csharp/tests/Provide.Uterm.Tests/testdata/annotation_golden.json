@@ -60,6 +60,130 @@
     "source": "src",
     "span": null
   },
+  "masks": {
+    "cases": [
+      {
+        "masked": "",
+        "text": ""
+      },
+      {
+        "masked": "nothing to see here",
+        "text": "nothing to see here"
+      },
+      {
+        "masked": "tokens: 5",
+        "text": "tokens: 5"
+      },
+      {
+        "masked": "AKIA1234",
+        "text": "AKIA1234"
+      },
+      {
+        "masked": "gho_short",
+        "text": "gho_short"
+      },
+      {
+        "masked": "user@host",
+        "text": "user@host"
+      },
+      {
+        "masked": "x [SECRET] y [SECRET]",
+        "text": "x AKIAIOSFODNN7EXAMPLE y AKIAIOSFODNN7EXAMPLE"
+      },
+      {
+        "masked": "Token = '[SECRET]' rest",
+        "text": "Token = 'abc' rest"
+      },
+      {
+        "masked": "\"api_key\": \"[SECRET]\"",
+        "text": "\"api_key\": \"k-123\""
+      },
+      {
+        "masked": "API-KEY:[SECRET]",
+        "text": "API-KEY:v"
+      },
+      {
+        "masked": "passwd:[SECRET] secret=[SECRET]",
+        "text": "passwd:pw secret=s"
+      },
+      {
+        "masked": "basic [SECRET]",
+        "text": "basic dXNlcjpwYXNz"
+      },
+      {
+        "masked": "Authorization: [SECRET]",
+        "text": "Authorization: Bearer abc def"
+      },
+      {
+        "masked": "authorization:[SECRET]",
+        "text": "authorization:token abc def"
+      },
+      {
+        "masked": "jwt [SECRET]",
+        "text": "jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl"
+      },
+      {
+        "masked": "ftp://[SECRET]@h",
+        "text": "ftp://bob:pw@h"
+      },
+      {
+        "masked": "-U [SECRET]",
+        "text": "-U proxy:pw"
+      },
+      {
+        "masked": "-u[SECRET]",
+        "text": "-ualice:pw"
+      },
+      {
+        "masked": "--proxy-user [SECRET] --ftp-password=[SECRET] --proxy-password [SECRET]",
+        "text": "--proxy-user p:q --ftp-password=z --proxy-password y"
+      },
+      {
+        "masked": "--user-agent foo",
+        "text": "--user-agent foo"
+      },
+      {
+        "masked": "-----BEGIN RSA PRIVATE KEY-----[SECRET]-----END RSA PRIVATE KEY-----",
+        "text": "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----"
+      },
+      {
+        "masked": "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "text": "-----BEGIN OPENSSH PRIVATE KEY-----"
+      },
+      {
+        "masked": "[SECRET]",
+        "text": "ghp_Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1ghs_zzzzzzzz"
+      },
+      {
+        "masked": "[SECRET]",
+        "text": "[SECRET]"
+      },
+      {
+        "masked": "to\u212aen=abc pa\u017fsword=abc",
+        "text": "to\u212aen=abc pa\u017fsword=abc"
+      },
+      {
+        "masked": "Bearer\u00a0abc Bearer\t[SECRET]",
+        "text": "Bearer\u00a0abc Bearer\tdef"
+      },
+      {
+        "masked": "caf\u00e9 token=[SECRET] \ud83d\ude00 [SECRET]",
+        "text": "caf\u00e9 token=\u00e9t\u00e9 \ud83d\ude00 AKIA0123456789ABCDEF"
+      }
+    ],
+    "marker": "[SECRET]",
+    "patterns": [
+      "([Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn][ \\t]*:[ \\t]*)([^'\"\\r\\n]+)()",
+      "((?:[Bb][Ee][Aa][Rr][Ee][Rr]|[Bb][Aa][Ss][Ii][Cc])[ \\t\\n\\r\\f\\v]+)([^ \\t\\n\\r\\f\\v'\"]+)()",
+      "((?:[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Ss][Ss][Ww][Dd]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy])['\"]?[ \\t]*[=:][ \\t]*['\"]?)([^ \\t\\n\\r\\f\\v'\"]+)()",
+      "((?:^|[ \\t])(?:-[uU][ \\t]*|--(?:user|proxy-user|password|http-password|ftp-password|proxy-password)(?:[ \\t]+|=))['\"]?)([^ \\t\\n\\r\\f\\v'\"]+)()",
+      "(://)([^/ \\t\\n\\r\\f\\v@:'\"]*:[^/ \\t\\n\\r\\f\\v@'\"]*)(@)",
+      "()(AKIA[0-9A-Z]{12,})()",
+      "()(gh[psourx]_[A-Za-z0-9_]{8,})()",
+      "()(eyJ[A-Za-z0-9_-]+\\.eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]*)()",
+      "(-----BEGIN[ \\t]+[A-Z ]*PRIVATE KEY-----)([^-]+)()"
+    ]
+  },
   "rules": [
     {
       "category": "credentials",
@@ -619,6 +743,232 @@
       "match_end": 0,
       "name": "an event type nothing applies to",
       "text": "sudo AKIAABCDEFGHIJKL"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Bearer token detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "curl HTTP request detected: curl -H 'Authorization: [SECRET]' https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 90,
+      "name": "a bearer header on a curl line",
+      "text": "curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl' https://api.example.com/v1"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Bearer token detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "curl HTTP request detected: curl -H 'X-Auth: Bearer [SECRET]' https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 83,
+      "name": "a bare bearer on a curl line",
+      "text": "curl -H 'X-Auth: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl' https://api.example.com"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "curl HTTP request detected: curl -d key=[SECRET] https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 41,
+      "name": "an aws key on a curl line",
+      "text": "curl -d key=AKIAIOSFODNN7EXAMPLE https://x.example"
+    },
+    {
+      "annotations": [
+        {
+          "description": "GitHub token detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "wget HTTP request detected: wget --header=X-Gh:[SECRET] https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 68,
+      "name": "a github token on a wget line",
+      "text": "wget --header=X-Gh:ghp_Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1 https://api.github.com/x"
+    },
+    {
+      "annotations": [
+        {
+          "description": "Secret assignment detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "curl HTTP request detected: curl -d 'user=bob&password=[SECRET]' https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 58,
+      "name": "a password assignment on a curl line",
+      "text": "curl -d 'user=bob&password=hunter2-correct-horse' https://login.example"
+    },
+    {
+      "annotations": [
+        {
+          "description": "curl HTTP request detected: curl -u [SECRET] https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 44,
+      "name": "a curl -u credential",
+      "text": "curl -u alice:hunter2-correct-horse https://x.example"
+    },
+    {
+      "annotations": [
+        {
+          "description": "curl HTTP request detected: curl https://[SECRET]@a.example/x -o y https://",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 66,
+      "name": "url userinfo before the last url",
+      "text": "curl https://alice:hunter2-correct-horse@a.example/x -o y https://b.example"
+    },
+    {
+      "annotations": [
+        {
+          "description": "AWS access key detected in send",
+          "label": "credential_exposure",
+          "principal": "system",
+          "severity": "high",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        },
+        {
+          "description": "curl HTTP request detected: curl -d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=[SECRET] h",
+          "label": "outbound_connection",
+          "principal": "system",
+          "severity": "info",
+          "source": "detector",
+          "span": {
+            "from_seq": 7,
+            "to_seq": 7
+          }
+        }
+      ],
+      "detect_matches_scan": true,
+      "event_type": "send",
+      "match_end": 99,
+      "name": "the cut would have split a key",
+      "text": "curl -d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=AKIAIOSFODNN7EXAMPLE https://x.example"
     }
   ],
   "streams": [

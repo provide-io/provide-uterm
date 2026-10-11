@@ -73,6 +73,8 @@ DETECT_INPUTS: list[str] = [
     "export K=AKIAJ2345678ABCDWXYZ",
     "$ sudo ls; rm -rf build",
     "$ curl https://example.com/" + "a" * 200,
+    # The description is masked; the key still digests the raw match.
+    "$ curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl' https://api.example.com",
 ]
 
 _AWS_A = "AKIAIOSFODNN7EXAMPLE"
@@ -131,6 +133,12 @@ SCENARIOS: dict[str, list[list[str]]] = {
         ["snapshot", "$ sudo ls\n"],
         ["term", "$ rm -rf build\r\n"],
         ["term", "$ sudo ls\r\n"],
+    ],
+    "credentials_masked_in_descriptions": [
+        ["term", "$ curl -u alice:hunter2 https://x.example\r\n"],
+        ["snapshot", "$ curl -u alice:hunter2 https://x.example\n"],
+        ["snapshot", "$ wget --header=X-Gh:ghp_" + "Ab1" * 12 + " https://api.github.com/x\n"],
+        ["term", "$ curl -d " + "x" * 61 + "=AKIAIOSFODNN7EXAMPLE https://x.example\r\n"],
     ],
     "empty_chunk_leaves_pending": [
         ["snapshot", "$ sudo ls\n"],

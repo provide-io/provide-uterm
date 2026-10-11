@@ -151,6 +151,21 @@
      "match_key": "3d864f2dbb23ff88f17a76e8b1009e0dc83938d54d9ed4078a66672a19dbe045"
     }
    ]
+  },
+  {
+   "text": "$ curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl' https://api.example.com",
+   "annotations": [
+    {
+     "label": "credential_exposure",
+     "description": "Bearer token detected in read",
+     "match_key": "80e23766d7ac8c41db4e1c728906f555293fcd8125973c5290f80dec5836dd84"
+    },
+    {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl -H 'Authorization: [SECRET]' https://",
+     "match_key": "cef50f20677616e59a6addfb7b1b2010070d5c919c18700e6d47708626e74f56"
+    }
+   ]
   }
  ],
  "scenarios": {
@@ -512,6 +527,50 @@
     {
      "label": "privilege_escalation",
      "description": "sudo command detected: sudo"
+    }
+   ],
+   "carry": "",
+   "pending_snapshot_keys": 0
+  },
+  "credentials_masked_in_descriptions": {
+   "steps": [
+    [
+     "term",
+     "$ curl -u alice:hunter2 https://x.example\r\n"
+    ],
+    [
+     "snapshot",
+     "$ curl -u alice:hunter2 https://x.example\n"
+    ],
+    [
+     "snapshot",
+     "$ wget --header=X-Gh:ghp_Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1Ab1 https://api.github.com/x\n"
+    ],
+    [
+     "term",
+     "$ curl -d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=AKIAIOSFODNN7EXAMPLE https://x.example\r\n"
+    ]
+   ],
+   "annotations": [
+    {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl -u [SECRET] https://"
+    },
+    {
+     "label": "credential_exposure",
+     "description": "GitHub token detected in read"
+    },
+    {
+     "label": "outbound_connection",
+     "description": "wget HTTP request detected: wget --header=X-Gh:[SECRET] https://"
+    },
+    {
+     "label": "credential_exposure",
+     "description": "AWS access key detected in read"
+    },
+    {
+     "label": "outbound_connection",
+     "description": "curl HTTP request detected: curl -d xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx=[SECRET] h"
     }
    ],
    "carry": "",

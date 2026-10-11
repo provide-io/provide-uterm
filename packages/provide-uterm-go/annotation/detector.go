@@ -77,7 +77,10 @@ func (d *PatternDetector) Scan(eventType, text string, seq int) ([]Annotation, i
 		if endRunes > maxEnd {
 			maxEnd = endRunes
 		}
-		matchText := runeTruncate(text[loc[0]:loc[1]], descriptionTruncate)
+		// Mask credential-shaped text in the FULL match, then cut: cutting
+		// first could leave the head of a key too short to be recognised. The
+		// rule is in masking.go; MatchKey below still hashes the raw match.
+		matchText := runeTruncate(MaskSecrets(text[loc[0]:loc[1]]), descriptionTruncate)
 
 		description, err := pyFormat(rule.DescriptionTemplate, map[string]string{
 			"match":      matchText,
