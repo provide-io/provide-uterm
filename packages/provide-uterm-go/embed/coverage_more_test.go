@@ -49,7 +49,17 @@ func TestHubSessionIDsAndLifecycle(t *testing.T) {
 	}
 
 	var appCalls, cliCalls, wireCalls atomic.Int32
-	s1.OnApplicationData(func(ByteDirection, []byte, string) { appCalls.Add(1) })
+	// The upstream pump delivers to clients before it calls the app observer,
+	// so a client can receive the bytes while the observer has yet to run.
+	// appSeen lets the test wait for the call instead of racing it.
+	appSeen := make(chan struct{}, 1)
+	s1.OnApplicationData(func(ByteDirection, []byte, string) {
+		appCalls.Add(1)
+		select { // never block the pump, which holds the session lock
+		case appSeen <- struct{}{}:
+		default:
+		}
+	})
 	s1.OnClientData(func([]byte, string) { cliCalls.Add(1) })
 	s1.OnWire(func(WireEventKind, []byte, string) { wireCalls.Add(1) })
 
@@ -85,6 +95,11 @@ func TestHubSessionIDsAndLifecycle(t *testing.T) {
 	got, err := c.Receive(ctx)
 	if err != nil || !bytes.Equal(got, []byte("OUT")) {
 		t.Fatalf("receive %q err %v", got, err)
+	}
+	select {
+	case <-appSeen:
+	case <-ctx.Done():
+		t.Fatal("OnApplicationData was never called")
 	}
 	if appCalls.Load() != 1 {
 		t.Fatalf("OnApplicationData calls = %d", appCalls.Load())
