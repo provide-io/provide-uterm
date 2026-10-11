@@ -120,13 +120,15 @@ public sealed class SessionOutputAnnotationTests
         return port;
     }
 
-    private static async Task<(UtermServer Server, TermHub Hub, InMemoryStore Store)> StartAsync(bool recording)
+    private static async Task<(UtermServer Server, TermHub Hub, InMemoryStore Store)> StartAsync(
+        bool recording, bool redact = true)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
         cfg.Server.Host = "127.0.0.1";
         cfg.Server.Port = port;
         cfg.Server.PublicBaseUrl = $"http://127.0.0.1:{port}";
+        cfg.Recording.RedactSensitive = redact;
         cfg.Sessions.Add(new SessionDefinition
         {
             SessionId = "rec1",
@@ -177,18 +179,93 @@ public sealed class SessionOutputAnnotationTests
             await worker.SendTextAsync(ControlChannelCodec.EncodeControlFrame(
                 new Dictionary<string, object?> { ["type"] = "snapshot_req" }));
 
+            // The snapshot shows the same key the echo already did: the stream
+            // recorded it, so the snapshot does not record it again.
             var recorded = await RecordedAnnotationsAsync(store);
             Assert.Equal(
-                ["AWS access key detected in send", "AWS access key detected in read",
-                    "AWS access key detected in read"],
+                ["AWS access key detected in send", "AWS access key detected in read"],
                 Descriptions(recorded));
             Assert.Equal(
-                [2, 2, 3],
+                [2, 2],
                 recorded.Select(d => (int)((Dictionary<string, object?>)d["span"]!)["from_seq"]!).ToList());
 
-            // The same path the operator's annotate route uses: the hub sees it too.
-            var events = hub.Registry.Get("rec1")!.Events.Where(e => (string?)e["type"] == "annotation").ToList();
-            Assert.Equal(3, events.Count);
+            // Recording entries only, as the reference logs them: none of them
+            // enters the hub's live event ring.
+            Assert.DoesNotContain(hub.Registry.Get("rec1")!.Events, e => (string?)e["type"] == "annotation");
+        }
+    }
+
+    private const string Token = "abcdef1234567890"; // pragma: allowlist secret
+
+    [Fact]
+    public async Task AnAutomaticAnnotationIsRedactedInTheStoreAndKeptOutOfTheEventRing()
+    {
+        // "curl HTTP request detected: {match}" embeds what was typed, token and all.
+        var (server, hub, store) = await StartAsync(recording: true);
+        await using (server)
+        {
+            var worker = hub.Registry.Get("rec1")!.WorkerWs!;
+
+            await worker.SendTextAsync($"curl -H token={Token} https://example.com\r");
+
+            var recorded = await RecordedAnnotationsAsync(store);
+            var curl = recorded.Where(d => ((string)d["description"]!).StartsWith("curl HTTP", StringComparison.Ordinal))
+                .ToList();
+            Assert.NotEmpty(curl);
+            Assert.All(curl, d => Assert.Equal(
+                "curl HTTP request detected: curl -H [TOKEN_REDACTED] https://", (string)d["description"]!));
+            Assert.All(recorded, d => Assert.DoesNotContain(Token, (string)d["description"]!));
+            Assert.All(recorded, d => Assert.Equal("detector", d["source"]));
+
+            // Each is a whole recording entry: timestamped and stamped with its session.
+            var entries = await store.GetEntriesAsync("rec1", new Query { Limit = 500, Event = "annotation" });
+            Assert.All(entries, e =>
+            {
+                Assert.IsType<double>(e["ts"]);
+                Assert.True((double)e["ts"]! > 0);
+                Assert.Equal("rec1", e["session_id"]);
+            });
+
+            Assert.DoesNotContain(hub.Registry.Get("rec1")!.Events, e => (string?)e["type"] == "annotation");
+            Assert.DoesNotContain(
+                hub.Registry.Get("rec1")!.Events,
+                e => System.Text.Json.JsonSerializer.Serialize(e).Contains("curl HTTP", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task WithRedactionOffAnAutomaticAnnotationIsRecordedAsDetected()
+    {
+        var (server, hub, store) = await StartAsync(recording: true, redact: false);
+        await using (server)
+        {
+            var worker = hub.Registry.Get("rec1")!.WorkerWs!;
+
+            await worker.SendTextAsync($"curl -H token={Token} https://example.com\r");
+
+            var recorded = await RecordedAnnotationsAsync(store);
+            Assert.Contains(recorded, d => (string)d["description"]! == $"curl HTTP request detected: curl -H token={Token} https://");
+        }
+    }
+
+    [Fact]
+    public async Task OnlyAnnotationsAreRecordedSoTypedInputNeverIs()
+    {
+        // The reference records keystrokes and masks those typed at a password
+        // prompt (checked on stripped text). This port records no keystrokes at
+        // all, so a password typed after a styled "Password:" prompt cannot
+        // reach the store in clear: every entry is a detector annotation.
+        var (server, hub, store) = await StartAsync(recording: true);
+        await using (server)
+        {
+            var worker = hub.Registry.Get("rec1")!.WorkerWs!;
+
+            await worker.SendTextAsync("hunter2-not-a-command\r");
+
+            var entries = await store.GetEntriesAsync("rec1", new Query { Limit = 500 });
+            Assert.All(entries, e => Assert.Equal("annotation", e["event"]));
+            Assert.All(entries, e => Assert.DoesNotContain(
+                "hunter2", System.Text.Json.JsonSerializer.Serialize(e), StringComparison.Ordinal));
         }
     }
 
