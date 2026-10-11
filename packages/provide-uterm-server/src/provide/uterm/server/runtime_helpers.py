@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import re
 from typing import TYPE_CHECKING, Any, Literal
 
+from provide.uterm import MAX_ESCAPE_CARRY, split_incomplete_escape
 from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
@@ -32,54 +32,41 @@ def _encode_runtime_frame(msg: dict[str, Any]) -> str:
     return encode_control_frame(msg)
 
 
-# An escape sequence cut off at the end of a streamed chunk: a bare ESC, or a CSI
-# (ESC [) whose parameter/intermediate bytes have not yet reached a final byte.
-# The grammar is exactly that of ``provide.uterm.strip_ansi`` (screen.py's
-# ``_ANSI_ESCAPE_RE``): anything that pattern would strip once complete, and
-# nothing else, is held back.
-_INCOMPLETE_ESCAPE_TAIL = re.compile(r"\x1b(?:\[[0-?]*[ -/]*)?")
-# Longest tail held back between chunks, in characters, ESC included. A real
-# sequence is a handful of bytes; past this the "sequence" is not one (or is
-# hostile), and it is released into the text rather than carried forever.
-_MAX_ESCAPE_CARRY = 64
+# The chunk-boundary escape carry lives in core, built from the same grammar
+# constants as strip_ansi (provide.uterm.screen), so a change to what strip_ansi
+# strips keeps the carry correct. These underscore names are kept as aliases for
+# existing importers (tests, the C# read-path golden generator).
+_MAX_ESCAPE_CARRY = MAX_ESCAPE_CARRY
+_split_incomplete_escape = split_incomplete_escape
 
-
-def _split_incomplete_escape(text: str) -> tuple[str, str]:
-    """Split *text* into (complete, carry): carry is an unterminated trailing escape.
-
-    ``strip_ansi`` sees one chunk at a time, so ``"\x1b[1"`` + ``"msudo"`` would
-    strip to ``"\x1b[1"`` (no final byte, left alone) and ``"msudo"``, and
-    ``\bsudo\b`` would miss. The caller prepends the carry to the next chunk.
-    Only the LAST ESC can start an unterminated tail (CSI parameter bytes never
-    include ESC). A tail longer than ``_MAX_ESCAPE_CARRY`` is not carried.
-    """
-
-    start = text.rfind("\x1b")
-    if start < 0 or len(text) - start > _MAX_ESCAPE_CARRY:
-        return text, ""
-    if _INCOMPLETE_ESCAPE_TAIL.fullmatch(text, start) is None:
-        return text, ""
-    return text[:start], text[start:]
-
-
-# Bound on the per-recording set of read-path annotation keys. Past it the set is
-# cleared and starts over: simple, and the worst case is that a snapshot repeats
-# an annotation the stream already recorded once more than 1024 distinct
-# read-path matches ago.
+# Bound on each per-recording set of read-path annotation keys (see
+# HostedSessionRuntime._read_annotation_keys / _snapshot_only_keys). Past it the
+# set is cleared and starts over: simple, and the worst case is one repeated (or,
+# for the snapshot-only set, one extra) annotation more than 1024 distinct
+# read-path matches after the first.
 _MAX_READ_ANNOTATION_KEYS = 1024
 
 
-def _read_annotation_key(annotation: Annotation) -> str:
-    """Identity of a read-path annotation for snapshot dedupe: rule + matched text.
+def _add_bounded(keys: set[str], key: str) -> None:
+    """Add *key* to *keys*, first clearing the set when it holds _MAX_READ_ANNOTATION_KEYS."""
+    if len(keys) >= _MAX_READ_ANNOTATION_KEYS:
+        keys.clear()
+    keys.add(key)
 
-    ``Annotation`` carries no rule id; ``label`` is the rule's category label and
-    ``description`` is the rule's own template formatted with the match (cut at
-    80 characters). So the pair names the rule and, for every rule whose
-    template embeds ``{match}``, the matched text. Credential rules deliberately
-    never embed the match, so for them the key is the rule alone.
+
+def _read_annotation_key(annotation: Annotation) -> str:
+    """Identity of a read-path annotation for stream/snapshot dedupe.
+
+    ``annotation.match_key`` as set by the detector:
+    ``sha256(rule_id + "\\x00" + full matched text)``, lowercase hex
+    (``provide.uterm.annotation.annotation_match_key``). It names the rule AND
+    the exact text matched -- so two different AWS keys, which share a label and
+    a description (credential rules never embed the match), are two keys -- and
+    it is a digest, so the dedupe sets never hold a raw secret. It is not part of
+    the recorded annotation (``Annotation.to_dict`` omits it).
     """
 
-    return f"{annotation.label}\x00{annotation.description}"
+    return annotation.match_key
 
 
 def _build_recording_redactor(enabled: bool) -> Callable[[str], str] | None:

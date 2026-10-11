@@ -24,15 +24,14 @@ from provide.uterm.server.models import RecordingConfig, SessionDefinition, Sess
 # Re-exported so the public import surface of ``runtime`` is unchanged: tests
 # and callers import these helpers directly from ``provide.uterm.server.runtime``.
 from provide.uterm.server.runtime_helpers import (
-    _MAX_READ_ANNOTATION_KEYS,
     RunOutcome,  # noqa: F401 — re-export
+    _add_bounded,
     _await_task_completion,
     _build_recording_redactor,
     _cancel_and_wait,
     _classify_run_error,
     _encode_runtime_frame,
     _read_annotation_key,
-    _split_incomplete_escape,
 )
 from provide.uterm.session_logger import SessionLogger
 
@@ -107,11 +106,26 @@ class HostedSessionRuntime:
         # and prepended to the next chunk before strip_ansi: see _scan_output.
         self._escape_carry = ""
         # Read-path rules run twice over the same output -- once over each
-        # streamed `term` chunk, once over each snapshot screen -- so every
-        # read-path annotation recorded is remembered here (by
-        # _read_annotation_key) and the snapshot path skips one already in it.
-        # Both are scoped to one recording and reset with it: see _stop_recording.
+        # streamed `term` chunk, once over each snapshot screen. Dedupe between
+        # the two, keyed by _read_annotation_key (a sha256 of rule id + matched
+        # text; never the raw text). THE RULE (ports mirror it exactly):
+        #   * _read_annotation_keys: every key recorded in this recording, by
+        #     either path.
+        #   * _snapshot_only_keys: keys the SNAPSHOT path recorded that the stream
+        #     has not delivered since -- each entry is one occurrence the stream
+        #     still owes.
+        #   Snapshot match: key in _read_annotation_keys -> skip. Otherwise
+        #     record it and add the key to BOTH sets.
+        #   Stream match: key in _snapshot_only_keys -> remove it and skip (the
+        #     snapshot already recorded this occurrence; consumed exactly once).
+        #     Otherwise record it and add the key to _read_annotation_keys.
+        # So stream-then-snapshot and snapshot-then-stream each record once, a
+        # run of identical snapshots records once, and a command streamed twice
+        # is annotated twice. Both sets are bounded (_MAX_READ_ANNOTATION_KEYS,
+        # cleared when full), scoped to one recording and reset with it: see
+        # _stop_recording.
         self._read_annotation_keys: set[str] = set()
+        self._snapshot_only_keys: set[str] = set()
         self._event_seq: int = 0
         self._at_password_prompt: bool = False
 
@@ -355,6 +369,31 @@ class HostedSessionRuntime:
             # what it sees afresh, and does not begin with a stale half-sequence.
             self._escape_carry = ""
             self._read_annotation_keys.clear()
+            self._snapshot_only_keys.clear()
+
+    async def _end_connection_recording(self) -> None:
+        """Close the recording at the end of one worker connection, never raising.
+
+        A failed final flush here used to escape ``_run``'s ``finally`` and end
+        the task: the session died silently, its state still read
+        running/starting and its connector stayed alive with nobody to stop it.
+        The failure is now recorded (``_last_error``, ``_state = "error"``, a
+        warning log) and the loop carries on as after any other connection end:
+        reconnect, or -- when stopping -- fall through to ``_stop_connector``.
+        No ``runtime_error`` event is written: the recording it would go to is
+        the one that just failed to close (``_stop_recording`` has dropped it).
+        """
+
+        try:
+            await self._stop_recording()
+        except Exception as exc:
+            self._state = "error"
+            self._last_error = str(exc)
+            logger.warning(
+                "hosted_session_recording_close_failed session_id=%s error=%s",
+                self.definition.session_id,
+                exc,
+            )
 
     async def _discard_connector(self) -> None:
         """Drop the connector alone, leaving the recording where it is.
@@ -391,21 +430,19 @@ class HostedSessionRuntime:
         self._event_seq += 1
         if self._detector is not None:
             for annotation in self._detector.detect("read", text, seq=self._event_seq):
-                # The snapshot path DEDUPES: a match the stream (or an earlier
-                # snapshot of the same screen) already recorded is skipped, so
-                # neither a stream+snapshot pair nor a run of identical
-                # snapshots records it twice.
+                # The snapshot path DEDUPES (rule in __init__): a match already
+                # recorded by the stream or an earlier snapshot is skipped; a new
+                # one is recorded and left owing to the stream once.
                 key = _read_annotation_key(annotation)
                 if key in self._read_annotation_keys:
                     continue
                 self._remember_read_annotation(key)
+                _add_bounded(self._snapshot_only_keys, key)
                 await self._logger.log_event("annotation", annotation.to_dict())
 
     def _remember_read_annotation(self, key: str) -> None:
         """Add *key* to the bounded read-path set, clearing it first when full."""
-        if len(self._read_annotation_keys) >= _MAX_READ_ANNOTATION_KEYS:
-            self._read_annotation_keys.clear()
-        self._read_annotation_keys.add(key)
+        _add_bounded(self._read_annotation_keys, key)
 
     async def _scan_output(self, data: str) -> None:
         """Run read-path rules over streamed output, escape sequences removed.
@@ -416,19 +453,26 @@ class HostedSessionRuntime:
         An escape sequence split across chunks (``...\\x1b[1`` | ``msudo ...``)
         would leave ``msudo`` behind if each chunk were stripped alone, so an
         unterminated trailing sequence is held back in ``_escape_carry`` and
-        prepended to the next chunk (bounded by ``_MAX_ESCAPE_CARRY``).
+        prepended to the next chunk (``provide.uterm.split_incomplete_escape``, bounded by ``MAX_ESCAPE_CARRY``).
 
-        The stream path NEVER suppresses a match -- a command run twice is
-        annotated twice -- but remembers each one so the snapshot path, which
-        sees the same text again, does not record it a second time.
+        The stream path records every match -- a command run twice is annotated
+        twice -- EXCEPT one occurrence a snapshot already recorded before the
+        stream delivered it (a key in ``_snapshot_only_keys``), which it consumes
+        once instead. Every match it records is remembered so the snapshot path,
+        which sees the same text again, does not record it a second time. Full
+        rule: ``__init__``.
         """
         if self._logger is None or self._read_stream is None or not data:
             return
-        from provide.uterm import strip_ansi
+        from provide.uterm import split_incomplete_escape, strip_ansi
 
-        text, self._escape_carry = _split_incomplete_escape(self._escape_carry + data)
+        text, self._escape_carry = split_incomplete_escape(self._escape_carry + data)
         for annotation in self._read_stream.detect("read", strip_ansi(text), seq=self._event_seq):
-            self._remember_read_annotation(_read_annotation_key(annotation))
+            key = _read_annotation_key(annotation)
+            if key in self._snapshot_only_keys:
+                self._snapshot_only_keys.discard(key)
+                continue
+            self._remember_read_annotation(key)
             await self._logger.log_event("annotation", annotation.to_dict())
 
     async def _log_send(self, data: str) -> None:
@@ -649,7 +693,7 @@ class HostedSessionRuntime:
                 self._connected = False
                 # The recording belongs to the connection that just ended; the
                 # connector belongs to the session and outlives it.
-                await self._stop_recording()
+                await self._end_connection_recording()
         await self._stop_connector()
         self._state = "stopped"
         self._stopped_at = time.time()
