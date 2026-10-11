@@ -111,19 +111,25 @@ class HostedSessionRuntime:
         # text; never the raw text). THE RULE (ports mirror it exactly):
         #   * _read_annotation_keys: every key recorded in this recording, by
         #     either path.
-        #   * _snapshot_only_keys: keys the SNAPSHOT path recorded that the stream
-        #     has not delivered since -- each entry is one occurrence the stream
-        #     still owes.
+        #   * _snapshot_only_keys: keys the SNAPSHOT path recorded since the last
+        #     processed stream chunk.
         #   Snapshot match: key in _read_annotation_keys -> skip. Otherwise
         #     record it and add the key to BOTH sets.
-        #   Stream match: key in _snapshot_only_keys -> remove it and skip (the
-        #     snapshot already recorded this occurrence; consumed exactly once).
-        #     Otherwise record it and add the key to _read_annotation_keys.
-        # So stream-then-snapshot and snapshot-then-stream each record once, a
-        # run of identical snapshots records once, and a command streamed twice
-        # is annotated twice. Both sets are bounded (_MAX_READ_ANNOTATION_KEYS,
-        # cleared when full), scoped to one recording and reset with it: see
-        # _stop_recording.
+        #   Stream chunk (non-empty, while recording): for each match, key in
+        #     _snapshot_only_keys -> remove it and skip (the snapshot already
+        #     recorded this occurrence). Otherwise record it and add the key to
+        #     _read_annotation_keys. AFTER the chunk's matches are handled,
+        #     _snapshot_only_keys is CLEARED: a pending key dedupes only the one
+        #     stream chunk that immediately follows the snapshot(s).
+        # So stream-then-snapshot records once, snapshot-then-next-chunk records
+        # once, a run of identical snapshots records once, and a command streamed
+        # twice is annotated twice; a pending key can never suppress a later,
+        # genuinely new match. Accepted cost: if the snapshot's text reaches the
+        # stream only in a LATER chunk (split over several, or after unrelated
+        # output), that match is recorded a second time -- a duplicate is
+        # preferred over a missed annotation. Both sets are bounded
+        # (_MAX_READ_ANNOTATION_KEYS, cleared when full), scoped to one recording
+        # and reset with it: see _stop_recording.
         self._read_annotation_keys: set[str] = set()
         self._snapshot_only_keys: set[str] = set()
         self._event_seq: int = 0
@@ -456,11 +462,11 @@ class HostedSessionRuntime:
         prepended to the next chunk (``provide.uterm.split_incomplete_escape``, bounded by ``MAX_ESCAPE_CARRY``).
 
         The stream path records every match -- a command run twice is annotated
-        twice -- EXCEPT one occurrence a snapshot already recorded before the
-        stream delivered it (a key in ``_snapshot_only_keys``), which it consumes
-        once instead. Every match it records is remembered so the snapshot path,
-        which sees the same text again, does not record it a second time. Full
-        rule: ``__init__``.
+        twice -- EXCEPT a match in the first chunk after a snapshot that already
+        recorded it (a key in ``_snapshot_only_keys``), which it consumes once
+        instead; the pending keys are then cleared, matched or not. Every match
+        it records is remembered so the snapshot path, which sees the same text
+        again, does not record it a second time. Full rule: ``__init__``.
         """
         if self._logger is None or self._read_stream is None or not data:
             return
@@ -474,6 +480,9 @@ class HostedSessionRuntime:
                 continue
             self._remember_read_annotation(key)
             await self._logger.log_event("annotation", annotation.to_dict())
+        # Pending snapshot keys expire with the first chunk after the snapshot,
+        # matched or not, so they never suppress a later, new match.
+        self._snapshot_only_keys.clear()
 
     async def _log_send(self, data: str) -> None:
         if self._logger is not None:

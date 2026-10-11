@@ -6,11 +6,12 @@
 
 Read-path rules run over every streamed ``term`` chunk AND every snapshot
 screen. The snapshot path skips any match already recorded (by the stream or an
-earlier snapshot); the stream records every match except one occurrence a
-snapshot recorded before the stream delivered it, which it consumes once. So the
-same output is annotated once whichever path sees it first, a command run twice
-is annotated twice, and matches are keyed by a digest of (rule id, matched text),
-so different credentials of one rule are each recorded. And an escape sequence cut off at a chunk
+earlier snapshot); the stream records every match except one a snapshot recorded
+just before it, in the very next chunk, which it consumes once (pending snapshot
+keys expire with that chunk). So the same output is annotated once whichever
+path sees it first, a command run twice is annotated twice, and matches are
+keyed by a digest of (rule id, matched text), so different credentials of one
+rule are each recorded. And an escape sequence cut off at a chunk
 boundary is carried into the next chunk before stripping, so its tail does not
 glue itself onto the text that follows (``\\x1b[1`` + ``msudo`` -> ``msudo``).
 """
@@ -179,14 +180,48 @@ async def test_a_stream_match_a_snapshot_already_recorded_is_not_recorded_again(
     assert _annotations(logger) == [_SUDO, _SUDO]
 
 
-async def test_a_snapshot_only_key_is_consumed_by_its_own_match_only() -> None:
+async def test_a_snapshot_then_its_chunk_records_once_and_a_later_new_match_records_again() -> None:
+    runtime, logger = _runtime()
+
+    await _snapshot(runtime, "$ sudo ls\n")
+    await _term(runtime, "$ sudo ls\r\n")  # the chunk carrying the snapshot's text
+    assert _annotations(logger) == [_SUDO]
+
+    await _term(runtime, "$ sudo reboot\r\n")  # a genuinely new sudo
+    assert _annotations(logger) == [_SUDO, _SUDO, "reboot command detected: reboot"]
+
+
+async def test_pending_snapshot_keys_expire_with_the_next_chunk_even_without_a_match() -> None:
+    # Missing an annotation is worse than an occasional duplicate: the pending key
+    # dedupes only the chunk right after the snapshot.
+    runtime, logger = _runtime()
+
+    await _snapshot(runtime, "$ sudo ls\n")
+    await _term(runtime, "unrelated output\r\n")
+    assert runtime._snapshot_only_keys == set()
+    await _term(runtime, "$ sudo ls\r\n")
+
+    assert _annotations(logger) == [_SUDO, _SUDO]
+
+
+async def test_a_pending_key_is_consumed_only_by_its_own_match() -> None:
     runtime, logger = _runtime()
 
     await _snapshot(runtime, "$ sudo ls\n")
     await _term(runtime, "$ rm -rf build\r\n")
 
     assert _annotations(logger) == [_SUDO, _RM]
-    assert len(runtime._snapshot_only_keys) == 1
+    assert runtime._snapshot_only_keys == set()
+
+
+async def test_an_empty_chunk_leaves_pending_keys_alone() -> None:
+    runtime, logger = _runtime()
+
+    await _snapshot(runtime, "$ sudo ls\n")
+    await _term(runtime, "")
+    await _term(runtime, "$ sudo ls\r\n")
+
+    assert _annotations(logger) == [_SUDO]
 
 
 async def test_different_credentials_of_one_rule_in_successive_snapshots_are_all_recorded() -> None:
