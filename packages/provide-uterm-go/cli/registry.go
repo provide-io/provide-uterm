@@ -288,9 +288,10 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 	e, ok := r.entries[id]
 	var br *bridge.TermBridge
 	var conn connectors.Connector
+	var rec *sessionRecorder
 	if ok {
 		br = takeBridge(e)
-		conn = e.conn
+		conn, rec = e.conn, e.recorder
 		delete(r.entries, id)
 		for i, oid := range r.order {
 			if oid == id {
@@ -304,6 +305,7 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 	// or a worker whose socket outlived its terminal keeps reconnecting against
 	// a session id the registry can no longer list.
 	stopBridge(br)
+	settleRecording(rec)
 	if conn != nil {
 		_ = conn.Stop(ctx)
 	}

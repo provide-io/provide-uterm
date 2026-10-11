@@ -122,7 +122,7 @@ func (r *SessionRegistryImpl) StopSession(ctx context.Context, id string) (*serv
 		r.mu.Unlock()
 		return nil, server.ErrSessionNotFound
 	}
-	conn := e.conn
+	conn, rec := e.conn, e.recorder
 	br := takeBridge(e)
 	e.conn = nil
 	e.lifecycle = server.LifecycleStopped
@@ -133,10 +133,33 @@ func (r *SessionRegistryImpl) StopSession(ctx context.Context, id string) (*serv
 	// Detach from the hub before the connector goes: a worker whose socket
 	// outlived its terminal would still look leasable.
 	stopBridge(br)
+	settleRecording(rec)
 	if conn != nil {
 		_ = conn.Stop(ctx)
 	}
 	return st, nil
+}
+
+// settleRecording settles a recording the session's last connection could not
+// close (sessionRecorder.settle), once its bridge has stopped and no attempt
+// will follow to do it. rec may be nil: a session never recorded.
+func settleRecording(rec *sessionRecorder) {
+	if rec != nil {
+		rec.settle()
+	}
+}
+
+// Shutdown stops every session, as the reference's registry shutdown stops
+// every runtime on the way out: each worker bridge detached, each recording
+// its last connection could not close settled, each connector released. Call
+// it once the server has stopped serving.
+func (r *SessionRegistryImpl) Shutdown(ctx context.Context) {
+	r.mu.Lock()
+	ids := append([]string(nil), r.order...)
+	r.mu.Unlock()
+	for _, id := range ids {
+		_, _ = r.StopSession(ctx, id)
+	}
 }
 
 // RestartSession stops then starts the session.
