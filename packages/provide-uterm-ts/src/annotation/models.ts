@@ -62,6 +62,16 @@ export interface DetectionRule {
   category: string;
 }
 
+/** Shared: an encoder holds no state between calls. */
+const UTF8 = new TextEncoder();
+
+/**
+ * A surrogate standing alone. Under the `u` flag a well-formed pair is one
+ * code point, not two surrogates, so only an unpaired one matches —
+ * `String.prototype.isWellFormed`, negated, in the ES2023 this builds against.
+ */
+const LONE_SURROGATE = /\p{Cs}/u;
+
 /**
  * `text` as UTF-8, with a lone surrogate encoded as its own three bytes.
  *
@@ -98,7 +108,11 @@ function utf8SurrogatePass(text: string): Uint8Array {
  * secret, being kept anywhere.
  */
 export function annotationMatchKey(ruleId: string, match: string): string {
-  return bytesToHex(sha256(utf8SurrogatePass(`${ruleId}\x00${match}`)));
+  const text = `${ruleId}\x00${match}`;
+  // The common case — no lone surrogate — is plain UTF-8, which the built-in
+  // encoder produces without a byte-at-a-time array. The two agree on every
+  // well-formed string; only a lone surrogate needs the slow path.
+  return bytesToHex(sha256(LONE_SURROGATE.test(text) ? utf8SurrogatePass(text) : UTF8.encode(text)));
 }
 
 /** An annotation as it goes over the wire. */

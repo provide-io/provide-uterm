@@ -20,9 +20,16 @@ import { encodeControlFrame } from "../control-channel/index.ts";
 import { InMemoryRecordingStore, type RecordingEvent } from "../recording/index.ts";
 import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { type Logger, type LogRecord, setLogSink } from "../telemetry/index.ts";
+import type { WorkerSocket } from "../hub/index.ts";
 import { SessionHub } from "./session-hub.ts";
 import { recordingSettingsFrom, SessionRecording } from "./session-recording.ts";
-import { attachConnector, POLL_ERROR_BACKOFF_MS, POLL_IDLE_MS } from "./worker-attach.ts";
+import {
+  attachConnector,
+  POLL_ERROR_BACKOFF_MS,
+  POLL_IDLE_MS,
+  RECORDING_REPORT_INTERVAL_S,
+  untilAborted,
+} from "./worker-attach.ts";
 
 /** A store that refuses every write once told to, as a full disk would. */
 class FailingStore extends InMemoryRecordingStore {
@@ -62,10 +69,10 @@ class EmittingConnector implements SessionConnector {
   async pollMessages(): Promise<WorkerMessage[]> {
     return this.pending.shift() ?? [];
   }
-  async handleInput(): Promise<WorkerMessage[]> {
+  async handleInput(_data: string): Promise<WorkerMessage[]> {
     return [];
   }
-  async handleControl(): Promise<WorkerMessage[]> {
+  async handleControl(_action: string): Promise<WorkerMessage[]> {
     return [];
   }
   async getSnapshot(): Promise<WorkerMessage> {
@@ -144,9 +151,12 @@ describe("a recording store that fails under the poll loop", () => {
     store.failing = true;
     // A screen, because a screen is what this recording writes an entry for.
     connector.pending.push([{ type: "snapshot", screen: "out", ts: 2 }]);
-    // Past the failure and back to idle polling: the loop is still alive.
-    await vi.waitFor(() => expect(recovered(waits)).toBe(true));
+    // Past the failure and back to idle polling: the loop is still alive, and
+    // never backed off — the recording's failure is not the poll's.
+    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    await vi.waitFor(() => expect(waits.length).toBeGreaterThan(1));
     await attachment.detach();
+    expect(waits.every((ms) => ms === POLL_IDLE_MS)).toBe(true);
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(errors).toStrictEqual(["ENOSPC: no space left on device"]);
@@ -289,28 +299,55 @@ describe("a failure on the way back from the link", () => {
   });
 });
 
-describe("a recording that keeps failing to take what a poll returned", () => {
-  it("backs off further each time, rather than retrying at the first step forever", async () => {
+describe("a recording that keeps failing under a busy session", () => {
+  it("never delays the next poll, and is reported once per interval or on a new failure", async () => {
     const store = new FailingStore();
     const recording = await openRecording(store);
     const connector = new EmittingConnector();
+    let polls = 0;
     let armed = false;
-    connector.pollMessages = async () => (armed ? [{ type: "snapshot", screen: "out", ts: 2 }] : []);
+    connector.pollMessages = async () => {
+      // A real connector waits on its PTY; this one yields a turn instead.
+      await new Promise((resolve) => setImmediate(resolve));
+      polls += 1;
+      return armed ? [{ type: "snapshot", screen: `out ${polls}`, ts: 2.5 }] : [];
+    };
     const { logger } = capturingLogger();
+    const errors: string[] = [];
     const { waits, sleep } = recordingSleep();
+    let clock = 5;
     const attachment = await attachConnector(new SessionHub(), "w1", connector, "hijack", {
-      now: () => 5,
+      now: () => clock,
       recording,
       sleep,
       logger,
+      onError: (error) => errors.push(error),
     });
     store.failing = true;
     armed = true;
-    // Every poll succeeds; every write of what it returned fails.
-    const backoffs = () => waits.filter((ms) => ms !== POLL_IDLE_MS);
-    await vi.waitFor(() => expect(backoffs().length).toBeGreaterThanOrEqual(4));
+    const busy = polls;
+    await vi.waitFor(() => expect(polls - busy).toBeGreaterThanOrEqual(20));
+    // Every write failed, and was reported once; no poll waited for it.
+    expect(errors).toStrictEqual(["ENOSPC: no space left on device"]);
+    expect(waits.filter((ms) => ms !== POLL_IDLE_MS)).toStrictEqual([]);
+
+    // Just short of the interval: still quiet.
+    clock += RECORDING_REPORT_INTERVAL_S - 0.5;
+    const quiet = polls;
+    await vi.waitFor(() => expect(polls - quiet).toBeGreaterThanOrEqual(3));
+    expect(errors).toHaveLength(1);
+    // Once the interval has passed, the same failure is reported again.
+    clock += 0.5;
+    await vi.waitFor(() => expect(errors).toHaveLength(2));
+    // And a different failure at once, without waiting out the interval.
+    store.appendEvents = async () => {
+      throw new Error("EACCES: permission denied");
+    };
+    await vi.waitFor(() => expect(errors).toHaveLength(3));
     await attachment.detach();
-    expect(backoffs().slice(0, 4)).toStrictEqual(POLL_ERROR_BACKOFF_MS.slice(0, 4));
+    expect(errors.slice(1)).toStrictEqual(["ENOSPC: no space left on device", "EACCES: permission denied"]);
+    expect(waits.filter((ms) => ms !== POLL_IDLE_MS)).toStrictEqual([]);
+    expect(RECORDING_REPORT_INTERVAL_S).toBe(30);
     expect(unhandled).toStrictEqual([]);
   });
 
@@ -373,10 +410,12 @@ describe("a recording that fails partway through a batch", () => {
       { type: "snapshot", screen: "two", ts: 3 },
       { type: "snapshot", screen: "three", ts: 4 },
     ]);
-    await vi.waitFor(() => expect(waits).toContain(POLL_ERROR_BACKOFF_MS[0]));
+    await vi.waitFor(() => expect(errors).toHaveLength(1));
+    await vi.waitFor(() => expect(broadcast).toHaveLength(3));
     await attachment.detach();
 
     expect(broadcast).toStrictEqual(["one", "two", "three"]);
+    expect(waits.every((ms) => ms === POLL_IDLE_MS)).toBe(true);
     // Logging went on past the failure: the write that failed kept its
     // buffer, and the next frame's write carried it, so nothing is lost.
     const screens = (await store.getEntries("w1", { event: "read" })).map(
@@ -409,17 +448,190 @@ describe("an attachment that fails before it is finished", () => {
   });
 
   it("raises its own failure, not a cleanup that failed after it", async () => {
-    const store = new FailingStore();
-    const recording = await openRecording(store);
     const hub = new SessionHub();
     hub.pruneIfIdle = async () => {
       throw new Error("prune failed");
     };
-    store.failing = true;
-    await expect(
-      attachConnector(hub, "w1", new EmittingConnector(), "hijack", { now: () => 5, recording }),
-    ).rejects.toThrow("ENOSPC: no space left on device");
+    const connector = new EmittingConnector();
+    connector.getSnapshot = async () => {
+      throw new Error("no screen");
+    };
+    await expect(attachConnector(hub, "w1", connector, "hijack", { now: () => 5 })).rejects.toThrow("no screen");
     expect(hub.registry.get("w1")?.workerWs ?? undefined).toBeUndefined();
     expect(unhandled).toStrictEqual([]);
+  });
+});
+
+describe("a recording that fails while the worker attaches", () => {
+  it("is reported, and the session comes up anyway", async () => {
+    const store = new FailingStore();
+    const recording = await openRecording(store);
+    store.failing = true;
+    const hub = new SessionHub();
+    const { logger } = capturingLogger();
+    const errors: string[] = [];
+    const attachment = await attachConnector(hub, "w1", new EmittingConnector(), "hijack", {
+      now: () => 5,
+      recording,
+      sleep: () => new Promise(() => {}),
+      logger,
+      onError: (error) => errors.push(error),
+    });
+    // Attached, with the seed screen the recording could not take.
+    expect(hub.registry.get("w1")?.workerWs).toBeDefined();
+    expect(hub.registry.get("w1")?.lastSnapshot).toMatchObject({ screen: "seed" });
+    // `runtime_started` and the seed screen fail alike: reported once.
+    expect(errors).toStrictEqual(["ENOSPC: no space left on device"]);
+    await attachment.detach();
+    expect(unhandled).toStrictEqual([]);
+  });
+});
+
+describe("input while the recording is failing", () => {
+  it("still reaches the connector, keystrokes and controls alike", async () => {
+    const store = new FailingStore();
+    const recording = await openRecording(store);
+    const hub = new SessionHub();
+    const connector = new EmittingConnector();
+    const typed: string[] = [];
+    const controls: string[] = [];
+    connector.handleInput = async (data) => {
+      typed.push(data);
+      return [];
+    };
+    connector.handleControl = async (action) => {
+      controls.push(action);
+      return [];
+    };
+    const { logger } = capturingLogger();
+    const errors: string[] = [];
+    const attachment = await attachConnector(hub, "w1", connector, "hijack", {
+      now: () => 5,
+      recording,
+      sleep: () => new Promise(() => {}),
+      logger,
+      onError: (error) => errors.push(error),
+    });
+    store.failing = true;
+    const socket = hub.registry.get("w1")?.workerWs as WorkerSocket;
+    await socket.sendText("ls\r");
+    await socket.sendText(encodeControlFrame({ type: "control", action: "pause" }));
+    await attachment.detach();
+
+    expect(typed).toStrictEqual(["ls\r"]);
+    expect(controls).toStrictEqual(["pause"]);
+    expect(errors).toStrictEqual(["ENOSPC: no space left on device"]);
+    expect(unhandled).toStrictEqual([]);
+  });
+});
+
+describe("an attachment that is stopped before it is finished", () => {
+  it("registers nothing when it was stopped before it began", async () => {
+    const hub = new SessionHub();
+    const abort = new AbortController();
+    abort.abort(new Error("stopping"));
+    await expect(
+      attachConnector(hub, "w1", new EmittingConnector(), "hijack", { now: () => 5, signal: abort.signal }),
+    ).rejects.toThrow("stopping");
+    expect(hub.registry.get("w1")).toBeUndefined();
+  });
+
+  it("stops waiting for a first screen that never comes, and leaves the hub", async () => {
+    const hub = new SessionHub();
+    const connector = new EmittingConnector();
+    let asked: () => void = () => {};
+    const reached = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    connector.getSnapshot = () => {
+      asked();
+      return new Promise(() => {});
+    };
+    const abort = new AbortController();
+    const attaching = attachConnector(hub, "w1", connector, "hijack", { now: () => 5, signal: abort.signal });
+    await reached;
+    expect(hub.registry.get("w1")?.workerWs).toBeDefined();
+    abort.abort(new Error("stopping"));
+    await expect(attaching).rejects.toThrow("stopping");
+    expect(hub.registry.get("w1")).toBeUndefined();
+  });
+
+  it("finishes as usual when nothing stops it", async () => {
+    const hub = new SessionHub();
+    const abort = new AbortController();
+    const attachment = await attachConnector(hub, "w1", new EmittingConnector(), "hijack", {
+      now: () => 5,
+      sleep: () => new Promise(() => {}),
+      signal: abort.signal,
+    });
+    // Too late to matter: the attachment is done.
+    abort.abort(new Error("stopping"));
+    expect(hub.registry.get("w1")?.workerWs).toBeDefined();
+    await attachment.detach();
+  });
+});
+
+describe("input to a session that records nothing", () => {
+  it("reaches the connector with nothing to report", async () => {
+    const hub = new SessionHub();
+    const connector = new EmittingConnector();
+    const typed: string[] = [];
+    connector.handleInput = async (data) => {
+      typed.push(data);
+      return [];
+    };
+    const errors: string[] = [];
+    const attachment = await attachConnector(hub, "w1", connector, "hijack", {
+      now: () => 5,
+      sleep: () => new Promise(() => {}),
+      onError: (error) => errors.push(error),
+    });
+    const socket = hub.registry.get("w1")?.workerWs as WorkerSocket;
+    await socket.sendText("ls\r");
+    await socket.sendText(encodeControlFrame({ type: "control", action: "pause" }));
+    await attachment.detach();
+    expect(typed).toStrictEqual(["ls\r"]);
+    expect(errors).toStrictEqual([]);
+  });
+});
+
+describe("waiting on work until a signal aborts", () => {
+  it("is the work itself with no signal", async () => {
+    const work = Promise.resolve(1);
+    expect(untilAborted(work, undefined)).toBe(work);
+  });
+
+  it("settles with the work, either way, while not aborted", async () => {
+    const abort = new AbortController();
+    await expect(untilAborted(Promise.resolve(2), abort.signal)).resolves.toBe(2);
+    await expect(untilAborted(Promise.reject(new Error("failed")), abort.signal)).rejects.toThrow("failed");
+  });
+
+  it("rejects with the reason once aborted, and ignores the work after", async () => {
+    const abort = new AbortController();
+    let finish: (value: number) => void = () => {};
+    const waiting = untilAborted(
+      new Promise<number>((resolve) => {
+        finish = resolve;
+      }),
+      abort.signal,
+    );
+    abort.abort(new Error("stopping"));
+    finish(3);
+    await expect(waiting).rejects.toThrow("stopping");
+  });
+
+  it("rejects at once when the signal had already aborted", async () => {
+    const abort = new AbortController();
+    abort.abort(new Error("already stopped"));
+    await expect(untilAborted(new Promise(() => {}), abort.signal)).rejects.toThrow("already stopped");
+  });
+
+  it("stops listening once the work settles", async () => {
+    const abort = new AbortController();
+    const remove = vi.spyOn(abort.signal, "removeEventListener");
+    await untilAborted(Promise.resolve(4), abort.signal);
+    await untilAborted(Promise.reject(new Error("x")), abort.signal).catch(() => undefined);
+    expect(remove.mock.calls.map(([event]) => event)).toStrictEqual(["abort", "abort"]);
   });
 });

@@ -9,7 +9,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { type Annotation, annotationMatchKey, annotationToWire, type DetectionRule, PatternDetector } from "./index.ts";
 
 const KEY_A = "AKIAIOSFODNN7EXAMPLE"; // pragma: allowlist secret
@@ -41,6 +41,52 @@ describe("the match key", () => {
   ])("encodes %s as the reference's UTF-8 does", (_name, match, bytes) => {
     const expected = sha256Hex(Uint8Array.from([0x72, 0x00, ...bytes]));
     expect(annotationMatchKey("r", match)).toBe(expected);
+  });
+
+  it.each([
+    ["well-formed text, through the built-in encoder", "plain ☃ 😀", true],
+    ["a lone high surrogate, through the pass-through encoder", "a\ud800b", false],
+    ["a lone low surrogate, through the pass-through encoder", "a\udc00b", false],
+    ["a reversed pair, which is two lone surrogates", "\udc00\ud800", false],
+    ["every width beside a lone surrogate, through the pass-through encoder", "aé☃😀\ud800", false],
+    ["each width's first code point beside a lone surrogate", "\x80\u0800\u{10000}\ud800", false],
+  ])("gives the same bytes on both paths: %s", (_name, match, wellFormed) => {
+    // Each code unit encoded by hand, pairs joined: CPython's surrogatepass.
+    const bytes: number[] = [0x72, 0x00];
+    for (const char of match) {
+      const code = char.codePointAt(0) as number;
+      if (code < 0x80) {
+        bytes.push(code);
+      } else if (code < 0x800) {
+        bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+      } else if (code < 0x10000) {
+        bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+      } else {
+        bytes.push(
+          0xf0 | (code >> 18),
+          0x80 | ((code >> 12) & 0x3f),
+          0x80 | ((code >> 6) & 0x3f),
+          0x80 | (code & 0x3f),
+        );
+      }
+    }
+    expect(annotationMatchKey("r", match)).toBe(sha256Hex(Uint8Array.from(bytes)));
+    // And for well-formed text, exactly what Node's own UTF-8 gives.
+    if (wellFormed) {
+      expect(annotationMatchKey("r", match)).toBe(sha256Hex(Buffer.from(`r\x00${match}`, "utf8")));
+    }
+  });
+
+  it("takes the built-in encoder only when no surrogate stands alone", () => {
+    const encode = vi.spyOn(TextEncoder.prototype, "encode");
+    try {
+      annotationMatchKey("r", "plain ☃ 😀");
+      expect(encode).toHaveBeenCalledTimes(1);
+      annotationMatchKey("r", "a\ud800b");
+      expect(encode).toHaveBeenCalledTimes(1);
+    } finally {
+      encode.mockRestore();
+    }
   });
 
   it("tells two different credentials of one rule apart", () => {

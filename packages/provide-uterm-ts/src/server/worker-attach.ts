@@ -64,6 +64,45 @@ export const POLL_IDLE_MS = 50;
  */
 export const POLL_ERROR_BACKOFF_MS: readonly number[] = [250, 500, 1000, 2000, 5000];
 
+/**
+ * Shortest gap between two reports of the same recording failure, in seconds.
+ *
+ * A store that has stopped taking writes fails on every frame, and a busy
+ * session sends many: reported each time, one full disk would flood the log
+ * and rewrite `last_error` on every keystroke. A failure with a different
+ * message is reported at once.
+ */
+export const RECORDING_REPORT_INTERVAL_S = 30;
+
+/**
+ * Settle with `work`, or reject with `signal`'s reason as soon as it aborts.
+ *
+ * The work is not cancelled — nothing here can cancel a connector's promise —
+ * only no longer waited for; what it settles with afterwards is dropped.
+ */
+export function untilAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (signal === undefined) {
+    return work;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    if (signal.aborted) {
+      onAbort();
+    }
+    signal.addEventListener("abort", onAbort);
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 /** Wait `ms` without holding the process open for it. */
 function idle(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -103,6 +142,12 @@ export interface AttachOptions {
    * reference's run loop stores the same text as the runtime's `_last_error`.
    */
   onError?: ((error: string) => void) | undefined;
+  /**
+   * Stops an attachment that has not finished yet. Aborted, the attachment
+   * stops waiting for its first screen, takes its worker back off the hub
+   * and rejects with the signal's reason.
+   */
+  signal?: AbortSignal | undefined;
   /**
    * Where those failures are logged. The reference's runtime module logger
    * unless a test says otherwise: a failure nobody can see is how a recording
@@ -192,15 +237,12 @@ export async function attachConnector(
    * is announced, so nothing can observe the event without the screen.
    *
    * Each message is logged after it is broadcast, as the reference's
-   * `_send_outbound_frame` logs a frame after its socket write. But a
-   * recording that cannot write does not hold back the live session: every
-   * message in the batch still reaches the hub, and logging is still tried
-   * for each, and only then is the recording's first failure thrown — for the
-   * caller to report, as it reports any other.
+   * `_send_outbound_frame` logs a frame after its socket write. A recording
+   * that cannot write does not hold back the live session: its failure is
+   * reported through {@link record} and every message still reaches the hub.
+   * Only a failure of the hub's own handling is thrown.
    */
   async function inbound(messages: readonly WorkerMessage[]): Promise<void> {
-    /** The recording's first failure in this batch, thrown once it is all out. */
-    let recordFailure: { error: unknown } | undefined;
     for (const message of messages) {
       if (String(message.type ?? "") !== "snapshot") {
         await hub.router.broadcast(sessionId, message);
@@ -213,14 +255,7 @@ export async function attachConnector(
         }
       }
       // The worker's message, not the hub's frame.
-      try {
-        await recording?.logOutbound(message);
-      } catch (error) {
-        recordFailure ??= { error };
-      }
-    }
-    if (recordFailure !== undefined) {
-      throw recordFailure.error;
+      await record(() => recording?.logOutbound(message));
     }
   }
 
@@ -273,6 +308,33 @@ export async function attachConnector(
     }
   }
 
+  /** The last recording failure reported, and when: see {@link record}. */
+  let lastRecordingReport: { text: string; at: number } | undefined;
+
+  /**
+   * Write to the recording, and report a failure rather than throw it.
+   *
+   * The recording is a record of the session, not part of it: a store that
+   * cannot write (disk full, EACCES) must not cost a viewer a frame, the
+   * connector a keystroke, or the session its start. So a failure here is
+   * reported — through the same {@link report} as any other — and the
+   * traffic goes on. The same failure is reported again only once
+   * {@link RECORDING_REPORT_INTERVAL_S} has passed; a different one at once.
+   */
+  async function record(write: () => Promise<void> | undefined): Promise<void> {
+    try {
+      await write();
+    } catch (error) {
+      const text = errorText(error);
+      const at = now();
+      if (lastRecordingReport?.text === text && at - lastRecordingReport.at < RECORDING_REPORT_INTERVAL_S) {
+        return;
+      }
+      lastRecordingReport = { text, at };
+      await report(error);
+    }
+  }
+
   const link = new WorkerLink({ workerId: sessionId, managerUrl: "http://in-process", worker: target, now });
   // What the link decides to send back travels the same path a worker's own
   // socket write would: straight into the hub's inbound handling. Nothing
@@ -293,36 +355,49 @@ export async function attachConnector(
   const socket: WorkerSocket = {
     sendText: async (payload) => {
       // Recorded as it arrives and before it is acted on, in the reference's
-      // order: the raw chunk, then each thing it decoded to.
-      await recording?.logWireRecv(payload);
+      // order: the raw chunk, then each thing it decoded to. A recording that
+      // fails is reported and the input still reaches the connector: a full
+      // disk must not swallow what an operator types.
+      await record(() => recording?.logWireRecv(payload));
       for (const chunk of decoder.feed(payload)) {
         if (chunk.kind === "data") {
-          await recording?.logSend(chunk.data);
+          await record(() => recording?.logSend(chunk.data));
           await link.handleData(chunk.data);
         } else {
-          await recording?.logControlRecv(chunk.control);
+          await record(() => recording?.logControlRecv(chunk.control));
           await link.handleControl(chunk.control);
         }
       }
     },
   };
 
+  // An attachment stopped before it began registers nothing.
+  options.signal?.throwIfAborted();
   hub.registerWorker(sessionId, socket, mode);
   try {
     // The reference's `runtime_started`, written as its worker connects and
-    // before the first screen it sends.
-    await recording?.logEvent("runtime_started", { session_id: sessionId });
+    // before the first screen it sends. A recording that cannot take it is
+    // reported, as it would be later: the session still comes up.
+    await untilAborted(
+      record(() => recording?.logEvent("runtime_started", { session_id: sessionId })),
+      options.signal,
+    );
     // The reference's worker sends a snapshot as soon as it connects, which is
     // why `GET /api/sessions/{id}/snapshot` answers with a screen before
     // anybody has typed anything. Sent through the same inbound path as every
     // later one.
-    await inbound([await connector.getSnapshot()]);
+    await untilAborted(
+      connector.getSnapshot().then((snapshot) => inbound([snapshot])),
+      options.signal,
+    );
   } catch (error) {
-    // An attachment that never finished is taken back off the hub, as the
-    // reference's worker socket closes with the connection that failed: left
-    // registered, the hub would lease a worker nobody is polling. The poll
-    // loop has not started yet, so there is nothing else to stop. A cleanup
-    // that fails as well does not replace the failure that caused it.
+    // An attachment that never finished — the connector had no screen, the
+    // hub could not take it, or it was stopped — is taken back off the hub,
+    // as the reference's worker socket closes with the connection that
+    // failed: left registered, the hub would lease a worker nobody is
+    // polling. The poll loop has not started yet, so there is nothing else to
+    // stop. A cleanup that fails as well does not replace the failure that
+    // caused it.
     hub.connections.deregisterWorker(sessionId, socket);
     await hub.pruneIfIdle(sessionId).catch(() => undefined);
     throw error;
@@ -343,12 +418,15 @@ export async function attachConnector(
    * `runtime_error` and retries on its backoff. There is no connection here
    * to drop, so the error is reported and the poll retried on the same
    * schedule; an iteration that succeeds all the way through starts the
-   * schedule over. A poll that succeeds is not enough: a recording that keeps
-   * failing to take what it returned must back off like anything else, not
-   * retry at the first step forever. Handing what a poll
-   * returned on — the hub's broadcast, the recording's write — fails the same
-   * way and is treated the same way: in the reference both run inside the
-   * one `try` its run loop catches.
+   * schedule over. Handing what a poll returned to the hub fails the same way
+   * and is treated the same way: in the reference both run inside the one
+   * `try` its run loop catches.
+   *
+   * The recording is the exception. A store that keeps failing is reported
+   * by {@link record}, at most once per {@link RECORDING_REPORT_INTERVAL_S}
+   * for the same failure, and never reaches this loop: backing off for it
+   * would throttle a live session's output to the slowest step because its
+   * disk is full.
    *
    * Detaching stops it. A poll still in flight then is not waited for — the
    * reference cancels it — and what it returns afterwards is dropped.

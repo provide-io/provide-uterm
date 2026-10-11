@@ -68,7 +68,7 @@ import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import type { SessionHub } from "./session-hub.ts";
 import { type RecordingSettings, recordingSettingsFrom, SessionRecording } from "./session-recording.ts";
 import type { SessionRegistry } from "./session-registry.ts";
-import type { SessionRuntimeStatus } from "./session-status.ts";
+import type { SessionDefinition, SessionRuntimeStatus } from "./session-status.ts";
 import { type AttachedWorker, attachConnector } from "./worker-attach.ts";
 
 /** How a connector is built for one session. The connector registry's shape. */
@@ -117,10 +117,12 @@ export class SessionRuntimes {
   readonly #hub: SessionHub;
   readonly #build: ConnectorBuilder;
   readonly #now: () => number;
-  /** Only sessions that are up: one that failed to start is not in here. */
+  /** Only sessions that are all the way up: one still starting is not in here. */
   readonly #connectors = new Map<string, SessionConnector>();
   /** The hub attachment for each running session, for taking it back off. */
   readonly #attached = new Map<string, AttachedWorker>();
+  /** Each start under way, to join a second start to and to stop on shutdown. */
+  readonly #starting = new Map<string, { promise: Promise<void>; abort: AbortController }>();
   /**
    * Each session's recording, open or not, kept for as long as this object.
    *
@@ -200,20 +202,36 @@ export class SessionRuntimes {
    *
    * Never throws: a session that cannot start says so in its own state, which
    * is the only way a caller starting several of them can carry on past one.
+   *
+   * A start already under way for the session is joined, not repeated: the
+   * second caller gets the first one's promise. The reference's `start()`
+   * returns early on a task that is still running for the same reason — two
+   * connectors for one session would be one too many, and the second would
+   * leak.
    */
-  async start(sessionId: string): Promise<void> {
+  start(sessionId: string): Promise<void> {
+    const inFlight = this.#starting.get(sessionId);
+    if (inFlight !== undefined) {
+      return inFlight.promise;
+    }
     const definition = this.#registry.definition(sessionId);
     // A start for a session that was deleted under the caller is a race, not a
-    // fault — the same tolerance `setState` has for the same reason.
-    if (definition === undefined) {
-      return;
+    // fault — the same tolerance `setState` has for the same reason. And one
+    // that is already up is left alone: a second start must not rebuild the
+    // connector or rewind the state.
+    if (definition === undefined || this.#connectors.has(sessionId)) {
+      return Promise.resolve();
     }
-    // The reference returns early on a task that is still running: a second
-    // start must not rebuild the connector or rewind the state.
-    if (this.#connectors.has(sessionId)) {
-      return;
-    }
+    const abort = new AbortController();
+    const promise = this.#bringUp(sessionId, definition, abort.signal).finally(() => {
+      this.#starting.delete(sessionId);
+    });
+    this.#starting.set(sessionId, { promise, abort });
+    return promise;
+  }
 
+  /** {@link start}, once it is known nothing else is starting the session. */
+  async #bringUp(sessionId: string, definition: SessionDefinition, signal: AbortSignal): Promise<void> {
     // `starting`, and last time's outcome cleared with it — what failed before
     // is not what is happening now. The reference's `start()` sets all three.
     this.#registry.setState(sessionId, {
@@ -225,6 +243,7 @@ export class SessionRuntimes {
     /** Set once the connector has started: only a started one is stopped. */
     let connector: SessionConnector | undefined;
     let recording: SessionRecording | undefined;
+    let attached: AttachedWorker | undefined;
     try {
       const built = this.#build(
         sessionId,
@@ -236,10 +255,10 @@ export class SessionRuntimes {
       );
       await built.start();
       connector = built;
-      // Held from here, so a second start while this one is still attaching
-      // returns early rather than building another. Let go again below if
-      // anything after this point fails.
-      this.#connectors.set(sessionId, connector);
+      // A shutdown that arrived while the connector was starting: what was
+      // brought up so far is taken down again below, rather than marked
+      // running behind the shutdown's back.
+      signal.throwIfAborted();
       // Opened once the connector is up and before the worker attaches, which
       // is where the reference opens it: a recording spans one worker
       // connection. Whether it records is read off the session's own status,
@@ -250,38 +269,44 @@ export class SessionRuntimes {
       // Attached to the hub as a worker, which is what makes the session
       // leasable: the hub arbitrates over workers, and one that had merely
       // been started would be refused every acquire with `no_worker`. An
-      // attachment that fails takes its own worker back off the hub.
-      this.#attached.set(
-        sessionId,
-        await attachConnector(this.#hub, sessionId, connector, definition.input_mode, {
-          now: this.#now,
-          recording,
-          // A failure the attachment survives is kept as `last_error`, as the
-          // reference's run loop keeps it in `_last_error`: the session stays
-          // up, and a client can still see what went wrong.
-          onError: (error) => this.#registry.setState(sessionId, { last_error: error }),
-        }),
-      );
+      // attachment that fails, or is stopped — including by a shutdown that
+      // arrived while the recording was opening, which it sees on entry —
+      // takes its own worker back off the hub.
+      attached = await attachConnector(this.#hub, sessionId, connector, definition.input_mode, {
+        now: this.#now,
+        recording,
+        signal,
+        // A failure the attachment survives is kept as `last_error`, as the
+        // reference's run loop keeps it in `_last_error`: the session stays
+        // up, and a client can still see what went wrong.
+        onError: (error) => this.#registry.setState(sessionId, { last_error: error }),
+      });
+      signal.throwIfAborted();
+      // Held only once it is all the way up, so a shutdown never finds half a
+      // session: anything still starting is the start's own to take down.
+      this.#connectors.set(sessionId, connector);
+      this.#attached.set(sessionId, attached);
       this.#registry.setState(sessionId, { lifecycle_state: "running", connected: true });
     } catch (error) {
-      // The recording belongs to the connection that just failed, as the
-      // reference's `finally` closes it. A store that cannot close it either
-      // must not turn a reported failure into a thrown one.
+      // Taken down in the order a stop takes it down: off the hub, then the
+      // recording — which belongs to the connection that just failed, as the
+      // reference's `finally` closes it — then the connector, as its
+      // `_stop_connector` discards it when its run loop gives up. Each step's
+      // own failure is suppressed: the session is going down either way, and
+      // a store that cannot close must not turn a reported failure into a
+      // thrown one.
+      await attached?.detach().catch(() => undefined);
       await recording?.stop().catch(() => undefined);
-      // Then the connector, as the reference's `_stop_connector` discards it
-      // when its run loop gives up — suppressing a stop that fails, since the
-      // session is going down either way. Left running and held, it would
-      // outlive the session and turn every later start into a no-op.
-      if (connector !== undefined) {
-        this.#connectors.delete(sessionId);
-        await connector.stop().catch(() => undefined);
-      }
-      // `stopped`, with the reason and the instant — where the reference's run
-      // loop comes to rest when it gives up. See the note on `error` above.
+      await connector?.stop().catch(() => undefined);
+      // `stopped`, with the instant — where the reference's run loop comes to
+      // rest when it gives up, or is stopped. A start that failed says why; one
+      // a shutdown stopped did not fail, and says nothing. See the note on
+      // `error` above.
       this.#registry.setState(sessionId, {
         lifecycle_state: "stopped",
-        last_error: errorText(error),
+        connected: false,
         stopped_at: this.#now(),
+        ...(signal.aborted ? {} : { last_error: errorText(error) }),
       });
     }
   }
@@ -313,6 +338,15 @@ export class SessionRuntimes {
    * server that stopped listening would still be holding whatever they hold.
    */
   async stopAll(): Promise<void> {
+    // Starts still under way are told to stop and waited for: each takes down
+    // whatever it had brought up, so none can finish behind the shutdown and
+    // mark its session running. A connector still in its own `start()` is
+    // waited out — nothing can cancel it — and stopped as soon as it returns.
+    const starting = [...this.#starting.values()];
+    for (const { abort } of starting) {
+      abort.abort();
+    }
+    await Promise.all(starting.map(({ promise }) => promise));
     /** The first thing that failed on the way down, thrown once all are down. */
     let failure: { error: unknown } | undefined;
     for (const [sessionId, connector] of this.#connectors) {
@@ -323,8 +357,9 @@ export class SessionRuntimes {
         failure ??= { error };
       };
       // Detached before it is stopped, so nothing can take a lease on a
-      // worker whose connector is on its way down.
-      await this.#attached.get(sessionId)?.detach().catch(fail);
+      // worker whose connector is on its way down. Present: a session is held
+      // only once it is attached.
+      await (this.#attached.get(sessionId) as AttachedWorker).detach().catch(fail);
       // Closed before the connector, as the reference closes the recording
       // with the worker connection and only then stops the connector. Its own
       // step, so a detach that failed still gets the final flush and the
