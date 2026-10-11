@@ -220,8 +220,8 @@ public static class FrameCodec
             JsonValueKind.Number => NumberFrom(el),
             JsonValueKind.True => true,
             JsonValueKind.False => false,
-            JsonValueKind.Null => null,
-            _ => el.GetRawText(),
+            // Null; Undefined only exists on a default(JsonElement), never a parsed one.
+            _ => null,
         };
 
     private static object NumberFrom(JsonElement el)

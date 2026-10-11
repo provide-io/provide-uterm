@@ -13,19 +13,12 @@ public static class ColorDialectRegistry
 
     static ColorDialectRegistry()
     {
-        MustRegister("brace_tokens", Dialects.HandleBraceTokens);
-        MustRegister("extended_tokens", Dialects.HandleExtendedTokens);
-        MustRegister("tilde_codes", Dialects.HandleTildeCodes);
-        MustRegister("pipe_codes", Dialects.HandlePipeCodes);
-    }
-
-    private static void MustRegister(string name, Func<string, string> handler)
-    {
-        var err = RegisterColorDialect(name, handler);
-        if (err is not null)
-        {
-            throw new InvalidOperationException(err);
-        }
+        // Four distinct built-in names into an empty list: nothing to dedupe,
+        // so they are added directly rather than through the checked path.
+        Registry.Add(("brace_tokens", Dialects.HandleBraceTokens));
+        Registry.Add(("extended_tokens", Dialects.HandleExtendedTokens));
+        Registry.Add(("tilde_codes", Dialects.HandleTildeCodes));
+        Registry.Add(("pipe_codes", Dialects.HandlePipeCodes));
     }
 
     public static string? RegisterColorDialect(string name, Func<string, string> handler)

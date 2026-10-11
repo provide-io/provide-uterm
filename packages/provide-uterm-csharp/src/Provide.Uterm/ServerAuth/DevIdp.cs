@@ -76,11 +76,8 @@ public static class DevIdp
         File.WriteAllText(path, jwt);
         try
         {
-            // Best-effort 0600 on Unix.
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            }
+            // Best-effort 0600 on Unix (a no-op where modes do not exist).
+            FileIo.FileIo.TrySetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
         catch
         {

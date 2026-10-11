@@ -6,6 +6,7 @@
 using System.Text;
 using System.Text.Json;
 using Provide.Uterm.Ansi;
+using Provide.Uterm.Platform;
 
 namespace Provide.Uterm.FileIo;
 
@@ -28,13 +29,24 @@ public static class FileIo
     /// </summary>
     public static void TrySetUnixFileMode(string path, UnixFileMode mode)
     {
-        if (OperatingSystem.IsWindows())
+        if (!OsPlatform.HasUnixFileModes)
         {
             return;
         }
 
-        File.SetUnixFileMode(path, mode);
+        ApplyUnixFileMode(path, mode);
     }
+
+    /// <summary>
+    /// Test seam for the chmod itself, so a refused chmod (EPERM on a file
+    /// another user owns) can be provoked even when the suite runs as root.
+    /// Defaults to <see cref="File.SetUnixFileMode(string, UnixFileMode)"/>;
+    /// its only caller is guarded by <see cref="OsPlatform.HasUnixFileModes"/>.
+    /// </summary>
+#pragma warning disable CA1416 // reached only behind OsPlatform.HasUnixFileModes
+    internal static Action<string, UnixFileMode> ApplyUnixFileMode { get; set; } =
+        static (path, mode) => File.SetUnixFileMode(path, mode);
+#pragma warning restore CA1416
 
     private static void EnsureOwnerOnlyDir(string directory, UnixFileMode mode)
     {
@@ -60,15 +72,12 @@ public static class FileIo
         // Refuse to open through a symlink at the target path when possible.
         if (File.Exists(path))
         {
+            // A symlink has a LinkTarget everywhere; the attribute also catches
+            // Windows reparse points that are not links (junction-like targets).
             var info = new FileInfo(path);
-            if (info.LinkTarget is not null)
+            if (info.LinkTarget is not null || (info.Attributes & FileAttributes.ReparsePoint) != 0)
             {
-                throw new IOException($"refusing to open symlink recording sink: {path}");
-            }
-
-            if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
-            {
-                throw new IOException($"refusing to open reparse-point recording sink: {path}");
+                throw new IOException($"refusing to open symlink or reparse-point recording sink: {path}");
             }
         }
 

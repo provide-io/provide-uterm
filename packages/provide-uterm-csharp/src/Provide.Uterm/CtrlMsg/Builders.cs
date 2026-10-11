@@ -183,8 +183,9 @@ public static class Builders
                     : $"is invalid (\"{s}\"); must be one of [{string.Join(' ', ValidLinkActions)}]"
                 : "must be a string",
             "group" => v is int or long or string ? null : "must be an int or string",
-            "payload" => null,
-            _ => "unknown",
+            // "payload" takes any value. Keys outside LinkPatternFields were
+            // refused before validation, so nothing else reaches here.
+            _ => null,
         };
 
     public static Dictionary<string, object?> MakePresenceUpdate(string userId, IReadOnlyDictionary<string, object?>? fields = null)

@@ -396,6 +396,8 @@ internal sealed class UtermSession : IUtermSession
         switch (result.Action)
         {
             case InterceptAction.Pass:
+            default:
+                // An action this session does not know forwards like Pass.
                 await Forward_NoLock(original, direction, clientId, ct).ConfigureAwait(false);
                 break;
             case InterceptAction.Replace:
@@ -422,9 +424,6 @@ internal sealed class UtermSession : IUtermSession
                     await ProcessClientPath_NoLock(injected, clientId, ct).ConfigureAwait(false);
                 }
 
-                break;
-            default:
-                await Forward_NoLock(original, direction, clientId, ct).ConfigureAwait(false);
                 break;
         }
     }

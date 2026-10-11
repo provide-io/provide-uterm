@@ -88,15 +88,8 @@ public static class IdentityNames
         return FirstRunes(name, 2).ToUpperInvariant();
     }
 
-    private static string TitleWord(string s)
-    {
-        if (s.Length == 0)
-        {
-            return "";
-        }
-
-        return char.ToUpperInvariant(s[0]) + s[1..];
-    }
+    // Only ever called with Adjectives/Animals entries, none of them empty.
+    private static string TitleWord(string s) => char.ToUpperInvariant(s[0]) + s[1..];
 
     private static string FirstRune(string s) => s.Length == 0 ? "" : s[0].ToString();
 

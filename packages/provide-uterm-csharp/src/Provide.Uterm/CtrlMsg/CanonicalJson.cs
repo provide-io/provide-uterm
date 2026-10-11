@@ -345,43 +345,24 @@ public static class CanonicalJson
         }
         else
         {
-            digits = g.TrimStart('0');
-            if (digits.Length == 0)
-            {
-                digits = "0";
-            }
-
+            // An integral "R" string: no leading zeros, and non-zero (0 returned above).
+            digits = g;
             exp = digits.Length - 1;
         }
 
-        // Drop leading zeros that could appear after trim anomalies
-        while (digits.Length > 1 && digits[0] == '0')
-        {
-            digits = digits[1..];
-            exp--;
-        }
-
         // Shortest mantissa: drop trailing zeros (1e+16 is "1", not "1000...0").
+        // A non-zero value always keeps at least one non-zero digit.
         digits = digits.TrimEnd('0');
-        if (digits.Length == 0)
-        {
-            digits = "0";
-        }
 
         var mant = digits.Length == 1 ? digits : digits[0] + "." + digits[1..];
         var expStr = exp >= 0
             ? "+" + exp.ToString(CultureInfo.InvariantCulture).PadLeft(2, '0')
             : "-" + (-exp).ToString(CultureInfo.InvariantCulture).PadLeft(2, '0');
-        var result = (neg ? "-" : "") + mant + "e" + expStr;
 
-        // Verify round-trip; if R→sci failed, fall back to high-precision e-format trim.
-        if (double.TryParse(result, NumberStyles.Float, CultureInfo.InvariantCulture, out var back) &&
-            BitConverter.DoubleToInt64Bits(back) == BitConverter.DoubleToInt64Bits(f))
-        {
-            return result;
-        }
-
-        return FallbackScientific(f);
+        // Same decimal digits and exponent as the round-trip "R" string, only
+        // re-spelled, so this parses back to f exactly (pinned by
+        // Coverage100CanonicalJsonTests over a large deterministic sample).
+        return (neg ? "-" : "") + mant + "e" + expStr;
     }
 
     private static string NormalizeScientificFromR(string g)
@@ -405,30 +386,6 @@ public static class CanonicalJson
             ? "+" + exp.ToString(CultureInfo.InvariantCulture).PadLeft(2, '0')
             : "-" + (-exp).ToString(CultureInfo.InvariantCulture).PadLeft(2, '0');
         return (neg ? "-" : "") + mant + "e" + expStr;
-    }
-
-    // Rare: only when R→scientific round-trip fails bit-exact equality. Unit tests
-    // cannot force a stable double that fails the primary path without flaky
-    // platform float behavior — excluded from the coverlet floor (same residual
-    // class as Makefile COVER_THRESHOLD notes).
-    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
-    private static string FallbackScientific(double f)
-    {
-        // Use enough digits then trim trailing zeros in mantissa.
-        var s = f.ToString("e17", CultureInfo.InvariantCulture);
-        // 1.00000000000000000e+000
-        var ePos = s.IndexOf('e');
-        var mant = s[..ePos];
-        var exp = int.Parse(s[(ePos + 1)..], CultureInfo.InvariantCulture);
-        if (mant.Contains('.'))
-        {
-            mant = mant.TrimEnd('0').TrimEnd('.');
-        }
-
-        var expStr = exp >= 0
-            ? "+" + Math.Abs(exp).ToString(CultureInfo.InvariantCulture).PadLeft(2, '0')
-            : "-" + Math.Abs(exp).ToString(CultureInfo.InvariantCulture).PadLeft(2, '0');
-        return mant + "e" + expStr;
     }
 
     private static string FormatFixed(string digits, int ndigits, int decpt)

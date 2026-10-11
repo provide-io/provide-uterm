@@ -83,13 +83,6 @@ public static class Identity
                 claims[k] = v;
             }
         }
-        else if (frame.GetValueOrDefault("claims") is Dictionary<string, object?> d)
-        {
-            foreach (var (k, v) in d)
-            {
-                claims[k] = v;
-            }
-        }
 
         var fingerprint = frame.GetValueOrDefault("fingerprint") as string ?? "";
 
@@ -329,14 +322,10 @@ public static class Identity
                     {
                         b.Append(r);
                     }
-                    else if (r > 0xffff)
-                    {
-                        var v = r - 0x10000;
-                        WriteUnicodeEscape(b, (char)(0xd800 + (v >> 10)));
-                        WriteUnicodeEscape(b, (char)(0xdc00 + (v & 0x3ff)));
-                    }
                     else
                     {
+                        // r is a UTF-16 char, so a supplementary code point
+                        // arrives as its two surrogates, each escaped here.
                         WriteUnicodeEscape(b, r);
                     }
 

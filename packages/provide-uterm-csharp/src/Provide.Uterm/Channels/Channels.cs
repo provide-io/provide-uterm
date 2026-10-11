@@ -139,17 +139,11 @@ public sealed class Negotiated
                 continue;
             }
 
+            // Dictionary<string, object?> is an IDictionary, so this one test
+            // accepts both the decoder's maps and any other dictionary.
             if (!ctrl.Control.TryGetValue("channels", out var channelsRaw) || channelsRaw is not IDictionary<string, object?> map)
             {
-                // also accept Dictionary
-                if (channelsRaw is Dictionary<string, object?> d)
-                {
-                    map = d;
-                }
-                else
-                {
-                    return null;
-                }
+                return null;
             }
 
             try

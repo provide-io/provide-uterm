@@ -163,14 +163,8 @@ public sealed class VtStream
         {
             _state = StOscCode;
         }
-        else if (r is CtrlNul or CtrlDel)
-        {
-            // ignored
-        }
-        else
-        {
-            _screen.Draw(char.ConvertFromUtf32(r));
-        }
+        // Otherwise NUL or DEL, ignored. Ground only ever sees IsSpecial runes:
+        // Feed draws every run of other runes as plain text before Send.
     }
 
     private void Escape(int r)

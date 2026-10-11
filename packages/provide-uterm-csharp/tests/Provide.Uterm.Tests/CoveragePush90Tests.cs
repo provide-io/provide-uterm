@@ -296,11 +296,9 @@ public class CoveragePush90Tests
     {
         var table = UnicodeWidthTables.WcwidthRanges;
         Assert.NotEmpty(table);
-        _ = Wcwidth.LookupRange(table, 'A');
-        _ = Wcwidth.LookupRange(table, 0x4e2d);
-        _ = Wcwidth.LookupRange(table, 0x10ffff);
-        _ = Wcwidth.LookupRange(table, -1);
-        Assert.True(Wcwidth.TryLookupRange(table, 'A', out _) || !Wcwidth.TryLookupRange(table, 'A', out _));
+        Assert.True(Wcwidth.TryLookupRange(table, 0x4e2d, out var wide));
+        Assert.Equal(2, wide);
+        Assert.False(Wcwidth.TryLookupRange(table, -1, out _));
         Assert.Equal(1, Wcwidth.RuneWidth('x'));
         Assert.True(Wcwidth.CombiningClass(0x0301) > 0);
         Assert.Equal(0, Wcwidth.CombiningClass('A'));

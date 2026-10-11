@@ -461,28 +461,22 @@ public class UshellDispatcherTests
         using var failClient = new HttpClient(failHttp);
         Assert.Contains("cannot fetch", Join(await new CommandDispatcher(client: failClient).DispatchAsync("render http://example.test/x")), StringComparison.Ordinal);
 
-        // Unreadable file → cannot fetch (Unix only; Windows residual is acceptable)
-        if (!OperatingSystem.IsWindows())
+        // A read that fails after the existence check → "cannot fetch". Provoked
+        // with an already-cancelled token rather than chmod 000: root reads a
+        // mode-000 file anyway, and Windows has no Unix modes, so the old
+        // approach only exercised this arm for non-root Unix users.
+        var readFail = Path.Combine(Path.GetTempPath(), "readfail-" + Guid.NewGuid().ToString("N"));
+        await File.WriteAllBytesAsync(readFail, new byte[] { 1 });
+        try
         {
-            var locked = Path.Combine(Path.GetTempPath(), "locked-" + Guid.NewGuid().ToString("N"));
-            await File.WriteAllBytesAsync(locked, new byte[] { 1 });
-            try
-            {
-#pragma warning disable CA1416 // UnixFileMode is Unix-only; gated above
-                File.SetUnixFileMode(locked, (UnixFileMode)0);
-                var msg = Join(await new CommandDispatcher().DispatchAsync("render file://" + locked));
-                Assert.True(
-                    msg.Contains("cannot fetch", StringComparison.Ordinal) ||
-                    msg.Contains("file not found", StringComparison.Ordinal) ||
-                    msg.Contains("Permission", StringComparison.OrdinalIgnoreCase),
-                    msg);
-                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-#pragma warning restore CA1416
-            }
-            finally
-            {
-                try { File.Delete(locked); } catch { /* best-effort */ }
-            }
+            using var cancelled = new CancellationTokenSource();
+            await cancelled.CancelAsync();
+            var msg = Join(await new CommandDispatcher().DispatchAsync("render file://" + readFail, cancelled.Token));
+            Assert.Contains("cannot fetch", msg, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(readFail);
         }
 
         // Directory as file:// → file not found

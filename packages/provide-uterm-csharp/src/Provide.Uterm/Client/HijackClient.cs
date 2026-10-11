@@ -403,8 +403,8 @@ public sealed class HijackClient : IDisposable
         JsonValueKind.Number => el.GetDouble(),
         JsonValueKind.True => true,
         JsonValueKind.False => false,
-        JsonValueKind.Null => null,
-        _ => el.ToString(),
+        // Null; Undefined only exists on a default(JsonElement), never a parsed one.
+        _ => null,
     };
 
     public void Dispose()

@@ -149,8 +149,8 @@ public static class ControlChannelCodec
             JsonValueKind.Number => NumberFromJson(el),
             JsonValueKind.True => true,
             JsonValueKind.False => false,
-            JsonValueKind.Null => null,
-            _ => el.GetRawText(),
+            // Null; Undefined only exists on a default(JsonElement), never a parsed one.
+            _ => null,
         };
 
     private static object NumberFromJson(JsonElement el)

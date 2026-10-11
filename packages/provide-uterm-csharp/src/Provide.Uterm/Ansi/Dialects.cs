@@ -47,11 +47,8 @@ internal static partial class Dialects
             return "\x1b[0m";
         }
 
-        if (!PreviewColorMap.TryGetValue(colorChar, out var code))
-        {
-            return "";
-        }
-
+        // Every TildeMap color is a PreviewColorMap key ("x" is handled above).
+        var code = PreviewColorMap[colorChar];
         return polarity == "+" ? $"\x1b[0;1;{code}m" : $"\x1b[0;{code}m";
     }
 
