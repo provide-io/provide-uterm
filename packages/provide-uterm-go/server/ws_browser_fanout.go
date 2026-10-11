@@ -54,9 +54,7 @@ func (s *Server) browserFanoutSend(ctx context.Context, bc *browserConn, msg map
 		"divergent_sessions": result.DivergentSessions,
 		"failed_sessions":    result.FailedSessions,
 	}
-	payload, err := encodeControlMap(frame)
-	if err != nil {
-		return
-	}
+	// Strings, ints, bools and string slices only: the encode cannot fail.
+	payload, _ := encodeControlMap(frame)
 	_ = bc.SendText(ctx, payload)
 }

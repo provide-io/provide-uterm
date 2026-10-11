@@ -139,17 +139,24 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	s.browserCleanup(bg, workerID, bc, owned)
 }
 
+// handshakeSend writes one handshake frame; swappable in tests, because a
+// socket that dies between the hello and the hijack-state frame cannot be
+// arranged on demand.
+var handshakeSend = func(ctx context.Context, bc *browserConn, payload string) error {
+	return bc.SendText(ctx, payload)
+}
+
 // browserHandshake sends the hello + hijack-state (+ initial snapshot) frames.
 // Returns false when a write fails (the socket is gone).
 func (s *Server) browserHandshake(ctx context.Context, conn *websocket.Conn, workerID string, bc *browserConn, role string, canHijack bool, state map[string]any) bool {
 	hello := s.buildHelloFrame(workerID, role, canHijack, state)
 	payload, err := encodeFrameControl(hello)
-	if err != nil || bc.SendText(ctx, payload) != nil {
+	if err != nil || handshakeSend(ctx, bc, payload) != nil {
 		return false
 	}
 	hijackState := s.deps.Hub.HijackStateMsgFor(ctx, workerID, bc)
 	if p, e := encodeFrameControl(hijackState); e == nil {
-		if bc.SendText(ctx, p) != nil {
+		if handshakeSend(ctx, bc, p) != nil {
 			return false
 		}
 	}

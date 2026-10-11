@@ -209,6 +209,14 @@ func (p *PamIntegration) createCaptureSession(ctx context.Context, ev pty.PamEve
 	})
 }
 
+// filepathAbs / filepathRel are filepath.Abs / filepath.Rel, swappable in
+// tests: Abs only fails when os.Getwd does, and Rel of two absolute paths on
+// one Unix volume never fails, so neither can be provoked on demand.
+var (
+	filepathAbs = filepath.Abs
+	filepathRel = filepath.Rel
+)
+
 // captureSocketConfined reports whether the capture socket lives under the
 // trusted base dir (explicit capture_socket_dir, else the notify socket's
 // parent). No configured base → no confinement (returns true), matching Python.
@@ -223,12 +231,12 @@ func (p *PamIntegration) captureSocketConfined(socket string) bool {
 	if base == "" {
 		return true
 	}
-	resolved, err := filepath.Abs(socket)
+	resolved, err := filepathAbs(socket)
 	if err != nil {
 		p.logger.Warn("pam_capture_socket_confined_resolve_failed", "socket", socket)
 		return false
 	}
-	trusted, err := filepath.Abs(base)
+	trusted, err := filepathAbs(base)
 	if err != nil {
 		p.logger.Warn("pam_capture_socket_confined_resolve_failed", "dir", base)
 		return false

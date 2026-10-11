@@ -11,7 +11,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -497,9 +496,9 @@ func webhookView(e *webhookEntry) map[string]any {
 // standing between a caller and someone else's webhook record.
 func newWebhookID() string {
 	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil { // pragma: no cover — crypto/rand does not fail on supported platforms
-		panic(errors.New("server: webhook id entropy unavailable"))
-	}
+	// crypto/rand.Read never returns an error (Go >= 1.24 crashes the program
+	// irrecoverably instead), so there is nothing to handle.
+	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
 }
 

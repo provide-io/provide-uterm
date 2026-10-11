@@ -72,9 +72,7 @@ func (s *Server) rateLimitBrowserFrame(
 // socket is gone; the recv loop will observe it). Mirrors
 // websocket.send_text(encode_control_frame(make_error_frame(message))).
 func (s *Server) sendControlErr(ctx context.Context, sender browserErrSender, message string) {
-	payload, err := encodeFrameControl(frames.MakeErrorFrame(message))
-	if err != nil {
-		return
-	}
+	// An error frame is a string-only struct of the right type: it always encodes.
+	payload, _ := encodeFrameControl(frames.MakeErrorFrame(message))
 	_ = sender.SendText(ctx, payload)
 }

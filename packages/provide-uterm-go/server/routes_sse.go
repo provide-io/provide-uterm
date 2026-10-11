@@ -11,8 +11,9 @@ import (
 	"time"
 )
 
-// sseHeartbeatInterval matches the Python _HEARTBEAT_S.
-const sseHeartbeatInterval = 15 * time.Second
+// sseHeartbeatInterval matches the Python _HEARTBEAT_S. A var so tests can
+// observe a heartbeat without waiting 15 s.
+var sseHeartbeatInterval = 15 * time.Second
 
 // registerSSERoutes wires the SSE event stream. Port of sse.py.
 func (s *Server) registerSSERoutes(mux *http.ServeMux) {

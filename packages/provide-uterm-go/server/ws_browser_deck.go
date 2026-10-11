@@ -80,9 +80,6 @@ func (s *Server) deckOnConnect(ctx context.Context, bc *browserConn, workerID, r
 	if err != nil {
 		s.logger.Debug("deckmux_connect_failed", "worker_id", workerID, "error", err)
 	}
-	if sync == nil {
-		return
-	}
 	payload, e := encodeControlMap(sync)
 	if e != nil {
 		return

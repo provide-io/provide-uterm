@@ -429,7 +429,7 @@ func (s *Server) buildLitevirtSession(
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	client, err := vnc.NewLitevirtAIClient(ctx, cc, vmName)
+	client, err := newLitevirtSession(ctx, cc, vmName)
 	if err != nil {
 		cancel()
 		_ = cc.Close()
@@ -450,7 +450,7 @@ func (s *Server) buildLitevirtSession(
 		// Drain the loop goroutine.
 		select {
 		case <-done:
-		case <-time.After(time.Second):
+		case <-time.After(litevirtDrainTimeout):
 		}
 		s.logger.Info("gui_attach_handshake_failed", "target", target.TargetID, "error", err.Error())
 		detailError(w, http.StatusBadGateway, attachHandshakeFailed)
