@@ -135,37 +135,51 @@ public sealed class Coverage100ServerMiscTests
     [Fact]
     public async Task Static_ui_serves_terminal_html_then_the_built_in_shell()
     {
-        var fe = Directory.CreateTempSubdirectory("fe-");
+        // Two frontend dirs rather than deleting terminal.html between requests:
+        // Kestrel can still hold the file it just streamed, and Windows refuses
+        // to delete an open file.
+        var withTerminal = Directory.CreateTempSubdirectory("fe-");
+        var empty = Directory.CreateTempSubdirectory("fe-");
         try
         {
-            await File.WriteAllTextAsync(Path.Combine(fe.FullName, "terminal.html"), "<p>terminal</p>");
-            await using var s = await C100Server.StartAsync(new C100Server.Options
+            await File.WriteAllTextAsync(Path.Combine(withTerminal.FullName, "terminal.html"), "<p>terminal</p>");
+            await using (var s = await StartWithFrontend(withTerminal.FullName))
             {
-                Deps = (cfg, hub) =>
-                {
-                    var d = C100Server.Default(cfg, hub);
-                    d.Metrics.Increment("c100_counter", 3);
-                    return new ServerDeps
-                    {
-                        Hub = d.Hub, Auth = d.Auth, Authz = d.Authz, Config = d.Config, Registry = d.Registry,
-                        ApiKeys = d.ApiKeys, Profiles = d.Profiles, Version = d.Version, FrontendDir = fe.FullName,
-                        Metrics = d.Metrics,
-                    };
-                },
-            });
-            using var admin = s.Http(s.AdminToken);
-            Assert.Contains("terminal", await admin.GetStringAsync("/app/x"), StringComparison.Ordinal);
-            File.Delete(Path.Combine(fe.FullName, "terminal.html"));
-            Assert.Contains("<html", await admin.GetStringAsync("/app/x"), StringComparison.OrdinalIgnoreCase);
+                using var admin = s.Http(s.AdminToken);
+                Assert.Contains("terminal", await admin.GetStringAsync("/app/x"), StringComparison.Ordinal);
 
-            var prom = await admin.GetStringAsync("/api/metrics/prometheus");
-            Assert.Contains("# TYPE c100_counter counter\nc100_counter 3\n", prom, StringComparison.Ordinal);
+                var prom = await admin.GetStringAsync("/api/metrics/prometheus");
+                Assert.Contains("# TYPE c100_counter counter\nc100_counter 3\n", prom, StringComparison.Ordinal);
+            }
+
+            await using (var s = await StartWithFrontend(empty.FullName))
+            {
+                using var admin = s.Http(s.AdminToken);
+                Assert.Contains("<html", await admin.GetStringAsync("/app/x"), StringComparison.OrdinalIgnoreCase);
+            }
         }
         finally
         {
-            fe.Delete(recursive: true);
+            withTerminal.Delete(recursive: true);
+            empty.Delete(recursive: true);
         }
     }
+
+    private static Task<C100Server> StartWithFrontend(string frontendDir) =>
+        C100Server.StartAsync(new C100Server.Options
+        {
+            Deps = (cfg, hub) =>
+            {
+                var d = C100Server.Default(cfg, hub);
+                d.Metrics.Increment("c100_counter", 3);
+                return new ServerDeps
+                {
+                    Hub = d.Hub, Auth = d.Auth, Authz = d.Authz, Config = d.Config, Registry = d.Registry,
+                    ApiKeys = d.ApiKeys, Profiles = d.Profiles, Version = d.Version, FrontendDir = frontendDir,
+                    Metrics = d.Metrics,
+                };
+            },
+        });
 
     [Fact]
     public async Task Lazy_webhooks_stamp_deliveries_and_refuse_loopback_while_a_share_is_live()
