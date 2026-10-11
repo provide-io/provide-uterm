@@ -134,6 +134,19 @@ ANNOTATED_SCRIPT: list[list[Any]] = [
     ["outbound", {"type": "snapshot", "screen": "$ kubectl delete pod web\n$ ", "ts": 9.25}],
     ["outbound", {"type": "term", "data": "building...\r\n", "ts": 9.5}],
     ["outbound", {"type": "term", "data": "$ kubectl delete pod web\r\n", "ts": 9.75}],
+    # Credentials on a command line never reach an annotation description:
+    # the {match} rules (conn.curl/conn.wget) see the match masked BEFORE the
+    # 80-character cut, on the send path and on the read path alike.
+    [
+        "send",
+        "curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl' https://api.example.com\r",
+    ],
+    ["send", "curl -d key=AKIAIOSFODNN7EXAMPLE https://x.example\r"],
+    ["send", "wget --header=X-Gh:ghp_" + "Ab1" * 12 + " https://api.github.com/x\r"],
+    ["send", "curl -d 'user=bob&password=hunter2-correct-horse' https://login.example\r"],
+    ["send", "curl -d " + "x" * 61 + "=AKIAIOSFODNN7EXAMPLE https://x.example\r"],
+    ["outbound", {"type": "term", "data": "$ curl -u alice:hunter2 https://x.example\r\n", "ts": 11.25}],
+    ["outbound", {"type": "snapshot", "screen": "$ wget --password=hunter2 https://y.example\n$ ", "ts": 11.5}],
     ["outbound", {"type": "hijack_state", "enabled": True, "owner": "ops"}],
 ]
 

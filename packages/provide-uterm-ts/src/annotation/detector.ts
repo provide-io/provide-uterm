@@ -13,6 +13,7 @@
  * itself ends up in the annotation, which flows to telemetry and logs.
  */
 
+import { maskSecrets } from "./masking.ts";
 import { type Annotation, annotationMatchKey, type DetectionRule } from "./models.ts";
 import { BUILTIN_RULES } from "./rules.ts";
 
@@ -97,7 +98,10 @@ export class PatternDetector {
 
       seenCategories.add(rule.category);
       matchEnd = Math.max(matchEnd, match.index + match[0].length);
-      const matchText = match[0].slice(0, DESCRIPTION_TRUNCATE);
+      // Mask credential-shaped text in the FULL match, then cut: cutting first
+      // could leave the head of a key too short to be recognised. The rule is
+      // in masking.ts; the match key below still hashes the raw match.
+      const matchText = maskSecrets(match[0]).slice(0, DESCRIPTION_TRUNCATE);
       // A malformed template must not leak the raw match — which is the
       // secret — into a description that flows to telemetry and logs.
       const description =

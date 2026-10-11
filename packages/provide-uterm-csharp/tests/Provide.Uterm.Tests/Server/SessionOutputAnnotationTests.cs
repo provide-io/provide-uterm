@@ -236,8 +236,11 @@ public sealed class SessionOutputAnnotationTests
     }
 
     [Fact]
-    public async Task WithRedactionOffAnAutomaticAnnotationIsRecordedAsDetected()
+    public async Task WithRedactionOffAnAutomaticAnnotationStillCarriesNoCredential()
     {
+        // Redaction off records what was detected, but the detector itself masks
+        // credential-shaped text before embedding a match (SecretMasking): this
+        // used to record the token in clear.
         var (server, hub, store) = await StartAsync(recording: true, redact: false);
         await using (server)
         {
@@ -246,7 +249,8 @@ public sealed class SessionOutputAnnotationTests
             await worker.SendTextAsync($"curl -H token={Token} https://example.com\r");
 
             var recorded = await RecordedAnnotationsAsync(store);
-            Assert.Contains(recorded, d => (string)d["description"]! == $"curl HTTP request detected: curl -H token={Token} https://");
+            Assert.Contains(recorded, d => (string)d["description"]! == "curl HTTP request detected: curl -H token=[SECRET] https://");
+            Assert.All(recorded, d => Assert.DoesNotContain(Token, (string)d["description"]!));
         }
     }
 

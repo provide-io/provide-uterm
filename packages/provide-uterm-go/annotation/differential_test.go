@@ -34,6 +34,14 @@ type diffGolden struct {
 		Chunks   []diffChunk        `json:"chunks"`
 		Outputs  [][]map[string]any `json:"outputs"`
 	} `json:"stream_cases"`
+	Masks struct {
+		Marker   string   `json:"marker"`
+		Patterns []string `json:"patterns"`
+		Cases    []struct {
+			Text   string `json:"text"`
+			Masked string `json:"masked"`
+		} `json:"cases"`
+	} `json:"masks"`
 }
 
 func loadAnnotationGolden(t *testing.T) diffGolden {
@@ -102,6 +110,26 @@ func TestDifferentialStreaming(t *testing.T) {
 			if got != want {
 				t.Errorf("stream case %d chunk %d mismatch\n got: %s\nwant: %s", ci, i, got, want)
 			}
+		}
+	}
+}
+
+// TestDifferentialMasks pins the masking rule to the reference: the marker, the
+// pattern strings byte for byte and in order, and what they make of each case.
+func TestDifferentialMasks(t *testing.T) {
+	g := loadAnnotationGolden(t)
+	if g.Masks.Marker != SecretMarker {
+		t.Errorf("marker: got %q want %q", SecretMarker, g.Masks.Marker)
+	}
+	if canonicalJSON(t, SecretMaskPatterns) != canonicalJSON(t, g.Masks.Patterns) {
+		t.Errorf("patterns differ from the reference\n got: %q\nwant: %q", SecretMaskPatterns, g.Masks.Patterns)
+	}
+	if len(g.Masks.Cases) == 0 {
+		t.Fatal("no mask cases in golden")
+	}
+	for _, c := range g.Masks.Cases {
+		if got := MaskSecrets(c.Text); got != c.Masked {
+			t.Errorf("MaskSecrets(%q) = %q, want %q", c.Text, got, c.Masked)
 		}
 	}
 }
