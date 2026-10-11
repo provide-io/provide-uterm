@@ -153,6 +153,13 @@ describe("building the frame a worker's snapshot becomes", () => {
     });
   });
 
+  it.each([["3"], [1.5], [true]])("drops a count that is not an integer, %j, rather than guessing", (value) => {
+    expect(workerSnapshotFrame({ chunks_read: value, bytes_read: value }, 0)).toMatchObject({
+      chunks_read: null,
+      bytes_read: null,
+    });
+  });
+
   it("refuses a size that would render as nothing, rather than passing it on", () => {
     const frame = workerSnapshotFrame({ cols: 0, rows: "many", ts: "soon" }, 7);
     expect(frame).toMatchObject({ cols: 80, rows: 25, ts: 7 });
@@ -219,7 +226,10 @@ describe("attaching", () => {
     // The connector's own `ts` of 1 is kept — `safeFloat` only falls back for
     // a value it cannot read — so the clock shows up on a message without one.
     await socketOf(hub, "w1").sendText(encodeControlFrame({ type: "snapshot_req" }));
-    expect(Number((await hub.getLastSnapshot("w1"))?.ts)).toBeGreaterThanOrEqual(before);
+    const ts = Number((await hub.getLastSnapshot("w1"))?.ts);
+    // Seconds, as every instant on this wire is — not milliseconds.
+    expect(ts).toBeGreaterThanOrEqual(before);
+    expect(ts).toBeLessThan(before + 60);
   });
 
   it("records a screen carrying no detected prompt without inventing one", async () => {

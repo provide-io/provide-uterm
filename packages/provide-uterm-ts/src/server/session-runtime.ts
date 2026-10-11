@@ -248,7 +248,14 @@ export class SessionRuntimes {
       // been started would be refused every acquire with `no_worker`.
       this.#attached.set(
         sessionId,
-        await attachConnector(this.#hub, sessionId, connector, definition.input_mode, { now: this.#now, recording }),
+        await attachConnector(this.#hub, sessionId, connector, definition.input_mode, {
+          now: this.#now,
+          recording,
+          // A failure the attachment survives is kept as `last_error`, as the
+          // reference's run loop keeps it in `_last_error`: the session stays
+          // up, and a client can still see what went wrong.
+          onError: (error) => this.#registry.setState(sessionId, { last_error: error }),
+        }),
       );
       this.#registry.setState(sessionId, { lifecycle_state: "running", connected: true });
     } catch (error) {
@@ -293,18 +300,45 @@ export class SessionRuntimes {
    * server that stopped listening would still be holding whatever they hold.
    */
   async stopAll(): Promise<void> {
+    /** The first thing that failed on the way down, thrown once all are down. */
+    let failure: { error: unknown } | undefined;
     for (const [sessionId, connector] of this.#connectors) {
-      // Detached before it is stopped, so nothing can take a lease on a
-      // worker whose connector is on its way down.
-      await this.#attached.get(sessionId)?.detach();
-      // Closed before the connector, as the reference closes the recording
-      // with the worker connection and only then stops the connector.
-      // Present: a session's recording is made before its connector is held.
-      await (this.#recordings.get(sessionId) as SessionRecording).stop();
-      await connector.stop();
-      this.#registry.setState(sessionId, { lifecycle_state: "stopped", connected: false, stopped_at: this.#now() });
+      let lastError: string | undefined;
+      try {
+        // Detached before it is stopped, so nothing can take a lease on a
+        // worker whose connector is on its way down.
+        await this.#attached.get(sessionId)?.detach();
+        // Closed before the connector, as the reference closes the recording
+        // with the worker connection and only then stops the connector.
+        // Present: a session's recording is made before its connector is held.
+        await (this.#recordings.get(sessionId) as SessionRecording).stop();
+      } catch (error) {
+        // A final flush that failed (disk full, EACCES) still has to let the
+        // connector go: otherwise the PTY or ssh process it holds outlives
+        // the server, and the session reads "running, connected" with nothing
+        // behind it. The reference's `stop()` raises the same error out of
+        // `_stop_recording` — before it reaches `_discard_connector` or the
+        // state update, which is the leak. Here the error is kept as
+        // `last_error`, the rest of the stop goes ahead, and it is raised once
+        // every session is down.
+        lastError = errorText(error);
+        failure ??= { error };
+      } finally {
+        // The reference's `_discard_connector`, which suppresses a connector
+        // that fails to stop: the session is going down either way.
+        await connector.stop().catch(() => undefined);
+        this.#registry.setState(sessionId, {
+          lifecycle_state: "stopped",
+          connected: false,
+          stopped_at: this.#now(),
+          ...(lastError === undefined ? {} : { last_error: lastError }),
+        });
+      }
     }
     this.#attached.clear();
     this.#connectors.clear();
+    if (failure !== undefined) {
+      throw failure.error;
+    }
   }
 }

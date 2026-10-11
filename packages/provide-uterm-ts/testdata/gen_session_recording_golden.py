@@ -21,7 +21,9 @@ A second script runs with the reference's ``PatternDetector`` attached, which
 is how the server factory builds every runtime: each match is an
 ``annotation`` entry. Read-path rules run on each snapshot's screen, on each
 streamed ``term`` frame with escape sequences removed (carrying a partial
-match across frames), and send-path rules on typed input (carrying likewise). Every ``ts`` in the script has a
+match, and an unterminated escape sequence, across frames), and send-path
+rules on typed input (carrying likewise). The snapshot path skips a read-path
+match this recording already holds, from the stream or an earlier snapshot. Every ``ts`` in the script has a
 fractional part: an integral float is ``4.0`` on CPython's wire and ``4`` on
 JavaScript's, a difference in number models rather than in recording, and a
 connector's stamps are never integral anyway. Wall-clock ``ts`` fields and the
@@ -63,6 +65,10 @@ SCRIPT: list[list[Any]] = [
     ["outbound", {"type": "snapshot", "screen": "Enter PASSPHRASE for key:\n\n", "ts": 4.75}],
     # Masked by length in cp437, where an accented letter is one byte.
     ["send", "s3crét"],
+    # A rendered prompt row ends in a reset: the escape code is stripped before
+    # the prompt check, so the typed password is still masked.
+    ["outbound", {"type": "snapshot", "screen": "\x1b[1msudo\x1b[0m password for tim: \x1b[0m", "ts": 5.25}],
+    ["send", "pw\r"],
     # Not a prompt: the colon is not at the end of what is on screen.
     ["outbound", {"type": "snapshot", "screen": "$ echo password=hunter2 done\n$ ", "ts": 5.5}],
     ["send", "export AWS=AKIAIOSFODNN7EXAMPLE\r"],
@@ -89,7 +95,20 @@ ANNOTATED_SCRIPT: list[list[Any]] = [
     ["outbound", {"type": "term", "data": "", "ts": 2.8}],
     # A whole screen is scanned on its own, several categories at once.
     ["outbound", {"type": "snapshot", "screen": f"# rm -rf /tmp/x\n# echo {_KEY}\n# ", "ts": 3.5}],
-    ["outbound", {"type": "snapshot", "screen": "Password: ", "ts": 4.5}],
+    # The same screen again records no annotation twice: the snapshot path
+    # skips a match an earlier snapshot (or the stream) already recorded.
+    ["outbound", {"type": "snapshot", "screen": f"# rm -rf /tmp/x\n# echo {_KEY}\n# ", "ts": 3.75}],
+    # An escape sequence split across frames is carried and stripped whole, so
+    # the styled word after it still matches; the stream records it ...
+    ["outbound", {"type": "term", "data": "$ \x1b[1", "ts": 4.0}],
+    ["outbound", {"type": "term", "data": "msudo\x1b[0m rm x\r\n", "ts": 4.1}],
+    # ... and the snapshot of the same (styled) text skips it as already seen.
+    ["outbound", {"type": "snapshot", "screen": "$ \x1b[1msudo\x1b[0m rm x\n$ ", "ts": 4.2}],
+    # A run of escape-looking bytes past the carry bound is released, not held.
+    ["outbound", {"type": "term", "data": "\x1b[" + "1;" * 40, "ts": 4.3}],
+    ["outbound", {"type": "term", "data": "mDROP TABLE t;", "ts": 4.4}],
+    # A trailing reset does not hide the prompt from the check.
+    ["outbound", {"type": "snapshot", "screen": "Password: \x1b[0m", "ts": 4.5}],
     # Masked in the recording, and still annotated: the reference scans the
     # input itself, not what it wrote.
     ["send", "shutdown now\r"],
