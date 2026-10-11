@@ -147,7 +147,10 @@ export function addBounded(keys: Set<string>, key: string): void {
  * different AWS keys, which share a label and a description (credential rules
  * never embed the match), are two keys — and it is a digest, so the dedupe
  * sets never hold a raw secret. An annotation the detector did not make has
- * none, and keys as the empty string, as the reference's default does.
+ * none, and keys as the empty string, as the reference's default does — and
+ * an empty key is never deduped: it is recorded every time and added to
+ * neither set, since it would otherwise collapse every such annotation into
+ * one.
  */
 export function readAnnotationKey(annotation: Annotation): string {
   return annotation.matchKey ?? "";
@@ -208,6 +211,7 @@ export class SessionRecording {
    *   path.
    * - `#snapshotOnlyKeys`: keys the SNAPSHOT path recorded since the last
    *   processed stream chunk.
+   * - An EMPTY key is never deduped: always recorded, added to neither set.
    * - Snapshot match: key in `#readAnnotationKeys` → skip. Otherwise record
    *   it and add the key to BOTH sets.
    * - Stream chunk (non-empty, while recording): for each match, key in
@@ -230,6 +234,8 @@ export class SessionRecording {
    */
   readonly #readAnnotationKeys = new Set<string>();
   readonly #snapshotOnlyKeys = new Set<string>();
+  /** The last frame {@link logOutbound} queued, settled either way. */
+  #outbound: Promise<void> = Promise.resolve();
 
   constructor(
     sessionId: string,
@@ -309,7 +315,21 @@ export class SessionRecording {
    * In `wire` mode the encoded frame, and the message itself unless it is
    * terminal output; then, for a snapshot, the screen.
    */
-  async logOutbound(message: WorkerMessage): Promise<void> {
+  logOutbound(message: WorkerMessage): Promise<void> {
+    // One frame at a time, in the order they were handed over. The traffic
+    // paths call this concurrently — the poll loop, typed input's echo, the
+    // link's replies — and the reference handles its frames strictly one
+    // after another. Interleaved, a stream chunk awaiting its annotation write
+    // would clear the pending key a snapshot recorded in the meantime, and the
+    // next chunk would record that match a second time. A frame that fails
+    // fails its own caller and does not stop the frames queued behind it.
+    const run = this.#outbound.then(() => this.#logOutboundNow(message));
+    this.#outbound = run.catch(() => undefined);
+    return run;
+  }
+
+  /** {@link logOutbound}, once every frame handed over before it is done. */
+  async #logOutboundNow(message: WorkerMessage): Promise<void> {
     const type = message.type;
     // One reading of the data, for the wire entry and the scan alike.
     const data = String(message.data ?? "");
@@ -375,11 +395,15 @@ export class SessionRecording {
       // stream or an earlier snapshot already recorded is skipped; a new one
       // is recorded and left pending for the next stream chunk.
       const key = readAnnotationKey(annotation);
-      if (this.#readAnnotationKeys.has(key)) {
-        continue;
+      // An empty key identifies nothing — an annotation the detector did not
+      // key — so it is never deduped: recorded, and kept out of both sets.
+      if (key !== "") {
+        if (this.#readAnnotationKeys.has(key)) {
+          continue;
+        }
+        addBounded(this.#readAnnotationKeys, key);
+        addBounded(this.#snapshotOnlyKeys, key);
       }
-      addBounded(this.#readAnnotationKeys, key);
-      addBounded(this.#snapshotOnlyKeys, key);
       await logger.logEvent("annotation", annotationToWire(annotation));
     }
   }
@@ -416,10 +440,14 @@ export class SessionRecording {
     this.#escapeCarry = carry;
     for (const annotation of stream.detect("read", stripAnsi(text), this.#eventSeq)) {
       const key = readAnnotationKey(annotation);
-      if (this.#snapshotOnlyKeys.delete(key)) {
-        continue;
+      // An empty key is never deduped, and never remembered (see the snapshot
+      // path): it cannot be in the pending set, so it is always recorded.
+      if (key !== "") {
+        if (this.#snapshotOnlyKeys.delete(key)) {
+          continue;
+        }
+        addBounded(this.#readAnnotationKeys, key);
       }
-      addBounded(this.#readAnnotationKeys, key);
       await logger.logEvent("annotation", annotationToWire(annotation));
     }
     // Pending snapshot keys expire with the first chunk after the snapshot,

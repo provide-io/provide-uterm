@@ -259,27 +259,240 @@ describe("a start that fails after its connector came up", () => {
   });
 });
 
+/** A promise to resolve by hand, and one that settles when it is first awaited on. */
+function gate() {
+  let open: () => void = () => {};
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  let reach: () => void = () => {};
+  const reached = new Promise<void>((resolve) => {
+    reach = resolve;
+  });
+  return {
+    opened,
+    open,
+    reached,
+    /** Note it was reached, then wait to be let through. */
+    wait: () => {
+      reach();
+      return opened;
+    },
+  };
+}
+
 describe("a shutdown while a session is still attaching", () => {
-  it("closes what is open and stops the connector, with no attachment yet to take off", async () => {
+  it("takes the worker off the hub, closes the recording and stops the connector, and says nothing failed", async () => {
     const store = new FailingStore();
     const connector = new CountingConnector();
-    let attaching: () => void = () => {};
-    const reached = new Promise<void>((resolve) => {
-      attaching = resolve;
-    });
+    const snapshot = gate();
     // The seed screen never arrives, so the attachment never finishes.
     connector.getSnapshot = () => {
-      attaching();
+      void snapshot.wait();
       return new Promise(() => {});
     };
-    const { registry, runtimes } = runtimesOver(store, { one: connector });
+    const { registry, runtimes, hub } = runtimesOver(store, { one: connector });
     void runtimes.start("one");
-    await reached;
+    await snapshot.reached;
+    expect(hub.registry.get("one")?.workerWs).toBeDefined();
 
     await expect(runtimes.stopAll()).resolves.toBeUndefined();
     expect(connector.stopped).toBe(1);
+    expect(runtimes.connector("one")).toBeUndefined();
+    expect(hub.registry.get("one")).toBeUndefined();
     expect((await store.getEntries("one")).map((entry) => entry.event).at(-1)).toBe("log_stop");
-    expect(registry.status("one")).toMatchObject({ lifecycle_state: "stopped", connected: false });
+    expect(registry.status("one")).toMatchObject({
+      lifecycle_state: "stopped",
+      connected: false,
+      last_error: null,
+      stopped_at: 1_700_000_000,
+    });
+  });
+
+  it("is waited out while the connector is still starting, which then comes straight back down", async () => {
+    const store = new FailingStore();
+    const connector = new CountingConnector();
+    const starting = gate();
+    connector.start = () => starting.wait();
+    const { registry, runtimes, hub } = runtimesOver(store, { one: connector });
+    const started = runtimes.start("one");
+    await starting.reached;
+
+    let stopped = false;
+    const stopping = runtimes.stopAll().then(() => {
+      stopped = true;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    // Not done: the connector's own start cannot be cancelled, only waited for.
+    expect(stopped).toBe(false);
+    starting.open();
+    await stopping;
+    await started;
+
+    expect(connector.stopped).toBe(1);
+    expect(runtimes.connector("one")).toBeUndefined();
+    expect(hub.registry.get("one")).toBeUndefined();
+    // Never opened: the shutdown came before the recording would have.
+    expect(await store.getEntries("one")).toStrictEqual([]);
+    expect(registry.status("one")).toMatchObject({ lifecycle_state: "stopped", connected: false, last_error: null });
+  });
+
+  it("closes a recording that opened while it was being stopped", async () => {
+    const store = new FailingStore();
+    const opening = gate();
+    const startSession = store.startSession.bind(store);
+    store.startSession = async (sessionId, metadata) => {
+      await opening.wait();
+      await startSession(sessionId, metadata);
+    };
+    const connector = new CountingConnector();
+    const { registry, runtimes, hub } = runtimesOver(store, { one: connector });
+    void runtimes.start("one");
+    await opening.reached;
+    const stopping = runtimes.stopAll();
+    opening.open();
+    await stopping;
+
+    expect(connector.stopped).toBe(1);
+    expect(hub.registry.get("one")).toBeUndefined();
+    expect((await store.getEntries("one")).map((entry) => entry.event)).toStrictEqual(["log_start", "log_stop"]);
+    expect(registry.status("one")).toMatchObject({ lifecycle_state: "stopped", last_error: null });
+  });
+
+  it("takes back an attachment that finished just as the shutdown began", async () => {
+    const store = new FailingStore();
+    const connector = new CountingConnector();
+    const { registry, runtimes, hub } = runtimesOver(store, { one: connector });
+    let stopping: Promise<void> | undefined;
+    // The poll loop's first poll is made as the attachment returns: the
+    // shutdown starts there, after the attachment can see it.
+    connector.pollMessages = () => {
+      stopping ??= runtimes.stopAll();
+      return new Promise(() => {});
+    };
+    await runtimes.start("one");
+    await stopping;
+
+    expect(connector.stopped).toBe(1);
+    expect(runtimes.connector("one")).toBeUndefined();
+    expect(hub.registry.get("one")).toBeUndefined();
+    expect((await store.getEntries("one")).map((entry) => entry.event).at(-1)).toBe("log_stop");
+    expect(registry.status("one")).toMatchObject({ lifecycle_state: "stopped", connected: false, last_error: null });
+  });
+});
+
+describe("an attachment taken back as the shutdown began", () => {
+  it("still comes down when taking it off the hub fails", async () => {
+    const connector = new CountingConnector();
+    const { registry, runtimes, hub } = runtimesOver(new FailingStore(), { one: connector });
+    hub.pruneIfIdle = async () => {
+      throw new Error("prune failed");
+    };
+    let stopping: Promise<void> | undefined;
+    connector.pollMessages = () => {
+      stopping ??= runtimes.stopAll();
+      return new Promise(() => {});
+    };
+    await runtimes.start("one");
+    await expect(stopping).resolves.toBeUndefined();
+    expect(connector.stopped).toBe(1);
+    expect(registry.status("one")).toMatchObject({ lifecycle_state: "stopped", last_error: null });
+  });
+});
+
+describe("a start for a session nobody defined", () => {
+  it("touches no state at all", async () => {
+    const { registry, runtimes } = runtimesOver(new FailingStore(), {});
+    const setState = vi.spyOn(registry, "setState");
+    await runtimes.start("ghost");
+    expect(setState).not.toHaveBeenCalled();
+  });
+});
+
+describe("two starts at once", () => {
+  it("bring the session up once, the second joining the first", async () => {
+    const store = new FailingStore();
+    const connector = new CountingConnector();
+    const starting = gate();
+    connector.start = () => starting.wait();
+    let built = 0;
+    const registry = new SessionRegistry(
+      [sessionDefinitionFrom({ session_id: "one" }, "2026-01-01T00:00:00.000Z")],
+      true,
+    );
+    const runtimes = new SessionRuntimes(registry, new SessionHub(), {
+      build: () => {
+        built += 1;
+        return connector;
+      },
+      now: () => 1_700_000_000,
+      recordingStore: store,
+    });
+
+    const first = runtimes.start("one");
+    const second = runtimes.start("one");
+    expect(second).toBe(first);
+    await starting.reached;
+    starting.open();
+    await Promise.all([first, second]);
+
+    expect(built).toBe(1);
+    expect(runtimes.connector("one")).toBe(connector);
+    expect(registry.status("one")).toMatchObject({ lifecycle_state: "running", connected: true });
+    // A start once it is up is a no-op, not a join.
+    await runtimes.start("one");
+    expect(built).toBe(1);
+    await runtimes.stopAll();
+    expect(connector.stopped).toBe(1);
+  });
+
+  it("let a later start through once the first has failed", async () => {
+    const connector = new CountingConnector();
+    const snapshot = connector.getSnapshot.bind(connector);
+    connector.getSnapshot = async () => {
+      throw new Error("no screen");
+    };
+    const { registry, runtimes } = runtimesOver(new FailingStore(), { one: connector });
+    await runtimes.start("one");
+    expect(registry.status("one")).toMatchObject({ lifecycle_state: "stopped", last_error: "no screen" });
+    connector.getSnapshot = snapshot;
+    await runtimes.start("one");
+    expect(registry.status("one")).toMatchObject({ lifecycle_state: "running" });
+    await runtimes.stopAll();
+  });
+});
+
+describe("a recording that fails as the session starts", () => {
+  it("is reported as last_error, and the session runs anyway", async () => {
+    const store = new FailingStore();
+    store.failing = true;
+    const connector = new CountingConnector();
+    const registry = new SessionRegistry(
+      [sessionDefinitionFrom({ session_id: "one" }, "2026-01-01T00:00:00.000Z")],
+      true,
+    );
+    const hub = new SessionHub();
+    // Every write flushed at once, so the attach's own writes are the ones
+    // that fail.
+    const flushing = new SessionRuntimes(registry, hub, {
+      build: () => connector,
+      now: () => 1_700_000_000,
+      recordingStore: store,
+      recordingSettings: recordingSettingsFrom({
+        ...(SERVER_CONFIG_DEFAULTS.recording as Record<string, unknown>),
+        flush_interval_s: 3600,
+        flush_batch_size: 1,
+      }),
+    });
+    await flushing.start("one");
+    expect(registry.status("one")).toMatchObject({
+      lifecycle_state: "running",
+      connected: true,
+      last_error: "EACCES: one",
+    });
+    expect(hub.registry.get("one")?.workerWs).toBeDefined();
+    store.failing = false;
+    await flushing.stopAll();
   });
 });
 

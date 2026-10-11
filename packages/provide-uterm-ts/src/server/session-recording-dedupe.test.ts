@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { PatternDetector } from "../annotation/index.ts";
+import { type Annotation, PatternDetector } from "../annotation/index.ts";
 import { InMemoryRecordingStore } from "../recording/index.ts";
 import { SERVER_CONFIG_DEFAULTS } from "../serverconfig/index.ts";
 import { addBounded, MAX_READ_ANNOTATION_KEYS, recordingSettingsFrom, SessionRecording } from "./session-recording.ts";
@@ -135,5 +135,106 @@ describe("the bound on a key set", () => {
     expect(keys.size).toBe(MAX_READ_ANNOTATION_KEYS);
     addBounded(keys, "next");
     expect([...keys]).toStrictEqual(["next"]);
+  });
+});
+
+/** A detector reporting one annotation per word: keyed by the word, unkeyed for `_`. */
+function wordDetector(): PatternDetector {
+  const each = (text: string): Annotation[] =>
+    text
+      .split(/\s+/)
+      .filter((word) => word !== "")
+      .map((word) => ({
+        label: "word",
+        description: word,
+        severity: "info",
+        source: "t",
+        principal: "",
+        ...(word === "_" ? {} : { matchKey: word }),
+      }));
+  return {
+    detect: (_eventType: string, text: string) => each(text),
+    scan: (_eventType: string, text: string) => ({ annotations: each(text), matchEnd: text.length }),
+  } as unknown as PatternDetector;
+}
+
+/** An open recording over `detector`, flushed per entry. */
+async function recordingWith(detector: PatternDetector, store = new InMemoryRecordingStore()) {
+  const settings = recordingSettingsFrom({
+    ...(SERVER_CONFIG_DEFAULTS.recording as Record<string, unknown>),
+    flush_interval_s: 3600,
+    flush_batch_size: 1,
+  });
+  const recording = new SessionRecording("s1", store, settings, { detector });
+  await recording.start(true);
+  const descriptions = async () =>
+    (await store.getEntries("s1", { event: "annotation", limit: 5000 })).map((entry) =>
+      String((entry.data as Record<string, unknown>).description),
+    );
+  return { store, recording, descriptions };
+}
+
+describe("an annotation with no match key", () => {
+  it("is recorded every time on both paths, and suppresses nothing after it", async () => {
+    const { recording, descriptions } = await recordingWith(wordDetector());
+    await recording.logOutbound({ type: "snapshot", screen: "_" });
+    await recording.logOutbound({ type: "snapshot", screen: "_" });
+    // Not left pending by the snapshot: the next chunk records it too.
+    await recording.logOutbound({ type: "term", data: "_" });
+    await recording.logOutbound({ type: "term", data: "_" });
+    await recording.logOutbound({ type: "snapshot", screen: "_" });
+    expect(await descriptions()).toStrictEqual(["_", "_", "_", "_", "_"]);
+  });
+
+  it("does not take a place in the bounded key set", async () => {
+    const { recording, descriptions } = await recordingWith(wordDetector());
+    // One short of full, then an unkeyed match on each path.
+    const keys = Array.from({ length: MAX_READ_ANNOTATION_KEYS - 1 }, (_, index) => `k${index}`);
+    await recording.logOutbound({ type: "term", data: keys.join(" ") });
+    await recording.logOutbound({ type: "term", data: "_" });
+    await recording.logOutbound({ type: "snapshot", screen: "_" });
+    // The last key fills the set exactly — had either unkeyed match taken a
+    // place, this one would have cleared it — so k0 is still remembered.
+    await recording.logOutbound({ type: "term", data: "last" });
+    await recording.logOutbound({ type: "snapshot", screen: "k0" });
+    // Nothing after `last`: the k0 snapshot was skipped.
+    expect((await descriptions()).slice(-4)).toStrictEqual([`k${MAX_READ_ANNOTATION_KEYS - 2}`, "_", "_", "last"]);
+  });
+});
+
+describe("frames handed over concurrently", () => {
+  it("are scanned strictly in the order they arrived, as the reference's are", async () => {
+    const { recording, descriptions } = await recordingWith(new PatternDetector());
+    // A chunk with two matches awaits two annotation writes. Unserialised,
+    // the snapshot handed over beside it would record sudo (pending) between
+    // them, and the chunk's trailing clear would wipe that pending key — so
+    // the next chunk would record sudo a second time.
+    await Promise.all([
+      recording.logOutbound({ type: "term", data: "$ rm -rf build; shutdown now\r\n" }),
+      recording.logOutbound({ type: "snapshot", screen: "$ sudo ls\n" }),
+    ]);
+    await recording.logOutbound({ type: "term", data: "$ sudo ls\r\n" });
+    expect(await descriptions()).toStrictEqual([RM, "shutdown command detected: shutdown", SUDO]);
+  });
+
+  it("go on past one that failed, which fails only its own caller", async () => {
+    const store = new InMemoryRecordingStore();
+    const append = store.appendEvents.bind(store);
+    let refusals = 1;
+    store.appendEvents = async (sessionId, events) => {
+      if (refusals > 0) {
+        refusals -= 1;
+        throw new Error("ENOSPC");
+      }
+      await append(sessionId, events);
+    };
+    const { recording, descriptions } = await recordingWith(new PatternDetector(), store);
+    const outcomes = await Promise.allSettled([
+      recording.logOutbound({ type: "snapshot", screen: "$ sudo ls\n" }),
+      recording.logOutbound({ type: "snapshot", screen: "$ rm -rf build\n" }),
+    ]);
+    expect(outcomes.map((outcome) => outcome.status)).toStrictEqual(["rejected", "fulfilled"]);
+    // The first screen's write failed before its scan; the second's went on.
+    expect(await descriptions()).toStrictEqual([RM]);
   });
 });
