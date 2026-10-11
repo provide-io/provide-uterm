@@ -136,10 +136,12 @@ func NewStreamRedactor(rules []RedactionRule) *StreamRedactor {
 	if len(patterns) == 0 {
 		return r
 	}
-	// The individual sub-patterns already compiled, so the join compiles too;
-	// a defensive failure yields an identity redactor rather than a panic.
+	// Each sub-pattern compiled on its own, but the join can still fail: the
+	// wrapping group and the alternation nest every rule deeper, so a rule
+	// already at RE2's nesting limit compiles alone and not combined. That
+	// yields an identity redactor rather than a panic.
 	combined, err := regexp.Compile(strings.Join(patterns, "|"))
-	if err != nil { //nolint:wsl // defensive: unreachable once sub-patterns compiled
+	if err != nil {
 		return &StreamRedactor{}
 	}
 	r.pattern = combined

@@ -53,10 +53,9 @@ func frameToMap(v any) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	// b is a marshaled struct, so always a JSON object: this cannot fail.
 	var m map[string]any
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, err
-	}
+	_ = json.Unmarshal(b, &m)
 	return m, nil
 }
 

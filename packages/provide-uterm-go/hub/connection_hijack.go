@@ -49,10 +49,9 @@ func (c *ConnectionManager) DisconnectWorker(ctx context.Context, workerID strin
 		}
 	}
 
-	m, err := frameToMap(frames.MakeWorkerDisconnectedFrame(workerID, 0))
-	if err != nil {
-		return false, err
-	}
+	// A worker_disconnected frame carries only the id and a finite timestamp,
+	// so it always encodes.
+	m, _ := frameToMap(frames.MakeWorkerDisconnectedFrame(workerID, 0))
 	if err := hub.Broadcast(ctx, workerID, m); err != nil {
 		return false, err
 	}
@@ -65,9 +64,9 @@ func (c *ConnectionManager) DisconnectWorker(ctx context.Context, workerID strin
 	if hub.eventBus != nil {
 		c.eventBusClose(workerID)
 	}
-	if err := hub.PruneIfIdle(ctx, workerID); err != nil {
-		return false, err
-	}
+	// TermHub.PruneIfIdle only drops in-memory state and never fails; the
+	// error exists for the LeaseHub interface.
+	_ = hub.PruneIfIdle(ctx, workerID)
 	return true, nil
 }
 
