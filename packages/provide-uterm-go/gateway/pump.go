@@ -175,7 +175,7 @@ func pumpOnce(ctx context.Context, wsURL string, cfg pumpConfig) (int, error) {
 		}
 	}
 	if cfg.st.token != nil {
-		if err := sendFrame(ctx, conn, resumeFrame(cfg.st.token)); err != nil {
+		if err := sendResume(ctx, conn, resumeFrame(cfg.st.token)); err != nil {
 			return -1, err
 		}
 	}
@@ -266,6 +266,11 @@ func dispatchTextMessage(msg string, dec *controlchannel.Decoder, cfg pumpConfig
 	return false
 }
 
+// sendResume sends the resume frame. It is sendFrame, swappable in tests: the
+// resume frame holds only strings so it always encodes, and a WebSocket write
+// on a freshly dialled connection does not fail on demand.
+var sendResume = sendFrame
+
 func sendFrame(ctx context.Context, conn *websocket.Conn, frame map[string]any) error {
 	enc, err := controlchannel.EncodeControlFrame(frame)
 	if err != nil {
@@ -300,23 +305,7 @@ func drive(ctx context.Context, p driveParams) {
 
 	readerCtx, readerCancel := context.WithCancel(ctx)
 	defer readerCancel()
-	go func() {
-		defer close(clientDone)
-		buf := make([]byte, 4096)
-		for {
-			n, err := p.client.Read(buf)
-			if n > 0 {
-				select {
-				case clientRx <- append([]byte(nil), buf[:n]...):
-				case <-readerCtx.Done():
-					return
-				}
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
+	go readClient(readerCtx, p.client, clientRx, clientDone)
 
 	cfg := pumpConfig{
 		tlsConfig:      p.tlsConfig,
@@ -349,6 +338,27 @@ func drive(ctx context.Context, p driveParams) {
 		reconnectDelay:  p.reconnectDelay,
 		maxRedirects:    5,
 	})
+}
+
+// readClient is drive's persistent client reader: it forwards each chunk read
+// from client to rx until the client errors/closes or ctx is cancelled while a
+// chunk is waiting to be handed off, then closes done.
+func readClient(ctx context.Context, client io.Reader, rx chan<- []byte, done chan<- struct{}) {
+	defer close(done)
+	buf := make([]byte, 4096)
+	for {
+		n, err := client.Read(buf)
+		if n > 0 {
+			select {
+			case rx <- append([]byte(nil), buf[:n]...):
+			case <-ctx.Done():
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
 }
 
 // sessionParams configures runGatewaySession.
