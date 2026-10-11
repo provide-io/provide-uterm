@@ -308,11 +308,11 @@
       "name": "attaching to a protocol nobody speaks yet",
       "path": "/worker/{worker_id}/gui/attach",
       "body": {
-        "target_id": "gt-rfb"
+        "target_id": "gt-litevirt"
       },
       "status": 501,
       "response": {
-        "error": "graphical protocol not supported: rfb"
+        "error": "graphical protocol not supported: litevirt"
       },
       "calls": [],
       "console": null,
