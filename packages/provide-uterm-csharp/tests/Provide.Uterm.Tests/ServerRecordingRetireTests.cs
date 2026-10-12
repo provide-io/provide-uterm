@@ -213,4 +213,118 @@ public sealed class ServerRecordingRetireTests : IDisposable
         Assert.Throws<ArgumentException>(() => SessionLoader.FromTable(table));
         Assert.Equal("ok_id", SessionLoader.FromTable(new Tomlyn.Model.TomlTable { ["session_id"] = "ok_id" }).SessionId);
     }
+
+    /// <summary>An in-memory store whose retire and end can be held up.</summary>
+    private sealed class GatedStore : IRecordingStore
+    {
+        private readonly InMemoryStore _inner = new();
+        public TaskCompletionSource RetireEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource? HoldRetire { get; set; }
+        public bool EndHangs { get; set; }
+        public TimeSpan RetireDelay { get; set; }
+
+        public Task StartSessionAsync(string sessionId, IReadOnlyDictionary<string, object?> metadata) =>
+            _inner.StartSessionAsync(sessionId, metadata);
+
+        public Task AppendEventsAsync(string sessionId, IReadOnlyList<Event> events) =>
+            _inner.AppendEventsAsync(sessionId, events);
+
+        public Task EndSessionAsync(string sessionId) =>
+            EndHangs ? new TaskCompletionSource().Task : _inner.EndSessionAsync(sessionId);
+
+        public Task<Meta> RecordingMetaAsync(string sessionId) => _inner.RecordingMetaAsync(sessionId);
+
+        public Task<IReadOnlyList<Event>> GetEntriesAsync(string sessionId, Query query) =>
+            _inner.GetEntriesAsync(sessionId, query);
+
+        public Task<string> GetPathAsync(string sessionId) => _inner.GetPathAsync(sessionId);
+
+        public async Task RetireSessionAsync(string sessionId)
+        {
+            if (HoldRetire is { } hold)
+            {
+                RetireEntered.TrySetResult();
+                await hold.Task;
+            }
+
+            if (RetireDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(RetireDelay);
+            }
+
+            await _inner.RetireSessionAsync(sessionId);
+        }
+    }
+
+    [Fact]
+    public async Task ACreateWaitsForAnIdBeingDeleted()
+    {
+        // A tty-named PAM id is reused by the next login on the tty while the
+        // last one's session is still being torn down.
+        var store = new GatedStore();
+        var (server, client) = await StartAsync(store);
+        await using (server)
+        using (client)
+        {
+            await Create(client, Sid);
+            await Annotate(client, Sid, "secretA");
+            store.HoldRetire = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var deleting = client.DeleteAsync($"/api/sessions/{Sid}");
+            await store.RetireEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var creating = Create(client, Sid);
+            Assert.NotSame(creating, await Task.WhenAny(creating, Task.Delay(100)));
+            var hold = store.HoldRetire;
+            store.HoldRetire = null;
+            hold.SetResult();
+            Assert.Equal(HttpStatusCode.OK, (await deleting).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await creating).StatusCode);
+            Assert.Equal(0, (await Entries(client, Sid)).GetArrayLength());
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentCreatesOfOneIdSeeAlreadyExists()
+    {
+        // The relay retries an open: the losers must get "already exists".
+        var (server, client) = await StartAsync(new GatedStore { RetireDelay = TimeSpan.FromMilliseconds(50) });
+        await using (server)
+        using (client)
+        {
+            var responses = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => Create(client, Sid)));
+            Assert.Single(responses, r => r.StatusCode == HttpStatusCode.OK);
+            var conflicts = responses.Where(r => r.StatusCode == HttpStatusCode.Conflict).ToList();
+            Assert.Equal(2, conflicts.Count);
+            foreach (var conflict in conflicts)
+            {
+                Assert.Contains("already exists", await conflict.Content.ReadAsStringAsync());
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AHungEndStillRetiresAndReleasesTheId()
+    {
+        var saved = UtermServer.RemovalStopTimeout;
+        UtermServer.RemovalStopTimeout = TimeSpan.FromMilliseconds(100);
+        try
+        {
+            var store = new GatedStore();
+            var (server, client) = await StartAsync(store);
+            await using (server)
+            using (client)
+            {
+                await Create(client, Sid);
+                await Annotate(client, Sid, "secretA");
+                store.EndHangs = true;
+                var deleted = await client.DeleteAsync($"/api/sessions/{Sid}").WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
+                Assert.Equal(HttpStatusCode.OK, (await Create(client, Sid)).StatusCode);
+                Assert.Equal(0, (await Entries(client, Sid)).GetArrayLength());
+            }
+        }
+        finally
+        {
+            UtermServer.RemovalStopTimeout = saved;
+        }
+    }
 }

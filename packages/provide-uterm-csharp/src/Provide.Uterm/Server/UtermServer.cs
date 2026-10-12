@@ -249,20 +249,16 @@ public sealed partial class UtermServer : IAsyncDisposable
                 return DetailError(409, "session already exists: " + id);
             }
 
-            if (!TryReserveId(id))
+            if (await ReserveForCreateAsync(id).ConfigureAwait(false) is { } conflict)
             {
-                return DetailError(409, "session is being deleted: " + id);
+                return DetailError(409, conflict);
             }
 
             try
             {
-                // A recording left under the id is not this new session's.
+                // A recording left under the id is not this new session's. The
+                // id is reserved, so nothing else can create it meanwhile.
                 await RetireSessionRecordingAsync(id).ConfigureAwait(false);
-                if (_deps.Registry.TryGetDefinition(id, out _))
-                {
-                    return DetailError(409, "session already exists: " + id);
-                }
-
                 CreateDefinition(id, body, p.SubjectId);
             }
             finally
