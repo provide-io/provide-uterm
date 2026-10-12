@@ -102,7 +102,11 @@ interface Charsets {
   shifted: boolean;
 }
 
-/** The reference's power-on sets: ASCII in G0, DEC special graphics in G1. */
+/**
+ * The reference's power-on sets: ASCII in G0, DEC special graphics in G1.
+ * That is pyte and the Linux console, not xterm (ASCII in both), and it is
+ * what the Python emulator draws: an undesignated SO draws lines here.
+ */
 function initialCharsets(): Charsets {
   return { g0: "ascii", g1: "dec", shifted: false };
 }
