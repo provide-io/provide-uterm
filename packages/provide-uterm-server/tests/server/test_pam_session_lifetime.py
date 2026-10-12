@@ -30,7 +30,13 @@ from provide.uterm.server.bridge.models import WorkerTermState
 from provide.uterm.server.config_schema import PamConfig, RecordingConfig
 from provide.uterm.server.registry import SessionRegistry
 
-SESSION_ID = "pam-suokki-capture-4242"
+# The capture id carries the sshd process's start time; pid 4242's is pinned.
+SESSION_ID = "pam-suokki-capture-4242-777"
+
+
+@pytest.fixture(autouse=True)
+def _pinned_start_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pam_integration, "_process_start_ticks", lambda pid: 777 if pid == 4242 else None)
 
 
 class _Env:
