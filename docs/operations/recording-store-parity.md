@@ -16,6 +16,7 @@ compliance recording is [ard-session-audit-compliance-recording.md](../ard-sessi
 | Event JSON shape | **Yes** | `{ts, event, data, session_id?}` |
 | Query semantics (`limit` / `offset` / event filter) | **Yes** | `limit=0` → default **200**, clamp **1..500** |
 | Stores LocalFile / InMemory / Null | **Yes** | Same roles |
+| Session instances (no cross-session reads) | **Yes** | Python, Go, TypeScript and C# — see [Session instances](#session-instances) |
 | Public method names / async style | **No** | Idiomatic per language |
 | Full HTTP/server recording surface | **Yes (thin)** | annotate + meta / entries / download on all three |
 
@@ -141,6 +142,53 @@ Lifecycle events written by the store:
 | `log_start` | `start_session` |
 | `log_stop` | `end_session` |
 
+### Session instances
+
+A session id does not name one session forever. A PAM capture session was named
+after the pid of the login's `sshd-session` process, and pids are reused; any
+session can be deleted and its id created again. Recording reads are authorized
+against whichever session holds the id **now**, so a store that kept appending
+to `{session_id}.jsonl` handed a new session every earlier holder's entries
+(terminal I/O, keystrokes included) for the whole retention period.
+
+`start_session` therefore takes an optional **instance** in its metadata
+(`metadata["instance"]`, a non-empty string; the key is Python
+`RECORDING_INSTANCE_KEY`, Go `recording.InstanceKey`, TypeScript
+`RECORDING_INSTANCE_KEY`, C# `RecordingInstance.Key`):
+
+| Recording already held for the id | `metadata.instance` | Result |
+|------------------------------------|---------------------|--------|
+| none | any | fresh recording |
+| started by the same instance | same | **continue** it (a reconnect) |
+| started by another instance, or by none, or unreadable | any | **fresh** recording |
+| any | absent | **fresh** recording |
+
+The file store decides from the `instance` in the recording's first line (its
+`log_start`), read without following a symlink. A recording that is not
+continued is **moved aside**, not deleted: it is renamed to
+`{session_id}.{unix_ns}-{8 hex}.jsonl`. That keeps it on disk for the retention
+sweep (which ages out `*.jsonl` by mtime, and a rename keeps the mtime) while no
+session can be served it: session ids match `^[\w-]+$`, so no
+`{session_id}.jsonl` contains the `.` a retired name has before `.jsonl`. The
+in-memory store drops the old events. A handle a previous start left open is
+closed before the decision is made.
+
+Hosted sessions name themselves: each Python `HostedSessionRuntime`, Go
+`sessionRecorder` and TypeScript `SessionRecording` draws a random instance when
+it is created and hands it to its `SessionLogger` (`instance=` / `Instance` /
+`instance`; C# `SessionLoggerOptions.Instance`). One runtime opens a recording
+per worker connection, so its reconnects continue one recording; a later session
+reusing the id has a new runtime and starts its own. A server restart creates
+new runtimes, so a long-lived configured session starts a fresh recording after
+a restart; the previous one is retired, not lost.
+
+The webhook store forwards the metadata, `instance` included; a webhook backend
+must apply the same rule.
+
+PAM ids were made unique per login as well (`pam-<user>-capture-<pid>-<start>`,
+where `<start>` is the process start time from `/proc/<pid>/stat`), so the
+store rule is the backstop, not the only guard.
+
 Application/demo events commonly use `snapshot`, `read`, `write`, etc. under
 `event` + structured `data` (including optional full `screen` text for replay).
 
@@ -151,6 +199,7 @@ Application/demo events commonly use `snapshot`, `read`, `write`, etc. under
 | Path | `{directory}/{session_id}.jsonl` |
 | Format | one JSON object per line |
 | Open | secure append (owner-only; refuse symlink) |
+| Another instance's recording at start | renamed aside to `{session_id}.{unix_ns}-{hex}.jsonl` (see [Session instances](#session-instances)) |
 | Malformed lines on read | skipped |
 | Missing file | `exists=false`, empty entries, no path |
 
@@ -160,6 +209,7 @@ Application/demo events commonly use `snapshot`, `read`, `write`, etc. under
 |----------|----------------|
 | Python | `packages/provide-uterm/src/provide/uterm/recording.py` |
 | Go | `packages/provide-uterm-go/recording` |
+| TypeScript | `packages/provide-uterm-ts/src/recording/stores.ts` |
 | C# | `packages/provide-uterm-csharp/src/Provide.Uterm/Recording` |
 
 ## Demo matrix (asciinema)
