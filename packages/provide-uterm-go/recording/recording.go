@@ -11,10 +11,17 @@ package recording
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fileio"
@@ -63,6 +70,13 @@ type Query struct {
 // Store is the interface for persisting and retrieving session recordings.
 // The lifecycle is StartSession → AppendEvents (repeatedly) → EndSession;
 // query methods may be called at any time, including mid-session.
+//
+// A session id can be reused by a later, unrelated session, so a store must
+// never let one session instance read another's entries: StartSession
+// continues the recording held for the id only when metadata[InstanceKey]
+// names the instance that started it (a reconnect), and otherwise — a
+// different instance, or none named — begins afresh, keeping or dropping the
+// old recording but never serving it under the id again.
 type Store interface {
 	StartSession(sessionID string, metadata map[string]any) error
 	AppendEvents(sessionID string, events []Event) error
@@ -72,6 +86,64 @@ type Store interface {
 	// GetPath returns a local file path for the recording, or "" for stores
 	// with no local file.
 	GetPath(sessionID string) (string, error)
+}
+
+// InstanceKey is the StartSession metadata key naming the session instance a
+// recording belongs to. Port of RECORDING_INSTANCE_KEY.
+const InstanceKey = "instance"
+
+// firstLineLimit bounds how much of a recording's first line is read to find
+// its instance. A log_start line is small; a longer one is not ours.
+const firstLineLimit = 64 * 1024
+
+// Instance returns the instance StartSession metadata names, or "" for none.
+func Instance(metadata map[string]any) string {
+	v, _ := metadata[InstanceKey].(string)
+	return v
+}
+
+// instanceOnFile returns the instance that started the recording at path, or
+// "" when it cannot say. The file is opened without following a symlink: a
+// link planted at the path is not a recording this store wrote.
+func instanceOnFile(path string) string {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	line, err := bufio.NewReaderSize(f, firstLineLimit).ReadSlice('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return ""
+	}
+	var start struct {
+		Event string         `json:"event"`
+		Data  map[string]any `json:"data"`
+	}
+	if json.Unmarshal(line, &start) != nil || start.Event != "log_start" {
+		return ""
+	}
+	return Instance(start.Data)
+}
+
+// RetiredName returns a unique name to move a superseded recording aside to.
+// It keeps the .jsonl suffix, so the retention sweep still ages it out, and
+// puts a "." before it that no session id may contain, so no session's
+// recording path can ever name it. Port of retired_recording_name.
+func RetiredName(sessionID string) string {
+	var nonce [4]byte
+	_, _ = rand.Read(nonce[:])
+	return sessionID + "." + strconv.FormatInt(time.Now().UnixNano(), 10) + "-" + hex.EncodeToString(nonce[:]) + ".jsonl"
+}
+
+// retireForeign moves the recording at path aside unless instance started it.
+func retireForeign(path, sessionID, instance string) error {
+	if _, err := os.Lstat(path); errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if instance != "" && instanceOnFile(path) == instance {
+		return nil
+	}
+	return os.Rename(path, filepath.Join(filepath.Dir(path), RetiredName(sessionID)))
 }
 
 func normalizeLimit(limit int) int {
@@ -127,11 +199,22 @@ func writeEvents(f *os.File, events []Event) error {
 	return f.Sync()
 }
 
-// StartSession opens the session file and writes the log_start event.
+// StartSession opens the session file and writes the log_start event. A
+// recording on file that another instance started is moved aside first (see
+// Store), and a handle an earlier start left open is closed: whether this
+// start continues that recording is decided from the file alone.
 func (s *LocalFileStore) StartSession(sessionID string, metadata map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	f, err := fileio.SecureOpenAppend(s.path(sessionID))
+	if stale, ok := s.files[sessionID]; ok {
+		delete(s.files, sessionID)
+		_ = stale.Close()
+	}
+	path := s.path(sessionID)
+	if err := retireForeign(path, sessionID, Instance(metadata)); err != nil {
+		return err
+	}
+	f, err := fileio.SecureOpenAppend(path)
 	if err != nil {
 		return err
 	}
@@ -240,20 +323,28 @@ func (s *LocalFileStore) GetPath(sessionID string) (string, error) {
 // reference implementation for custom remote stores; data is lost when the
 // process exits.
 type InMemoryStore struct {
-	mu       sync.Mutex
-	sessions map[string]bool // session_id → active
-	events   map[string][]Event
+	mu        sync.Mutex
+	sessions  map[string]bool // session_id → active
+	instances map[string]string
+	events    map[string][]Event
 }
 
 // NewInMemoryStore creates an empty in-memory store.
 func NewInMemoryStore() *InMemoryStore {
-	return &InMemoryStore{sessions: map[string]bool{}, events: map[string][]Event{}}
+	return &InMemoryStore{sessions: map[string]bool{}, instances: map[string]string{}, events: map[string][]Event{}}
 }
 
-// StartSession records the log_start event and marks the session active.
+// StartSession records the log_start event and marks the session active. A
+// recording another instance started is dropped first (see Store).
 func (s *InMemoryStore) StartSession(sessionID string, metadata map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	instance := Instance(metadata)
+	previous, started := s.instances[sessionID]
+	if instance == "" || !started || previous != instance {
+		s.events[sessionID] = nil
+	}
+	s.instances[sessionID] = instance
 	s.sessions[sessionID] = true
 	s.events[sessionID] = append(s.events[sessionID], lifecycleEvent("log_start", sessionID, metadata))
 	return nil

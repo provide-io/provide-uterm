@@ -50,6 +50,12 @@ type Options struct {
 	BatchSize int
 	// Logger receives quota/flush warnings; nil selects slog.Default().
 	Logger *slog.Logger
+	// Instance names the session instance this logger records for. Every
+	// Start passes it to the store, which continues the recording on file only
+	// when the same instance started it (a reconnect) and otherwise begins
+	// afresh, so a later session reusing the id never inherits this one's
+	// entries. "" asks for a fresh recording on every Start.
+	Instance string
 }
 
 // SessionLogger is an async session recorder over a pluggable
@@ -63,6 +69,7 @@ type SessionLogger struct {
 	flushInterval      time.Duration
 	batchSize          int
 	logger             *slog.Logger
+	instance           string
 
 	mu        sync.Mutex
 	sessionID string
@@ -100,6 +107,7 @@ func New(store recording.Store, opts Options) *SessionLogger {
 		flushInterval:      opts.FlushInterval,
 		batchSize:          opts.BatchSize,
 		logger:             opts.Logger,
+		instance:           opts.Instance,
 	}
 }
 
@@ -110,6 +118,9 @@ func (l *SessionLogger) Start(sessionID string) error {
 	l.mu.Unlock()
 
 	metadata := map[string]any{"started_at": float64(time.Now().UnixNano()) / 1e9}
+	if l.instance != "" {
+		metadata[recording.InstanceKey] = l.instance
+	}
 	if err := l.store.StartSession(sessionID, metadata); err != nil {
 		return err
 	}

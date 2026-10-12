@@ -7,6 +7,8 @@ package cli
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -127,9 +129,15 @@ type recordingLog interface {
 
 type sessionRecorder struct {
 	sessionID string
-	store     recording.Store
-	cfg       serverconfig.RecordingConfig
-	logger    *slog.Logger
+	// instance names this recorder's recordings to the store. A session id
+	// outlives the session it names -- a PAM capture id is a pid, and pids are
+	// reused -- so a new connection continues the recording only under the
+	// same instance, and a later session reusing the id starts its own. Port
+	// of HostedSessionRuntime._recording_instance.
+	instance string
+	store    recording.Store
+	cfg      serverconfig.RecordingConfig
+	logger   *slog.Logger
 
 	detector   *annotation.PatternDetector
 	sendStream *annotation.StreamingDetector
@@ -185,6 +193,13 @@ type sessionRecorder struct {
 
 var _ bridge.Observer = (*sessionRecorder)(nil)
 
+// newRecordingInstance returns a fresh random recording instance name.
+func newRecordingInstance() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
+}
+
 // newSessionRecorder builds a session's recorder. detector may be nil, for a
 // session that records without annotating.
 func newSessionRecorder(
@@ -198,7 +213,7 @@ func newSessionRecorder(
 		logger = ptel.GetLogger(context.Background(), "provide.uterm.server.runtime")
 	}
 	s := &sessionRecorder{
-		sessionID: sessionID, store: store, cfg: cfg, detector: detector, logger: logger,
+		sessionID: sessionID, instance: newRecordingInstance(), store: store, cfg: cfg, detector: detector, logger: logger,
 		readAnnotationKeys: map[string]struct{}{}, snapshotOnlyKeys: map[string]struct{}{},
 	}
 	if detector != nil {
@@ -251,6 +266,7 @@ func (s *sessionRecorder) AttemptStarted() {
 		FlushInterval:      time.Duration(s.cfg.FlushIntervalS * float64(time.Second)),
 		BatchSize:          s.cfg.FlushBatchSize,
 		Logger:             s.logger,
+		Instance:           s.instance,
 	})
 	if err := rec.Start(s.sessionID); err != nil {
 		// The session runs either way; it just goes unrecorded.
