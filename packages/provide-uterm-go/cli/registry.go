@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	ptel "github.com/provide-io/provide-telemetry/go"
+
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/bridge"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
@@ -65,7 +67,7 @@ type SessionRegistryImpl struct {
 	// retired, so a new session under the id can neither be served the old
 	// recording nor receive the old one's late writes. Port of the
 	// reference's registry._retiring.
-	retiring map[string]bool
+	retiring map[string]chan struct{}
 	recDeflt bool
 	// recCfg is the recording section sessions record under, and recording
 	// the store they record into (nil: nothing is recorded). Wired by
@@ -102,7 +104,7 @@ var _ server.SessionRegistry = (*SessionRegistryImpl)(nil)
 func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImpl {
 	r := &SessionRegistryImpl{
 		entries:      map[string]*sessionEntry{},
-		retiring:     map[string]bool{},
+		retiring:     map[string]chan struct{}{},
 		recDeflt:     cfg.Recording.EnabledByDefault,
 		recCfg:       cfg.Recording,
 		connect:      defaultConnect,
@@ -253,35 +255,75 @@ func (r *SessionRegistryImpl) createSession(
 			return nil, err
 		}
 	}
-	r.mu.Lock()
-	if _, exists := r.entries[def.SessionID]; exists {
-		r.mu.Unlock()
-		return nil, &server.SessionConflictError{Msg: "session already exists: " + def.SessionID}
+	store, err := r.reserveForCreate(ctx, def.SessionID)
+	if err != nil {
+		return nil, err
 	}
-	if r.retiring[def.SessionID] {
-		// The previous holder is still stopping, or its recording is still
-		// being retired: refuse rather than share either.
-		r.mu.Unlock()
-		return nil, &server.SessionConflictError{Msg: "session is being deleted: " + def.SessionID}
-	}
-	r.retiring[def.SessionID] = true
-	store := r.recording
-	r.mu.Unlock()
 	// A recording left under this id (a session from before a restart, or one
 	// a store kept) is not this new session's: retire it before the session
 	// becomes visible, so nothing can read it as this one's.
 	retireErr := retireIn(store, def.SessionID)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	delete(r.retiring, def.SessionID)
+	// Released and inserted in one step: no other create can slip in.
+	r.releaseLocked(def.SessionID)
 	if retireErr != nil {
 		return nil, retireErr
 	}
-	if _, exists := r.entries[def.SessionID]; exists {
-		return nil, &server.SessionConflictError{Msg: "session already exists: " + def.SessionID}
-	}
 	r.seed(def)
 	return r.snapshotStatus(r.entries[def.SessionID]), nil
+}
+
+// reservedIDWait is how long a create waits for a teardown holding its id.
+// Port of _RESERVED_ID_WAIT_S.
+var reservedIDWait = 15 * time.Second
+
+// removalStopTimeout is how long DeleteSession waits for the session to stop
+// before it retires the recording and releases the id regardless. Port of
+// _REMOVAL_STOP_TIMEOUT_S.
+var removalStopTimeout = 10 * time.Second
+
+// reserveForCreate reserves id for a create, waiting out a teardown (or
+// another create) that holds it for up to reservedIDWait: a tty-named PAM id
+// is reused by the next login on that tty, and the relay retries an open, so
+// the id is often wanted again while its last holder is still going. Then the
+// usual checks run, so a session that now exists is still "already exists";
+// only a teardown that outlasts the wait is "session is being deleted".
+// Returns the recording store to retire into. Port of _reserve_for_create.
+func (r *SessionRegistryImpl) reserveForCreate(ctx context.Context, id string) (recording.Store, error) {
+	timer := time.NewTimer(reservedIDWait)
+	defer timer.Stop()
+	for {
+		r.mu.Lock()
+		if _, exists := r.entries[id]; exists {
+			r.mu.Unlock()
+			return nil, &server.SessionConflictError{Msg: "session already exists: " + id}
+		}
+		pending, held := r.retiring[id]
+		if !held {
+			r.retiring[id] = make(chan struct{})
+			store := r.recording
+			r.mu.Unlock()
+			return store, nil
+		}
+		r.mu.Unlock()
+		select {
+		case <-pending:
+		case <-timer.C:
+			return nil, &server.SessionConflictError{Msg: "session is being deleted: " + id}
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// releaseLocked releases a reserved id and wakes whatever waits on it.
+// Caller holds r.mu.
+func (r *SessionRegistryImpl) releaseLocked(id string) {
+	if ch, ok := r.retiring[id]; ok {
+		delete(r.retiring, id)
+		close(ch)
+	}
 }
 
 // retireIn retires id's recording in store; a nil store records nothing.
@@ -324,12 +366,18 @@ func (r *SessionRegistryImpl) UpdateSession(_ context.Context, id string, payloa
 // stopping any live connector.
 func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) error {
 	r.mu.Lock()
-	if r.retiring[id] {
+	if _, held := r.retiring[id]; held {
 		// Already being torn down by another call; that call retires it.
 		r.mu.Unlock()
 		return nil
 	}
-	r.retiring[id] = true
+	r.retiring[id] = make(chan struct{})
+	// Released however this returns, a panic in the teardown included.
+	defer func() {
+		r.mu.Lock()
+		r.releaseLocked(id)
+		r.mu.Unlock()
+	}()
 	store := r.recording
 	e, ok := r.entries[id]
 	var br *bridge.TermBridge
@@ -347,21 +395,44 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 		}
 	}
 	r.mu.Unlock()
-	// Same order as StopSession: detach from the hub before the connector goes,
-	// or a worker whose socket outlived its terminal keeps reconnecting against
-	// a session id the registry can no longer list.
-	stopBridge(br)
-	settleRecording(rec)
-	if conn != nil {
-		_ = conn.Stop(ctx)
+	stopRemoved(ctx, id, br, rec, conn)
+	// Only now, with the recording closed and its last writes in it (or the
+	// stop given up on), is it retired; the deferred release frees the id.
+	return retireIn(store, id)
+}
+
+// stopRemoved stops a deleted session, waiting at most removalStopTimeout:
+// a stop that hangs must not hold the id forever, so past the timeout it is
+// logged and left running, and the delete goes on to retire and release. A
+// panic in it is recovered and logged for the same reason.
+func stopRemoved(ctx context.Context, id string, br *bridge.TermBridge, rec *sessionRecorder, conn connectors.Connector) {
+	logger := ptel.GetLogger(ctx, "provide.uterm.server.registry")
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			if p := recover(); p != nil {
+				logger.Warn("session_removal_stop_panicked", "session_id", id, "panic", fmt.Sprint(p))
+			}
+		}()
+		// Same order as StopSession: detach from the hub before the connector
+		// goes, or a worker whose socket outlived its terminal keeps
+		// reconnecting against a session id the registry can no longer list.
+		stopBridge(br)
+		settleRecording(rec)
+		if conn != nil {
+			stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), removalStopTimeout)
+			defer cancel()
+			_ = conn.Stop(stopCtx)
+		}
+	}()
+	timer := time.NewTimer(removalStopTimeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+		logger.Warn("session_removal_stop_timed_out", "session_id", id, "timeout_s", removalStopTimeout.Seconds())
 	}
-	// Only now, with the recording closed and its last writes in it, is it
-	// retired and the id released for a new session.
-	err := retireIn(store, id)
-	r.mu.Lock()
-	delete(r.retiring, id)
-	r.mu.Unlock()
-	return err
 }
 
 // definitionFromPayload builds a SessionDefinition from a create payload,

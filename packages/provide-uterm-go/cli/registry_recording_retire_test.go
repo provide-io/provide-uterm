@@ -15,8 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
 // A deleted session's recording is never served to the id's next holder: not
@@ -156,7 +158,9 @@ func TestDeletedSessionsLastWritesLandBeforeRetirement(t *testing.T) {
 	}
 }
 
-func TestCreateUnderAnIDBeingDeletedIsRefused(t *testing.T) {
+// A create whose id is still being torn down waits for the teardown, then
+// proceeds: a tty-named PAM id is reused by the next login on that tty.
+func TestCreateWaitsForAnIDBeingDeleted(t *testing.T) {
 	store := &gatedFileStore{
 		LocalFileStore: recording.NewLocalFileStore(t.TempDir()),
 		retire:         make(chan struct{}), release: make(chan struct{}),
@@ -166,22 +170,145 @@ func TestCreateUnderAnIDBeingDeletedIsRefused(t *testing.T) {
 	must(t, createRetireSession(t, r, retireID))
 	r.SetRecording(store, nil)
 
-	done := make(chan error, 1)
-	go func() { done <- r.DeleteSession(context.Background(), retireID) }()
-	select { // the delete is retiring the recording
+	deleted := make(chan error, 1)
+	go func() { deleted <- r.DeleteSession(context.Background(), retireID) }()
+	waitRetire(t, store) // the delete is retiring the recording
+	created := make(chan error, 1)
+	go func() { created <- createRetireSession(t, r, retireID) }()
+	select {
+	case err := <-created:
+		t.Fatalf("create returned %v while the id was still being deleted", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(store.release)
+	must(t, <-deleted)
+	waitRetire(t, store) // the create's own retire of any leftover
+	must(t, <-created)
+	readNothing(t, store)
+}
+
+func waitRetire(t *testing.T, store *gatedFileStore) {
+	t.Helper()
+	select {
 	case <-store.retire:
 	case <-time.After(5 * time.Second):
-		t.Fatal("DeleteSession never retired the recording")
+		t.Fatal("the recording was never retired")
 	}
+}
+
+// Only a teardown that outlasts the wait is refused.
+func TestCreateThatOutwaitsTheBoundIsRefused(t *testing.T) {
+	saved := reservedIDWait
+	t.Cleanup(func() { reservedIDWait = saved })
+	reservedIDWait = 50 * time.Millisecond
+	store := &gatedFileStore{
+		LocalFileStore: recording.NewLocalFileStore(t.TempDir()),
+		retire:         make(chan struct{}), release: make(chan struct{}),
+	}
+	r := newTestRegistry(t)
+	r.SetRecording(recording.NewInMemoryStore(), nil)
+	must(t, createRetireSession(t, r, retireID))
+	r.SetRecording(store, nil)
+
+	deleted := make(chan error, 1)
+	go func() { deleted <- r.DeleteSession(context.Background(), retireID) }()
+	waitRetire(t, store)
 	err := createRetireSession(t, r, retireID)
 	var conflict *server.SessionConflictError
 	if !errors.As(err, &conflict) || !strings.Contains(conflict.Msg, "being deleted") {
-		t.Fatalf("create during delete = %v, want a being-deleted conflict", err)
+		t.Fatalf("create past the bound = %v, want a being-deleted conflict", err)
 	}
 	close(store.release)
-	must(t, <-done)
-	store.release = nil
+	must(t, <-deleted)
+}
+
+type slowRetireStore struct{ *recording.InMemoryStore }
+
+func (s slowRetireStore) RetireSession(id string) error {
+	time.Sleep(20 * time.Millisecond) // the first create is still retiring when the retries arrive
+	return s.InMemoryStore.RetireSession(id)
+}
+
+// The relay retries an open: the losers get "already exists", which the route
+// treats as idempotent, never "being deleted".
+func TestConcurrentCreatesOfOneIDSeeAlreadyExists(t *testing.T) {
+	r := newTestRegistry(t)
+	r.SetRecording(slowRetireStore{recording.NewInMemoryStore()}, nil)
+	errs := make(chan error, 3)
+	for range 3 {
+		go func() { errs <- createRetireSession(t, r, retireID) }()
+	}
+	var ok, exists int
+	for range 3 {
+		err := <-errs
+		var conflict *server.SessionConflictError
+		switch {
+		case err == nil:
+			ok++
+		case errors.As(err, &conflict) && strings.Contains(conflict.Msg, "already exists"):
+			exists++
+		default:
+			t.Fatalf("create = %v", err)
+		}
+	}
+	if ok != 1 || exists != 2 {
+		t.Fatalf("ok=%d exists=%d, want 1 and 2", ok, exists)
+	}
+}
+
+// stuckConnector's Stop hangs until released, or panics.
+type stuckConnector struct {
+	*fakeConnector
+	panics  bool
+	release chan struct{}
+}
+
+func (c *stuckConnector) Stop(context.Context) error {
+	if c.panics {
+		panic("connector stop exploded")
+	}
+	<-c.release
+	return nil
+}
+
+func startedWith(t *testing.T, conn connectors.Connector) *SessionRegistryImpl {
+	t.Helper()
+	r := newTestRegistry(t)
+	r.connect = func(context.Context, serverconfig.SessionDefinition) (connectors.Connector, error) { return conn, nil }
+	r.SetRecording(recording.NewInMemoryStore(), nil)
 	must(t, createRetireSession(t, r, retireID))
+	if _, err := r.StartSession(context.Background(), retireID); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// A stop that hangs or panics cannot hold the id: the delete retires and
+// releases it anyway.
+func TestHungOrPanickingStopStillReleasesTheID(t *testing.T) {
+	saved := removalStopTimeout
+	t.Cleanup(func() { removalStopTimeout = saved })
+	removalStopTimeout = 50 * time.Millisecond
+	for name, conn := range map[string]*stuckConnector{
+		"hang":  {fakeConnector: newFakeConnector(), release: make(chan struct{})},
+		"panic": {fakeConnector: newFakeConnector(), panics: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := startedWith(t, conn)
+			deleted := make(chan error, 1)
+			go func() { deleted <- r.DeleteSession(context.Background(), retireID) }()
+			select {
+			case err := <-deleted:
+				must(t, err)
+			case <-time.After(5 * time.Second):
+				t.Fatal("DeleteSession is still waiting on the stop")
+			}
+			must(t, createRetireSession(t, r, retireID))
+			if conn.release != nil {
+				close(conn.release)
+			}
+		})
+	}
 }
 
 func TestSessionIDsAreCappedSoEveryRecordingCanBeRetired(t *testing.T) {
