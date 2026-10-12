@@ -242,3 +242,19 @@ async def test_webhook_recording_get_allowed_url_proceeds():
         meta = await store.recording_meta("sid")
         assert route.called
         assert meta == {"exists": True}
+
+
+@pytest.mark.asyncio
+async def test_webhook_recording_retire_session():
+    url = "https://fleet.example.com/webhooks/recording"
+    store = WebhookRecordingStore(url)
+
+    async with http_mock.mock:
+        route = http_mock.post(url).mock(return_value=httpx2.Response(200))
+
+        await store.retire_session("test-session")
+
+        assert route.called
+        data = json.loads(route.calls.last.request.read().decode())
+        assert data["session_id"] == "test-session"
+        assert data["action"] == "retire"

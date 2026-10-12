@@ -281,6 +281,29 @@ def test_process_start_ticks_reads_proc_stat() -> None:
     assert pam_integration._process_start_ticks(2**22 + 12345) is None  # above any pid_max
 
 
+@pytest.mark.parametrize("stat", ["1 (sshd) S 2 3", "1 (sshd) " + "x " * 20], ids=["short", "not-a-number"])
+def test_process_start_ticks_without_a_readable_start_time(monkeypatch: pytest.MonkeyPatch, stat: str) -> None:
+    class _Stat:
+        def __init__(self, _path: str) -> None:
+            pass
+
+        def read_text(self, **_kwargs: object) -> str:
+            return stat
+
+    monkeypatch.setattr(pam_integration, "Path", _Stat)
+    assert pam_integration._process_start_ticks(4242) is None
+
+
+def test_the_cap_never_drops_the_kept_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pam_integration, "_MAX_REMEMBERED_LOGINS", 2)
+    instances = pam_integration.OpenLogins()
+    for pid in (1, 2, 3, 4):
+        instances[("u", pid)] = f"pam-u-{pid}"  # tty-named: never provably gone
+    pam_integration._prune_logins(instances, keep=("u", 1))
+    assert sorted(instances) == [("u", 1), ("u", 4)]
+    assert instances.gone_since == {}
+
+
 async def test_close_finds_the_id_open_gave_even_after_the_process_is_gone(
     start_ticks: dict[int, int | None],
 ) -> None:
