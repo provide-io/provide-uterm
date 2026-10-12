@@ -19,7 +19,6 @@ from provide.uterm.control_channel import (
     ControlFrameProtocolError,
     DataChunk,
 )
-from provide.uterm.redaction import redact_text
 from provide.uterm.server.connectors import SessionConnector, build_connector
 from provide.uterm.server.models import RecordingConfig, SessionDefinition, SessionLifecycle, SessionRuntimeStatus
 
@@ -30,6 +29,7 @@ from provide.uterm.server.runtime_helpers import (
     _add_bounded,
     _await_task_completion,
     _build_recording_redactor,
+    _build_server_redactor,
     _cancel_and_wait,
     _classify_run_error,
     _encode_runtime_frame,
@@ -66,10 +66,13 @@ class HostedSessionRuntime:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
         self._recording_cfg = recording
-        # One recording redactor per runtime: the SessionLogger of every
-        # connection gets it, and so does error text (see _run) — the error
-        # surfaces in status() and the server log as well as the recording.
+        # One recording redactor per runtime, handed to the SessionLogger of
+        # every connection; it follows recording.redact_sensitive.
         self._redactor = _build_recording_redactor(recording.redact_sensitive)
+        # status().last_error and the server log are not recording sinks, so
+        # error text bound for them is always redacted with the server-default
+        # ruleset (as the hub's event ring is), whatever the recording setting.
+        self._error_redactor = _build_server_redactor()
         if recording_store is None:
             from provide.uterm.recording import LocalFileRecordingStore
 
@@ -723,10 +726,13 @@ class HostedSessionRuntime:
                 self._state = "error"
                 self._connected = False
                 # str(exc) can quote what the connector was handed (a URL with
-                # credentials, a rejected command line). With redact_sensitive
-                # on it gets the same redactor as the recording before it is
-                # kept for status(), logged, or recorded.
-                error = redact_text(str(exc), self._redactor)
+                # credentials, a rejected command line). Each sink redacts it
+                # once under its own policy: status() and the server log always
+                # get the server-default ruleset (`error`); the runtime_error
+                # recording gets the raw text, which SessionLogger.log_event
+                # redacts per recording.redact_sensitive.
+                raw_error = str(exc)
+                error = self._error_redactor(raw_error)
                 self._last_error = connection_error = error
                 if outcome == "permanent":
                     if isinstance(exc, ValueError):
@@ -735,7 +741,7 @@ class HostedSessionRuntime:
                             self.definition.session_id,
                             error,
                         )
-                        await self._log_runtime_error({"error": error, "permanent": True})
+                        await self._log_runtime_error({"error": raw_error, "permanent": True})
                     else:
                         # Permanent HTTP failure (401/403/404). Log the warning
                         # event first so observers see what failed, then the
@@ -745,7 +751,7 @@ class HostedSessionRuntime:
                             self.definition.session_id,
                             error,
                         )
-                        await self._log_runtime_error({"error": error})
+                        await self._log_runtime_error({"error": raw_error})
                         _status = getattr(exc, "status_code", None) or getattr(
                             getattr(exc, "response", None), "status_code", None
                         )
@@ -758,7 +764,7 @@ class HostedSessionRuntime:
                 logger.warning(
                     "hosted_session_runtime_failed session_id=%s error=%s", self.definition.session_id, error
                 )
-                await self._log_runtime_error({"error": error})
+                await self._log_runtime_error({"error": raw_error})
                 delay = backoff_s[min(attempt, len(backoff_s) - 1)]
                 attempt += 1
                 await asyncio.sleep(delay)
