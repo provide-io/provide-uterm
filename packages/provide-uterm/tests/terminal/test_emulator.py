@@ -46,6 +46,21 @@ class TestTerminalEmulator:
 
         assert "╔═╗" in emu.get_snapshot()["screen"]
 
+    def test_dec_special_graphics_draw_as_box_characters_in_a_utf8_session(self) -> None:
+        emu = TerminalEmulator(cols=80, rows=5, receive_encoding="utf-8")
+
+        emu.process("\x1b(0lqqk\x1b(B café ─│ \x0eqq\x0f x".encode())
+
+        assert emu.get_snapshot()["screen"].startswith("┌──┐ café ─│ ── x")
+
+    def test_a_cp437_session_draws_what_it_always_drew(self) -> None:
+        # A stray SO in CP437 art must not start drawing lines.
+        emu = TerminalEmulator(cols=80, rows=5)
+
+        emu.process(b"AB\x0eqq\x0fCD \x1b(0lqqk\x1b(B")
+
+        assert emu.get_snapshot()["screen"].startswith("ABqqCD lqqk")
+
     def test_hash_changes_on_update(self) -> None:
         emu = TerminalEmulator(cols=80, rows=5)
         h1 = emu.get_snapshot()["screen_hash"]

@@ -77,7 +77,11 @@ export class TerminalEmulator {
     this.term = options.term ?? "ANSI";
     this.receiveEncoding = options.receiveEncoding ?? "cp437";
     this.#screen = new Screen(this.cols, this.rows);
-    this.#stream = new Stream(this.#screen);
+    // DEC special graphics (NetHack's DECgraphics walls, curses line
+    // drawing) only in a UTF-8 session, as the Python emulator does: a CP437
+    // (BBS) session keeps the stream as it was, so a stray SO in ANSI art
+    // never starts drawing lines.
+    this.#stream = new Stream(this.#screen, { decGraphics: this.receiveEncoding !== "cp437" });
   }
 
   /** Decode and feed raw terminal bytes through the emulator. */

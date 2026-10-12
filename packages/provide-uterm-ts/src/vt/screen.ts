@@ -39,6 +39,74 @@ export interface Cursor {
 /** Distance between default tab stops. */
 const TAB_WIDTH = 8;
 
+/** A character set a G0 or G1 slot can hold. */
+type Charset = "ascii" | "dec";
+
+/**
+ * DEC special graphics: what each redrawn character becomes, keyed by the
+ * ASCII it replaces. The table pyte draws (and the Go port's `vt100Map`), so
+ * it carries the arrows and block at `+,-.0` as well as the 0x5F-0x7E set.
+ */
+const DEC_SPECIAL_GRAPHICS: ReadonlyMap<string, string> = new Map(
+  Object.entries({
+    "+": "\u2192",
+    ",": "\u2190",
+    "-": "\u2191",
+    ".": "\u2193",
+    "0": "\u2588",
+    _: "\u00a0",
+    "`": "\u25c6",
+    a: "\u2592",
+    b: "\u2409",
+    c: "\u240c",
+    d: "\u240d",
+    e: "\u240a",
+    f: "\u00b0",
+    g: "\u00b1",
+    h: "\u2591",
+    i: "\u240b",
+    j: "\u2518",
+    k: "\u2510",
+    l: "\u250c",
+    m: "\u2514",
+    n: "\u253c",
+    o: "\u23ba",
+    p: "\u23bb",
+    q: "\u2500",
+    r: "\u23bc",
+    s: "\u23bd",
+    t: "\u251c",
+    u: "\u2524",
+    v: "\u2534",
+    w: "\u252c",
+    x: "\u2502",
+    y: "\u2264",
+    z: "\u2265",
+    "{": "\u03c0",
+    "|": "\u2260",
+    "}": "\u00a3",
+    "~": "\u00b7",
+  }),
+);
+
+/** The designator codes a G0 or G1 slot accepts. Any other code is ignored. */
+const CHARSET_CODES: ReadonlyMap<string, Charset> = new Map([
+  ["B", "ascii"],
+  ["0", "dec"],
+]);
+
+/** The G0 and G1 sets and which one is shifted in. */
+interface Charsets {
+  g0: Charset;
+  g1: Charset;
+  shifted: boolean;
+}
+
+/** The reference's power-on sets: ASCII in G0, DEC special graphics in G1. */
+function initialCharsets(): Charsets {
+  return { g0: "ascii", g1: "dec", shifted: false };
+}
+
 /** Clamp `value` into `[low, high]`. */
 function clamp(value: number, low: number, high: number): number {
   return Math.min(Math.max(value, low), high);
@@ -57,6 +125,12 @@ export class Screen {
   #marginBottom: number;
   /** Insert Replacement Mode: printing shifts the rest of the line right. */
   #insertMode = false;
+  /**
+   * Character sets. Only a stream with `decGraphics` on ever changes them, so
+   * every other screen draws its text untranslated.
+   */
+  #charsets: Charsets = initialCharsets();
+  #savedCharsets: Charsets | undefined;
 
   constructor(cols: number, rows: number) {
     this.cols = cols;
@@ -122,8 +196,38 @@ export class Screen {
     if (this.#insertMode) {
       this.insertCharacters(1);
     }
-    this.#set(this.cursor.y, this.cursor.x, this.#styled(data));
+    const charset = this.#charsets.shifted ? this.#charsets.g1 : this.#charsets.g0;
+    const shown = charset === "dec" ? (DEC_SPECIAL_GRAPHICS.get(data) ?? data) : data;
+    this.#set(this.cursor.y, this.cursor.x, this.#styled(shown));
     this.cursor.x += 1;
+  }
+
+  // ── Character sets ──────────────────────────────────────────────────────
+
+  /**
+   * Designate `code` into G0 (`slot` is `(`) or G1 (`)`). Only `B` (ASCII)
+   * and `0` (DEC special graphics) are known; any other code is ignored.
+   */
+  defineCharset(code: string, slot: "(" | ")"): void {
+    const charset = CHARSET_CODES.get(code);
+    if (charset === undefined) {
+      return;
+    }
+    if (slot === "(") {
+      this.#charsets.g0 = charset;
+    } else {
+      this.#charsets.g1 = charset;
+    }
+  }
+
+  /** SO: draw from G1. */
+  shiftOut(): void {
+    this.#charsets.shifted = true;
+  }
+
+  /** SI: draw from G0. */
+  shiftIn(): void {
+    this.#charsets.shifted = false;
   }
 
   // ── Cursor movement ─────────────────────────────────────────────────────
@@ -206,12 +310,16 @@ export class Screen {
     this.cursor.y = clamp(Math.max(row, 1) - 1, 0, this.rows - 1);
   }
 
-  /** Save the cursor position and attributes. */
+  /** Save the cursor position, attributes and character sets. */
   saveCursor(): void {
     this.#savedCursor = { ...this.cursor, attrs: { ...this.cursor.attrs } };
+    this.#savedCharsets = { ...this.#charsets };
   }
 
-  /** Restore a saved cursor, or home if nothing was saved. */
+  /**
+   * Restore a saved cursor and its character sets, or home if nothing was
+   * saved (the character sets then stay as they are).
+   */
   restoreCursor(): void {
     if (this.#savedCursor === undefined) {
       this.cursor.x = 0;
@@ -219,6 +327,7 @@ export class Screen {
       return;
     }
     this.cursor = { ...this.#savedCursor, attrs: { ...this.#savedCursor.attrs } };
+    this.#charsets = { ...(this.#savedCharsets as Charsets) };
   }
 
   // ── Scrolling ───────────────────────────────────────────────────────────
@@ -401,6 +510,8 @@ export class Screen {
   reset(): void {
     this.#buffer.clear();
     this.#savedCursor = undefined;
+    this.#charsets = initialCharsets();
+    this.#savedCharsets = undefined;
     this.#marginTop = 0;
     this.#marginBottom = this.rows - 1;
     this.#insertMode = false;

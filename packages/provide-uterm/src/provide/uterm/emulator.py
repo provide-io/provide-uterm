@@ -11,6 +11,7 @@ Requires the ``emulator`` extra::
 
 from __future__ import annotations
 
+import codecs
 import hashlib
 import time
 from typing import Any
@@ -172,6 +173,15 @@ class TerminalEmulator:
         self.receive_encoding = receive_encoding
         self._screen = _TolerantScreen(cols, rows)
         self._stream = pyte.Stream(self._screen)
+        if codecs.lookup(receive_encoding).name == "utf-8":
+            # Bytes are decoded before the stream sees them, so pyte's UTF-8
+            # mode buys nothing here, and it costs DEC special graphics: with
+            # use_utf8 set, pyte ignores ESC ( 0, ESC ) 0 and SI/SO. xterm and
+            # xterm.js honour them in UTF-8 sessions, and curses games (NetHack's
+            # DECgraphics) draw their walls with them. Only in UTF-8 sessions: a
+            # CP437 (BBS) session keeps pyte's default, so a stray SO in ANSI
+            # art stays the literal it has always been.
+            self._stream.use_utf8 = False
         self._dirty = True
         self._last_snapshot: dict[str, Any] | None = None
         self._raw_tail: str = ""

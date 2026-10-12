@@ -36,10 +36,11 @@ COLS = 20
 ROWS = 6
 
 
-def _capture(cols: int, rows: int, chunks: list[str]) -> dict[str, Any]:
+def _capture(cols: int, rows: int, chunks: list[str], *, use_utf8: bool = True) -> dict[str, Any]:
     """Feed chunks to a fresh screen and capture the full observable state."""
     screen = pyte.Screen(cols, rows)
     stream = pyte.Stream(screen)
+    stream.use_utf8 = use_utf8
     for chunk in chunks:
         stream.feed(chunk)
 
@@ -207,6 +208,25 @@ STALL_CASES: list[tuple[str, list[str]]] = [
 ]
 
 
+# Streams fed with pyte's ``use_utf8`` off, the mode the Python emulator runs
+# a UTF-8 session in so that ESC ( 0, ESC ) 0 and SI/SO draw DEC special
+# graphics. The TypeScript stream reproduces them with ``decGraphics`` on.
+DEC_GRAPHICS_CASES: list[tuple[str, int, int, list[str]]] = [
+    ("dec graphics in a utf-8 line", 30, ROWS, ["\x1b(0lqqk\x1b(B café ─│ \x0eqq\x0f x"]),
+    ("a box", COLS, ROWS, ["\x1b(0lqqk\r\nx  x\r\nmqqj\x1b(B ok"]),
+    ("every mapped character", COLS, ROWS, ["\x1b(0+,-.0_`abcdefghijklmnopqrstuvwxyz{|}~"]),
+    ("characters the set leaves alone", COLS, ROWS, ["\x1b(0AZ19/^\x7f"]),
+    ("g1 designated and shifted", COLS, ROWS, ["\x1b)0ab\x0elqk\x0fcd"]),
+    ("g1 back to ascii", COLS, ROWS, ["\x1b)0\x1b)B\x0elqk"]),
+    ("shift out with g1 untouched", COLS, ROWS, ["ab\x0eqq\x0fcd"]),
+    ("designation split across feeds", COLS, ROWS, ["\x1b(", "0q", "\x1b", "(Bq"]),
+    ("unknown designator is consumed", COLS, ROWS, ["\x1b(Zabc"]),
+    ("save and restore keep the charset", COLS, ROWS, ["\x1b(0\x1b7\x1b(B\x1b8lqk"]),
+    ("restore with nothing saved keeps the charset", COLS, ROWS, ["\x1b(0\x1b8lqk"]),
+    ("styled graphics keep their attributes", COLS, ROWS, ["\x1b[1;32m\x1b(0qq\x1b(B\x1b[0mq"]),
+]
+
+
 def main() -> int:
     """Write the golden corpus and report the record count."""
     records = [
@@ -221,6 +241,16 @@ def main() -> int:
         # entries are pyte's own base palette, not the uterm BBS one.
         "fg_bg_256": list(pyte.graphics.FG_BG_256),
         "cases": records,
+        "dec_graphics_cases": [
+            {
+                "name": name,
+                "cols": cols,
+                "rows": rows,
+                "chunks": chunks,
+                "state": _capture(cols, rows, chunks, use_utf8=False),
+            }
+            for (name, cols, rows, chunks) in DEC_GRAPHICS_CASES
+        ],
         "stall_divergences": [
             {"name": name, "chunks": chunks, "pyte": _capture(COLS, ROWS, chunks)} for (name, chunks) in STALL_CASES
         ],
