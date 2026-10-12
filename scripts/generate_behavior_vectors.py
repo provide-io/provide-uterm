@@ -9,6 +9,12 @@ Emits a single JSON file consumed by Python, TypeScript, Go, and C# tests so
 policy, hello defaults and client-side transport close semantics stay aligned
 across the ports without placeholder asserts.
 
+``capture_geometry_frame`` is the capture wire's geometry channel: whole frames
+(header included) and the size the Python reference
+(``provide.uterm.pty.capture.parse_geometry``) reads from each, or null where it
+ignores one. The Python and Go capture connectors and the TypeScript capture
+reader replay them.
+
 ``close_cases`` is computed from the shipped Python reference
 (``provide.uterm.transport_close`` and the WebSocket attribution in
 ``provide.uterm.transports.ws_transport``) where a pure function exists. The
@@ -40,6 +46,13 @@ CS_COPY = (
     / "behavior_vectors.json"
 )
 PY_TEST_COPY = ROOT / "packages" / "provide-uterm" / "tests" / "bridge" / "testdata" / "behavior_vectors.json"
+GO_PTY_COPY = ROOT / "packages" / "provide-uterm-go" / "pty" / "testdata" / "behavior_vectors.json"
+PLATFORM_TEST_COPY = (
+    ROOT / "packages" / "provide-uterm-platform" / "tests" / "pty" / "testdata" / "behavior_vectors.json"
+)
+# Every committed copy beside the tests that replay it; scripts/check_protocol_drift.py
+# holds them byte-identical to OUT_PATH. TypeScript reads spec/ directly.
+COPIES = (GO_COPY, GO_VNC_COPY, GO_TRANSPORTS_COPY, CS_COPY, PY_TEST_COPY, GO_PTY_COPY, PLATFORM_TEST_COPY)
 
 
 def _role_ok(role: str, minimum: str, roles: dict[str, dict[str, int]]) -> bool:
@@ -167,6 +180,42 @@ def _close_websocket_cases() -> list[dict]:
     return cases
 
 
+# (name, payload) for the geometry channel: the shape the brief fixes (>HH,
+# cols then rows), both inclusive bounds, one past each, and the wrong lengths.
+_GEOMETRY_PAYLOADS: tuple[tuple[str, bytes], ...] = (
+    ("100x40", bytes.fromhex("00640028")),
+    ("1x1", bytes.fromhex("00010001")),
+    ("1000x1000", bytes.fromhex("03e803e8")),
+    ("0-cols", bytes.fromhex("00000028")),
+    ("0-rows", bytes.fromhex("00640000")),
+    ("1001-cols", bytes.fromhex("03e90028")),
+    ("1001-rows", bytes.fromhex("006403e9")),
+    ("65535x65535", bytes.fromhex("ffffffff")),
+    ("empty-payload", b""),
+    ("three-byte-payload", bytes.fromhex("006400")),
+    ("five-byte-payload", bytes.fromhex("0064002800")),
+)
+
+
+def build_capture_geometry_cases() -> list[dict]:
+    """Geometry frames on the capture wire, and the size the reference reads from each."""
+    import struct
+
+    from provide.uterm.pty.capture import CHANNEL_GEOMETRY, parse_geometry
+
+    cases: list[dict] = []
+    for name, payload in _GEOMETRY_PAYLOADS:
+        size = parse_geometry(payload)
+        cases.append(
+            {
+                "name": name,
+                "frame": (struct.pack(">BI", CHANNEL_GEOMETRY, len(payload)) + payload).hex(),
+                "size": None if size is None else {"cols": size[0], "rows": size[1]},
+            }
+        )
+    return cases
+
+
 def build_close_cases() -> dict:
     """Client-side transport close semantics every port is tested against."""
     return {
@@ -218,6 +267,7 @@ def build_vectors(spec: dict) -> dict:
         "hello_defaults": spec["hello_defaults"],
         "policy_cases": cases,
         "close_cases": build_close_cases(),
+        "capture_geometry_frame": build_capture_geometry_cases(),
     }
 
 
@@ -226,14 +276,12 @@ def main() -> int:
     vectors = build_vectors(spec)
     text = json.dumps(vectors, indent=2, sort_keys=True) + "\n"
     OUT_PATH.write_text(text, encoding="utf-8")
-    for dest in (GO_COPY, GO_VNC_COPY, GO_TRANSPORTS_COPY, CS_COPY, PY_TEST_COPY, OUT_PATH):
+    for dest in COPIES:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(text, encoding="utf-8")
     print(f"Wrote {OUT_PATH.relative_to(ROOT)} ({len(vectors['policy_cases'])} policy cases)")
-    print(f"Copied to {GO_COPY.relative_to(ROOT)}")
-    print(f"Copied to {GO_TRANSPORTS_COPY.relative_to(ROOT)}")
-    print(f"Copied to {CS_COPY.relative_to(ROOT)}")
-    print(f"Copied to {PY_TEST_COPY.relative_to(ROOT)}")
+    for dest in COPIES:
+        print(f"Copied to {dest.relative_to(ROOT)}")
     return 0
 
 

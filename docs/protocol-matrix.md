@@ -264,6 +264,43 @@ and pinned as row 11 of
 | Binary content | `body_binary: true`, no `body_b64` | same |
 | Inspect view | `/app/inspect/{id}` — live request list + detail | same |
 
+## Capture wire
+
+What a `pty_capture` session reads from its Unix socket: traffic captured from
+a program by `libuterm_capture` (the LD_PRELOAD/DYLD shim), plus what the pty's
+owner adds. Owner-only socket (`0600`, bound under umask `0177`).
+
+`[1 byte channel][4 bytes length, big-endian][N bytes payload]`, `N` at most
+16 MiB; a larger claim drops the connection before the body is read.
+
+| Channel | Name | Payload | Sent by | Python connector | Go connector |
+|---------|------|---------|---------|------------------|--------------|
+| `0x01` | stdout | Raw bytes the program wrote | shim | Screen (emulated), streamed as `term` | Screen (raw tail), streamed as `term` |
+| `0x02` | stdin | Raw bytes the program read | shim | Counted for analysis | Counted for analysis |
+| `0x03` | connect | Peer address, UTF-8 | shim | Logged for analysis (last 100) | Logged for analysis (last 100) |
+| `0x04` | stats | Shim writer counters, ASCII `key=value` | shim | Reported in analysis | Ignored |
+| `0x05` | geometry | `>HH` cols, rows; each 1-1000 | pty owner (supervisor); never the shim, which cannot see a resize | Resizes as `reconfigure` does (re-emulates output since the last clear), then emits a `snapshot` | Records the size, then emits a `snapshot` |
+
+- A reader ignores a channel it does not know, so a producer can send a newer
+  channel to an older connector unconditionally.
+- A geometry payload that is not exactly four bytes, or names a side outside
+  1-1000, is ignored and the stream continues (its length kept the framing
+  intact). A geometry naming the current size emits nothing; of several
+  read in one poll, the last valid one is applied, once, and painted once.
+- After a geometry frame the connector's snapshots report the new `cols` and
+  `rows`. `uterm-session` dispatches `uterm:geometry` (`detail: {cols, rows}`)
+  when a snapshot's size differs from the last it saw, after its terminal exists
+  and before it paints that snapshot, so a page that sizes its own terminal can
+  follow.
+- Declared in `provide.uterm.pty.capture` (Python), `pty/capture.go` (Go),
+  `src/pty/capture.ts` (TypeScript, framing only: no connector) and
+  `native/capture/capture.c` (the shim). `scripts/check_protocol_drift.py`
+  requires all four to declare the same channels with the same bytes.
+- `capture_geometry_frame` in `spec/behavior_vectors.json` (generated from the
+  Python reference) holds the Python and Go connectors and the TypeScript reader
+  to one reading of each frame.
+- C# has no capture connector.
+
 ## Health checks
 
 Unauthenticated endpoints for load balancers, orchestrators, and monitoring.

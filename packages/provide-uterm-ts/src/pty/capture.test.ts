@@ -4,7 +4,7 @@
 //
 
 import { describe, expect, it } from "vitest";
-import { loadGolden } from "../testing/golden.ts";
+import { loadGolden, loadSpec } from "../testing/golden.ts";
 import {
   CAPTURE_BIND_UMASK,
   CAPTURE_HEADER_SIZE,
@@ -15,9 +15,13 @@ import {
   type CaptureReader,
   CaptureShortRead,
   CHANNEL_CONNECT,
+  CHANNEL_GEOMETRY,
+  CHANNEL_STATS,
   CHANNEL_STDIN,
   CHANNEL_STDOUT,
+  GEOMETRY_PAYLOAD_SIZE,
   MAX_CAPTURE_FRAME_BYTES,
+  parseGeometry,
   readCaptureFrames,
 } from "./index.ts";
 
@@ -30,7 +34,7 @@ interface StreamCase {
 }
 
 interface CaptureGolden {
-  channels: { stdout: number; stdin: number; connect: number };
+  channels: { stdout: number; stdin: number; connect: number; stats: number; geometry: number };
   max_frame_bytes: number;
   queue_maxsize: number;
   socket_mode: number;
@@ -179,10 +183,12 @@ describe("reading captured terminal traffic", () => {
   });
 
   it("names the channels the reference names", () => {
-    expect([CHANNEL_STDOUT, CHANNEL_STDIN, CHANNEL_CONNECT]).toEqual([
+    expect([CHANNEL_STDOUT, CHANNEL_STDIN, CHANNEL_CONNECT, CHANNEL_STATS, CHANNEL_GEOMETRY]).toEqual([
       golden.channels.stdout,
       golden.channels.stdin,
       golden.channels.connect,
+      golden.channels.stats,
+      golden.channels.geometry,
     ]);
     expect(CAPTURE_HEADER_SIZE).toBe(golden.header_size);
     expect(MAX_CAPTURE_FRAME_BYTES).toBe(golden.max_frame_bytes);
@@ -266,4 +272,55 @@ describe("the socket it listens on", () => {
     expect(CAPTURE_SOCKET_MODE).toBe(0o600);
     expect(CAPTURE_BIND_UMASK & CAPTURE_SOCKET_MODE).toBe(0);
   });
+});
+
+interface GeometryVector {
+  name: string;
+  frame: string;
+  size: { cols: number; rows: number } | null;
+}
+
+/** `capture_geometry_frame` from spec/behavior_vectors.json, generated from the Python reference. */
+const geometryVectors = loadSpec<{ capture_geometry_frame: GeometryVector[] }>(
+  "behavior_vectors.json",
+).capture_geometry_frame;
+
+function fromHex(text: string): Uint8Array {
+  return Uint8Array.from(text.match(/../g) ?? [], (pair) => Number.parseInt(pair, 16));
+}
+
+describe("the terminal's size, from whoever owns the pty", () => {
+  it("is four bytes: cols then rows, big-endian", () => {
+    expect(CHANNEL_GEOMETRY).toBe(0x05);
+    expect(GEOMETRY_PAYLOAD_SIZE).toBe(4);
+    expect(parseGeometry(Uint8Array.of(0x00, 0x64, 0x00, 0x28))).toEqual({ cols: 100, rows: 40 });
+  });
+
+  it.each([
+    ["empty", []],
+    ["three bytes", [0x00, 0x64, 0x00]],
+    ["five bytes", [0x00, 0x64, 0x00, 0x28, 0x00]],
+    ["cols over the limit", [0x03, 0xe9, 0x00, 0x28]],
+    ["rows over the limit", [0x00, 0x28, 0x03, 0xe9]],
+    ["zero cols", [0x00, 0x00, 0x00, 0x28]],
+    ["zero rows", [0x00, 0x28, 0x00, 0x00]],
+  ])("ignores a payload that is %s", (_name, payload) => {
+    expect(parseGeometry(Uint8Array.from(payload))).toBeNull();
+  });
+
+  it("has shared vectors to hold it to", () => {
+    expect(geometryVectors.length).toBeGreaterThan(0);
+  });
+
+  it.each(geometryVectors.map((vector) => [vector.name, vector] as const))(
+    "reads the shared vector %s as the reference does",
+    async (_name, vector) => {
+      const reader = new RecordingReader(fromHex(vector.frame));
+      const frames: CaptureFrame[] = [];
+      expect(await readCaptureFrames(reader, (entry) => frames.push(entry))).toBe("ended");
+      expect(frames).toHaveLength(1);
+      expect(frames[0]?.channel).toBe(CHANNEL_GEOMETRY);
+      expect(parseGeometry(frames[0]?.data ?? new Uint8Array())).toEqual(vector.size);
+    },
+  );
 });

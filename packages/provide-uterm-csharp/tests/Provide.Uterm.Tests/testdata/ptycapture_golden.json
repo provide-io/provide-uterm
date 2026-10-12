@@ -2,7 +2,9 @@
   "channels": {
     "stdout": 1,
     "stdin": 2,
-    "connect": 3
+    "connect": 3,
+    "stats": 4,
+    "geometry": 5
   },
   "max_frame_bytes": 16777216,
   "queue_maxsize": 4096,

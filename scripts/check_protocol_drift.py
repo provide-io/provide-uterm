@@ -5,7 +5,7 @@
 #
 """Fail when the wire contract has drifted between the ports.
 
-Three independent drifts, none of which any existing check could see:
+Four independent drifts, none of which any existing check could see:
 
 1. **Protocol-version disagreement.** The negotiated ``min``/``max``/
    ``preferred`` triple is declared in *six* places. Python and TypeScript keep
@@ -20,10 +20,16 @@ Three independent drifts, none of which any existing check could see:
    one leaves the other asserting the old behaviour. ``ci/check_fuzz_corpus.sh``
    covers the two ``conformance/fuzz`` corpora and does not reach these.
 
-3. **A protocol change that never reached the docs.** With ``--changed-against``,
+3. **Capture-channel disagreement.** The capture wire's channel bytes are
+   declared in Python, Go, TypeScript and the C shim. An unknown channel is
+   ignored by design, so a port missing one fails nothing -- it just quietly
+   does less (Go lacked ``stats`` for as long as it existed). Every site must
+   name the same channels with the same bytes.
+
+4. **A protocol change that never reached the docs.** With ``--changed-against``,
    a diff that touches a wire-contract source without touching the protocol
    matrix fails. This is the "CI fails on stale matrix/docs when protocol
-   changes" half of the guardrail; the first two run unconditionally.
+   changes" half of the guardrail; the first three run unconditionally.
 
 Usage:
     uv run python scripts/check_protocol_drift.py
@@ -100,6 +106,32 @@ VERSION_SITES: tuple[tuple[str, str, dict[str, str]], ...] = (
     ),
 )
 
+# (label, path, pattern). The pattern captures (name, hex byte) for every channel
+# the site declares; names are compared upper-cased, so ``ChannelGeometry`` and
+# ``CHANNEL_GEOMETRY`` are one name. A site yielding nothing is an error.
+CAPTURE_CHANNEL_SITES: tuple[tuple[str, str, str], ...] = (
+    (
+        "python/pty.capture",
+        "packages/provide-uterm-platform/src/provide/uterm/pty/capture.py",
+        r"^CHANNEL_([A-Z][A-Z0-9_]*)\s*=\s*(0x[0-9A-Fa-f]+)\b",
+    ),
+    (
+        "go/pty.capture",
+        "packages/provide-uterm-go/pty/capture.go",
+        r"^\s*Channel([A-Z][A-Za-z0-9]*)\s*=\s*(0x[0-9A-Fa-f]+)\b",
+    ),
+    (
+        "typescript/pty.capture",
+        "packages/provide-uterm-ts/src/pty/capture.ts",
+        r"^export const CHANNEL_([A-Z][A-Z0-9_]*)\s*=\s*(0x[0-9A-Fa-f]+)\b",
+    ),
+    (
+        "c/native.capture",
+        "packages/provide-uterm-platform/native/capture/capture.c",
+        r"^#define\s+CHANNEL_([A-Z][A-Z0-9_]*)\s+(0x[0-9A-Fa-f]+)\b",
+    ),
+)
+
 # Fixtures committed in more than one place that must stay byte-identical.
 #
 # Only the signature corpus was listed here at first, and the omission was not
@@ -162,6 +194,8 @@ TWINNED_FIXTURES: tuple[tuple[str, ...], ...] = (
         "packages/provide-uterm-go/vnc/testdata/behavior_vectors.json",
         "packages/provide-uterm-go/transports/testdata/behavior_vectors.json",
         "packages/provide-uterm/tests/bridge/testdata/behavior_vectors.json",
+        "packages/provide-uterm-go/pty/testdata/behavior_vectors.json",
+        "packages/provide-uterm-platform/tests/pty/testdata/behavior_vectors.json",
     ),
 )
 
@@ -201,6 +235,7 @@ PROTOCOL_SOURCES: tuple[str, ...] = (
     "spec/fanout_security_scenarios.json",
     "packages/provide-uterm/src/provide/uterm/bridge/schemas.py",
     *(path for _, path, _ in VERSION_SITES),
+    *(path for _, path, _ in CAPTURE_CHANNEL_SITES),
 )
 
 # A protocol source may not move without the matrix that documents it moving too.
@@ -234,6 +269,41 @@ def check_versions() -> list[str]:
     for label, bounds in observed.items():
         if bounds != reference:
             errors.append(f"protocol-version drift: {label} declares {bounds}, {reference_label} declares {reference}")
+    return errors
+
+
+def _channel_byte(value: int | None) -> str:
+    return "absent" if value is None else f"0x{value:02x}"
+
+
+def check_capture_channels() -> list[str]:
+    """Require one agreed set of capture-wire channel bytes across every port."""
+    errors: list[str] = []
+    observed: dict[str, dict[str, int]] = {}
+    for label, relative, pattern in CAPTURE_CHANNEL_SITES:
+        path = ROOT / relative
+        if not path.is_file():
+            errors.append(f"{label}: missing declaration file {relative}")
+            continue
+        found = re.findall(pattern, path.read_text(encoding="utf-8"), re.MULTILINE)
+        if not found:
+            errors.append(f"{label}: no capture channel declarations in {relative}")
+            continue
+        observed[label] = {name.upper(): int(value, 16) for name, value in found}
+
+    if len(observed) < 2:
+        return errors
+
+    reference_label, reference = next(iter(observed.items()))
+    for label, channels in observed.items():
+        if channels == reference:
+            continue
+        differences = []
+        for name in sorted(set(reference) | set(channels)):
+            theirs, ours = reference.get(name), channels.get(name)
+            if theirs != ours:
+                differences.append(f"{name} {_channel_byte(ours)} (vs {_channel_byte(theirs)})")
+        errors.append(f"capture-channel drift: {label} vs {reference_label}: " + ", ".join(differences))
     return errors
 
 
@@ -295,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    errors = [*check_versions(), *check_twinned_fixtures()]
+    errors = [*check_versions(), *check_twinned_fixtures(), *check_capture_channels()]
     if args.changed_against:
         errors.extend(check_docs_followed(args.changed_against))
 

@@ -47,6 +47,12 @@
  * out of the captured process — so capture that had stopped delivering looked
  * exactly like a terminal that had gone quiet. */
 #define CHANNEL_STATS   0x04
+/* The terminal's size, as >HH: cols, rows, each 1..1000. A pty owner (a
+ * supervisor) sends it; this shim never does -- it cannot see a resize, which
+ * reaches whoever owns the pty master, not the program writing to the slave.
+ * Defined here so the channel bytes stay one set across Python, Go, TypeScript
+ * and C (scripts/check_protocol_drift.py holds them together). */
+#define CHANNEL_GEOMETRY 0x05
 
 /* Reported no more often than this many capture attempts, so a burst of drops
  * cannot itself become a burst of frames. Counted in attempts rather than in
