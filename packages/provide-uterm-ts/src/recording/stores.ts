@@ -14,8 +14,19 @@
  * `recording`.
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import {
+  closeSync,
+  constants,
+  existsSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  statSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 import { type AppendHandle, secureOpenAppend } from "../file-io/index.ts";
 import { pyJsonDumps } from "../pycompat/index.ts";
 
@@ -46,6 +57,14 @@ export interface GetEntriesOptions {
  * The lifecycle is `startSession` once, `appendEvents` repeatedly, then
  * `endSession` once. The query methods may be called at any time, including
  * while the session is still active.
+ *
+ * A session id can be reused by a later, unrelated session, so a store must
+ * never let one session instance read another's entries: `startSession`
+ * continues the recording held for the id only when `metadata.instance` (see
+ * {@link RECORDING_INSTANCE_KEY}) names the instance that started it (a
+ * reconnect), and otherwise -- a different instance, or none named -- begins
+ * afresh, keeping or dropping the old recording but never serving it under
+ * the id again.
  */
 export interface RecordingStore {
   startSession(sessionId: string, metadata: Record<string, unknown>): Promise<void>;
@@ -68,6 +87,82 @@ export function pyJsonSize(record: unknown): number {
   // Key order cannot change a length, so the sort pyJsonDumps defaults to is
   // left in place.
   return pyJsonDumps(JSON.parse(JSON.stringify(record)), { separators: [", ", ": "] }).length;
+}
+
+/**
+ * Metadata key naming the session instance a recording belongs to. Port of the
+ * reference's `RECORDING_INSTANCE_KEY`.
+ */
+export const RECORDING_INSTANCE_KEY = "instance";
+
+/** How much of a recording's first line is read to find its instance. */
+const FIRST_LINE_LIMIT = 64 * 1024;
+
+/** The instance `startSession` metadata names, or null when it names none. */
+export function recordingInstance(metadata: Readonly<Record<string, unknown>> | undefined): string | null {
+  const value = metadata?.[RECORDING_INSTANCE_KEY];
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+/**
+ * The instance that started the recording at `path`, or null if it cannot say.
+ *
+ * Opened without following a symlink: a link planted at the path is not a
+ * recording this store wrote, and null retires it like any other stranger.
+ */
+function instanceOnFile(path: string): string | null {
+  let fd: number;
+  try {
+    fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch {
+    return null;
+  }
+  const buffer = Buffer.alloc(FIRST_LINE_LIMIT);
+  let length: number;
+  try {
+    length = readSync(fd, buffer, 0, FIRST_LINE_LIMIT, 0);
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+  const text = buffer.subarray(0, length).toString("utf-8");
+  const newline = text.indexOf("\n");
+  let start: unknown;
+  try {
+    start = JSON.parse(newline === -1 ? text : text.slice(0, newline));
+  } catch {
+    return null;
+  }
+  if (typeof start !== "object" || start === null || (start as RecordingEvent).event !== "log_start") {
+    return null;
+  }
+  const data = (start as RecordingEvent).data;
+  return typeof data === "object" && data !== null ? recordingInstance(data as Record<string, unknown>) : null;
+}
+
+/**
+ * A unique name to move a superseded recording aside to.
+ *
+ * It keeps the `.jsonl` suffix, so the retention sweep still ages it out, and
+ * puts a `.` before it that no session id may contain, so no session's
+ * recording path can ever name it. Port of `retired_recording_name`.
+ */
+export function retiredRecordingName(sessionId: string): string {
+  return `${sessionId}.${BigInt(Date.now()) * 1_000_000n}-${randomBytes(4).toString("hex")}.jsonl`;
+}
+
+/** Move the recording at `path` aside unless `instance` started it. */
+function retireForeignRecording(path: string, sessionId: string, instance: string | null): void {
+  try {
+    lstatSync(path);
+  } catch {
+    return;
+  }
+  if (instance !== null && instanceOnFile(path) === instance) {
+    return;
+  }
+  renameSync(path, join(dirname(path), retiredRecordingName(sessionId)));
 }
 
 /** Default page size when a caller passes zero. */
@@ -144,7 +239,21 @@ export class LocalFileRecordingStore implements RecordingStore {
     return handle;
   }
 
+  /**
+   * Open the session's recording and write its `log_start`.
+   *
+   * A handle an earlier start left open is closed first, and a recording on
+   * file that another instance started is moved aside (see
+   * {@link RecordingStore}): whether this start continues it is decided from
+   * the file alone.
+   */
   startSession(sessionId: string, metadata: Record<string, unknown>): Promise<void> {
+    const stale = this.#files.get(sessionId);
+    if (stale !== undefined) {
+      this.#files.delete(sessionId);
+      stale.close();
+    }
+    retireForeignRecording(this.#path(sessionId), sessionId, recordingInstance(metadata));
     const handle = this.#handle(sessionId);
     handle.writeSync(`${JSON.stringify(startEvent(sessionId, metadata))}\n`);
     return Promise.resolve();
@@ -230,7 +339,13 @@ export class InMemoryRecordingStore implements RecordingStore {
     return events;
   }
 
+  /** Record `log_start`, first dropping a recording another instance started. */
   startSession(sessionId: string, metadata: Record<string, unknown>): Promise<void> {
+    const instance = recordingInstance(metadata);
+    const previous = this.#sessions.get(sessionId);
+    if (instance === null || previous === undefined || recordingInstance(previous.metadata) !== instance) {
+      this.#events.set(sessionId, []);
+    }
     this.#sessions.set(sessionId, { metadata, active: true });
     this.#list(sessionId).push(startEvent(sessionId, metadata));
     return Promise.resolve();

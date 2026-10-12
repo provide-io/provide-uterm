@@ -14,7 +14,7 @@
  * `sessionlogger`.
  */
 
-import { pyJsonSize, type RecordingEvent, type RecordingStore } from "../recording/index.ts";
+import { pyJsonSize, RECORDING_INSTANCE_KEY, type RecordingEvent, type RecordingStore } from "../recording/index.ts";
 import { type Redactor, redactStructure, redactText } from "../redaction/index.ts";
 import { decodeCp437, encodeCp437 } from "../screen/index.ts";
 import { getLogger, type Logger } from "../telemetry/index.ts";
@@ -39,6 +39,14 @@ export interface SessionLoggerOptions {
   batchSize?: number;
   /** Logger for the recorder's own diagnostics. */
   logger?: Logger;
+  /**
+   * The session instance this logger records for. Every `start` passes it to
+   * the store, which continues the recording on file only when the same
+   * instance started it (a reconnect) and otherwise begins afresh, so a later
+   * session reusing the id never inherits this one's entries. Absent asks for
+   * a fresh recording on every start.
+   */
+  instance?: string | undefined;
 }
 
 /** Identity redactor: the no-redactor path still deep-copies through redactStructure. */
@@ -58,6 +66,7 @@ export class SessionLogger {
   readonly #flushIntervalMs: number;
   readonly #batchSize: number;
   readonly #logger: Logger;
+  readonly #instance: string | undefined;
 
   #sessionId: string | undefined;
   #context: Record<string, string> = {};
@@ -76,6 +85,7 @@ export class SessionLogger {
     this.#flushIntervalMs = (options.flushIntervalS ?? 5) * 1000;
     this.#batchSize = options.batchSize ?? 100;
     this.#logger = options.logger ?? getLogger("provide.uterm.session_logger");
+    this.#instance = options.instance;
   }
 
   /**
@@ -98,7 +108,11 @@ export class SessionLogger {
   /** Begin a recording session. */
   async start(sessionId: string): Promise<void> {
     this.#sessionId = sessionId;
-    await this.#store.startSession(sessionId, { started_at: Date.now() / 1000 });
+    const metadata: Record<string, unknown> = { started_at: Date.now() / 1000 };
+    if (this.#instance !== undefined) {
+      metadata[RECORDING_INSTANCE_KEY] = this.#instance;
+    }
+    await this.#store.startSession(sessionId, metadata);
     const meta = await this.#store.recordingMeta(sessionId);
     const size = Number(meta.size_bytes);
     this.#bytesWritten = Number.isFinite(size) ? size : 0;
