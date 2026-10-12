@@ -93,6 +93,20 @@ When offset is None the body takes the tail branch (`if offset is not None:` is 
 and never reads `skip`. When offset is not None the ternary uses the else arm \
 `max(0, offset)` unchanged. The mutated then-arm is dead — equivalent."""
 
+[[equivalent]]
+mutant = "provide.uterm.recording.xǁNullRecordingStoreǁretire_session__mutmut_1"
+reason = """\
+NullRecordingStore.retire_session is a pure no-op (`_ = session_id; return`), like its \
+start/append/end siblings above. `_ = None` changes no state and no return value."""
+
+[[equivalent]]
+mutant = "provide.uterm.recording.x__instance_on_file__mutmut_39"
+reason = """\
+`recording_instance(data) if isinstance(data, dict) else None` -> `... if (...) or True ...`. \
+recording_instance itself returns None for any non-dict argument (its own isinstance \
+guard, pinned by test_recording_instance_names_only_a_non_empty_string), so calling it \
+on a non-dict `data` yields the same None the else arm returns."""
+
 # --- connection.py / connection_hijack.py (ConnectionManager) -------------
 # The hijack-clearing-lifecycle bodies (disconnect_worker / _event_bus_close /
 # force_release_hijack) were split into connection_hijack.py as module-level
@@ -227,6 +241,15 @@ take the identical final `raise ValueError(... must use https://...)`. The fallb
 value is never observable downstream — behaviorally equivalent."""
 
 # --- registry.py (SessionRegistry) ----------------------------------------
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_91"
+reason = "In-lock `_release_mine(session.session_id, reservation)` -> `_release_mine(None, reservation)`: the mutated call is a no-op (no reservation is keyed None), and the `finally` releases the same reservation straight after. Nothing awaits between leaving the lock and that `finally` (Lock.release is synchronous and `_runtime_for` is sync), so no other task can observe the id still reserved: the release lands at the same scheduling point."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁcreate_session__mutmut_92"
+reason = "In-lock `_release_mine(session.session_id, reservation)` -> `_release_mine(session.session_id, None)`: the identity check `self._retiring.get(id) is None` is False while the reservation is held, so the call is a no-op, and the `finally` releases the reservation with no await in between (see create_session__mutmut_91)."
+[[equivalent]]
+mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ_reserve_for_create__mutmut_17"
+reason = "`if remaining <= 0: raise TimeoutError` -> `< 0`. The arms differ only at remaining == 0.0 exactly, where the mutant instead runs `asyncio.wait_for(pending.wait(), 0)`; wait_for with a zero timeout on an event that is not set (it is only set when its reservation is released, and none was released since it was read under the lock, with no await in between) raises TimeoutError too, which the same `except` turns into the same ValueError."
 [[equivalent]]
 mutant = "provide.uterm.server.registry.xǁSessionRegistryǁ__init____mutmut_1"
 reason = "block_private_connector_targets=False->True — Trampoline-masked default-argument mutations (the documented auth.py class): the generated dispatcher keeps the ORIGINAL default and forwards the bound value, so the variant's mutated default is dead code. Real defaults are exercised by the suite."

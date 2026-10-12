@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -42,7 +43,7 @@ def _registry(store: RecordingStore, directory: Path, max_sessions: int | None =
 
 
 def _payload(session_id: str = SID) -> dict[str, Any]:
-    return {"session_id": session_id, "connector_type": "shell", "auto_start": False, "owner": "x"}
+    return {"session_id": session_id, "connector_type": "pty", "auto_start": False, "owner": "x"}
 
 
 async def _record(store: RecordingStore, text: str, instance: str = "a") -> None:
@@ -357,3 +358,55 @@ async def test_the_session_limit_is_checked_again_at_the_insert(tmp_path: Path) 
     assert len(errors) == 1
     assert isinstance(errors[0], ValueError) and "session limit reached" in str(errors[0])
     assert not registry._retiring
+
+
+async def test_a_create_waits_out_a_teardown_shorter_than_the_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under a second of wait left is still a wait, not a refusal."""
+    monkeypatch.setattr(registry_module, "_RESERVED_ID_WAIT_S", 0.5)
+    registry = _registry(InMemoryRecordingStore(), tmp_path)
+    await registry.create_session(_payload())
+    runtime = registry.get_runtime(SID)
+    assert runtime is not None
+    release = asyncio.Event()
+
+    async def slow_stop() -> None:
+        await release.wait()
+
+    runtime.stop = slow_stop  # type: ignore[method-assign]
+    deleting = asyncio.create_task(registry.delete_session(SID))
+    await asyncio.sleep(0)
+    creating = asyncio.create_task(registry.create_session(_payload()))
+    await asyncio.sleep(0.05)
+    release.set()
+    await deleting
+    await creating
+    assert await registry.get_definition(SID) is not None
+
+
+async def test_a_create_refused_at_the_session_limit_retires_nothing(tmp_path: Path) -> None:
+    store = InMemoryRecordingStore()
+    registry = _registry(store, tmp_path, max_sessions=1)
+    await registry.create_session(_payload("one"))
+    await _record(store, "kept")  # a recording under SID, which is not created
+    with pytest.raises(ValueError, match="session limit reached"):
+        await registry.create_session(_payload())
+    assert (await store.recording_meta(SID))["exists"] is True
+
+
+async def test_a_hung_stop_is_logged_with_its_id_and_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(registry_module, "_REMOVAL_STOP_TIMEOUT_S", 0.05)
+    log = MagicMock()
+    monkeypatch.setattr(registry_module, "logger", log)
+    registry = _registry(InMemoryRecordingStore(), tmp_path)
+    await registry.create_session(_payload())
+    runtime = registry.get_runtime(SID)
+    assert runtime is not None
+
+    async def hung_stop() -> None:
+        await asyncio.Event().wait()
+
+    runtime.stop = hung_stop  # type: ignore[method-assign]
+    await asyncio.wait_for(registry.delete_session(SID), 2.0)
+    log.warning.assert_called_once_with("session_removal_stop_timed_out session_id=%s timeout_s=%s", SID, 0.05)
