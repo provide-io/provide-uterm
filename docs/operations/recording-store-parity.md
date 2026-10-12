@@ -179,9 +179,17 @@ under the write gate), so its last flush and `log_stop` land in **its own**
 recording, then retires that recording. A create retires anything left under
 the id (a session from before a restart, a store that kept one) before the
 session becomes visible. In both cases the id is **reserved** until the work is
-done: a create for it meanwhile is refused (`409 session is being deleted`),
-so a new session can neither be served the old recording nor receive the old
-one's late writes. A configured session keeps its recording across restarts
+done, so a new session can neither be served the old recording nor receive the
+old one's late writes. A create for a reserved id **waits** (up to 15 s) for the
+reservation to clear and then answers as usual -- a tty-named PAM id is reused
+by the next login on that tty, and the relay retries an open, so "already
+exists" must stay "already exists"; only a teardown that outlasts the wait is
+refused (`409 session is being deleted`). The teardown's stop is bounded at
+10 s (Python `runtime.stop()`, Go bridge/settle/connector stop, C# the write
+gate and final `EndSessionAsync`): past it the server logs
+`session_removal_stop_timed_out` and retires and releases anyway, so a hung
+stop cannot hold an id forever. Anything such a stop writes later is not
+ordered before the retirement. A configured session keeps its recording across restarts
 until it starts recording again (same definition, same owner); the start rule
 then retires it.
 
