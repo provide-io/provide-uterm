@@ -301,7 +301,10 @@ describe("redactStructure", () => {
 
   it("passes non-plain objects through unchanged instead of flattening them", () => {
     class Point {
-      constructor(readonly x: string) {}
+      readonly x: string;
+      constructor(x: string) {
+        this.x = x;
+      }
     }
     const date = new Date(0);
     const map = new Map([["k", "S3cret"]]);
