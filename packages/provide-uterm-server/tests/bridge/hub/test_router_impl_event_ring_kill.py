@@ -278,3 +278,13 @@ async def test_an_annotation_for_an_unknown_worker_is_still_returned_redacted(hu
 
     assert evt["seq"] == 0
     assert evt["data"] == {"description": _REDACTED}
+
+
+async def test_an_annotation_event_is_redacted_key_aware(hub: TermHub) -> None:
+    """One policy with the recorder: a credential field is masked whatever its value looks like."""
+    evt = await hub.router.append_event(
+        _WORKER, "annotation", {"label": "x", "meta": {"accessToken": "opaque-abc", "token": None}}
+    )
+
+    assert evt["data"] == {"label": "x", "meta": {"accessToken": "[SECRET_REDACTED]", "token": None}}
+    assert _stored(hub)["data"] == evt["data"]

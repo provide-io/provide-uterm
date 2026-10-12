@@ -30,11 +30,10 @@ from typing import Any
 
 import pytest
 
-from provide.uterm.redaction import DEPTH_LIMIT_MARKER
+from provide.uterm.redaction import DEPTH_LIMIT_MARKER, REDACT_MAX_DEPTH
 from provide.uterm.server.bridge.hub.ext import RedactionRule
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.router_redaction import (
-    _REDACT_MAX_DEPTH,
     _redact_frame_fields,
     _redact_value,
 )
@@ -90,13 +89,13 @@ def test_a_frame_missing_its_content_field_redacts_to_empty_not_the_word_none(fr
 
 @pytest.mark.parametrize("container", ["dict", "list"])
 def test_a_secret_at_the_last_walked_level_is_still_redacted(container: str) -> None:
-    """``_REDACT_MAX_DEPTH`` containers deep is inside the cap, so it is walked.
+    """``REDACT_MAX_DEPTH`` containers deep is inside the cap, so it is walked.
 
     Pins the near side of the boundary. Any mutant that makes the counter run
     hot — starting at 1, stepping by 2 — trips the cap one or more levels early
     and leaks this secret.
     """
-    result = _redact_value(_nest(_REDACT_MAX_DEPTH, container=container), _redactor())
+    result = _redact_value(_nest(REDACT_MAX_DEPTH, container=container), _redactor())
 
     assert _innermost(result) == "[R]"
 
@@ -112,7 +111,7 @@ def test_a_container_at_the_cap_is_replaced_whole_so_a_deeper_secret_cannot_surv
     forever and redacts the string instead of replacing its container, and
     ``>`` instead of ``>=`` moves the boundary by exactly this one level.
     """
-    result = _redact_value(_nest(_REDACT_MAX_DEPTH + 1, container=container), _redactor())
+    result = _redact_value(_nest(REDACT_MAX_DEPTH + 1, container=container), _redactor())
 
     assert _innermost(result) == DEPTH_LIMIT_MARKER
     assert _PLANTED not in repr(result)
@@ -125,4 +124,4 @@ def test_the_cap_is_the_value_the_boundary_tests_are_written_against() -> None:
     the constant itself pass unnoticed. Stating the number once, here, keeps the
     boundary a decision someone has to make deliberately.
     """
-    assert _REDACT_MAX_DEPTH == 32
+    assert REDACT_MAX_DEPTH == 32

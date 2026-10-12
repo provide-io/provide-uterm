@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -31,29 +32,46 @@ DEPTH_LIMIT_MARKER = "[NESTED_REDACTED]"
 # What the value of a sensitive key becomes under key-aware redaction.
 SENSITIVE_KEY_MARKER = "[SECRET_REDACTED]"
 
-# Field names whose value is a credential regardless of what it looks like.
-# The default text rules need context such as ``token=`` or ``password:`` to
-# fire, so a bare ``{"token": "abc"}`` (a ``resume`` / ``session_token`` frame)
-# passes them untouched. A superset of the connector-config keys masked by the
-# server's tunnel routes (password/passphrase/secret/token). Matching is on the
-# lower-cased key with ``-`` folded to ``_``.
-SENSITIVE_KEY_NAMES = frozenset(
+# Key-aware redaction: which field names hold a credential regardless of what
+# the value looks like. The default text rules need context such as ``token=``
+# or ``password:`` to fire, so a bare ``{"token": "abc"}`` (a ``resume`` /
+# ``session_token`` frame) passes them untouched.
+#
+# The rule works on a key's *segments*: camelCase is split (``accessToken`` ->
+# ``access``, ``token``; ``APIKey`` -> ``api``, ``key``), the result is
+# lower-cased, ``-``, ``.`` and spaces become ``_``, and it is split on ``_``.
+# A key is sensitive when
+#   - any segment is in SENSITIVE_KEY_SEGMENTS (``resume_token``,
+#     ``Set-Cookie``, ``Proxy-Authorization``, ``aws_secret_access_key``), or
+#   - two adjacent segments form a pair in SENSITIVE_KEY_PAIRS (``api_key``,
+#     ``privateKey``, ``x-api-key``, ``access_key_id``'s ``access_key``),
+# unless its LAST segment is in NON_SECRET_KEY_SUFFIXES: a field that describes
+# a credential rather than holding one (``token_count``, ``token_type``,
+# ``password_required``, ``secret_hash``) stays visible.
+# Whole segments only: ``tokens``, ``max_tokens``, ``tokenizer`` and
+# ``secretary`` are not sensitive. ``session_id`` is deliberately not covered:
+# it names a session on nearly every frame and is not a bearer credential.
+# A superset of the connector-config keys the server's tunnel routes mask
+# (password/passphrase/secret/token). The Go, TypeScript and C# ports implement
+# the same rule; the shared session-logger corpus pins it.
+SENSITIVE_KEY_SEGMENTS = frozenset(
     {
         "token",
+        "secret",
         "password",
         "passwd",
         "passphrase",
-        "secret",
-        "api_key",
-        "apikey",
-        "authorization",
+        "credential",
+        "credentials",
         "cookie",
-        "private_key",
+        "authorization",
+        "apikey",
     }
 )
-# ...and any key ending in one of these (resume_token, share_token,
-# client_secret, ssh_passphrase, ...).
-SENSITIVE_KEY_SUFFIXES = ("_token", "_password", "_passphrase", "_secret", "_api_key")
+SENSITIVE_KEY_PAIRS = frozenset({("api", "key"), ("private", "key"), ("access", "key")})
+NON_SECRET_KEY_SUFFIXES = frozenset(
+    {"count", "len", "length", "size", "type", "kind", "ttl", "expiry", "expires", "hash", "required", "enabled"}
+)
 
 
 def make_redactor(patterns: Sequence[str] | None = None) -> Callable[[str], str]:
@@ -78,10 +96,42 @@ def redact_text(text: str, redactor: Callable[[str], str] | None) -> str:
     return redactor(text)
 
 
+def _is_upper(ch: str) -> bool:
+    return "A" <= ch <= "Z"
+
+
+def _is_lower_or_digit(ch: str) -> bool:
+    return "a" <= ch <= "z" or "0" <= ch <= "9"
+
+
+def key_segments(key: str) -> list[str]:
+    """Split *key* into lower-case segments (see the rule above ``SENSITIVE_KEY_SEGMENTS``).
+
+    An ASCII upper-case letter starts a new segment when it follows a lower-case
+    letter or digit (``accessToken``) or ends an acronym (the ``K`` in
+    ``APIKey``). ``-``, ``.`` and spaces are separators like ``_``.
+    """
+    chars: list[str] = []
+    last = len(key) - 1
+    for i, ch in enumerate(key):
+        if i > 0 and _is_upper(ch):
+            prev = key[i - 1]
+            ends_acronym = _is_upper(prev) and i < last and "a" <= key[i + 1] <= "z"
+            if _is_lower_or_digit(prev) or ends_acronym:
+                chars.append("_")
+        chars.append(ch)
+    folded = "".join(chars).lower().replace("-", "_").replace(".", "_").replace(" ", "_")
+    return [segment for segment in folded.split("_") if segment]
+
+
 def is_sensitive_key(key: str) -> bool:
-    """Return True when *key* names a credential field (see ``SENSITIVE_KEY_NAMES``)."""
-    folded = key.lower().replace("-", "_")
-    return folded in SENSITIVE_KEY_NAMES or folded.endswith(SENSITIVE_KEY_SUFFIXES)
+    """Return True when *key* names a credential field (see ``SENSITIVE_KEY_SEGMENTS``)."""
+    segments = key_segments(key)
+    if not segments or segments[-1] in NON_SECRET_KEY_SUFFIXES:
+        return False
+    if any(segment in SENSITIVE_KEY_SEGMENTS for segment in segments):
+        return True
+    return any(pair in SENSITIVE_KEY_PAIRS for pair in pairwise(segments))
 
 
 def redact_structure(

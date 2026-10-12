@@ -91,6 +91,34 @@ async def test_log_event_without_redactor_is_verbatim_but_not_aliased() -> None:
     assert entry["data"] == {"description": "pw=S3cretValue", "seq": 1, "token": "abc"}
 
 
+async def test_no_redactor_deep_copies_nested_containers() -> None:
+    """A shallow copy still shared nested dicts/lists with the caller, so mutating
+    ``snap["cursor"]["x"]`` after ``log_screen`` rewrote the buffered record."""
+    store = InMemoryRecordingStore()
+    logger = SessionLogger(store, control_channel_mode="wire", flush_interval_s=3600)
+    await logger.start("s1")
+    snap: dict[str, Any] = {"screen": "abc", "cursor": {"x": 1, "y": 2}, "rows": [["a"]]}
+    event: dict[str, Any] = {"span": {"from_seq": 1}, "notes": ["n"], "pair": (1, 2)}
+    frame: dict[str, Any] = {"type": "x", "inner": {"k": [1]}}
+    await logger.log_screen(snap, b"abc")
+    await logger.log_event("annotation", event)
+    await logger.log_control("send", frame)
+    snap["cursor"]["x"] = 99
+    snap["rows"][0].append("b")
+    event["span"]["from_seq"] = 99
+    event["notes"].append("m")
+    frame["inner"]["k"].append(2)
+    await logger.stop()
+    entries = await store.get_entries("s1", limit=500)
+    read = next(e for e in entries if e["event"] == "read")["data"]
+    assert read["cursor"] == {"x": 1, "y": 2}
+    assert read["rows"] == [["a"]]
+    ann = next(e for e in entries if e["event"] == "annotation")["data"]
+    assert ann == {"span": {"from_seq": 1}, "notes": ["n"], "pair": [1, 2]}
+    ctl = next(e for e in entries if e["event"] == "control_send")["data"]
+    assert ctl == {"control": {"type": "x", "inner": {"k": [1]}}}
+
+
 async def test_log_event_redacts_runtime_error_text() -> None:
     entries = await _record(
         redactor=_REDACTOR, event="runtime_error", data={"error": "auth failed for S3cretToken", "permanent": True}
