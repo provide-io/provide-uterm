@@ -36,7 +36,9 @@ Session ids
   session, ``pam-<user>-tty-<pid>-<start>`` for a notify session with no tty.
   Where the start time cannot be read, a random ``r<hex>`` takes its place.
   The id is computed once, at open, and remembered for the close: by the time a
-  close is handled the process may already be gone.
+  close is handled the process may already be gone. The memory is bounded: on
+  every open and close, entries whose process has provably ended (its pid now
+  reports another start time) are dropped, and past 4096 entries the oldest go.
 """
 
 from __future__ import annotations
@@ -169,6 +171,48 @@ def _login_key(ev: PamEvent) -> tuple[str, int]:
     return (ev.username, ev.pid)
 
 
+# The most logins remembered between open and close. Each open login holds one
+# entry, so this is far above any real concurrency; it only bounds the map when
+# closes go missing on a host where start times cannot be read (see
+# _prune_logins).
+_MAX_REMEMBERED_LOGINS = 4096
+
+
+def _login_is_gone(key: tuple[str, int], session_id: str) -> bool:
+    """True when the process an entry's id names has provably ended.
+
+    Only an id that carries a start time can say: the login is gone when its pid
+    now reports another start time, or none. A tty-named id or a random tag
+    proves nothing, and is kept until its close or the cap.
+    """
+    match = re.search(rf"-{key[1]}-([0-9]+)\Z", session_id)
+    return match is not None and str(_process_start_ticks(key[1])) != match.group(1)
+
+
+def _prune_logins(instances: dict[tuple[str, int], str], keep: tuple[str, int] | None = None) -> None:
+    """Forget logins whose close never came, so the map stays bounded.
+
+    First every entry whose process has provably ended (:func:`_login_is_gone`);
+    then, if still over :data:`_MAX_REMEMBERED_LOGINS`, the oldest. *keep* is
+    never dropped.
+    """
+    for key, session_id in list(instances.items()):
+        if key != keep and _login_is_gone(key, session_id):
+            del instances[key]
+    for key in list(instances):
+        if len(instances) <= _MAX_REMEMBERED_LOGINS:
+            break
+        if key != keep:
+            del instances[key]
+
+
+def _remember_login(instances: dict[tuple[str, int], str], key: tuple[str, int], session_id: str) -> None:
+    """Remember the id an opening login was given, for its close to find."""
+    instances.pop(key, None)  # re-inserted last: the newest entry is the last the cap drops
+    instances[key] = session_id
+    _prune_logins(instances, keep=key)
+
+
 async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -> None:
     """
     Long-running coroutine: start PamNotifyListener and dispatch events.
@@ -241,7 +285,7 @@ async def _on_open(
     cfg = pam_cfg
     session_id = _session_id(ev)
     if instances is not None:
-        instances[_login_key(ev)] = session_id
+        _remember_login(instances, _login_key(ev), session_id)
 
     if cfg.mode == "capture" and ev.capture_socket:
         await _create_capture_session(ev, cfg, registry, session_id)
@@ -291,6 +335,8 @@ async def _on_close(
     # process that ran PAM is still alive to report its start time.
     known = instances.pop(_login_key(ev), None) if instances is not None else None
     session_id = known if known is not None else _session_id(ev)
+    if instances is not None:
+        _prune_logins(instances)
 
     # Stop tunnel bridge first
     bridge = bridges.pop(session_id, None) if bridges is not None else None

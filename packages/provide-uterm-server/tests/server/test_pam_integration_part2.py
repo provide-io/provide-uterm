@@ -324,6 +324,41 @@ async def test_open_never_reuses_an_id_a_closeless_login_left(start_ticks: dict[
     assert instances == {("suokki", 9): "pam-suokki-capture-9-200"}
 
 
+async def test_a_login_whose_close_never_came_is_forgotten_once_its_pid_moves_on(
+    start_ticks: dict[int, int | None],
+) -> None:
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.server.models import PamConfig
+
+    cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture")
+    registry = MagicMock()
+    registry.create_session = AsyncMock()
+    instances: dict[tuple[str, int], str] = {}
+
+    start_ticks.update({10: 1, 11: 2, 12: 3})
+    for pid in (10, 11):
+        await _on_open(_capture_event(pid), cfg, registry, None, instances)  # type: ignore[arg-type]
+    start_ticks[10] = 5  # pid 10's sshd exited without a close; the pid is someone else's now
+    await _on_open(_capture_event(12), cfg, registry, None, instances)  # type: ignore[arg-type]
+    assert sorted(instances) == [("suokki", 11), ("suokki", 12)]
+
+
+async def test_logins_that_cannot_be_proven_gone_are_capped(
+    start_ticks: dict[int, int | None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.server.models import PamConfig
+
+    monkeypatch.setattr(pam_integration, "_MAX_REMEMBERED_LOGINS", 3)
+    cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture")
+    registry = MagicMock()
+    registry.create_session = AsyncMock()
+    instances: dict[tuple[str, int], str] = {}
+    for pid in range(20, 25):  # no start times: random tags, nothing provably gone
+        await _on_open(_capture_event(pid), cfg, registry, None, instances)  # type: ignore[arg-type]
+    assert [pid for _, pid in instances] == [22, 23, 24]
+
+
 def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty(
     start_ticks: dict[int, int | None],
 ) -> None:
