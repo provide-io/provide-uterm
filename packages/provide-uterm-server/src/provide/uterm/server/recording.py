@@ -31,6 +31,10 @@ class WebhookRecordingStore(RecordingStore):
     async def end_session(self, session_id: str) -> None:
         await self._post(session_id, "end", {})
 
+    async def retire_session(self, session_id: str) -> None:
+        """Tell the backend the session is gone: the id's next holder must not see this recording."""
+        await self._post(session_id, "retire", {})
+
     async def recording_meta(self, session_id: str) -> dict[str, Any]:
         resp = await self._get(session_id, "meta")
         return resp or {"session_id": session_id, "exists": False, "size_bytes": 0}

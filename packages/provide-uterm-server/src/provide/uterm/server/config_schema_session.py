@@ -29,6 +29,12 @@ from pydantic import Field, field_validator, model_validator
 from provide.uterm.bridge.contracts import InputMode, Visibility  # noqa: TC001
 from provide.uterm.server.config_schema import SERVER_BUILTIN_CONNECTOR_TYPES, ServerBaseModel
 
+#: The longest session id, in UTF-8 bytes. A recording is ``<id>.jsonl`` and a
+#: retired one ``<id>.<19-digit ns>-<8 hex>.jsonl`` (35 bytes past the id); 200
+#: keeps both inside the 255-byte filename limit, so every id can be retired.
+#: The same limit holds in every port.
+MAX_SESSION_ID_BYTES = 200
+
 
 class SessionDefinition(ServerBaseModel):
     """Config-backed definition for a named hosted terminal session."""
@@ -76,6 +82,8 @@ class SessionDefinition(ServerBaseModel):
             raise ValueError("session_id is required for each [[sessions]] entry")
         if not re.match(r"^[\w\-]+$", session_id):
             raise ValueError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
+        if len(session_id.encode("utf-8")) > MAX_SESSION_ID_BYTES:
+            raise ValueError(f"session_id must be at most {MAX_SESSION_ID_BYTES} bytes (UTF-8), got: {session_id!r}")
         return session_id
 
     @field_validator("connector_type")

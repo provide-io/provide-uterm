@@ -17,7 +17,12 @@ from pathlib import Path
 
 import pytest
 
-from provide.uterm.recording import InMemoryRecordingStore, LocalFileRecordingStore, RecordingStore
+from provide.uterm.recording import (
+    InMemoryRecordingStore,
+    LocalFileRecordingStore,
+    RecordingStore,
+    retire_recording,
+)
 
 
 def _stores(tmp_path: Path) -> list[RecordingStore]:
@@ -97,3 +102,23 @@ async def test_a_handle_left_open_by_an_unended_instance_is_not_reused(tmp_path:
     # No end_session: the first instance went away without closing.
     await _record(store, "s", {"instance": "second"}, "new")
     assert _texts(await store.get_entries("s", limit=500)) == ["new"]
+
+
+@pytest.mark.parametrize("kind", [0, 1], ids=["file", "memory"])
+async def test_retire_session_leaves_nothing_to_serve(tmp_path: Path, kind: int) -> None:
+    store = _stores(tmp_path)[kind]
+    await store.start_session("s", {"instance": "a"})
+    await store.append_events("s", [{"ts": 1.0, "event": "read", "data": {"text": "old"}}])
+    await retire_recording(store, "s")  # an open handle too: no end_session first
+    assert await store.get_entries("s", limit=500) == []
+    assert (await store.recording_meta("s"))["exists"] is False
+    # A later write starts a new recording rather than reviving the old one.
+    await _record(store, "s", {"instance": "a"}, "new")
+    assert _texts(await store.get_entries("s", limit=500)) == ["new"]
+
+
+async def test_retire_recording_skips_a_store_without_it() -> None:
+    class Legacy:
+        pass
+
+    await retire_recording(Legacy(), "s")  # no AttributeError
