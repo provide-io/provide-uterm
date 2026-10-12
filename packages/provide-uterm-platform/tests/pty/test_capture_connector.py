@@ -869,3 +869,33 @@ async def test_a_size_there_and_back_in_one_poll_repaints_nothing() -> None:
         ]
     )
     assert await connector.poll_messages() == []
+
+
+async def test_a_patch_that_only_carries_the_old_size_keeps_the_geometry() -> None:
+    # The stored definition still says 80x24 after a geometry frame: a PATCH
+    # replacing the config for another reason (a keystroke socket) must not set
+    # the terminal back to the size the pty owner has since corrected.
+    connector = _fed([CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(100, 40))])
+    await connector.poll_messages()
+    stale = {"socket_path": "/tmp/unused.sock", "cols": 80, "rows": 24, "stdin_socket_path": "/tmp/in.sock"}
+    assert connector.reconfigure(stale)
+    assert (connector._cols, connector._rows) == (100, 40)
+    assert connector._stdin_socket_path == "/tmp/in.sock"
+
+
+async def test_a_patch_that_changes_the_size_still_applies_after_a_geometry_frame() -> None:
+    connector = _fed([CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(100, 40))])
+    await connector.poll_messages()
+    assert connector.reconfigure({"socket_path": "/tmp/unused.sock", "cols": 120, "rows": 30})
+    assert (connector._cols, connector._rows) == (120, 30)
+
+
+async def test_a_patch_naming_the_size_geometry_already_set_redraws_nothing() -> None:
+    connector = _fed([CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(100, 40))])
+    await connector.poll_messages()
+    emulator = connector._emulator
+    assert connector.reconfigure({"socket_path": "/tmp/unused.sock", "cols": 100, "rows": 40})
+    assert connector._emulator is emulator
+    # And the config now names 100x40, so naming 80x24 again is a real change.
+    assert connector.reconfigure({"socket_path": "/tmp/unused.sock", "cols": 80, "rows": 24})
+    assert (connector._cols, connector._rows) == (80, 24)

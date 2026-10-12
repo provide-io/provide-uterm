@@ -101,4 +101,39 @@ describe("uterm:geometry", () => {
 
     expect(listener).not.toHaveBeenCalled();
   });
+
+  it("says nothing for a size that is not a positive whole number", async () => {
+    const session = await makeSession();
+    const listener = vi.fn();
+    session.addEventListener("uterm:geometry", listener);
+
+    for (const [cols, rows] of [
+      [Number.NaN, 40],
+      [100, Number.NaN],
+      [0, 40],
+      [100, -1],
+      [100.5, 40],
+      [Number.POSITIVE_INFINITY, 40],
+    ]) {
+      receive(session, { type: "snapshot", screen: "", cols, rows });
+    }
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("announces the size again to the terminal a new worker gets", async () => {
+    const session = await makeSession();
+    const details: unknown[] = [];
+    session.addEventListener("uterm:geometry", (event) => details.push((event as CustomEvent).detail));
+
+    receive(session, { type: "snapshot", screen: "", cols: 100, rows: 40 });
+    session.config = { workerId: "another" };
+    session.connect();
+    receive(session, { type: "snapshot", screen: "", cols: 100, rows: 40 });
+
+    expect(details).toEqual([
+      { cols: 100, rows: 40 },
+      { cols: 100, rows: 40 },
+    ]);
+  });
 });

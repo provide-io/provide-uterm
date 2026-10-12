@@ -408,6 +408,9 @@ export class UtermSessionElement extends LitElement {
   }
 
   private _init() {
+    // A new worker gets a new terminal, which has been told no size yet.
+    this._lastCols = 0;
+    this._lastRows = 0;
     this._resolvedConfig = {
       wsUrl: this.config.wsUrl,
       workerId: this.config.workerId,
@@ -628,14 +631,22 @@ export class UtermSessionElement extends LitElement {
           // `element.terminal` would find null -- with the size already
           // recorded as seen, so no later snapshot would announce it again.
           // Before the paint, so the screen lands in a terminal of its size.
+          // Positive whole numbers only: NaN would differ from itself and
+          // announce on every snapshot, and 0 or a fraction is no size.
+          const cols = msg.cols;
+          const rows = msg.rows;
           if (
-            typeof msg.cols === "number" &&
-            typeof msg.rows === "number" &&
-            (msg.cols !== this._lastCols || msg.rows !== this._lastRows)
+            typeof cols === "number" &&
+            typeof rows === "number" &&
+            Number.isInteger(cols) &&
+            Number.isInteger(rows) &&
+            cols > 0 &&
+            rows > 0 &&
+            (cols !== this._lastCols || rows !== this._lastRows)
           ) {
-            this._lastCols = msg.cols;
-            this._lastRows = msg.rows;
-            this.dispatchEvent(new CustomEvent("uterm:geometry", { detail: { cols: msg.cols, rows: msg.rows } }));
+            this._lastCols = cols;
+            this._lastRows = rows;
+            this.dispatchEvent(new CustomEvent("uterm:geometry", { detail: { cols, rows } }));
           }
           t.write("\x1b[!p\x1b[2J\x1b[H");
           t.write((msg.screen ?? "").replace(/\n/g, "\r\n"));

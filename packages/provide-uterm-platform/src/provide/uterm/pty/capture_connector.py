@@ -111,6 +111,11 @@ class CaptureConnector:
         self._socket_path: str = str(config["socket_path"])
         self._cols: int = int(config.get("cols", 80))
         self._rows: int = int(config.get("rows", 24))
+        # The size the config last named. A PATCH that names it again is not
+        # asking for it: the stored definition keeps the creation-time size
+        # after a geometry frame corrects it, and a config replaced for another
+        # reason would otherwise put the terminal back. See reconfigure.
+        self._config_size = (self._cols, self._rows)
         self._connect_timeout: float = float(config.get("connect_timeout_s", 5.0))
         self._stdin_socket_path: str | None = (
             str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
@@ -222,8 +227,10 @@ class CaptureConnector:
             if self._stdin_writer is not None:
                 self._stdin_writer.close()
                 self._stdin_writer = None
-        if (cols, rows) != (self._cols, self._rows):
-            self._apply_size(cols, rows)
+        if (cols, rows) != self._config_size:
+            self._config_size = (cols, rows)
+            if (cols, rows) != (self._cols, self._rows):
+                self._apply_size(cols, rows)
         return True
 
     def _apply_size(self, cols: int, rows: int) -> None:
