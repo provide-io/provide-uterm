@@ -392,5 +392,922 @@
  "batch": {
   "after_one": 1,
   "after_two": 3
+ },
+ "payloads": {
+  "patterns": [
+   "secret\\w*"
+  ],
+  "calls": [
+   {
+    "method": "event",
+    "name": "annotation",
+    "data": {
+     "label": "rotate",
+     "description": "curl --data secretPW https://x",
+     "severity": "info",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 2
+     },
+     "notes": [
+      "a secret1 b",
+      {
+       "inner": "secret2"
+      },
+      3,
+      0.5,
+      true,
+      null
+     ]
+    }
+   },
+   {
+    "method": "event",
+    "name": "credentials",
+    "data": {
+     "token": "abc",
+     "Resume-Token": "rt",
+     "client_secret": "cs",
+     "api_key": 42,
+     "password": null,
+     "Authorization": {
+      "scheme": "Bearer"
+     },
+     "tokens": "secret3",
+     "max_tokens": 5,
+     "nested": [
+      {
+       "session_token": "st",
+       "keep": "plain"
+      }
+     ]
+    }
+   },
+   {
+    "method": "control",
+    "direction": "recv",
+    "data": {
+     "type": "resume",
+     "token": "rt_8f3a",
+     "player_id": 2
+    }
+   },
+   {
+    "method": "control",
+    "direction": "send",
+    "data": {
+     "type": "session_token",
+     "token": "st_1",
+     "player_id": null
+    }
+   },
+   {
+    "method": "control",
+    "direction": "recv",
+    "data": {
+     "type": "hello",
+     "resume_token": "rt_2",
+     "capabilities": {
+      "x": [
+       "secret4"
+      ]
+     }
+    }
+   },
+   {
+    "method": "event",
+    "name": "at_cap",
+    "data": {
+     "payload": {
+      "k": {
+       "k": {
+        "k": {
+         "k": {
+          "k": {
+           "k": {
+            "k": {
+             "k": {
+              "k": {
+               "k": {
+                "k": {
+                 "k": {
+                  "k": {
+                   "k": {
+                    "k": {
+                     "k": {
+                      "k": {
+                       "k": {
+                        "k": {
+                         "k": {
+                          "k": {
+                           "k": {
+                            "k": {
+                             "k": {
+                              "k": {
+                               "k": {
+                                "k": {
+                                 "k": {
+                                  "k": {
+                                   "k": {
+                                    "k": "secret5"
+                                   }
+                                  }
+                                 }
+                                }
+                               }
+                              }
+                             }
+                            }
+                           }
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   {
+    "method": "event",
+    "name": "past_cap_dict",
+    "data": {
+     "payload": {
+      "k": {
+       "k": {
+        "k": {
+         "k": {
+          "k": {
+           "k": {
+            "k": {
+             "k": {
+              "k": {
+               "k": {
+                "k": {
+                 "k": {
+                  "k": {
+                   "k": {
+                    "k": {
+                     "k": {
+                      "k": {
+                       "k": {
+                        "k": {
+                         "k": {
+                          "k": {
+                           "k": {
+                            "k": {
+                             "k": {
+                              "k": {
+                               "k": {
+                                "k": {
+                                 "k": {
+                                  "k": {
+                                   "k": {
+                                    "k": {
+                                     "k": "secret6"
+                                    }
+                                   }
+                                  }
+                                 }
+                                }
+                               }
+                              }
+                             }
+                            }
+                           }
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   {
+    "method": "control",
+    "direction": "recv",
+    "data": {
+     "type": "x",
+     "list": [
+      [
+       [
+        [
+         [
+          [
+           [
+            [
+             [
+              [
+               [
+                [
+                 [
+                  [
+                   [
+                    [
+                     [
+                      [
+                       [
+                        [
+                         [
+                          [
+                           [
+                            [
+                             [
+                              [
+                               [
+                                [
+                                 [
+                                  [
+                                   [
+                                    [
+                                     [
+                                      [
+                                       "secret7"
+                                      ]
+                                     ]
+                                    ]
+                                   ]
+                                  ]
+                                 ]
+                                ]
+                               ]
+                              ]
+                             ]
+                            ]
+                           ]
+                          ]
+                         ]
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     ]
+    }
+   }
+  ],
+  "redacted": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "rotate",
+     "description": "curl --data [REDACTED] https://x",
+     "severity": "info",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 2
+     },
+     "notes": [
+      "a [REDACTED] b",
+      {
+       "inner": "[REDACTED]"
+      },
+      3,
+      0.5,
+      true,
+      null
+     ]
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "credentials",
+    "data": {
+     "token": "[SECRET_REDACTED]",
+     "Resume-Token": "[SECRET_REDACTED]",
+     "client_secret": "[SECRET_REDACTED]",
+     "api_key": "[SECRET_REDACTED]",
+     "password": null,
+     "Authorization": "[SECRET_REDACTED]",
+     "tokens": "[REDACTED]",
+     "max_tokens": 5,
+     "nested": [
+      {
+       "session_token": "[SECRET_REDACTED]",
+       "keep": "plain"
+      }
+     ]
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "control_recv",
+    "data": {
+     "control": {
+      "type": "resume",
+      "token": "[SECRET_REDACTED]",
+      "player_id": 2
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "control_send",
+    "data": {
+     "control": {
+      "type": "session_token",
+      "token": "[SECRET_REDACTED]",
+      "player_id": null
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "control_recv",
+    "data": {
+     "control": {
+      "type": "hello",
+      "resume_token": "[SECRET_REDACTED]",
+      "capabilities": {
+       "x": [
+        "[REDACTED]"
+       ]
+      }
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "at_cap",
+    "data": {
+     "payload": {
+      "k": {
+       "k": {
+        "k": {
+         "k": {
+          "k": {
+           "k": {
+            "k": {
+             "k": {
+              "k": {
+               "k": {
+                "k": {
+                 "k": {
+                  "k": {
+                   "k": {
+                    "k": {
+                     "k": {
+                      "k": {
+                       "k": {
+                        "k": {
+                         "k": {
+                          "k": {
+                           "k": {
+                            "k": {
+                             "k": {
+                              "k": {
+                               "k": {
+                                "k": {
+                                 "k": {
+                                  "k": {
+                                   "k": {
+                                    "k": "[REDACTED]"
+                                   }
+                                  }
+                                 }
+                                }
+                               }
+                              }
+                             }
+                            }
+                           }
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "past_cap_dict",
+    "data": {
+     "payload": {
+      "k": {
+       "k": {
+        "k": {
+         "k": {
+          "k": {
+           "k": {
+            "k": {
+             "k": {
+              "k": {
+               "k": {
+                "k": {
+                 "k": {
+                  "k": {
+                   "k": {
+                    "k": {
+                     "k": {
+                      "k": {
+                       "k": {
+                        "k": {
+                         "k": {
+                          "k": {
+                           "k": {
+                            "k": {
+                             "k": {
+                              "k": {
+                               "k": {
+                                "k": {
+                                 "k": {
+                                  "k": {
+                                   "k": {
+                                    "k": "[NESTED_REDACTED]"
+                                   }
+                                  }
+                                 }
+                                }
+                               }
+                              }
+                             }
+                            }
+                           }
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "control_recv",
+    "data": {
+     "control": {
+      "type": "x",
+      "list": [
+       [
+        [
+         [
+          [
+           [
+            [
+             [
+              [
+               [
+                [
+                 [
+                  [
+                   [
+                    [
+                     [
+                      [
+                       [
+                        [
+                         [
+                          [
+                           [
+                            [
+                             [
+                              [
+                               [
+                                [
+                                 [
+                                  [
+                                   [
+                                    [
+                                     "[NESTED_REDACTED]"
+                                    ]
+                                   ]
+                                  ]
+                                 ]
+                                ]
+                               ]
+                              ]
+                             ]
+                            ]
+                           ]
+                          ]
+                         ]
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "s1"
+   }
+  ],
+  "verbatim": [
+   {
+    "event": "log_start",
+    "data": {
+     "stripped": true
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "annotation",
+    "data": {
+     "label": "rotate",
+     "description": "curl --data secretPW https://x",
+     "severity": "info",
+     "span": {
+      "from_seq": 1,
+      "to_seq": 2
+     },
+     "notes": [
+      "a secret1 b",
+      {
+       "inner": "secret2"
+      },
+      3,
+      0.5,
+      true,
+      null
+     ]
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "credentials",
+    "data": {
+     "token": "abc",
+     "Resume-Token": "rt",
+     "client_secret": "cs",
+     "api_key": 42,
+     "password": null,
+     "Authorization": {
+      "scheme": "Bearer"
+     },
+     "tokens": "secret3",
+     "max_tokens": 5,
+     "nested": [
+      {
+       "session_token": "st",
+       "keep": "plain"
+      }
+     ]
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "control_recv",
+    "data": {
+     "control": {
+      "type": "resume",
+      "token": "rt_8f3a",
+      "player_id": 2
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "control_send",
+    "data": {
+     "control": {
+      "type": "session_token",
+      "token": "st_1",
+      "player_id": null
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "control_recv",
+    "data": {
+     "control": {
+      "type": "hello",
+      "resume_token": "rt_2",
+      "capabilities": {
+       "x": [
+        "secret4"
+       ]
+      }
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "at_cap",
+    "data": {
+     "payload": {
+      "k": {
+       "k": {
+        "k": {
+         "k": {
+          "k": {
+           "k": {
+            "k": {
+             "k": {
+              "k": {
+               "k": {
+                "k": {
+                 "k": {
+                  "k": {
+                   "k": {
+                    "k": {
+                     "k": {
+                      "k": {
+                       "k": {
+                        "k": {
+                         "k": {
+                          "k": {
+                           "k": {
+                            "k": {
+                             "k": {
+                              "k": {
+                               "k": {
+                                "k": {
+                                 "k": {
+                                  "k": {
+                                   "k": {
+                                    "k": "secret5"
+                                   }
+                                  }
+                                 }
+                                }
+                               }
+                              }
+                             }
+                            }
+                           }
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "past_cap_dict",
+    "data": {
+     "payload": {
+      "k": {
+       "k": {
+        "k": {
+         "k": {
+          "k": {
+           "k": {
+            "k": {
+             "k": {
+              "k": {
+               "k": {
+                "k": {
+                 "k": {
+                  "k": {
+                   "k": {
+                    "k": {
+                     "k": {
+                      "k": {
+                       "k": {
+                        "k": {
+                         "k": {
+                          "k": {
+                           "k": {
+                            "k": {
+                             "k": {
+                              "k": {
+                               "k": {
+                                "k": {
+                                 "k": {
+                                  "k": {
+                                   "k": {
+                                    "k": {
+                                     "k": "secret6"
+                                    }
+                                   }
+                                  }
+                                 }
+                                }
+                               }
+                              }
+                             }
+                            }
+                           }
+                          }
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "control_recv",
+    "data": {
+     "control": {
+      "type": "x",
+      "list": [
+       [
+        [
+         [
+          [
+           [
+            [
+             [
+              [
+               [
+                [
+                 [
+                  [
+                   [
+                    [
+                     [
+                      [
+                       [
+                        [
+                         [
+                          [
+                           [
+                            [
+                             [
+                              [
+                               [
+                                [
+                                 [
+                                  [
+                                   [
+                                    [
+                                     [
+                                      [
+                                       [
+                                        "secret7"
+                                       ]
+                                      ]
+                                     ]
+                                    ]
+                                   ]
+                                  ]
+                                 ]
+                                ]
+                               ]
+                              ]
+                             ]
+                            ]
+                           ]
+                          ]
+                         ]
+                        ]
+                       ]
+                      ]
+                     ]
+                    ]
+                   ]
+                  ]
+                 ]
+                ]
+               ]
+              ]
+             ]
+            ]
+           ]
+          ]
+         ]
+        ]
+       ]
+      ]
+     }
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "log_stop",
+    "data": {},
+    "session_id": "s1"
+   }
+  ]
  }
 }

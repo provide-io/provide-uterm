@@ -144,6 +144,14 @@ TWINNED_FIXTURES: tuple[tuple[str, ...], ...] = (
     ),
     # The TypeScript -> C# copies (stream_redaction_golden.json among them) are
     # not listed: csharp_copies_of_ts_goldens() derives every one of them.
+    # The session-logger corpus is generated beside the TS port
+    # (gen_session_logger_golden.py); Go and C# replay its caller-payload
+    # section (redaction, key-aware masking, depth cap) from their own copies.
+    (
+        "packages/provide-uterm-ts/testdata/session_logger_golden.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/session_logger_golden.json",
+        "packages/provide-uterm-go/sessionlogger/testdata/session_logger_golden.json",
+    ),
     # spec/ is the source here (scripts/generate_behavior_vectors.py writes all of
     # them); Python, Go and C# each keep a copy next to the tests that replay it.
     # TypeScript reads spec/ directly.
