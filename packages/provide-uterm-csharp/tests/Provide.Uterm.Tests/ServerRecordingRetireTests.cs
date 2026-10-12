@@ -217,9 +217,17 @@ public sealed class ServerRecordingRetireTests : IDisposable
     }
 
     /// <summary>An in-memory store whose retire and end can be held up.</summary>
-    internal sealed class GatedStore(IRecordingStore? inner = null) : IRecordingStore
+    internal sealed class GatedStore(IRecordingStore? inner = null) : IRecordingStore, IDisposable
     {
         private readonly IRecordingStore _inner = inner ?? new InMemoryStore();
+
+        /// <summary>
+        /// Forward the server's shutdown release to the wrapped store, so a wrapped
+        /// <see cref="LocalFileStore"/> closes its handles as it would unwrapped.
+        /// Without it the handle outlives the server, and on Windows the test's
+        /// cleanup cannot delete the recording directory.
+        /// </summary>
+        public void Dispose() => (_inner as IDisposable)?.Dispose();
 
         /// <summary>When set, the next append waits for it before it is written.</summary>
         public TaskCompletionSource? HoldNextAppend { get; set; }
