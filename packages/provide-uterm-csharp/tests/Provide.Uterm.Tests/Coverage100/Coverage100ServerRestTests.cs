@@ -263,6 +263,5 @@ public sealed class Coverage100ServerRestTests
         public SessionStatus? SetMode(string sessionId, string inputMode) => inner.SetMode(sessionId, inputMode);
         public SessionStatus? PatchSession(string sessionId, string? displayName, string? visibility, IReadOnlyList<string>? tags) =>
             inner.PatchSession(sessionId, displayName, visibility, tags);
-        public int BulkDelete(string? lifecycleState) => inner.BulkDelete(lifecycleState);
     }
 }

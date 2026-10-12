@@ -6,6 +6,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Provide.Uterm.Hub;
@@ -45,7 +46,8 @@ public sealed class ServerRecordingRetireTests : IDisposable
         return port;
     }
 
-    internal static async Task<(UtermServer Server, HttpClient Client)> StartAsync(IRecordingStore store)
+    internal static async Task<(UtermServer Server, HttpClient Client)> StartAsync(
+        IRecordingStore store, Func<ISessionRegistry, ISessionRegistry>? wrapRegistry = null)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
@@ -66,7 +68,7 @@ public sealed class ServerRecordingRetireTests : IDisposable
             Auth = new LocalIdentityProvider(cfg.Auth, new ApiKeyStore()),
             Authz = new AuthorizationService(),
             Config = cfg,
-            Registry = new InMemorySessionRegistry(cfg.Sessions),
+            Registry = (wrapRegistry ?? (r => r))(new InMemorySessionRegistry(cfg.Sessions)),
             Version = "test",
             Clock = clock,
             Recording = store,
@@ -310,6 +312,83 @@ public sealed class ServerRecordingRetireTests : IDisposable
     }
 
     [Fact]
+    public async Task AWriteForADeletedSessionWritesNothing()
+    {
+        // A detector annotation from a worker's late output can arrive after its
+        // session is gone; nothing of it reaches the store.
+        var store = new InMemoryStore();
+        var (server, client) = await StartAsync(store);
+        await using (server)
+        using (client)
+        {
+            await Create(client, Sid);
+            await Annotate(client, Sid, "secretA");
+            await client.DeleteAsync($"/api/sessions/{Sid}");
+            var append = typeof(UtermServer).GetMethod(
+                "AppendSessionRecordingAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            await (Task)append.Invoke(server, [Sid, new[] { new Event { ["ts"] = 1.0, ["event"] = "annotation" } }])!;
+            Assert.False((await store.RecordingMetaAsync(Sid)).Exists);
+        }
+    }
+
+    /// <summary>A registry whose Delete waits for the test before it removes anything.</summary>
+    private sealed class HeldDeleteRegistry(ISessionRegistry inner) : ISessionRegistry
+    {
+        public TaskCompletionSource DeleteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ManualResetEventSlim ReleaseDelete { get; } = new(false);
+
+        public bool TryGetDefinition(string sessionId, out SessionDefinition definition) =>
+            inner.TryGetDefinition(sessionId, out definition);
+
+        public bool TryGetStatus(string sessionId, out SessionStatus status) => inner.TryGetStatus(sessionId, out status);
+        public IReadOnlyList<SessionItem> ListWithDefinitions() => inner.ListWithDefinitions();
+        public SessionDefinition Upsert(SessionDefinition def) => inner.Upsert(def);
+
+        public bool Delete(string sessionId)
+        {
+            DeleteEntered.TrySetResult();
+            ReleaseDelete.Wait();
+            return inner.Delete(sessionId);
+        }
+
+        public SessionStatus? StartSession(string sessionId) => inner.StartSession(sessionId);
+        public SessionStatus? StopSession(string sessionId) => inner.StopSession(sessionId);
+        public SessionStatus? RestartSession(string sessionId) => inner.RestartSession(sessionId);
+        public SessionStatus? ClearSession(string sessionId) => inner.ClearSession(sessionId);
+        public SessionStatus? SetMode(string sessionId, string inputMode) => inner.SetMode(sessionId, inputMode);
+
+        public SessionStatus? PatchSession(string sessionId, string? displayName, string? visibility, IReadOnlyList<string>? tags) =>
+            inner.PatchSession(sessionId, displayName, visibility, tags);
+    }
+
+    [Fact]
+    public async Task ASecondDeleteLeavesTheTeardownToTheFirst()
+    {
+        HeldDeleteRegistry? registry = null;
+        var (server, client) = await StartAsync(new InMemoryStore(), inner => registry = new HeldDeleteRegistry(inner));
+        await using (server)
+        using (client)
+        {
+            await Create(client, Sid);
+            var first = client.DeleteAsync($"/api/sessions/{Sid}");
+            try
+            {
+                await registry!.DeleteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)); // the first holds the id
+                Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"/api/sessions/{Sid}")).StatusCode);
+                Assert.False(first.IsCompleted);
+                Assert.True(registry.TryGetDefinition(Sid, out _)); // the second deleted nothing
+            }
+            finally
+            {
+                registry!.ReleaseDelete.Set();
+            }
+
+            Assert.Equal(HttpStatusCode.OK, (await first).StatusCode);
+            Assert.False(registry.TryGetDefinition(Sid, out _));
+        }
+    }
+
+    [Fact]
     public async Task ConcurrentCreatesOfOneIdSeeAlreadyExists()
     {
         // The relay retries an open: the losers must get "already exists".
@@ -338,6 +417,7 @@ public sealed class ServerRecordingTimeoutTests : IDisposable
 {
     private const string Sid = ServerRecordingRetireTests.Sid;
     private readonly TimeSpan _saved = UtermServer.RemovalStopTimeout;
+    private readonly TimeSpan _savedWait = UtermServer.ReservedIdWait;
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "uterm-rec-timeout-" + Guid.NewGuid().ToString("N"));
 
     public ServerRecordingTimeoutTests() => UtermServer.RemovalStopTimeout = TimeSpan.FromMilliseconds(100);
@@ -345,6 +425,7 @@ public sealed class ServerRecordingTimeoutTests : IDisposable
     public void Dispose()
     {
         UtermServer.RemovalStopTimeout = _saved;
+        UtermServer.ReservedIdWait = _savedWait;
         if (Directory.Exists(_dir))
         {
             Directory.Delete(_dir, recursive: true);
@@ -362,6 +443,30 @@ public sealed class ServerRecordingTimeoutTests : IDisposable
 
     private static Task<JsonElement> Entries(HttpClient client, string id) =>
         ServerRecordingRetireTests.Entries(client, id);
+
+    [Fact]
+    public async Task ACreateThatOutwaitsTheBoundIsRefused()
+    {
+        // Only a teardown that outlasts the wait is "being deleted".
+        UtermServer.ReservedIdWait = TimeSpan.Zero;
+        var store = new ServerRecordingRetireTests.GatedStore();
+        var (server, client) = await StartAsync(store);
+        await using (server)
+        using (client)
+        {
+            await Create(client, Sid);
+            store.HoldRetire = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var deleting = client.DeleteAsync($"/api/sessions/{Sid}");
+            await store.RetireEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var refused = await Create(client, Sid);
+            Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+            Assert.Contains("being deleted", await refused.Content.ReadAsStringAsync());
+            var hold = store.HoldRetire;
+            store.HoldRetire = null;
+            hold.SetResult();
+            Assert.Equal(HttpStatusCode.OK, (await deleting).StatusCode);
+        }
+    }
 
     [Fact]
     public async Task AHungEndStillRetiresAndReleasesTheId()

@@ -195,7 +195,6 @@ public sealed class SessionLifecycleParityTests
             string sessionId, string? displayName, string? visibility, IReadOnlyList<string>? tags) =>
             _inner.PatchSession(sessionId, displayName, visibility, tags);
 
-        public int BulkDelete(string? lifecycleState) => _inner.BulkDelete(lifecycleState);
     }
 
     // -- the lifecycle vocabulary is the reference's ---------------------------
