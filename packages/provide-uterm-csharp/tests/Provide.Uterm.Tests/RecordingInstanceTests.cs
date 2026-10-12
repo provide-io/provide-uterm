@@ -111,6 +111,20 @@ public sealed class RecordingInstanceTests : IDisposable
         Assert.DoesNotContain("not json", File.ReadAllText(Path.Combine(_dir, "s.jsonl")));
     }
 
+    [Theory]
+    [InlineData("{\"ts\":1.0,\"event\":\"read\",\"data\":{\"instance\":\"i1\",\"text\":\"old\"}}")]
+    [InlineData("{\"event\":\"log_start\",\"data\":{\"text\":\"old\"}}")]
+    public async Task RecordingThatNamesNoInstanceIsRetiredNotAppendedTo(string firstLine)
+    {
+        // A first line that is not a log_start naming an instance cannot say
+        // whose the recording is, so no instance continues it.
+        Directory.CreateDirectory(_dir);
+        await File.WriteAllTextAsync(Path.Combine(_dir, "s.jsonl"), firstLine + "\n");
+        var store = new LocalFileStore(_dir);
+        await RecordOne(store, "s", "i1", "mine");
+        Assert.DoesNotContain("old", File.ReadAllText(Path.Combine(_dir, "s.jsonl")));
+    }
+
     [Fact]
     public async Task HandleLeftOpenByUnendedInstanceIsNotReused()
     {
@@ -141,5 +155,40 @@ public sealed class RecordingInstanceTests : IDisposable
         Assert.Equal(["alice-1", "alice-2"], await Texts(store, "s", "send", "keys"));
         await OneConnection("i2", "bob");
         Assert.Equal(["bob"], await Texts(store, "s", "send", "keys"));
+    }
+
+    [Fact]
+    public void InstanceIsReadFromJsonMetadataAndOnlyAsAString()
+    {
+        using var doc = JsonDocument.Parse("""{"str":"i1","num":7}""");
+        Assert.Equal("i1", RecordingInstance.Of(new Dictionary<string, object?> { ["instance"] = doc.RootElement.GetProperty("str") }));
+        Assert.Null(RecordingInstance.Of(new Dictionary<string, object?> { ["instance"] = doc.RootElement.GetProperty("num") }));
+        Assert.Null(RecordingInstance.Of(new Dictionary<string, object?> { ["instance"] = 7 }));
+    }
+
+    [Fact]
+    public async Task PlantedSymlinkIsNeverContinued()
+    {
+        // A link at the recording path is not a recording this store wrote,
+        // whatever its target says: it is moved aside, its target untouched.
+        Directory.CreateDirectory(_dir);
+        var target = Path.Combine(_dir, "elsewhere.txt");
+        const string planted = "{\"event\":\"log_start\",\"data\":{\"instance\":\"i1\"}}\n";
+        await File.WriteAllTextAsync(target, planted);
+        try
+        {
+            File.CreateSymbolicLink(Path.Combine(_dir, "s.jsonl"), target);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // Windows without the symlink privilege cannot create one at all.
+            Assert.True(OperatingSystem.IsWindows(), ex.ToString());
+            return;
+        }
+
+        var store = new LocalFileStore(_dir);
+        await RecordOne(store, "s", "i1", "mine");
+        Assert.Equal(["mine"], await Texts(store, "s"));
+        Assert.Equal(planted, await File.ReadAllTextAsync(target));
     }
 }

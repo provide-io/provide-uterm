@@ -160,9 +160,10 @@ public sealed partial class UtermServer
     /// released and created again before the store call returns. After every
     /// await the write therefore checks that the id still names the session it
     /// started for (the same definition, not reserved). If not, what it wrote
-    /// went to a recording that is no longer that session's: it records no
-    /// instance, retires the id's recording again -- the new holder cannot have
-    /// written yet, its first write waits on the gate this write holds -- and
+    /// went to a recording that is no longer that session's: the instance it
+    /// recorded is dropped again (unless the id still names its session), the
+    /// id's recording is retired again -- the new holder cannot have written
+    /// yet, its first write waits on the gate this write holds -- and the write
     /// is discarded.</para>
     /// </summary>
     private async Task AppendSessionRecordingAsync(string sessionId, IReadOnlyList<Event> events)
@@ -190,15 +191,15 @@ public sealed partial class UtermServer
                     ["started_at"] = _clock.Wall(),
                     [RecordingInstance.Key] = instance,
                 }).ConfigureAwait(false);
+                lock (_recordingInstances)
+                {
+                    _recordingInstances[sessionId] = (instance, owner);
+                }
+
                 if (!StillHolds(sessionId, owner, out _))
                 {
                     await DiscardStaleWriteAsync(sessionId).ConfigureAwait(false);
                     return;
-                }
-
-                lock (_recordingInstances)
-                {
-                    _recordingInstances[sessionId] = (instance, owner);
                 }
             }
 
@@ -245,14 +246,7 @@ public sealed partial class UtermServer
             }
         }
 
-        try
-        {
-            await _recording.RetireSessionAsync(sessionId).ConfigureAwait(false);
-        }
-        catch (IOException)
-        {
-            // Another retire moved it first.
-        }
+        await _recording.RetireSessionAsync(sessionId).ConfigureAwait(false);
     }
 
     /// <summary>
