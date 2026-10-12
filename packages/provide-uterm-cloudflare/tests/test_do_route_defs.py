@@ -415,3 +415,27 @@ def test_do_route_def_capability_validation_rejects_global_handler() -> None:
     with patch.dict(_session.SESSION_CAPABILITIES, {"sessions.list": AsyncMock()}):
         with pytest.raises(ValueError, match="global RouteDef capability registered in Durable Object"):
             _session._validate_session_capabilities()
+
+
+async def test_annotate_redacts_the_frame_before_it_is_stored_broadcast_or_webhooked() -> None:
+    runtime = _Runtime()
+    runtime.broadcast_worker_frame = AsyncMock()
+    secret = "S3cretValue"  # pragma: allowlist secret
+
+    response = await route_http(
+        runtime,
+        _Request(
+            "/api/sessions/session-1/annotate",
+            "POST",
+            {"label": f"rotate password={secret}", "description": f"was password={secret}", "severity": "info"},
+        ),
+    )
+
+    assert response.status == 200
+    frame = runtime.broadcast_worker_frame.await_args.args[0]
+    assert frame["label"] == "rotate [PASSWORD_REDACTED]"
+    assert frame["description"] == "was [PASSWORD_REDACTED]"
+    assert frame["type"] == "annotation"
+    assert frame["severity"] == "info"
+    assert isinstance(frame["ts"], float)
+    assert secret not in str(frame)

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import re
 import time
 from collections.abc import Awaitable, Callable, Mapping
@@ -309,6 +310,15 @@ async def _update(
     return json_response(_session_status_item(runtime))
 
 
+@functools.cache
+def _annotation_redactor() -> Callable[[str], str]:
+    """The server-default ruleset, built once (imported lazily, like ``_shared``'s server helpers)."""
+    from provide.uterm.server.bridge.hub.redaction import StreamRedactor
+    from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
+
+    return StreamRedactor(default_rules()).redact
+
+
 async def _annotate(
     runtime: RuntimeProtocol, request: object, _path: str, _url: str, _route: RouteDef, _params: Mapping[str, str]
 ) -> object:
@@ -321,13 +331,23 @@ async def _annotate(
     severity = str(payload.get("severity", "info"))
     if severity not in {"info", "warning", "high", "critical"}:
         return json_response({"error": f"invalid severity: {severity}"}, status=400)
-    event = {
-        "type": "annotation",
-        "label": label,
-        "description": str(payload.get("description", "")),
-        "severity": severity,
-        "ts": time.time(),
-    }
+    from provide.uterm.redaction import redact_structure
+
+    # The frame is stored in the event ring, broadcast to every browser and
+    # delivered to webhooks, so the operator's free text is redacted first --
+    # the same shared, key-aware walker and server-default ruleset the FastAPI
+    # hub applies to annotation events before they enter its ring.
+    event: dict[str, object] = redact_structure(
+        {
+            "type": "annotation",
+            "label": label,
+            "description": str(payload.get("description", "")),
+            "severity": severity,
+            "ts": time.time(),
+        },
+        _annotation_redactor(),
+        key_aware=True,
+    )
     await runtime.broadcast_worker_frame(event)
     return json_response({"ts": event["ts"], "seq": runtime.store.current_event_seq(runtime.worker_id)})
 
