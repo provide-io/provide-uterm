@@ -163,31 +163,71 @@ to `{session_id}.jsonl` handed a new session every earlier holder's entries
 | started by another instance, or by none, or unreadable | any | **fresh** recording |
 | any | absent | **fresh** recording |
 
-The file store decides from the `instance` in the recording's first line (its
-`log_start`), read without following a symlink. A recording that is not
-continued is **moved aside**, not deleted: it is renamed to
-`{session_id}.{unix_ns}-{8 hex}.jsonl`. That keeps it on disk for the retention
-sweep (which ages out `*.jsonl` by mtime, and a rename keeps the mtime) while no
-session can be served it: session ids match `^[\w-]+$`, so no
-`{session_id}.jsonl` contains the `.` a retired name has before `.jsonl`. The
-in-memory store drops the old events. A handle a previous start left open is
-closed before the decision is made.
+The start rule alone is lazy: it runs only when the new holder starts
+recording, and reads (`recording_meta` / `get_entries` / `get_path`) have no
+instance to check. So the id's previous recording is also **retired eagerly**,
+whenever a session goes away or arrives:
+
+| When | Python `SessionRegistry` | Go `SessionRegistryImpl` | C# `UtermServer` | TypeScript |
+|------|--------------------------|--------------------------|------------------|------------|
+| session deleted (incl. expired ephemeral, bulk) | `delete_session` | `DeleteSession` | `DELETE /api/sessions/{id}`, bulk delete | no runtime create/delete (configured sessions only) |
+| session created | `create_session` | `CreateSession` | `POST /api/sessions` | — |
+
+A delete first stops the session (Python: `runtime.stop()`; Go: bridge
+detached, unclosed recording settled, connector stopped; C#: `EndSessionAsync`
+under the write gate), so its last flush and `log_stop` land in **its own**
+recording, then retires that recording. A create retires anything left under
+the id (a session from before a restart, a store that kept one) before the
+session becomes visible. In both cases the id is **reserved** until the work is
+done: a create for it meanwhile is refused (`409 session is being deleted`),
+so a new session can neither be served the old recording nor receive the old
+one's late writes. A configured session keeps its recording across restarts
+until it starts recording again (same definition, same owner); the start rule
+then retires it.
+
+Retiring is a store operation, optional so stores written before it still work
+(they keep only the start rule): Python `retire_session` (called through
+`retire_recording`, which skips a store without it), Go `recording.Retirer` /
+`recording.Retire`, TypeScript `retireSession?` / `retireRecording`, C#
+`IRecordingStore.RetireSessionAsync` (default: no-op). The file store **moves
+the recording aside** (closing any open handle first, without a `log_stop`), the
+in-memory store drops it, the webhook store posts a `"retire"` action.
+
+A moved-aside recording is renamed to `{session_id}.{unix_ns}-{8 hex}.jsonl`.
+That keeps it on disk for the retention sweep (which ages out `*.jsonl` by
+mtime, and a rename keeps the mtime and the 0600 mode) while **no session can be
+served it**: a session can only be created or configured with an id matching
+`^[\w-]+$` (C#: `^[A-Za-z0-9_-]+$`), so no session's `{session_id}.jsonl`
+contains the `.` a retired name has before `.jsonl`; and recording reads are
+only answered for a session that exists. Session ids are capped at **200 UTF-8
+bytes** in every port (Python `MAX_SESSION_ID_BYTES`, Go
+`serverconfig.MaxSessionIDBytes`, TypeScript `MAX_SESSION_ID_BYTES`, C#
+`UtermServer.MaxSessionIdBytes`), so both `<id>.jsonl` and its retired name (35
+bytes longer) fit a 255-byte filename and every recording can be retired.
+
+The file store's start rule reads the `instance` in the recording's first line
+(its `log_start`), without following a symlink. The in-memory store keeps the
+instance alongside the events. A handle a previous start left open is closed
+before the decision is made.
 
 Hosted sessions name themselves: each Python `HostedSessionRuntime`, Go
 `sessionRecorder` and TypeScript `SessionRecording` draws a random instance when
 it is created and hands it to its `SessionLogger` (`instance=` / `Instance` /
 `instance`; C# `SessionLoggerOptions.Instance`). One runtime opens a recording
 per worker connection, so its reconnects continue one recording; a later session
-reusing the id has a new runtime and starts its own. A server restart creates
+reusing the id has a new runtime and starts its own. The C# server records
+straight from its routes (operator and detector annotations): its first write
+for a session starts the recording under an instance drawn for that session, and
+a session that has been deleted writes nothing more. A server restart creates
 new runtimes, so a long-lived configured session starts a fresh recording after
 a restart; the previous one is retired, not lost.
 
-The webhook store forwards the metadata, `instance` included; a webhook backend
-must apply the same rule.
+The webhook store forwards the metadata, `instance` included, and the
+`"retire"` action; a webhook backend must apply the same rules.
 
 PAM ids were made unique per login as well (`pam-<user>-capture-<pid>-<start>`,
 where `<start>` is the process start time from `/proc/<pid>/stat`), so the
-store rule is the backstop, not the only guard.
+store rules are the backstop, not the only guard.
 
 Application/demo events commonly use `snapshot`, `read`, `write`, etc. under
 `event` + structured `data` (including optional full `screen` text for replay).
@@ -199,7 +239,7 @@ Application/demo events commonly use `snapshot`, `read`, `write`, etc. under
 | Path | `{directory}/{session_id}.jsonl` |
 | Format | one JSON object per line |
 | Open | secure append (owner-only; refuse symlink) |
-| Another instance's recording at start | renamed aside to `{session_id}.{unix_ns}-{hex}.jsonl` (see [Session instances](#session-instances)) |
+| Another instance's recording at start, or the session deleted / its id created | renamed aside to `{session_id}.{unix_ns}-{hex}.jsonl`, served to nobody (see [Session instances](#session-instances)) |
 | Malformed lines on read | skipped |
 | Missing file | `exists=false`, empty entries, no path |
 
