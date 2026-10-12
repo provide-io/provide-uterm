@@ -188,8 +188,15 @@ refused (`409 session is being deleted`). The teardown's stop is bounded at
 10 s (Python `runtime.stop()`, Go bridge/settle/connector stop, C# the write
 gate and final `EndSessionAsync`): past it the server logs
 `session_removal_stop_timed_out` and retires and releases anyway, so a hung
-stop cannot hold an id forever. Anything such a stop writes later is not
-ordered before the retirement. A configured session keeps its recording across restarts
+stop cannot hold an id forever. What such a stop still writes is kept out of
+the next holder's recording: Go retires the session's recorder on timeout, so
+its batch writer drops everything queued and every later start, append and end
+(only a store call already in flight completes); C# re-checks after every await
+of a write that the id still names the session definition it started for, and
+otherwise retires the id's recording again and drops the write; Python cancels
+the stop. A reservation is released however its holder ends -- cancelled
+(Python releases synchronously in a `finally`) or panicking (Go releases by
+`defer` without re-taking a lock it may already hold). A configured session keeps its recording across restarts
 until it starts recording again (same definition, same owner); the start rule
 then retires it.
 
