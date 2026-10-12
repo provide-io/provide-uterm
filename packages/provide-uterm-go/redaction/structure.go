@@ -58,7 +58,9 @@ var nonSecretKeySuffixes = map[string]bool{
 
 func isASCIIUpper(c byte) bool { return c >= 'A' && c <= 'Z' }
 
-func isASCIILowerOrDigit(c byte) bool { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') }
+func isASCIILower(c byte) bool { return c >= 'a' && c <= 'z' }
+
+func isASCIILowerOrDigit(c byte) bool { return isASCIILower(c) || (c >= '0' && c <= '9') }
 
 // KeySegments splits key into lower-case segments, exactly as the reference
 // key_segments does.
@@ -69,7 +71,7 @@ func KeySegments(key string) []string {
 		c := key[i]
 		if i > 0 && isASCIIUpper(c) {
 			prev := key[i-1]
-			endsAcronym := isASCIIUpper(prev) && i < last && key[i+1] >= 'a' && key[i+1] <= 'z'
+			endsAcronym := isASCIIUpper(prev) && i < last && isASCIILower(key[i+1])
 			if isASCIILowerOrDigit(prev) || endsAcronym {
 				b.WriteByte('_')
 			}

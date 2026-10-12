@@ -406,4 +406,22 @@ public class RedactionStructureTests
         var entry = (await store.GetEntriesAsync("s1", new Query { Limit = 500 })).Single(e => (string)e["event"]! == "read");
         Assert.Equal("{\"cursor\":{\"x\":1},\"rows\":[\"a\"],\"token\":\"t\"}", JsonSerializer.Serialize(entry["data"]));
     }
+
+    [Fact]
+    public async Task WriteAsync_Rechecks_The_Quota_Under_The_Lock()
+    {
+        // Another thread can spend the quota between a caller's entry check and its turn on
+        // the lock; the write path re-checks there. Driven directly, since no single-threaded
+        // sequence of public calls can interleave the two.
+        var store = new InMemoryStore();
+        var logger = new SessionLog(store, new SessionLogOpts { MaxBytes = 10 });
+        await logger.StartAsync("s1");
+        var type = typeof(SessionLog);
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        type.GetField("_bytesWritten", flags)!.SetValue(logger, 10);
+        var write = (Task)type.GetMethod("WriteAsync", flags)!.Invoke(logger, ["late", new Dictionary<string, object?>()])!;
+        await write;
+        await logger.StopAsync();
+        Assert.DoesNotContain(await store.GetEntriesAsync("s1", new Query { Limit = 500 }), e => (string)e["event"]! == "late");
+    }
 }
