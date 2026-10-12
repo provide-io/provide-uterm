@@ -6,9 +6,13 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
@@ -111,5 +115,33 @@ func TestASecondDeleteLeavesTheTeardownToTheFirst(t *testing.T) {
 	must(t, <-deleted)
 	if reserved(r, retireID) {
 		t.Fatal("the id is still reserved after the first delete")
+	}
+}
+
+func TestRemovalWaitDefaults(t *testing.T) {
+	if got := defaultReservedIDWait(); got != 15*time.Second {
+		t.Fatalf("defaultReservedIDWait() = %v, want 15s", got)
+	}
+	if got := defaultRemovalStopTimeout(); got != 10*time.Second {
+		t.Fatalf("defaultRemovalStopTimeout() = %v, want 10s", got)
+	}
+}
+
+// A stop that panics is logged as such; one that returns is not.
+func TestOnlyAPanickingStopIsLoggedAsOne(t *testing.T) {
+	saved := registryLogger
+	t.Cleanup(func() { registryLogger = saved })
+	for name, panics := range map[string]bool{"panic": true, "clean": false} {
+		t.Run(name, func(t *testing.T) {
+			var logs bytes.Buffer
+			registryLogger = func(context.Context) *slog.Logger { return slog.New(slog.NewTextHandler(&logs, nil)) }
+			release := make(chan struct{})
+			close(release)
+			r := startedWith(t, &stuckConnector{fakeConnector: newFakeConnector(), panics: panics, release: release})
+			must(t, r.DeleteSession(context.Background(), retireID))
+			if got := strings.Count(logs.String(), "session_removal_stop_panicked"); got != map[bool]int{true: 1, false: 0}[panics] {
+				t.Fatalf("panicked logged %d times: %s", got, logs.String())
+			}
+		})
 	}
 }
