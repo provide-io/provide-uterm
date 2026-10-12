@@ -84,6 +84,9 @@ class TelnetTransport(ConnectionTransport):
         self._writer: asyncio.StreamWriter | None = None
         self._negotiated: dict[str, set[int]] = {"do": set(), "dont": set(), "will": set(), "wont": set()}
         self._rx_buf = bytearray()
+        # Bytes a cancelled receive() had already taken off the socket; the
+        # next receive() returns them before reading again (see _read_bounded).
+        self._rx_carry = b""
         self._cols: int = 80
         self._rows: int = 25
         self._term: str = "ANSI"
@@ -233,6 +236,7 @@ class TelnetTransport(ConnectionTransport):
             self._writer = None
             self._reader = None
             self._rx_buf.clear()
+            self._rx_carry = b""
             self._negotiated = {"do": set(), "dont": set(), "will": set(), "wont": set()}
 
     async def send(self, data: bytes) -> None:
@@ -256,8 +260,7 @@ class TelnetTransport(ConnectionTransport):
             await self.disconnect()
             raise TransportClosedError("Send failed", _close_from_socket_error(exc)) from exc
 
-    @staticmethod
-    async def _read_bounded(reader: asyncio.StreamReader, max_bytes: int, timeout: float) -> bytes:
+    async def _read_bounded(self, reader: asyncio.StreamReader, max_bytes: int, timeout: float) -> bytes:
         """Read up to *max_bytes*, raising :class:`TimeoutError` after *timeout*.
 
         Deliberately not ``asyncio.wait_for``. On CPython < 3.12 ``wait_for``
@@ -268,6 +271,12 @@ class TelnetTransport(ConnectionTransport):
         ``asyncio.wait`` propagates cancellation unconditionally; the ``finally``
         makes sure the in-flight read is dropped on both the timeout and the
         cancellation path.
+
+        A cancellation can also land in the same tick the read completes, after
+        the bytes have left the ``StreamReader``. Those bytes are kept in
+        ``_rx_carry`` for the next ``receive()`` rather than dropped: a hosted
+        session's run loop cancels its poll whenever the hub's frame arrives
+        first, and the bytes lost that way never reached the screen at all.
         """
         read_task = asyncio.ensure_future(reader.read(max_bytes))
         try:
@@ -275,6 +284,10 @@ class TelnetTransport(ConnectionTransport):
             if not done:
                 raise TimeoutError
             return read_task.result()
+        except asyncio.CancelledError:
+            if read_task.done() and not read_task.cancelled() and read_task.exception() is None:
+                self._rx_carry += read_task.result()
+            raise
         finally:
             if not read_task.done():
                 read_task.cancel()
@@ -294,6 +307,9 @@ class TelnetTransport(ConnectionTransport):
         """
         if not self._reader:
             raise ConnectionError("Not connected")
+        if self._rx_carry:
+            chunk, self._rx_carry = self._rx_carry, b""
+            return self._accept_chunk(chunk)
         try:
             chunk = await self._read_bounded(self._reader, max_bytes, timeout_ms / 1000)
         except TimeoutError:
@@ -303,12 +319,16 @@ class TelnetTransport(ConnectionTransport):
             raise TransportClosedError("Connection lost", _close_from_socket_error(exc)) from exc
 
         if not chunk:
-            payload, events = self._consume_rx_buffer(final=True)
+            payload, _events = self._consume_rx_buffer(final=True)
             await self.disconnect()
             if payload:
                 return payload
             raise TransportClosedError("Connection closed by remote", TransportClose(CloseInitiator.REMOTE))
 
+        return self._accept_chunk(chunk)
+
+    def _accept_chunk(self, chunk: bytes) -> bytes:
+        """Parse a non-empty chunk read from the socket and start any negotiation it asks for."""
         self._rx_buf.extend(chunk)
         payload, events = self._consume_rx_buffer()
         if len(self._rx_buf) > _MAX_RX_BUF_BYTES:
