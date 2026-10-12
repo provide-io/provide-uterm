@@ -8,8 +8,11 @@ package server
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -51,6 +54,13 @@ type PamIntegration struct {
 	bridgesMu sync.Mutex
 	bridges   map[string]*PamTunnelBridge
 
+	// instances holds the id each open login was given, for its close to find:
+	// the id carries the PAM process's start time, which the close may no
+	// longer be able to read, and failing that a random tag no second
+	// computation reproduces. Guarded by instancesMu.
+	instancesMu sync.Mutex
+	instances   map[pamLoginKey]string
+
 	// newTunnel, when non-nil, overrides the tunnel-client factory a provisioned
 	// bridge uses (test seam; production leaves it nil → the real client).
 	newTunnel func(wsURL, token string) tunnelConn
@@ -65,18 +75,26 @@ type loggerLike interface {
 
 var pamTTYSlugRe = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 
+// pamLoginKey is what a login's open and close have in common: the user and
+// the process that ran PAM.
+type pamLoginKey struct {
+	username string
+	pid      int
+}
+
 // NewPamIntegration builds the integration. A nil egress guard uses a default.
 func NewPamIntegration(cfg serverconfig.PamConfig, registry SessionRegistry, egress *EgressGuard, logger loggerLike) *PamIntegration {
 	if egress == nil {
 		egress = NewEgressGuard(nil, nil)
 	}
 	return &PamIntegration{
-		cfg:      cfg,
-		registry: registry,
-		egress:   egress,
-		client:   &http.Client{Timeout: 5 * time.Second},
-		logger:   logger,
-		bridges:  map[string]*PamTunnelBridge{},
+		cfg:       cfg,
+		registry:  registry,
+		egress:    egress,
+		client:    &http.Client{Timeout: 5 * time.Second},
+		logger:    logger,
+		bridges:   map[string]*PamTunnelBridge{},
+		instances: map[pamLoginKey]string{},
 	}
 }
 
@@ -120,6 +138,7 @@ func (p *PamIntegration) handle(ctx context.Context, ev pty.PamEvent) {
 
 // onOpen creates the companion/live session then best-effort relays the event.
 func (p *PamIntegration) onOpen(ctx context.Context, ev pty.PamEvent) {
+	p.beginLogin(ev)
 	switch {
 	case p.cfg.Mode == "capture" && ev.CaptureSocket != "":
 		p.createCaptureSession(ctx, ev)
@@ -143,7 +162,7 @@ func (p *PamIntegration) onOpen(ctx context.Context, ev pty.PamEvent) {
 // synchronously, so relaying afterwards would hold the logout notification
 // behind a shell that is slow — or refusing — to die.
 func (p *PamIntegration) onClose(ctx context.Context, ev pty.PamEvent) {
-	sessionID := pamSessionID(ev)
+	sessionID := p.endLogin(ev)
 	p.stopBridge(sessionID)
 	if p.relayConfigured() {
 		p.forwardToRelay(ctx, map[string]any{
@@ -172,7 +191,7 @@ func (p *PamIntegration) createNotifySession(ctx context.Context, ev pty.PamEven
 		command = "/bin/bash"
 	}
 	p.safeCreate(ctx, map[string]any{
-		"session_id":     pamSessionID(ev),
+		"session_id":     p.loginID(ev),
 		"display_name":   ev.Username + " (" + ttyOrPam(ev.TTY) + ")",
 		"connector_type": "pty",
 		"connector_config": map[string]any{
@@ -198,7 +217,7 @@ func (p *PamIntegration) createCaptureSession(ctx context.Context, ev pty.PamEve
 		return
 	}
 	p.safeCreate(ctx, map[string]any{
-		"session_id":       pamSessionID(ev),
+		"session_id":       p.loginID(ev),
 		"display_name":     ev.Username + " (" + ttyOrPam(ev.TTY) + ") [live]",
 		"connector_type":   "pty_capture",
 		"connector_config": map[string]any{"socket_path": ev.CaptureSocket},
@@ -292,19 +311,104 @@ func (p *PamIntegration) forwardToRelay(ctx context.Context, event map[string]an
 	_ = resp.Body.Close()
 }
 
-// pamSessionID builds a stable session id for a PAM event. Port of _session_id:
-// capture sessions key on the PID (pam_uterm.so publishes one capture socket per
-// pid, and the close event carries a TTY that the open-side id must not depend
-// on); otherwise the TTY slug, plus the PID when the TTY is absent.
+// procStartTicks returns when pid started, in clock ticks since boot (field 22
+// of /proc/<pid>/stat), or false when /proc will not say. The command name
+// before it is in parentheses and may itself hold spaces and parentheses;
+// every field after the LAST ")" is fixed, which puts the start time at offset
+// 19 there. Port of _process_start_ticks.
+func procStartTicks(pid int) (int64, bool) {
+	if pid <= 0 {
+		return 0, false
+	}
+	raw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0, false
+	}
+	text := string(raw)
+	fields := strings.Fields(text[strings.LastIndex(text, ")")+1:])
+	if len(fields) < 20 {
+		return 0, false
+	}
+	ticks, err := strconv.ParseInt(fields[19], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return ticks, true
+}
+
+// pamProcessStartTicks is procStartTicks, swappable in tests.
+var pamProcessStartTicks = procStartTicks
+
+// pamInstanceTag returns what tells this login's process apart from every
+// other that had its pid: its start time, or a random r<hex> where that
+// cannot be read. Port of _instance_tag.
+func pamInstanceTag(pid int) string {
+	if ticks, ok := pamProcessStartTicks(pid); ok {
+		return strconv.FormatInt(ticks, 10)
+	}
+	var b [4]byte
+	_, _ = rand.Read(b[:])
+	return "r" + hex.EncodeToString(b[:])
+}
+
+// pamSessionID builds a new session id for the login a PAM event names. Port
+// of _session_id: capture sessions key on the pid (pam_uterm.so publishes one
+// capture socket per pid, and the close event carries a TTY that the open-side
+// id must not depend on); otherwise the TTY slug, plus the pid when the TTY is
+// absent. Pids are reused, so every id carrying one also carries the
+// process's instance tag: pam-<user>-capture-<pid>-<start>. A tty-named
+// notify id is unchanged: it is the shape the relay's /api/pam-events derives
+// for the same login. Computed once per login, at open (see beginLogin).
 func pamSessionID(ev pty.PamEvent) string {
 	if ev.Mode == "capture" || ev.CaptureSocket != "" {
-		return "pam-" + ev.Username + "-capture-" + strconv.Itoa(ev.PID)
+		return "pam-" + ev.Username + "-capture-" + strconv.Itoa(ev.PID) + "-" + pamInstanceTag(ev.PID)
 	}
 	slug := ttySlug(ev.TTY)
 	if ev.TTY == "" {
-		return "pam-" + ev.Username + "-" + slug + "-" + strconv.Itoa(ev.PID)
+		return "pam-" + ev.Username + "-" + slug + "-" + strconv.Itoa(ev.PID) + "-" + pamInstanceTag(ev.PID)
 	}
 	return "pam-" + ev.Username + "-" + slug
+}
+
+// beginLogin gives an opening login a new id and remembers it for the close.
+// Always new: an id left by an earlier login on the same pid whose close never
+// came belongs to that login, not this one.
+func (p *PamIntegration) beginLogin(ev pty.PamEvent) string {
+	id := pamSessionID(ev)
+	p.instancesMu.Lock()
+	p.instances[pamLoginKey{ev.Username, ev.PID}] = id
+	p.instancesMu.Unlock()
+	return id
+}
+
+// loginID returns the id the login was given at open, giving it one if it
+// has none yet (a helper reached without an open).
+func (p *PamIntegration) loginID(ev pty.PamEvent) string {
+	key := pamLoginKey{ev.Username, ev.PID}
+	p.instancesMu.Lock()
+	defer p.instancesMu.Unlock()
+	if id, ok := p.instances[key]; ok {
+		return id
+	}
+	id := pamSessionID(ev)
+	p.instances[key] = id
+	return id
+}
+
+// endLogin forgets a closing login and returns the id its open gave it.
+// Without one (the open came before a restart) it is computed afresh, which
+// finds the session while the process that ran PAM can still report its
+// start time.
+func (p *PamIntegration) endLogin(ev pty.PamEvent) string {
+	key := pamLoginKey{ev.Username, ev.PID}
+	p.instancesMu.Lock()
+	id, ok := p.instances[key]
+	delete(p.instances, key)
+	p.instancesMu.Unlock()
+	if ok {
+		return id
+	}
+	return pamSessionID(ev)
 }
 
 // ttySlug maps '/dev/pts/3' → 'pts-3'. Port of _tty_slug.

@@ -84,15 +84,17 @@ func TestPamSessionIDAndSlug(t *testing.T) {
 		// Parity with Python _tty_slug: the basename is the segment after the last
 		// "/", so "/dev/pts/3" → "3" (the "pts-3" docstring is aspirational).
 		{pty.PamEvent{Username: "alice", TTY: "/dev/pts/3"}, "pam-alice-3"},
-		{pty.PamEvent{Username: "bob", TTY: "", PID: 42}, "pam-bob-tty-42"},
+		// A pid-carrying id also carries the process's start time (pinned below).
+		{pty.PamEvent{Username: "bob", TTY: "", PID: 42}, "pam-bob-tty-42-4200"},
 		{pty.PamEvent{Username: "eve", TTY: "tty1"}, "pam-eve-tty1"},
 		// Capture sessions key on the pid, never the tty: pam_uterm.so publishes
 		// UTERM_CAPTURE_SOCKET per-pid, and a capture close event carries the tty
 		// too, so a tty-keyed id would not match the id minted at open.
-		{pty.PamEvent{Username: "carol", TTY: "/dev/pts/4", PID: 7, Mode: "capture"}, "pam-carol-capture-7"},
+		{pty.PamEvent{Username: "carol", TTY: "/dev/pts/4", PID: 7, Mode: "capture"}, "pam-carol-capture-7-700"},
 		// The socket alone is enough — mode may be absent on a close event.
-		{pty.PamEvent{Username: "dan", TTY: "/dev/pts/5", PID: 9, CaptureSocket: "/run/uterm-cap-9.sock"}, "pam-dan-capture-9"},
+		{pty.PamEvent{Username: "dan", TTY: "/dev/pts/5", PID: 9, CaptureSocket: "/run/uterm-cap-9.sock"}, "pam-dan-capture-9-900"},
 	}
+	pinStartTicks(t, map[int]int64{42: 4200, 7: 700, 9: 900})
 	for _, c := range cases {
 		if got := pamSessionID(c.ev); got != c.want {
 			t.Errorf("pamSessionID(%+v)=%q want %q", c.ev, got, c.want)
@@ -199,6 +201,7 @@ func TestPamOnCloseDeletes(t *testing.T) {
 // a round-trip that only compares the two ids to each other still agrees under
 // tty-slug keying, and would pass with the capture branch deleted.
 func TestPamCaptureOpenCloseSameID(t *testing.T) {
+	pinStartTicks(t, map[int]int64{7: 700})
 	reg := newFakeRegistry()
 	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, reg)
 	pi.onOpen(context.Background(), pty.PamEvent{
@@ -208,8 +211,8 @@ func TestPamCaptureOpenCloseSameID(t *testing.T) {
 	if len(reg.created) != 1 {
 		t.Fatalf("want 1 create, got %d", len(reg.created))
 	}
-	if created, _ := reg.created[0]["session_id"].(string); created != "pam-carol-capture-7" {
-		t.Fatalf("created id = %q, want pam-carol-capture-7", created)
+	if created, _ := reg.created[0]["session_id"].(string); created != "pam-carol-capture-7-700" {
+		t.Fatalf("created id = %q, want pam-carol-capture-7-700", created)
 	}
 
 	// The close carries no tty: under tty-slug keying this would key on the pid
@@ -217,8 +220,8 @@ func TestPamCaptureOpenCloseSameID(t *testing.T) {
 	pi.onClose(context.Background(), pty.PamEvent{
 		Event: "close", Username: "carol", PID: 7, Mode: "capture",
 	})
-	if len(reg.deleted) != 1 || reg.deleted[0] != "pam-carol-capture-7" {
-		t.Fatalf("close deleted %v, want [pam-carol-capture-7]", reg.deleted)
+	if len(reg.deleted) != 1 || reg.deleted[0] != "pam-carol-capture-7-700" {
+		t.Fatalf("close deleted %v, want [pam-carol-capture-7-700]", reg.deleted)
 	}
 }
 

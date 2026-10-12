@@ -97,10 +97,17 @@ func TestPamCaptureSessionStartsThroughRegistry(t *testing.T) {
 		capture)
 	_ = conn.Close()
 
-	const id = "pam-zed-capture-11"
+	// The id carries pid 11's start time (or a random tag where /proc will not
+	// say), so it is found by its pid-keyed prefix.
+	var id string
 	waitFor(t, "capture session created", func() bool {
-		_, err := reg.GetSession(ctx, id)
-		return err == nil
+		for _, item := range reg.ListWithDefinitions(ctx) {
+			if strings.HasPrefix(item.Definition.SessionID, "pam-zed-capture-11-") {
+				id = item.Definition.SessionID
+				return true
+			}
+		}
+		return false
 	})
 
 	st, err := reg.StartSession(ctx, id)
