@@ -25,6 +25,18 @@ Two modes, configured via ``ServerConfig.pam.mode``:
 
 The integration starts at server startup and runs until the server shuts down.
 It is fully opt-in: nothing happens unless ``config.pam.notify_socket`` is set.
+
+Session ids
+  A PAM event names its login by the pid of the process that ran PAM, and pids
+  are reused. An id built from the pid alone was handed, with everything
+  recorded under it, to whichever later login drew the same pid, so every id
+  that carries a pid also carries that process's start time (``/proc/<pid>/stat``
+  field 22, clock ticks since boot): a pid is reused, a pid together with when
+  it started is not. ``pam-<user>-capture-<pid>-<start>`` for a capture
+  session, ``pam-<user>-tty-<pid>-<start>`` for a notify session with no tty.
+  Where the start time cannot be read, a random ``r<hex>`` takes its place.
+  The id is computed once, at open, and remembered for the close: by the time a
+  close is handled the process may already be gone.
 """
 
 from __future__ import annotations
@@ -33,6 +45,8 @@ import asyncio
 import contextlib
 import logging
 import re
+import secrets
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -108,14 +122,51 @@ def _tty_slug(tty: str) -> str:
     return _TTY_SLUG_RE.sub("-", basename).strip("-") or "tty"
 
 
+def _process_start_ticks(pid: int) -> int | None:
+    """When ``pid`` started, in clock ticks since boot, or None if /proc will not say.
+
+    Field 22 of ``/proc/<pid>/stat``. The command name before it is in
+    parentheses and may itself contain spaces and parentheses; every field after
+    the LAST ")" is fixed, which puts the start time at offset 19 there.
+    """
+    if pid <= 0:
+        return None
+    try:
+        text = Path(f"/proc/{pid}/stat").read_text(encoding="ascii", errors="replace")
+    except OSError:
+        return None
+    fields = text.rpartition(")")[2].split()
+    try:
+        return int(fields[19])
+    except (IndexError, ValueError):
+        return None
+
+
+def _instance_tag(pid: int) -> str:
+    """What tells this login's process apart from every other that had its pid."""
+    ticks = _process_start_ticks(pid)
+    return str(ticks) if ticks is not None else f"r{secrets.token_hex(4)}"
+
+
 def _session_id(ev: PamEvent) -> str:
-    """Stable session ID for matching PAM open and close events."""
+    """A new session id for the login a PAM event names (see the module docstring).
+
+    Every id carrying a pid also carries the instance tag, so a later login that
+    draws the same pid gets a different id. A tty-named notify id is unchanged:
+    it is the shape the relay's ``/api/pam-events`` derives for the same login.
+    Computed once per login, at open (see :func:`_on_open`).
+    """
     if ev.mode == "capture" or ev.capture_socket is not None:
-        return f"pam-{ev.username}-capture-{ev.pid}"
+        return f"pam-{ev.username}-capture-{ev.pid}-{_instance_tag(ev.pid)}"
     slug = _tty_slug(ev.tty)
     if not ev.tty:
-        return f"pam-{ev.username}-{slug}-{ev.pid}"
+        return f"pam-{ev.username}-{slug}-{ev.pid}-{_instance_tag(ev.pid)}"
     return f"pam-{ev.username}-{slug}"
+
+
+def _login_key(ev: PamEvent) -> tuple[str, int]:
+    """What an open and its close have in common: the user and the PAM process."""
+    return (ev.username, ev.pid)
 
 
 async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -> None:
@@ -135,6 +186,8 @@ async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -
         return
 
     _bridges: dict[str, object] = {}
+    # The id each open login was given, for its close to find (see _on_open).
+    _instances: dict[tuple[str, int], str] = {}
 
     async def handle(event: PamEvent) -> None:
         ev = event
@@ -147,9 +200,9 @@ async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -
             ev.mode,
         )
         if ev.event == "open":
-            await _on_open(ev, pam_cfg, registry, _bridges)
+            await _on_open(ev, pam_cfg, registry, _bridges, _instances)
         elif ev.event == "close":  # pragma: no branch
-            await _on_close(ev, pam_cfg, registry, _bridges)
+            await _on_close(ev, pam_cfg, registry, _bridges, _instances)
 
     listener = PamNotifyListener(pam_cfg.notify_socket, require_peer_uids=pam_cfg.require_peer_uids)
     await listener.start(handle)
@@ -174,18 +227,27 @@ async def _on_open(
     pam_cfg: PamConfig,
     registry: SessionRegistry,
     bridges: dict[str, object] | None = None,
+    instances: dict[tuple[str, int], str] | None = None,
 ) -> None:
+    """Create the login's session, then relay the event.
+
+    The id is made here, once, and kept in *instances* for :func:`_on_close`:
+    it carries the process's start time, which the close may no longer be able
+    to read, and, failing that, a random tag no second computation reproduces.
+    """
     from provide.uterm.server.pam_tunnel import PamTunnelBridge
 
     ev = event
     cfg = pam_cfg
+    session_id = _session_id(ev)
+    if instances is not None:
+        instances[_login_key(ev)] = session_id
 
     if cfg.mode == "capture" and ev.capture_socket:
-        await _create_capture_session(ev, cfg, registry)
+        await _create_capture_session(ev, cfg, registry, session_id)
     elif cfg.auto_session:
-        await _create_notify_session(ev, cfg, registry)
+        await _create_notify_session(ev, cfg, registry, session_id)
 
-    session_id = _session_id(ev)
     display_name = f"{ev.username} ({ev.tty or 'pam'})"
 
     if cfg.relay_url and cfg.relay_token:
@@ -220,10 +282,15 @@ async def _on_close(
     pam_cfg: PamConfig,
     registry: SessionRegistry,
     bridges: dict[str, object] | None = None,
+    instances: dict[tuple[str, int], str] | None = None,
 ) -> None:
     ev = event
     cfg = pam_cfg
-    session_id = _session_id(ev)
+    # The id the open gave this login. Without one (the open came before a
+    # restart) it is computed afresh, which finds the session while the
+    # process that ran PAM is still alive to report its start time.
+    known = instances.pop(_login_key(ev), None) if instances is not None else None
+    session_id = known if known is not None else _session_id(ev)
 
     # Stop tunnel bridge first
     bridge = bridges.pop(session_id, None) if bridges is not None else None
@@ -252,11 +319,13 @@ async def _on_close(
 # ── notify mode ───────────────────────────────────────────────────────────────
 
 
-async def _create_notify_session(event: PamEvent, pam_cfg: PamConfig, registry: SessionRegistry) -> None:
+async def _create_notify_session(
+    event: PamEvent, pam_cfg: PamConfig, registry: SessionRegistry, session_id: str | None = None
+) -> None:
     ev = event
     cfg = pam_cfg
 
-    session_id = _session_id(ev)
+    session_id = session_id if session_id is not None else _session_id(ev)
     command = cfg.auto_session_command or "/bin/bash"
 
     payload: dict[str, object] = {
@@ -281,7 +350,9 @@ async def _create_notify_session(event: PamEvent, pam_cfg: PamConfig, registry: 
 # ── capture mode ──────────────────────────────────────────────────────────────
 
 
-async def _create_capture_session(event: PamEvent, pam_cfg: PamConfig, registry: SessionRegistry) -> None:
+async def _create_capture_session(
+    event: PamEvent, pam_cfg: PamConfig, registry: SessionRegistry, session_id: str | None = None
+) -> None:
     ev = event
     if ev.capture_socket is None:
         return
@@ -321,7 +392,7 @@ async def _create_capture_session(event: PamEvent, pam_cfg: PamConfig, registry:
             )
             return
 
-    session_id = _session_id(ev)
+    session_id = session_id if session_id is not None else _session_id(ev)
 
     payload: dict[str, object] = {
         "session_id": session_id,

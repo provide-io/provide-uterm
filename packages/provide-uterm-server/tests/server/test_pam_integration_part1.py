@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from provide.uterm.recording import LocalFileRecordingStore
+from provide.uterm.server import pam_integration
 from provide.uterm.server.models import RecordingConfig, SessionDefinition
 from provide.uterm.server.pam_integration import (
     _on_close,
@@ -67,7 +68,7 @@ async def test_run_pam_integration_missing_pty_package_exits_gracefully() -> Non
 # ── _on_open ──────────────────────────────────────────────────────────────────
 
 
-async def test_on_open_capture_mode_with_socket_creates_capture_session() -> None:
+async def test_on_open_capture_mode_with_socket_creates_capture_session(monkeypatch: pytest.MonkeyPatch) -> None:
     """Capture mode + capture_socket → create pty_capture session."""
     pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from provide.uterm.pty.pam_listener import PamEvent
@@ -84,6 +85,7 @@ async def test_on_open_capture_mode_with_socket_creates_capture_session() -> Non
     cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture")
     registry = MagicMock()
     registry.create_session = AsyncMock()
+    monkeypatch.setattr(pam_integration, "_process_start_ticks", lambda pid: 98765)
 
     await _on_open(ev, cfg, registry)
 
@@ -91,7 +93,7 @@ async def test_on_open_capture_mode_with_socket_creates_capture_session() -> Non
     payload = registry.create_session.call_args[0][0]
     assert payload["connector_type"] == "pty_capture"
     assert payload["connector_config"]["socket_path"] == "/run/uterm-cap-1234.sock"
-    assert payload["session_id"] == "pam-alice-capture-1234"
+    assert payload["session_id"] == "pam-alice-capture-1234-98765"
     assert payload["ephemeral"] is False
 
 

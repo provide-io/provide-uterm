@@ -5,10 +5,13 @@
 from __future__ import annotations
 
 import contextlib
+import os
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from provide.uterm.server import pam_integration
 from provide.uterm.server.pam_integration import (
     _on_close,
     _on_open,
@@ -202,29 +205,109 @@ def test_session_id_with_tty_uses_slug_only() -> None:
     assert _session_id(ev) == "pam-alice-3"
 
 
-def test_session_id_empty_tty_includes_pid() -> None:
+@pytest.fixture
+def start_ticks(monkeypatch: pytest.MonkeyPatch) -> dict[int, int | None]:
+    """Pin each pid's process start time; a pid left out reads as unreadable."""
+    ticks: dict[int, int | None] = {}
+    monkeypatch.setattr(pam_integration, "_process_start_ticks", ticks.get)
+    return ticks
+
+
+def test_session_id_empty_tty_includes_pid(start_ticks: dict[int, int | None]) -> None:
     """Empty TTY must include PID to prevent collision between concurrent sessions."""
     pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from provide.uterm.pty.pam_listener import PamEvent
 
+    start_ticks.update({100: 5100, 200: 5200})
     ev1 = PamEvent(event="open", username="alice", tty="", pid=100)
     ev2 = PamEvent(event="open", username="alice", tty="", pid=200)
     assert _session_id(ev1) != _session_id(ev2)
-    assert _session_id(ev1) == "pam-alice-tty-100"
-    assert _session_id(ev2) == "pam-alice-tty-200"
+    assert _session_id(ev1) == "pam-alice-tty-100-5100"
+    assert _session_id(ev2) == "pam-alice-tty-200-5200"
 
 
-def test_session_id_open_and_close_match_with_same_pid() -> None:
-    """Open and close events with same PID and empty TTY map to the same session_id."""
+def test_session_id_open_and_close_match_with_same_pid(start_ticks: dict[int, int | None]) -> None:
+    """Open and close of one live process with an empty TTY map to the same session_id."""
     pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from provide.uterm.pty.pam_listener import PamEvent
 
+    start_ticks[999] = 4321
     ev_open = PamEvent(event="open", username="bob", tty="", pid=999)
     ev_close = PamEvent(event="close", username="bob", tty="", pid=999)
     assert _session_id(ev_open) == _session_id(ev_close)
 
 
-def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty() -> None:
+def _capture_event(pid: int, event: str = "open") -> object:
+    from provide.uterm.pty.pam_listener import PamEvent
+
+    return PamEvent(
+        event=event,  # type: ignore[arg-type]
+        username="suokki",
+        tty="ssh",
+        pid=pid,
+        mode="capture",
+        capture_socket=f"/run/uterm-cap-{pid}.sock" if event == "open" else None,
+    )
+
+
+def test_a_recycled_pid_gets_a_different_capture_id(start_ticks: dict[int, int | None]) -> None:
+    """Two logins that draw the same sshd pid are two sessions, never one id."""
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+
+    start_ticks[62738] = 1000
+    first = _session_id(_capture_event(62738))  # type: ignore[arg-type]
+    start_ticks[62738] = 98000  # the pid came round again, to a later process
+    second = _session_id(_capture_event(62738))  # type: ignore[arg-type]
+    assert first == "pam-suokki-capture-62738-1000"
+    assert second == "pam-suokki-capture-62738-98000"
+
+
+def test_an_unreadable_start_time_falls_back_to_a_random_tag(start_ticks: dict[int, int | None]) -> None:
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    import re
+
+    first = _session_id(_capture_event(7))  # type: ignore[arg-type]
+    second = _session_id(_capture_event(7))  # type: ignore[arg-type]
+    assert re.fullmatch(r"pam-suokki-capture-7-r[0-9a-f]{8}", first)
+    assert first != second
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="needs /proc")
+def test_process_start_ticks_reads_proc_stat() -> None:
+    fields = Path(f"/proc/{os.getpid()}/stat").read_text().rpartition(")")[2].split()
+    assert pam_integration._process_start_ticks(os.getpid()) == int(fields[19])
+    assert pam_integration._process_start_ticks(0) is None
+    assert pam_integration._process_start_ticks(-1) is None
+    assert pam_integration._process_start_ticks(2**22 + 12345) is None  # above any pid_max
+
+
+async def test_close_finds_the_id_open_gave_even_after_the_process_is_gone(
+    start_ticks: dict[int, int | None],
+) -> None:
+    """The close must not depend on reading /proc: sshd may already have exited."""
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.server.models import PamConfig
+
+    cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture")
+    registry = MagicMock()
+    registry.create_session = AsyncMock()
+    registry.delete_session = AsyncMock()
+    instances: dict[tuple[str, int], str] = {}
+
+    start_ticks[4242] = 31337
+    await _on_open(_capture_event(4242), cfg, registry, None, instances)  # type: ignore[arg-type]
+    created = registry.create_session.call_args[0][0]["session_id"]
+    assert created == "pam-suokki-capture-4242-31337"
+
+    del start_ticks[4242]  # the sshd process has exited by the time close is handled
+    await _on_close(_capture_event(4242, "close"), cfg, registry, None, instances)  # type: ignore[arg-type]
+    registry.delete_session.assert_awaited_once_with(created)
+    assert instances == {}
+
+
+def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty(
+    start_ticks: dict[int, int | None],
+) -> None:
     pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from provide.uterm.pty.pam_listener import PamEvent
 
@@ -245,8 +328,9 @@ def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty() -> N
         capture_socket="/run/uterm-cap-200.sock",
     )
 
-    assert _session_id(first) == "pam-alice-capture-100"
-    assert _session_id(second) == "pam-alice-capture-200"
+    start_ticks.update({100: 5100, 200: 5200})
+    assert _session_id(first) == "pam-alice-capture-100-5100"
+    assert _session_id(second) == "pam-alice-capture-200-5200"
 
 
 # ── run_pam_integration event loop ───────────────────────────────────────────
