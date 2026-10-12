@@ -628,6 +628,9 @@ pytest_add_cli_args_test_selection = [
     # the security-bearing syscall args (dir/file modes, O_NOFOLLOW, S_ISREG,
     # utf-8 encoding) that chmod/fchmod otherwise mask; this wraps them to assert.
     "packages/provide-uterm/tests/terminal/test_recording_kill.py",
+    # Session instances and retirement (start_session's instance rule,
+    # retire_session, retire_recording): the reused-id behaviour #151 added.
+    "packages/provide-uterm/tests/terminal/test_recording_instances.py",
     # Covers redaction.py (make_redactor / redact_text / redact_structure).
     "packages/provide-uterm/tests/test_redaction.py",
     "packages/provide-uterm/tests/test_redaction_structure.py",
@@ -656,6 +659,10 @@ pytest_add_cli_args_test_selection = [
     # HostedSessionRuntime / registered_types / egress / asyncio.sleep / EventBus
     # so no external registry state or real async streaming reaches a forked worker).
     "packages/provide-uterm-server/tests/server/test_registry_mutation_killing.py",
+    # Retire-on-delete/create and the id reservation (_reserve_for_create,
+    # _finish_removal, _release_mine). In-memory and tmp-dir stores, a real
+    # TermHub and auto_start=False runtimes: no streaming, nothing external.
+    "packages/provide-uterm-server/tests/server/test_registry_recording_retire.py",
     # routes/ self-contained mocked kill-suite (mutmut skips the @router.* handlers;
     # this binds the undecorated helpers + create_*_router bodies via router-endpoint
     # extraction with mocked Request — no TestClient/full-app lifespan).

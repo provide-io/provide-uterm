@@ -12,17 +12,24 @@ recording on file was started by the same instance (a reconnect).
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
+import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from provide.uterm import recording as recording_module
 from provide.uterm.recording import (
     InMemoryRecordingStore,
     LocalFileRecordingStore,
     NullRecordingStore,
     RecordingStore,
+    recording_instance,
     retire_recording,
+    retired_recording_name,
 )
 
 
@@ -157,3 +164,93 @@ async def test_retire_recording_skips_a_store_without_it() -> None:
         pass
 
     await retire_recording(Legacy(), "s")  # no AttributeError
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        ({"instance": "i1"}, "i1"),
+        ({"instance": ""}, None),
+        ({"instance": 5}, None),
+        ({"instance": None}, None),
+        ({}, None),
+        ("instance", None),
+        (None, None),
+    ],
+)
+def test_recording_instance_names_only_a_non_empty_string(metadata: Any, expected: str | None) -> None:
+    assert recording_instance(metadata) == expected
+
+
+def test_a_retired_name_is_the_id_a_dot_a_timestamp_and_eight_hex_digits() -> None:
+    assert re.fullmatch(r"s\.[0-9]+-[0-9a-f]{8}\.jsonl", retired_recording_name("s"))
+
+
+async def test_a_first_line_that_is_not_utf8_is_retired_not_raised(tmp_path: Path) -> None:
+    (tmp_path / "s.jsonl").write_bytes(b"\x80\x81 not text\n")
+    store = LocalFileRecordingStore(tmp_path)
+    await _record(store, "s", {"instance": "i1"}, "mine")
+    assert _texts(await store.get_entries("s", limit=500)) == ["mine"]
+
+
+async def test_a_first_line_past_the_read_limit_is_not_one_this_store_wrote(tmp_path: Path) -> None:
+    """Only the first 64 KiB is read: a longer log_start does not parse, and is retired."""
+    start = {"ts": 0, "event": "log_start", "data": {"instance": "i1", "pad": "x" * (64 * 1024)}}
+    (tmp_path / "s.jsonl").write_text(json.dumps(start) + "\n")
+    store = LocalFileRecordingStore(tmp_path)
+    await _record(store, "s", {"instance": "i1"}, "mine")
+    assert len(list(tmp_path.glob("s.*.jsonl"))) == 1
+    assert [e["event"] for e in await store.get_entries("s", limit=500)] == ["log_start", "read", "log_stop"]
+
+
+def test_the_instance_is_read_with_plain_o_rdonly_where_o_nofollow_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "s.jsonl"
+    path.write_text(json.dumps({"ts": 0, "event": "log_start", "data": {"instance": "i1"}}) + "\n")
+    flags: list[int] = []
+    real_open = os.open
+
+    def spy(p: Any, f: int, *args: Any) -> int:
+        flags.append(f)
+        return real_open(p, f, *args)
+
+    monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
+    monkeypatch.setattr(os, "open", spy)
+    assert recording_module._instance_on_file(path) == "i1"
+    assert flags == [os.O_RDONLY]
+
+
+async def test_a_restart_closes_the_handle_an_earlier_start_left_open(tmp_path: Path) -> None:
+    store = LocalFileRecordingStore(tmp_path)
+    await store.start_session("s", {"instance": "first"})
+    handle = store._files["s"]
+    await store.start_session("s", {"instance": "second"})
+    assert handle.closed
+    assert store._files["s"] is not handle
+
+
+async def test_retiring_closes_the_open_handle_and_later_writes_start_a_new_file(tmp_path: Path) -> None:
+    store = LocalFileRecordingStore(tmp_path)
+    await store.start_session("s", {"instance": "a"})
+    handle = store._files["s"]
+    await store.retire_session("s")
+    assert handle.closed
+    await store.append_events("s", [{"ts": 2.0, "event": "read", "data": {"text": "after"}}])
+    (retired,) = tmp_path.glob("s.*.jsonl")
+    assert "after" not in retired.read_text()
+    assert "after" in (tmp_path / "s.jsonl").read_text()
+
+
+async def test_retire_session_waits_for_the_session_lock(tmp_path: Path) -> None:
+    store = LocalFileRecordingStore(tmp_path)
+    await _record(store, "s", {"instance": "a"}, "old")
+    lock = store._get_lock("s")
+    await lock.acquire()
+    retiring = asyncio.create_task(store.retire_session("s"))
+    await asyncio.sleep(0.01)
+    assert not retiring.done()
+    assert (tmp_path / "s.jsonl").exists()
+    lock.release()
+    await retiring
+    assert not (tmp_path / "s.jsonl").exists()
