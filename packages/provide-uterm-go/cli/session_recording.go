@@ -360,7 +360,10 @@ func (s *sessionRecorder) FrameSent(payload string, frame map[string]any) error 
 		if err := s.rec.LogWire("send", payload); err != nil {
 			return err
 		}
-		if mtype != "term" {
+		// term frames are the wire text itself, and a snapshot is recorded in
+		// full as a "read" event by logSnapshot below, as the reference's
+		// _log_wire_send skips both.
+		if mtype != "term" && mtype != "snapshot" {
 			if err := s.rec.LogControl("send", frame); err != nil {
 				return err
 			}

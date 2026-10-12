@@ -224,13 +224,12 @@ describe("frames missing the fields the loggers read", () => {
       "control_send",
       "wire_send",
       "wire_send",
-      "control_send",
       "read",
       "log_stop",
     ]);
     // Terminal output with no data is an empty chunk on the wire.
     expect(entries[3]?.data).toStrictEqual({ text: "", bytes_b64: "" });
-    expect(entries[6]?.data).toStrictEqual({ type: "snapshot", raw: "", raw_bytes_b64: "" });
+    expect(entries[5]?.data).toStrictEqual({ type: "snapshot", raw: "", raw_bytes_b64: "" });
   });
 });
 

@@ -407,7 +407,7 @@ func TestABlockingStoreDoesNotBlockTheBridge(t *testing.T) {
 	must(t, <-flushed)
 	rec.AttemptEnded(nil)
 
-	want := []string{"log_start", "runtime_started", "wire_send", "control_send", "read", "wire_recv", "control_recv", "send"}
+	want := []string{"log_start", "runtime_started", "wire_send", "read", "wire_recv", "control_recv", "send"}
 	for range 20 {
 		want = append(want, "wire_send")
 	}
