@@ -20,6 +20,7 @@ import pytest
 from provide.uterm.recording import (
     InMemoryRecordingStore,
     LocalFileRecordingStore,
+    NullRecordingStore,
     RecordingStore,
     retire_recording,
 )
@@ -93,6 +94,40 @@ async def test_an_unreadable_recording_is_retired_rather_than_appended_to(tmp_pa
     await _record(store, "s", {"instance": "i1"}, "mine")
     assert (tmp_path / "s.jsonl").read_text().startswith('{"ts"')
     assert _texts(await store.get_entries("s", limit=500)) == ["mine"]
+
+
+@pytest.mark.parametrize("first_line", ['{"event": "read", "data": {}}', "[1, 2]"], ids=["not-start", "not-object"])
+async def test_a_recording_not_begun_by_a_log_start_is_retired(tmp_path: Path, first_line: str) -> None:
+    (tmp_path / "s.jsonl").write_text(first_line + "\n")
+    store = LocalFileRecordingStore(tmp_path)
+    await _record(store, "s", {"instance": "i1"}, "mine")
+    assert _texts(await store.get_entries("s", limit=500)) == ["mine"]
+    assert [p.read_text() for p in tmp_path.glob("s.*.jsonl")] == [first_line + "\n"]
+
+
+async def test_a_symlink_planted_at_the_path_is_retired_unread(tmp_path: Path) -> None:
+    target = tmp_path / "elsewhere.txt"
+    target.write_text(json.dumps({"ts": 0, "event": "log_start", "data": {"instance": "i1"}}) + "\n")
+    (tmp_path / "s.jsonl").symlink_to(target)
+    store = LocalFileRecordingStore(tmp_path)
+    await _record(store, "s", {"instance": "i1"}, "mine")
+    assert not (tmp_path / "s.jsonl").is_symlink()
+    assert _texts(await store.get_entries("s", limit=500)) == ["mine"]
+    assert target.read_text().count("\n") == 1  # never written through
+
+
+async def test_retire_session_after_the_session_ended(tmp_path: Path) -> None:
+    store = LocalFileRecordingStore(tmp_path)
+    await _record(store, "s", {"instance": "a"}, "old")
+    await store.retire_session("s")  # no handle open
+    assert not (tmp_path / "s.jsonl").exists()
+    assert len(list(tmp_path.glob("s.*.jsonl"))) == 1
+
+
+async def test_the_null_store_retires_nothing() -> None:
+    store = NullRecordingStore()
+    await store.retire_session("s")
+    assert (await store.recording_meta("s"))["exists"] is False
 
 
 async def test_a_handle_left_open_by_an_unended_instance_is_not_reused(tmp_path: Path) -> None:
