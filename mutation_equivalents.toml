@@ -887,11 +887,11 @@ reason = 'cast("XXdict[str, dict[str, object]]XX", uterm_tunnel_tokens) — runt
 mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_428"
 reason = 'cast("DICT[STR, DICT[STR, OBJECT]]", uterm_tunnel_tokens) — runtime no-op.'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_1000"
-reason = 'recording_download media_type -> None: Starlette guesses "application/json" from the .json filename, so the response header is byte-identical. (Was _993 until the 2026-08-15 renumbering, _996 until mutmut 3.8.)'
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_1002"
+reason = 'recording_download media_type -> None: Starlette guesses "application/json" from the .json filename, so the response header is byte-identical. (Was _1000 until annotate began auditing evt["data"] on 2026-10-10, _993 until the 2026-08-15 renumbering, _996 until mutmut 3.8.)'
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_1003"
-reason = "recording_download media_type argument dropped: same guess from the filename — identical response. (Was _996 until the 2026-08-15 renumbering, _999 until mutmut 3.8.)"
+mutant = "provide.uterm.server.routes.sessions.x_session_capability_handlers__mutmut_1005"
+reason = "recording_download media_type argument dropped: same guess from the filename — identical response. (Was _1003 until annotate began auditing evt[\"data\"] on 2026-10-10, _996 until the 2026-08-15 renumbering, _999 until mutmut 3.8.)"
 
 # -------------------------------------------------------------------------
 # routes/route_defs.py — the shared binder. Two verified-equivalent pairs in
