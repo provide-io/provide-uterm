@@ -342,7 +342,7 @@ const BEFORE_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
       if (!SESSION_ID_PATTERN.test(sessionId)) {
         return `session_id must match ^[\\w\\-]+$, got: ${pyRepr(sessionId)}`;
       }
-      return Buffer.byteLength(sessionId, "utf8") > MAX_SESSION_ID_BYTES
+      return Buffer.byteLength(sessionId) > MAX_SESSION_ID_BYTES
         ? `session_id must be at most ${MAX_SESSION_ID_BYTES} bytes (UTF-8), got: ${pyRepr(sessionId)}`
         : undefined;
     },
