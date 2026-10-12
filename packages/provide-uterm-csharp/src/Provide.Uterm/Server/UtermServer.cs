@@ -237,18 +237,54 @@ public sealed partial class UtermServer : IAsyncDisposable
             var body = await ReadJson(ctx).ConfigureAwait(false);
             var id = Str(body, "session_id");
             if (string.IsNullOrEmpty(id)) id = "sess-" + Guid.NewGuid().ToString("N")[..12];
-            if (!SafeId.IsMatch(id)) return DetailError(422, "invalid session_id");
+            if (!SafeId.IsMatch(id) || SessionIdError(id) is not null)
+            {
+                return DetailError(422, "invalid session_id: " + (SessionIdError(id) ?? "unsafe characters"));
+            }
+
+            // A live id is the live session's: creating over it would hand its
+            // recording (and the session) to a new owner. As the reference: 409.
+            if (_deps.Registry.TryGetDefinition(id, out _))
+            {
+                return DetailError(409, "session already exists: " + id);
+            }
+
+            if (!TryReserveId(id))
+            {
+                return DetailError(409, "session is being deleted: " + id);
+            }
+
+            try
+            {
+                // A recording left under the id is not this new session's.
+                await RetireSessionRecordingAsync(id).ConfigureAwait(false);
+                if (_deps.Registry.TryGetDefinition(id, out _))
+                {
+                    return DetailError(409, "session already exists: " + id);
+                }
+
+                CreateDefinition(id, body, p.SubjectId);
+            }
+            finally
+            {
+                ReleaseId(id);
+            }
+
+            return Results.Json(new { ok = true, session_id = id }, JsonOpts);
+        });
+
+        void CreateDefinition(string id, Dictionary<string, JsonElement> body, string owner)
+        {
             var def = new SessionDefinition
             {
                 SessionId = id,
                 DisplayName = Str(body, "display_name", id),
                 ConnectorType = Str(body, "connector_type", "shell"),
                 Visibility = Str(body, "visibility", _deps.Config.Security.DefaultSessionVisibility),
-                Owner = p.SubjectId,
+                Owner = owner,
             };
             _deps.Registry.Upsert(def);
-            return Results.Json(new { ok = true, session_id = id }, JsonOpts);
-        });
+        }
 
         app.MapDelete("/api/sessions/{sessionId}", async (HttpContext ctx, string sessionId) =>
         {
@@ -263,7 +299,7 @@ public sealed partial class UtermServer : IAsyncDisposable
                 return DetailError(403, "insufficient privileges");
             }
 
-            _deps.Registry.Delete(sessionId);
+            await DeleteSessionAsync(sessionId).ConfigureAwait(false);
             return Results.Json(new { ok = true }, JsonOpts);
         });
 

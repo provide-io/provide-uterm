@@ -80,7 +80,7 @@ public sealed partial class UtermServer
             ts = td;
         }
 
-        await _recording.AppendEventsAsync(sessionId, new[]
+        await AppendSessionRecordingAsync(sessionId, new[]
         {
             new Event
             {
@@ -134,7 +134,7 @@ public sealed partial class UtermServer
             data[key] = value is string text ? RedactForRecording(text) : value;
         }
 
-        return _recording.AppendEventsAsync(sessionId, new[]
+        return AppendSessionRecordingAsync(sessionId, new[]
         {
             new Event
             {
