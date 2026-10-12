@@ -135,8 +135,8 @@ func (p *PamIntegration) onOpen(ctx context.Context, ev pty.PamEvent) {
 }
 
 // onClose stops the tunnel bridge, best-effort relays the close event, then
-// deletes the session. PAM sessions are ephemeral, so the definition is removed
-// rather than left behind stopped (DeleteSession detaches the worker bridge and
+// deletes the session. A PAM session is owned by the login, so it is removed here
+// (not when its last viewer leaves) rather than left behind stopped (DeleteSession detaches the worker bridge and
 // stops the connector).
 //
 // Relay before delete, matching _on_close: DeleteSession stops the connector
@@ -180,7 +180,8 @@ func (p *PamIntegration) createNotifySession(ctx context.Context, ev pty.PamEven
 		},
 		"input_mode": "hijack",
 		"auto_start": true,
-		"ephemeral":  true,
+		// Owned by the PAM login: removed on close, not when the last viewer leaves.
+		"ephemeral":  false,
 		"tags":       []any{"pam", "notify", ev.Username},
 		"visibility": "operator",
 	})
@@ -203,9 +204,10 @@ func (p *PamIntegration) createCaptureSession(ctx context.Context, ev pty.PamEve
 		"connector_config": map[string]any{"socket_path": ev.CaptureSocket},
 		"input_mode":       "open",
 		"auto_start":       true,
-		"ephemeral":        true,
-		"tags":             []any{"pam", "capture", ev.Username},
-		"visibility":       "operator",
+		// Owned by the PAM login: removed on close, not when the last viewer leaves.
+		"ephemeral":  false,
+		"tags":       []any{"pam", "capture", ev.Username},
+		"visibility": "operator",
 	})
 }
 

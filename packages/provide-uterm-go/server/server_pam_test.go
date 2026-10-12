@@ -116,6 +116,9 @@ func TestPamOnOpenNotifyCreatesSession(t *testing.T) {
 	if cc["command"] != "/bin/zsh" || cc["username"] != "alice" {
 		t.Fatalf("unexpected connector_config: %+v", cc)
 	}
+	if p["ephemeral"] != false {
+		t.Fatalf("PAM sessions must outlive their last viewer, got ephemeral=%v", p["ephemeral"])
+	}
 }
 
 func TestPamOnOpenNotifyDisabled(t *testing.T) {
@@ -145,6 +148,9 @@ func TestPamOnOpenCaptureConfined(t *testing.T) {
 	if p["connector_config"].(map[string]any)["socket_path"] != sock {
 		t.Fatalf("socket_path not threaded: %+v", p)
 	}
+	if p["ephemeral"] != false {
+		t.Fatalf("PAM sessions must outlive their last viewer, got ephemeral=%v", p["ephemeral"])
+	}
 }
 
 func TestPamCaptureSocketOutsideDirRefused(t *testing.T) {
@@ -172,7 +178,7 @@ func TestPamCaptureNoConfinementWhenNoBase(t *testing.T) {
 }
 
 // TestPamOnCloseDeletes pins the delete-on-close contract: a PAM session is
-// ephemeral, so closing it must remove the definition from the registry rather
+// owned by its login, so closing it must remove the definition from the registry rather
 // than leave a stopped shell behind. Port of _on_close's registry.delete_session.
 func TestPamOnCloseDeletes(t *testing.T) {
 	reg := newFakeRegistry()

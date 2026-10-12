@@ -132,7 +132,7 @@ def test_pam_events_operator_open_matches_cloudflare_contract_without_relay() ->
             "connector_config": {},
             "input_mode": "open",
             "auto_start": False,
-            "ephemeral": True,
+            "ephemeral": False,
             "tags": ["pam", "notify", "alice"],
             "recording_enabled": False,
             "owner": "alice",

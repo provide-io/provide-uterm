@@ -363,7 +363,7 @@ class TestIngestOpen:
             "connector_config": {},
             "input_mode": "open",
             "auto_start": False,
-            "ephemeral": True,
+            "ephemeral": False,
             "tags": ["pam", "enforce", "alice"],
             "recording_enabled": False,
             "owner": "alice",

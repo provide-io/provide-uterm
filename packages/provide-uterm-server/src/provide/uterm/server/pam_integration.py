@@ -270,7 +270,8 @@ async def _create_notify_session(event: PamEvent, pam_cfg: PamConfig, registry: 
         },
         "input_mode": "hijack",
         "auto_start": True,
-        "ephemeral": True,
+        # A PAM login owns its session: it leaves on PAM close, not when the last viewer leaves.
+        "ephemeral": False,
         "tags": ["pam", "notify", ev.username],
         "visibility": "operator",
     }
@@ -331,7 +332,8 @@ async def _create_capture_session(event: PamEvent, pam_cfg: PamConfig, registry:
         },
         "input_mode": "open",
         "auto_start": True,
-        "ephemeral": True,
+        # A PAM login owns its session: it leaves on PAM close, not when the last viewer leaves.
+        "ephemeral": False,
         "tags": ["pam", "capture", ev.username],
         "visibility": "operator",
     }

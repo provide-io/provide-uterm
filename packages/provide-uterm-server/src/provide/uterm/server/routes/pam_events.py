@@ -106,7 +106,8 @@ def pam_event_capability_handlers() -> dict[str, Callable[..., object]]:
             "connector_config": {},
             "input_mode": "open",
             "auto_start": False,
-            "ephemeral": True,
+            # A PAM login owns its session: it leaves on PAM close, not when the last viewer leaves.
+            "ephemeral": False,
             "tags": ["pam", str(body.get("mode") or "notify"), username],
             "recording_enabled": False,
             "owner": username,
