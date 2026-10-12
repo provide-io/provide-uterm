@@ -522,7 +522,14 @@ describe("recording what crosses the attachment", () => {
     await socket.sendText(encodeTerminalData("x"));
 
     const events = summarise(await store.getEntries("w1"));
-    expect(events.slice(5)).toStrictEqual([
+    expect(events).toStrictEqual([
+      // The opening, as the reference records it: the start events, then the
+      // seeded snapshot on the wire and as the screen it carries. The
+      // snapshot is not also recorded as a decoded control frame.
+      "log_start",
+      "runtime_started",
+      "wire_send",
+      "read:seed",
       // The pause: what arrived, what it decoded to, what the connector said,
       // and the link's acknowledgement, which is a control frame.
       "wire_recv",
