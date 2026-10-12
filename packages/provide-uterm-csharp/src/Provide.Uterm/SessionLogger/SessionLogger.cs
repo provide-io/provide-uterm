@@ -22,6 +22,15 @@ public sealed class SessionLoggerOptions
     public Redactor? Redactor { get; set; }
     public TimeSpan FlushInterval { get; set; } = TimeSpan.FromSeconds(5);
     public int BatchSize { get; set; } = 100;
+
+    /// <summary>
+    /// The session instance this logger records for. Every StartAsync passes it
+    /// to the store, which continues the recording on file only when the same
+    /// instance started it (a reconnect) and otherwise begins afresh, so a later
+    /// session reusing the id never inherits this one's entries. Null asks for
+    /// a fresh recording on every start.
+    /// </summary>
+    public string? Instance { get; set; }
 }
 
 /// <summary>
@@ -36,6 +45,7 @@ public sealed class SessionLogger : IAsyncDisposable
     private readonly Redactor? _redactor;
     private readonly TimeSpan _flushInterval;
     private readonly int _batchSize;
+    private readonly string? _instance;
 
     private readonly object _lock = new();
     private string _sessionId = "";
@@ -55,6 +65,7 @@ public sealed class SessionLogger : IAsyncDisposable
             ? TimeSpan.FromSeconds(5)
             : options.FlushInterval;
         _batchSize = options.BatchSize <= 0 ? 100 : options.BatchSize;
+        _instance = options.Instance;
     }
 
     public async Task StartAsync(string sessionId)
@@ -68,6 +79,11 @@ public sealed class SessionLogger : IAsyncDisposable
         {
             ["started_at"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0,
         };
+        if (!string.IsNullOrEmpty(_instance))
+        {
+            metadata[RecordingInstance.Key] = _instance;
+        }
+
         await _store.StartSessionAsync(sessionId, metadata);
         var meta = await _store.RecordingMetaAsync(sessionId);
         lock (_lock)
