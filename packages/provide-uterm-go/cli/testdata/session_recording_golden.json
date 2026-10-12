@@ -489,21 +489,6 @@
     "session_id": "rec"
    },
    {
-    "event": "control_send",
-    "data": {
-     "control": {
-      "type": "snapshot",
-      "screen": "$ ",
-      "cursor": {
-       "x": 2,
-       "y": 0
-      },
-      "ts": 1.5
-     }
-    },
-    "session_id": "rec"
-   },
-   {
     "event": "read",
     "data": {
      "type": "snapshot",
@@ -551,17 +536,6 @@
     "session_id": "rec"
    },
    {
-    "event": "control_send",
-    "data": {
-     "control": {
-      "type": "snapshot",
-      "screen": "login: tim\nPassword: ",
-      "ts": 3.5
-     }
-    },
-    "session_id": "rec"
-   },
-   {
     "event": "read",
     "data": {
      "type": "snapshot",
@@ -587,17 +561,6 @@
     "data": {
      "text": "\u0010\u000200000046:{\"type\":\"snapshot\",\"screen\":\"Enter PASSPHRASE for key:\\n\\n\",\"ts\":4.75}",
      "bytes_b64": "EAIwMDAwMDA0Njp7InR5cGUiOiJzbmFwc2hvdCIsInNjcmVlbiI6IkVudGVyIFBBU1NQSFJBU0UgZm9yIGtleTpcblxuIiwidHMiOjQuNzV9"
-    },
-    "session_id": "rec"
-   },
-   {
-    "event": "control_send",
-    "data": {
-     "control": {
-      "type": "snapshot",
-      "screen": "Enter PASSPHRASE for key:\n\n",
-      "ts": 4.75
-     }
     },
     "session_id": "rec"
    },
@@ -631,17 +594,6 @@
     "session_id": "rec"
    },
    {
-    "event": "control_send",
-    "data": {
-     "control": {
-      "type": "snapshot",
-      "screen": "login: tim\n\u001b[1mPassword:\u001b[0m",
-      "ts": 5.25
-     }
-    },
-    "session_id": "rec"
-   },
-   {
     "event": "read",
     "data": {
      "type": "snapshot",
@@ -667,17 +619,6 @@
     "data": {
      "text": "\u0010\u000200000048:{\"type\":\"snapshot\",\"screen\":\"$ echo [PASSWORD_REDACTED] done\\n$ \",\"ts\":5.5}",
      "bytes_b64": "EAIwMDAwMDA0ODp7InR5cGUiOiJzbmFwc2hvdCIsInNjcmVlbiI6IiQgZWNobyBbUEFTU1dPUkRfUkVEQUNURURdIGRvbmVcbiQgIiwidHMiOjUuNX0="
-    },
-    "session_id": "rec"
-   },
-   {
-    "event": "control_send",
-    "data": {
-     "control": {
-      "type": "snapshot",
-      "screen": "$ echo password=hunter2 done\n$ ",
-      "ts": 5.5
-     }
     },
     "session_id": "rec"
    },
@@ -1367,7 +1308,7 @@
     "event": "annotation",
     "data": {
      "label": "outbound_connection",
-     "description": "curl HTTP request detected: curl -d 'user=bob&password=[SECRET]' https://",
+     "description": "curl HTTP request detected: curl -d 'user=bob&[PASSWORD_REDACTED] https://",
      "severity": "info",
      "source": "detector",
      "principal": "system",
@@ -1461,7 +1402,7 @@
     "event": "annotation",
     "data": {
      "label": "outbound_connection",
-     "description": "wget HTTP request detected: wget --password=[SECRET] https://",
+     "description": "wget HTTP request detected: wget --[PASSWORD_REDACTED] https://",
      "severity": "info",
      "source": "detector",
      "principal": "system",

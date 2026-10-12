@@ -337,7 +337,10 @@ export class SessionRecording {
     if (logger !== undefined) {
       const payload = type === "term" ? encodeTerminalData(data) : encodeControlFrame(message);
       await logger.logWire("send", payload);
-      if (type !== "term") {
+      // term frames are the wire text itself, and a snapshot is recorded in
+      // full as a "read" event by #logSnapshot below, as the reference's
+      // _log_wire_send skips both.
+      if (type !== "term" && type !== "snapshot") {
         await logger.logControl("send", message);
       }
     }
