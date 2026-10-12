@@ -203,8 +203,16 @@ class SessionLogger:
         await self._write_event("read", data)
 
     async def log_event(self, event: str, data: dict[str, Any]) -> None:
-        """Log an arbitrary named event."""
-        await self._write_event(event, data)
+        """Log an arbitrary named event.
+
+        Every string inside *data* (recursively) goes through the configured
+        redactor, exactly like keys, screens and wire text. Callers put
+        terminal-derived text here — detector annotations quote the matched
+        command line, operator annotations carry free-form descriptions, and
+        ``runtime_error`` events carry ``str(exc)`` — so recording it verbatim
+        would store the very secret the screen beside it had redacted.
+        """
+        await self._write_event(event, self._redact_payload(data))
 
     async def log_wire(self, direction: Literal["send", "recv"], text: str) -> None:
         """Log a raw wire chunk when wire-mode recording is enabled."""
@@ -224,7 +232,9 @@ class SessionLogger:
         """Log a decoded control frame when wire-mode recording is enabled."""
         if self._control_channel_mode != "wire":
             return
-        await self._write_event(f"control_{direction}", {"control": control})
+        # The same frame is usually also recorded as (redacted) wire text, so
+        # the decoded copy must not be the one place it survives in clear.
+        await self._write_event(f"control_{direction}", {"control": self._redact_payload(control)})
 
     def set_context(self, context: dict[str, str]) -> None:
         """Set metadata context for subsequent log entries."""
@@ -303,10 +313,21 @@ class SessionLogger:
     def _redact_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:
         return {k: self._redact_value(v) for k, v in snapshot.items()}
 
+    def _redact_payload(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Redact every string in a caller-supplied payload.
+
+        Without a redactor the payload is passed through untouched (same
+        object), so recordings made with redaction off are byte-identical to
+        before. Dict keys are field names chosen by the caller and are kept.
+        """
+        if self._redactor is None:
+            return data
+        return self._redact_snapshot(data)
+
     def _redact_value(self, value: Any) -> Any:
         if isinstance(value, str):
             return self._redact_text(value)
-        if isinstance(value, list):
+        if isinstance(value, (list, tuple)):
             return [self._redact_value(item) for item in value]
         if isinstance(value, dict):
             return {k: self._redact_value(v) for k, v in value.items()}
