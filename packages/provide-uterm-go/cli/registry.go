@@ -259,6 +259,16 @@ func (r *SessionRegistryImpl) createSession(
 	if err != nil {
 		return nil, err
 	}
+	// Released however this returns, a panic included; normally below, in
+	// the same step as the insert.
+	released := false
+	defer func() {
+		if !released {
+			r.mu.Lock()
+			r.releaseLocked(def.SessionID)
+			r.mu.Unlock()
+		}
+	}()
 	// A recording left under this id (a session from before a restart, or one
 	// a store kept) is not this new session's: retire it before the session
 	// becomes visible, so nothing can read it as this one's.
@@ -267,6 +277,7 @@ func (r *SessionRegistryImpl) createSession(
 	defer r.mu.Unlock()
 	// Released and inserted in one step: no other create can slip in.
 	r.releaseLocked(def.SessionID)
+	released = true
 	if retireErr != nil {
 		return nil, retireErr
 	}
@@ -372,9 +383,13 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 		return nil
 	}
 	r.retiring[id] = make(chan struct{})
-	// Released however this returns, a panic in the teardown included.
+	// Released however this returns, a panic in the teardown included. A panic
+	// while r.mu is still held (in takeBridge, say) must not re-lock it.
+	locked := true
 	defer func() {
-		r.mu.Lock()
+		if !locked {
+			r.mu.Lock()
+		}
 		r.releaseLocked(id)
 		r.mu.Unlock()
 	}()
@@ -394,6 +409,7 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 			}
 		}
 	}
+	locked = false
 	r.mu.Unlock()
 	stopRemoved(ctx, id, br, rec, conn)
 	// Only now, with the recording closed and its last writes in it (or the
@@ -407,6 +423,7 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 // panic in it is recovered and logged for the same reason.
 func stopRemoved(ctx context.Context, id string, br *bridge.TermBridge, rec *sessionRecorder, conn connectors.Connector) {
 	logger := ptel.GetLogger(ctx, "provide.uterm.server.registry")
+	timeout := removalStopTimeout // read once: the goroutine may outlive this call
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -421,17 +438,22 @@ func stopRemoved(ctx context.Context, id string, br *bridge.TermBridge, rec *ses
 		stopBridge(br)
 		settleRecording(rec)
 		if conn != nil {
-			stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), removalStopTimeout)
+			stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 			defer cancel()
 			_ = conn.Stop(stopCtx)
 		}
 	}()
-	timer := time.NewTimer(removalStopTimeout)
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case <-done:
 	case <-timer.C:
-		logger.Warn("session_removal_stop_timed_out", "session_id", id, "timeout_s", removalStopTimeout.Seconds())
+		logger.Warn("session_removal_stop_timed_out", "session_id", id, "timeout_s", timeout.Seconds())
+		// The stop is left running; whatever it still writes must not reach
+		// the store once the recording is retired and the id released.
+		if rec != nil {
+			rec.retire()
+		}
 	}
 }
 

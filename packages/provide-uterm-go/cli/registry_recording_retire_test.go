@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -329,5 +330,103 @@ func TestTheLongestIDCanBeRetiredOnDisk(t *testing.T) {
 	must(t, recording.Retire(store, id))
 	if got, _ := filepath.Glob(filepath.Join(dir, id+".*.jsonl")); len(got) != 1 {
 		t.Fatalf("retired = %v", got)
+	}
+}
+
+// A delete whose stop timed out leaves that stop running: its recorder is
+// retired, so whatever it still writes (a settled recording, a later attempt)
+// is dropped instead of reopening the id's file under its next holder.
+func TestATimedOutStopsLateWritesAreDropped(t *testing.T) {
+	saved := removalStopTimeout
+	t.Cleanup(func() { removalStopTimeout = saved })
+	removalStopTimeout = 50 * time.Millisecond
+	dir := t.TempDir()
+	store := recording.NewLocalFileStore(dir)
+	conn := &stuckConnector{fakeConnector: newFakeConnector(), release: make(chan struct{})}
+	r := newTestRegistry(t)
+	r.connect = func(context.Context, serverconfig.SessionDefinition) (connectors.Connector, error) { return conn, nil }
+	r.SetRecording(store, nil)
+	must(t, createRetireSession(t, r, retireID))
+	if _, err := r.StartSession(context.Background(), retireID); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	rec := r.recorderFor(r.entries[retireID])
+	r.mu.Unlock()
+	rec.setEnabled(true)
+
+	must(t, r.DeleteSession(context.Background(), retireID)) // the stop hangs; the delete gives up on it
+	if !rec.retired.Load() {
+		t.Fatal("the timed-out stop's recorder was not retired")
+	}
+	must(t, createRetireSession(t, r, retireID))
+
+	// The old session's stop is still running and still writing.
+	rec.AttemptStarted()
+	_ = rec.InputReceived("late-A")
+	rec.AttemptEnded(nil)
+	settleRecording(rec)
+	close(conn.release)
+	readNothing(t, store)
+}
+
+func TestARetiredRecordersUnclosedRecordingIsNotSettled(t *testing.T) {
+	store := &failAfter{InMemoryStore: recording.NewInMemoryStore()}
+	rec := newSessionRecorder("s1", store, testRecordingConfig(), nil, nil)
+	rec.setEnabled(true)
+	leaveUnclosed(t, rec)
+	store.allow(100)
+	before := len(entriesOf(t, store, "s1", ""))
+	rec.retire()
+	rec.settle()
+	if got := len(entriesOf(t, store, "s1", "")); got != before {
+		t.Fatalf("settle wrote %d entries into a retired recording", got-before)
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.unclosed != nil {
+		t.Fatal("the retired recorder still holds its unclosed recording")
+	}
+}
+
+func TestARetiredWriterDropsWhatIsQueued(t *testing.T) {
+	store := recording.NewInMemoryStore()
+	retired := new(atomic.Bool)
+	w := newRetirableBatchWriter(store, retired)
+	retired.Store(true)
+	must(t, w.StartSession("s", map[string]any{}))
+	must(t, w.AppendEvents("s", []recording.Event{{"ts": 1.0, "event": "read"}}))
+	must(t, w.EndSession("s"))
+	if got := entriesOf(t, store, "s", ""); len(got) != 0 {
+		t.Fatalf("a retired writer wrote %v", got)
+	}
+}
+
+// A panic while DeleteSession still holds r.mu must not deadlock its deferred
+// release, nor leave the id reserved.
+func TestAPanicUnderTheLockStillReleasesTheID(t *testing.T) {
+	r := newTestRegistry(t)
+	must(t, createRetireSession(t, r, retireID))
+	r.mu.Lock()
+	r.entries[retireID] = nil // takeBridge(nil) panics while r.mu is held
+	r.mu.Unlock()
+	done := make(chan any, 1)
+	go func() {
+		defer func() { done <- recover() }()
+		_ = r.DeleteSession(context.Background(), retireID)
+	}()
+	select {
+	case p := <-done:
+		if p == nil {
+			t.Fatal("expected the planted panic")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("DeleteSession deadlocked in its deferred release")
+	}
+	r.mu.Lock()
+	_, held := r.retiring[retireID]
+	r.mu.Unlock()
+	if held {
+		t.Fatal("the id is still reserved")
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -138,6 +139,11 @@ type sessionRecorder struct {
 	store    recording.Store
 	cfg      serverconfig.RecordingConfig
 	logger   *slog.Logger
+	// retired is set when the session was deleted and its recording retired
+	// before this recorder had stopped (the delete's stop timed out): every
+	// write still on its way is dropped rather than reopening the retired
+	// id's file, which by then may be the next holder's. See retire.
+	retired atomic.Bool
 
 	detector   *annotation.PatternDetector
 	sendStream *annotation.StreamingDetector
@@ -258,7 +264,7 @@ func (s *sessionRecorder) AttemptStarted() {
 	if skip {
 		return
 	}
-	writer := newBatchWriter(s.store)
+	writer := newRetirableBatchWriter(s.store, &s.retired)
 	rec := sessionlogger.New(writer, sessionlogger.Options{
 		MaxBytes:           int(s.cfg.MaxBytes),
 		ControlChannelMode: sessionlogger.ControlChannelMode(s.cfg.ControlChannelMode),
@@ -324,7 +330,18 @@ func (s *sessionRecorder) AttemptEnded(err error) {
 // caller's goroutine, outside mu: the bridge's run goroutine, or the
 // registry's caller once the bridge is gone -- never a send/receive
 // goroutine.
+// retire marks the recorder retired (see sessionRecorder.retired).
+func (s *sessionRecorder) retire() {
+	s.retired.Store(true)
+}
+
 func (s *sessionRecorder) settle() {
+	if s.retired.Load() {
+		s.mu.Lock()
+		s.unclosed, s.unclosedWriter = nil, nil // its recording is retired: nothing to settle into
+		s.mu.Unlock()
+		return
+	}
 	s.mu.Lock()
 	unclosed, writer := s.unclosed, s.unclosedWriter
 	s.unclosed, s.unclosedWriter = nil, nil
