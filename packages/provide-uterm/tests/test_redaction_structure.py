@@ -21,6 +21,7 @@ import sys
 from typing import Any
 
 import pytest
+
 from provide.uterm.redaction import (
     DEPTH_LIMIT_MARKER,
     REDACT_MAX_DEPTH,
