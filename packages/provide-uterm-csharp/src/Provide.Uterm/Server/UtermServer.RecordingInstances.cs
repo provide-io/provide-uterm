@@ -63,14 +63,27 @@ public sealed partial class UtermServer
     private readonly object _retiringLock = new();
 
     // Ids being deleted, or whose leftover recording is being retired for a new
-    // session. Guarded by _retiringLock.
-    private readonly HashSet<string> _retiringIds = new(StringComparer.Ordinal);
+    // session; each completes when the id is released. Guarded by _retiringLock.
+    private readonly Dictionary<string, TaskCompletionSource> _retiringIds = new(StringComparer.Ordinal);
+
+    /// <summary>How long a create waits for a teardown holding its id. Port of _RESERVED_ID_WAIT_S.</summary>
+    internal static TimeSpan ReservedIdWait { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// How long a removal waits on the recording (the write gate, the final
+    /// EndSessionAsync) before it retires and releases regardless. Port of
+    /// _REMOVAL_STOP_TIMEOUT_S.
+    /// </summary>
+    internal static TimeSpan RemovalStopTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    private static readonly Provide.Telemetry.Logger RecordingLog =
+        Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.server.recording");
 
     private bool TryReserveId(string sessionId)
     {
         lock (_retiringLock)
         {
-            return _retiringIds.Add(sessionId);
+            return _retiringIds.TryAdd(sessionId, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
         }
     }
 
@@ -78,7 +91,10 @@ public sealed partial class UtermServer
     {
         lock (_retiringLock)
         {
-            _retiringIds.Remove(sessionId);
+            if (_retiringIds.Remove(sessionId, out var released))
+            {
+                released.TrySetResult();
+            }
         }
     }
 
@@ -86,7 +102,47 @@ public sealed partial class UtermServer
     {
         lock (_retiringLock)
         {
-            return _retiringIds.Contains(sessionId);
+            return _retiringIds.ContainsKey(sessionId);
+        }
+    }
+
+    /// <summary>
+    /// Reserve <paramref name="sessionId"/> for a create, waiting out a teardown
+    /// (or another create) that holds it, for up to <see cref="ReservedIdWait"/>.
+    /// A tty-named PAM id is reused by the next login on that tty, and the relay
+    /// retries an open, so the id is often wanted again while its last holder
+    /// is still going. Null on success; otherwise the conflict to answer:
+    /// "already exists" when the session exists (before or after the wait),
+    /// "being deleted" only when the teardown outlasts the wait.
+    /// </summary>
+    private async Task<string?> ReserveForCreateAsync(string sessionId)
+    {
+        var deadline = DateTime.UtcNow + ReservedIdWait;
+        while (true)
+        {
+            Task pending;
+            lock (_retiringLock)
+            {
+                if (_deps.Registry.TryGetDefinition(sessionId, out _))
+                {
+                    return "session already exists: " + sessionId;
+                }
+
+                if (!_retiringIds.TryGetValue(sessionId, out var holder))
+                {
+                    _retiringIds[sessionId] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    return null;
+                }
+
+                pending = holder.Task;
+            }
+
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero
+                || await Task.WhenAny(pending, Task.Delay(remaining)).ConfigureAwait(false) != pending)
+            {
+                return "session is being deleted: " + sessionId;
+            }
         }
     }
 
@@ -105,7 +161,13 @@ public sealed partial class UtermServer
                 return;
             }
 
-            if (!_recordingInstances.ContainsKey(sessionId))
+            bool started;
+            lock (_recordingInstances)
+            {
+                started = _recordingInstances.ContainsKey(sessionId);
+            }
+
+            if (!started)
             {
                 var instance = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
                 await _recording.StartSessionAsync(sessionId, new Dictionary<string, object?>
@@ -113,7 +175,10 @@ public sealed partial class UtermServer
                     ["started_at"] = _clock.Wall(),
                     [RecordingInstance.Key] = instance,
                 }).ConfigureAwait(false);
-                _recordingInstances[sessionId] = instance;
+                lock (_recordingInstances)
+                {
+                    _recordingInstances[sessionId] = instance;
+                }
             }
 
             await _recording.AppendEventsAsync(sessionId, events).ConfigureAwait(false);
@@ -124,24 +189,55 @@ public sealed partial class UtermServer
         }
     }
 
-    /// <summary>End the session's recording if this server started one, then retire it.</summary>
+    /// <summary>
+    /// End the session's recording if this server started one, then retire it.
+    /// Waiting on the write gate and on the final EndSessionAsync is bounded by
+    /// <see cref="RemovalStopTimeout"/>: a write that hangs must not hold the id
+    /// forever, so past the bound it is logged and the recording retired anyway.
+    /// </summary>
     private async Task RetireSessionRecordingAsync(string sessionId)
     {
-        await _recordingGate.WaitAsync().ConfigureAwait(false);
+        var gated = await _recordingGate.WaitAsync(RemovalStopTimeout).ConfigureAwait(false);
         try
         {
-            if (_recordingInstances.Remove(sessionId))
+            bool started;
+            lock (_recordingInstances)
             {
-                await _recording.EndSessionAsync(sessionId).ConfigureAwait(false);
+                started = _recordingInstances.Remove(sessionId);
+            }
+
+            if (started)
+            {
+                var end = _recording.EndSessionAsync(sessionId);
+                if (await Task.WhenAny(end, Task.Delay(RemovalStopTimeout)).ConfigureAwait(false) != end)
+                {
+                    LogStopTimedOut(sessionId, "end_session");
+                }
+            }
+
+            if (!gated)
+            {
+                LogStopTimedOut(sessionId, "recording_gate");
             }
 
             await _recording.RetireSessionAsync(sessionId).ConfigureAwait(false);
         }
         finally
         {
-            _recordingGate.Release();
+            if (gated)
+            {
+                _recordingGate.Release();
+            }
         }
     }
+
+    private static void LogStopTimedOut(string sessionId, string waitingOn) =>
+        RecordingLog.Error("session_removal_stop_timed_out", new Dictionary<string, object?>
+        {
+            ["session_id"] = sessionId,
+            ["waiting_on"] = waitingOn,
+            ["timeout_s"] = RemovalStopTimeout.TotalSeconds,
+        });
 
     /// <summary>
     /// Delete a session and retire its recording, holding the id until both
