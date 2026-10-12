@@ -159,9 +159,10 @@ func (c *CaptureConnector) PollMessages() []Frame {
 			}
 		case ChannelGeometry:
 			// The terminal's size, from whoever owns the pty. Malformed is
-			// ignored. This port renders no screen (its snapshot is the raw
-			// output tail), so taking a size is recording it; Python also
-			// re-emulates what was drawn since the last clear.
+			// ignored. This connector renders no screen (its snapshot is the
+			// raw output tail), so taking a size is recording it; the hosted
+			// session's emulator is redrawn at it by connectors.CaptureTransport,
+			// which reads the snapshot this returns.
 			if cols, rows, ok := ParseGeometry(frame.Data); ok {
 				wantCols, wantRows = cols, rows
 			}
@@ -232,6 +233,14 @@ func (c *CaptureConnector) closeStdinWriter() {
 // HandleControl is a no-op for the capture connector. Port of
 // CaptureConnector.handle_control.
 func (c *CaptureConnector) HandleControl(action string) []Frame { return nil }
+
+// Size reports the terminal size the connector holds: the configured one
+// until a geometry frame says otherwise.
+func (c *CaptureConnector) Size() (cols, rows int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cols, c.rows
+}
 
 // GetSnapshot returns a fresh snapshot frame. Port of CaptureConnector.get_snapshot.
 func (c *CaptureConnector) GetSnapshot() Frame {

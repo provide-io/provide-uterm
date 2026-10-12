@@ -409,3 +409,25 @@ func TestEncodeTermBytesEncodings(t *testing.T) {
 		t.Fatalf("latin-1 got %q", got)
 	}
 }
+
+// A session that resized tells its watchers with no raw bytes and resized set;
+// the bridge answers by repainting the hub with a snapshot at the new size,
+// which is how every viewer learns it.
+func TestAttachSessionRepaintsOnResize(t *testing.T) {
+	session := &mockSession{snapshot: map[string]any{"screen": "s", "cols": float64(100), "rows": float64(40)}}
+	b := newBridge(&mockWorker{session: session})
+	b.AttachSession()
+
+	session.fire(map[string]any{"resized": true, "cols": 100, "rows": 40}, nil)
+
+	snap := drainControl(t, b)
+	if snap["type"] != "snapshot" || snap["cols"] != 100 || snap["rows"] != 40 {
+		t.Fatalf("frame = %v, want a snapshot at 100x40", snap)
+	}
+	b.mu.Lock()
+	latest := b.latestSnapshot
+	b.mu.Unlock()
+	if latest != nil {
+		t.Fatalf("a resize note is not a screen; latest snapshot = %v", latest)
+	}
+}

@@ -85,6 +85,10 @@ func (c *transportConnector) Start(ctx context.Context) error {
 // "term" message). It runs in the reader goroutine; TransportSession invokes it
 // with its own lock released, so locking c.mu here cannot invert lock order.
 func (c *transportConnector) onRaw(_ map[string]any, raw []byte) {
+	if len(raw) == 0 {
+		// A resize note (termsession.WatchFunc): no output to buffer.
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.rxBytes += len(raw)
