@@ -258,7 +258,7 @@ class TestWsToTcpProtocolError:
             cast("asyncio.StreamWriter", writer),
             token_holder=[None],
         )
-        # Binary data is written as-is (with DEL→BS and CRLF normalization applied)
+        # Binary data is written as-is (with CRLF normalization applied)
         combined = b"".join(writer.written)
         assert b"green" in combined
 

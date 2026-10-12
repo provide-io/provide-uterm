@@ -501,8 +501,10 @@ async def _ws_to_tcp(
                     if redirect_holder is not None and redirect_holder[0]:
                         return
                     continue
+                # Upstream OUTPUT: bytes pass through unchanged. 0x7F is legal in
+                # server art (TW2002 tavern.ans) and terminals ignore it; turning it
+                # into BS moved the cursor. Keystroke DEL→BS belongs on the input side.
                 raw = event.data.encode(text_encoding, errors="replace")
-                raw = raw.replace(b"\x7f", b"\x08")  # DEL→BS
                 raw = _normalize_crlf(raw)
                 raw = apply_color_mode(raw, color_mode)
                 writer.write(raw)
@@ -510,7 +512,6 @@ async def _ws_to_tcp(
                 _note(raw)
             continue
         raw = message
-        raw = raw.replace(b"\x7f", b"\x08")  # DEL→BS
         raw = _normalize_crlf(raw)
         raw = apply_color_mode(raw, color_mode)
         writer.write(raw)

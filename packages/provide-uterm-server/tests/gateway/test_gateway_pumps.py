@@ -110,14 +110,6 @@ class TestWsToTcp:
         written = writer.write.call_args[0][0]
         assert b"\r\n" in written
 
-    async def test_del_to_bs_conversion(self) -> None:
-        writer = MagicMock(spec=asyncio.StreamWriter)
-        writer.drain = AsyncMock()
-        ws = _mock_ws([b"\x7f"])
-        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
-        written = writer.write.call_args[0][0]
-        assert b"\x08" in written
-
     async def test_control_message_handled(self) -> None:
         holder: list[dict | None] = [None]
         writer = MagicMock(spec=asyncio.StreamWriter)
@@ -142,15 +134,6 @@ class TestWsToTcp:
         await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="256")
         written = writer.write.call_args[0][0]
         assert b"38;5;" in written
-
-    async def test_del_to_bs_in_text_data(self) -> None:
-        writer = MagicMock(spec=asyncio.StreamWriter)
-        writer.drain = AsyncMock()
-        msg = encode_terminal_data("\x7f")
-        ws = _mock_ws([msg])
-        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
-        written = writer.write.call_args[0][0]
-        assert b"\x08" in written
 
     async def test_resume_ok_calls_write_fn(self) -> None:
         """Cover the _write_fn closure (lines 237-238)."""
@@ -592,3 +575,52 @@ class TestWsToTcpTextEncoding:
         assert b"?" not in written
         # Round-trips through the codec the terminal emulator decodes with.
         assert written.decode("cp437") == "▀█═"
+
+
+class TestDelByteDirection:
+    """0x7F is only remapped on INPUT, never on upstream OUTPUT.
+
+    ``_ws_to_tcp`` carries upstream server output to the telnet client. A
+    server's ANSI art may legitimately contain DEL (TW2002's tavern.ans holds
+    ``\\x7f\\x7f``); terminals ignore it on output, while BS moves the cursor
+    and shifts the art. Gold and direct-WS clients receive the 0x7F unchanged,
+    so the gateway must too. Backspace remapping for keystrokes lives on the
+    input side (the client telnet transport), not here.
+    """
+
+    async def test_text_frame_del_passes_through_latin1(self) -> None:
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+        ws = _mock_ws([encode_terminal_data("ab\x7f\x7fcd")])
+
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
+
+        assert writer.write.call_args[0][0] == b"ab\x7f\x7fcd"
+
+    async def test_text_frame_del_passes_through_cp437(self) -> None:
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+        ws = _mock_ws([encode_terminal_data("▀\x7f\x7f▀")])
+
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough", text_encoding="cp437")
+
+        assert writer.write.call_args[0][0] == "▀\x7f\x7f▀".encode("cp437")
+
+    async def test_binary_frame_del_passes_through(self) -> None:
+        writer = MagicMock(spec=asyncio.StreamWriter)
+        writer.drain = AsyncMock()
+        ws = _mock_ws([b"ab\x7f\x7fcd"])
+
+        await _ws_to_tcp(ws, writer, token_holder=[None], color_mode="passthrough")
+
+        assert writer.write.call_args[0][0] == b"ab\x7f\x7fcd"
+
+    async def test_client_input_del_reaches_upstream_unchanged(self) -> None:
+        reader = MagicMock(spec=asyncio.StreamReader)
+        reader.read = AsyncMock(side_effect=[b"x\x7f", b""])
+        ws = MagicMock()
+        ws.send = AsyncMock()
+
+        await _tcp_to_ws(reader, ws)
+
+        ws.send.assert_awaited_once_with(encode_terminal_data("x\x7f"))

@@ -91,7 +91,7 @@ class TestHandleWsControlMutationKilling:
 
 # ---------------------------------------------------------------------------
 # _ws_to_tcp mutation killers
-# DEL→BS conversion, CRLF normalization, color mode applied
+# DEL passthrough, CRLF normalization, color mode applied
 # ---------------------------------------------------------------------------
 
 
@@ -112,19 +112,15 @@ class TestWsToTcpMutationKilling:
         await _ws_to_tcp(_async_iter(messages), cast("asyncio.StreamWriter", MockWriter()), **kwargs)
         return b"".join(written)
 
-    async def test_del_converted_to_backspace(self):
-        """0x7F DEL in input must become 0x08 BS."""
+    async def test_del_passes_through_unchanged(self):
+        """0x7F in upstream OUTPUT is forwarded as-is (no DEL→BS on output)."""
         out = await self._collect_ws_to_tcp(["\x7f"])
-        assert b"\x08" in out
-        assert b"\x7f" not in out
+        assert out == b"\x7f"
 
-    async def test_del_in_longer_string(self):
-        """DEL in the middle of text must be converted."""
+    async def test_del_in_longer_string_passes_through(self):
+        """DEL inside server art must not become a cursor-moving BS."""
         out = await self._collect_ws_to_tcp(["abc\x7fdef"])
-        assert b"\x08" in out
-        assert b"\x7f" not in out
-        assert b"abc" in out
-        assert b"def" in out
+        assert out == b"abc\x7fdef"
 
     async def test_crlf_normalization_applied(self):
         """Bare LF must be converted to CRLF."""
