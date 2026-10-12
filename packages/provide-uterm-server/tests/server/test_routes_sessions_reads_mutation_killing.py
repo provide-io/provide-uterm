@@ -96,7 +96,9 @@ def _request(
 
 def _hub() -> MagicMock:
     hub = MagicMock(name="hub")
-    hub.append_event = AsyncMock(return_value={"seq": 7})
+    # The real hub returns the stored event, whose ``data`` is the (redacted)
+    # payload; the annotate route audits that copy.
+    hub.append_event = AsyncMock(side_effect=lambda _sid, _type, data=None: {"seq": 7, "data": data})
     return hub
 
 
@@ -205,7 +207,7 @@ class TestAnnotateEffects:
 
     async def test_the_sequence_comes_from_the_event_and_defaults_to_zero(self) -> None:
         seqless_hub = _hub()
-        seqless_hub.append_event = AsyncMock(return_value={})
+        seqless_hub.append_event = AsyncMock(return_value={"data": {}})
 
         result, _audit, _returned_hub = await _annotate({"label": "x"}, hub=seqless_hub)
 

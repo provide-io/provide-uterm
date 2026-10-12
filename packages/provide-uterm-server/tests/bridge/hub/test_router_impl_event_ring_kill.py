@@ -231,3 +231,50 @@ async def test_the_private_operation_bus_receives_the_raw_payload(hub: TermHub) 
     assert worker_id == _WORKER
     assert raw_evt["data"] == {"data": _PLANTED}
     assert raw_evt["seq"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Annotation events
+# ---------------------------------------------------------------------------
+
+
+async def test_every_string_in_an_annotation_event_is_redacted_before_it_is_stored(hub: TermHub) -> None:
+    """An annotation has no fixed content field: label, description and nested text all count.
+
+    The operator annotate route publishes free text here and audits the stored
+    copy, so the ring's redaction is what keeps the secret out of both.
+    """
+    payload = {
+        "label": f"rotated {_PLANTED}",
+        "description": f"was {_PLANTED}",
+        "severity": "info",
+        "span": {"from_seq": 1, "notes": [f"x {_PLANTED}"]},
+    }
+
+    evt = await hub.router.append_event(_WORKER, "annotation", payload)
+
+    expected = {
+        "label": f"rotated {_REDACTED}",
+        "description": f"was {_REDACTED}",
+        "severity": "info",
+        "span": {"from_seq": 1, "notes": [f"x {_REDACTED}"]},
+    }
+    assert _stored(hub)["data"] == expected
+    assert evt["data"] == expected
+    # The caller's payload is untouched, and the private operation bus keeps it raw.
+    assert payload["description"] == f"was {_PLANTED}"
+    hub._operation_event_bus._enqueue.assert_called_once()
+    assert hub._operation_event_bus._enqueue.call_args.args[1]["data"] == payload
+
+
+def test_annotation_is_one_of_the_redacted_event_types() -> None:
+    from provide.uterm.server.bridge.hub.router_impl import MessageRouter
+
+    assert frozenset({"term", "snapshot", "analysis", "annotation"}) == MessageRouter._REDACTED_EVENT_TYPES
+
+
+async def test_an_annotation_for_an_unknown_worker_is_still_returned_redacted(hub: TermHub) -> None:
+    evt = await hub.router.append_event("nobody", "annotation", {"description": _PLANTED})
+
+    assert evt["seq"] == 0
+    assert evt["data"] == {"description": _REDACTED}

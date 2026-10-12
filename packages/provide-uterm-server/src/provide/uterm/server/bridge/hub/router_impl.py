@@ -109,10 +109,11 @@ class MessageRouter:
     """
 
     # Content event types whose payloads carry terminal output and must be
-    # redacted at write time before landing in the ring buffer. Other event
-    # types (hijack_*, input_send, worker_status, ...) carry control metadata,
-    # not scraped terminal output, and pass through unredacted.
-    _REDACTED_EVENT_TYPES = frozenset({"term", "snapshot", "analysis"})
+    # redacted at write time before landing in the ring buffer. ``annotation``
+    # is free text an operator (or a detector quoting the screen) wrote, so it
+    # carries the same secrets. Other event types (hijack_*, input_send,
+    # worker_status, ...) carry control metadata and pass through unredacted.
+    _REDACTED_EVENT_TYPES = frozenset({"term", "snapshot", "analysis", "annotation"})
 
     __slots__ = ("_event_redactor", "_hub", "_keystroke_timestamps")
 
@@ -153,7 +154,8 @@ class MessageRouter:
         coerces ``data``, which would change the stored type, so we skip it to
         preserve the legacy ring contract. snapshot/analysis content fields are
         strings in every real producer, so they always go through the redactor.
-        Never mutates the input payload.
+        An ``annotation`` has no fixed content field, so every string in it is
+        redacted. Never mutates the input payload.
         """
         if event_type == "term" and not isinstance(payload.get("data"), str):
             return payload
@@ -161,6 +163,9 @@ class MessageRouter:
             from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
 
             self._event_redactor = StreamRedactor(default_rules())
+        if event_type == "annotation":
+            annotation: dict[str, Any] = _redact_value(payload, self._event_redactor)
+            return annotation
         redacted = _redact_frame_fields({"type": event_type, **payload}, self._event_redactor)
         return {k: v for k, v in redacted.items() if k != "type"}
 
