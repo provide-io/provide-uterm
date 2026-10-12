@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from provide.uterm.recording import retire_recording
+from provide.uterm.server.config_schema_session import MAX_SESSION_ID_BYTES
 from provide.uterm.server.models import (
     InputMode,
     RecordingConfig,
@@ -100,6 +102,12 @@ class SessionRegistry:
         self._lock = asyncio.Lock()
         self._sessions: dict[str, SessionDefinition] = {session.session_id: session for session in sessions}
         self._runtimes: dict[str, HostedSessionRuntime] = {}
+        # Ids whose session is being torn down, or whose leftover recording is
+        # being retired before a new session takes them. Held until the old
+        # runtime has stopped (its last flush written) and the recording has
+        # been retired, so a new session under the id can neither be served
+        # the old recording nor receive the old runtime's late writes.
+        self._retiring: set[str] = set()
         hub.on_worker_empty = self._on_worker_empty
 
     def _revoke_tunnel_tokens(self, session_id: str) -> None:
@@ -127,11 +135,35 @@ class SessionRegistry:
         async with self._lock:
             if self._sessions.get(session_id) is not session:
                 return
-            self._sessions.pop(session_id, None)
-            runtime = self._runtimes.pop(session_id, None)
-            self._revoke_tunnel_tokens(session_id)
-        if runtime is not None:
-            await runtime.stop()
+            runtime = self._remove_locked(session_id)
+        await self._finish_removal(session_id, runtime)
+
+    def _remove_locked(self, session_id: str) -> HostedSessionRuntime | None:
+        """Take a session out of the registry and reserve its id.  Caller holds ``self._lock``.
+
+        The id stays reserved (see ``_retiring``) until :meth:`_finish_removal`.
+        """
+        self._sessions.pop(session_id, None)
+        runtime = self._runtimes.pop(session_id, None)
+        self._revoke_tunnel_tokens(session_id)
+        self._retiring.add(session_id)
+        return runtime
+
+    async def _finish_removal(self, session_id: str, runtime: HostedSessionRuntime | None) -> None:
+        """Stop the removed runtime, retire its recording, then release the id.
+
+        Stop first: it writes the recording's last flush and ``log_stop``, which
+        must land in the recording being retired, not in a successor's.
+        """
+        try:
+            if runtime is not None:
+                await runtime.stop()
+        finally:
+            try:
+                await retire_recording(self._recording_store, session_id)
+            finally:
+                async with self._lock:
+                    self._retiring.discard(session_id)
 
     def _require_session(self, session_id: str) -> SessionDefinition:
         """Return the session definition or raise ``KeyError``.  Caller must hold ``self._lock``."""
@@ -213,6 +245,10 @@ class SessionRegistry:
         session_id = str(payload["session_id"])
         if not re.match(r"^[\w\-]+$", session_id):
             raise SessionValidationError(f"session_id must match ^[\\w\\-]+$, got: {session_id!r}")
+        if len(session_id.encode("utf-8")) > MAX_SESSION_ID_BYTES:
+            raise SessionValidationError(
+                f"session_id must be at most {MAX_SESSION_ID_BYTES} bytes (UTF-8), got: {session_id!r}"
+            )
         connector_type_raw = str(payload.get("connector_type", "shell"))
         from provide.uterm.server.connectors import registered_types
 
@@ -271,6 +307,24 @@ class SessionRegistry:
             if self._max_sessions is not None and len(self._sessions) >= self._max_sessions:
                 raise ValueError(f"session limit reached: max_sessions={self._max_sessions}")
             if session.session_id in self._sessions:
+                raise ValueError(f"session already exists: {session.session_id}")
+            if session.session_id in self._retiring:
+                # The previous holder is still stopping, or its recording is
+                # still being retired: refuse rather than share either.
+                raise ValueError(f"session is being deleted: {session.session_id}")
+            self._retiring.add(session.session_id)
+        try:
+            # A recording left under this id (a session from before a restart,
+            # or one a store kept) is not this new session's: retire it before
+            # the session becomes visible, so nothing can read it as this one's.
+            await retire_recording(self._recording_store, session.session_id)
+        finally:
+            async with self._lock:
+                self._retiring.discard(session.session_id)
+        async with self._lock:
+            if self._max_sessions is not None and len(self._sessions) >= self._max_sessions:
+                raise ValueError(f"session limit reached: max_sessions={self._max_sessions}")
+            if session.session_id in self._sessions or session.session_id in self._retiring:
                 raise ValueError(f"session already exists: {session.session_id}")
             self._sessions[session.session_id] = session
             runtime = self._runtime_for(session)
@@ -345,11 +399,11 @@ class SessionRegistry:
 
     async def delete_session(self, session_id: str) -> None:
         async with self._lock:
-            self._sessions.pop(session_id, None)
-            runtime = self._runtimes.pop(session_id, None)
-            self._revoke_tunnel_tokens(session_id)
-        if runtime is not None:
-            await runtime.stop()
+            if session_id in self._retiring:
+                # Already being torn down by another call; that call retires it.
+                return
+            runtime = self._remove_locked(session_id)
+        await self._finish_removal(session_id, runtime)
 
     async def _locked_runtime(self, session_id: str) -> HostedSessionRuntime:
         async with self._lock:

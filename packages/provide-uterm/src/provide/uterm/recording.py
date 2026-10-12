@@ -13,6 +13,7 @@ implementations: :class:`LocalFileRecordingStore` (JSONL files),
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import secrets
@@ -132,6 +133,23 @@ def _retire_foreign_recording(path: Path, session_id: str, instance: str | None)
     if instance is not None and _instance_on_file(path) == instance:
         return
     path.rename(path.with_name(retired_recording_name(session_id)))
+
+
+async def retire_recording(store: object, session_id: str) -> None:
+    """Retire *session_id*'s recording in *store*, if the store can.
+
+    Called when a session is deleted (and before one is created), so the next
+    session to hold the id is never served this one's entries -- not even before
+    it starts recording, or when it never records at all. A file store moves the
+    recording aside, an in-memory store drops it. A store without
+    ``retire_session`` (a custom backend written before it existed) is left
+    alone: it still has the ``start_session`` instance rule.
+    """
+    retire = getattr(store, "retire_session", None)
+    if callable(retire):
+        result = retire(session_id)
+        if inspect.isawaitable(result):
+            await result
 
 
 @runtime_checkable
@@ -280,6 +298,18 @@ class LocalFileRecordingStore(RecordingStore):
                 f.write(json.dumps(event) + "\n")
             f.flush()
 
+    async def retire_session(self, session_id: str) -> None:
+        """Move the session's recording aside: it is kept, but served to nobody.
+
+        A handle still open for it is closed first, without a ``log_stop``: the
+        session is gone, and anything written after this lands in a new file.
+        """
+        async with self._get_lock(session_id):
+            stale = self._files.pop(session_id, None)
+            if stale is not None:
+                stale.close()
+            _retire_foreign_recording(self._get_path(session_id), session_id, None)
+
     async def end_session(self, session_id: str) -> None:
         async with self._get_lock(session_id):
             f = self._files.pop(session_id, None)
@@ -378,6 +408,11 @@ class InMemoryRecordingStore:
     async def append_events(self, session_id: str, events: list[dict[str, Any]]) -> None:
         self._events.setdefault(session_id, []).extend(events)
 
+    async def retire_session(self, session_id: str) -> None:
+        """Drop the session's recording: no later holder of the id is served it."""
+        self._sessions.pop(session_id, None)
+        self._events.pop(session_id, None)
+
     async def end_session(self, session_id: str) -> None:
         stop_event = {"ts": time.time(), "event": "log_stop", "data": {}, "session_id": session_id}
         self._events.setdefault(session_id, []).append(stop_event)
@@ -432,6 +467,10 @@ class NullRecordingStore:
         return
 
     async def end_session(self, session_id: str) -> None:
+        _ = session_id
+        return
+
+    async def retire_session(self, session_id: str) -> None:
         _ = session_id
         return
 
