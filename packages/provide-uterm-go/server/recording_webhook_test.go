@@ -78,10 +78,14 @@ func TestWebhookStorePostsTheLifecycle(t *testing.T) {
 	if err := s.EndSession("s1"); err != nil {
 		t.Fatal(err)
 	}
+	if err := recording.Retire(s, "s1"); err != nil {
+		t.Fatal(err)
+	}
 	want := []map[string]any{
 		{"session_id": "s1", "action": "start", "metadata": map[string]any{"started_at": 1.5}},
 		{"session_id": "s1", "action": "append", "events": []any{map[string]any{"ts": 2.5, "event": "send", "data": map[string]any{"keys": "x"}}}},
 		{"session_id": "s1", "action": "end"},
+		{"session_id": "s1", "action": "retire"},
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()

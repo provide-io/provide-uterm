@@ -17,9 +17,10 @@ var errLogWrite = errors.New("log write refused")
 // failingLog wraps a live recording and refuses one kind of write.
 type failingLog struct {
 	recordingLog
-	wire  bool   // LogWire fails
-	send  bool   // LogSend fails
-	event string // LogEvent fails for this event name
+	wire    bool   // LogWire fails
+	control bool   // LogControl fails
+	send    bool   // LogSend fails
+	event   string // LogEvent fails for this event name
 }
 
 func (f failingLog) LogWire(direction, text string) error {
@@ -27,6 +28,13 @@ func (f failingLog) LogWire(direction, text string) error {
 		return errLogWrite
 	}
 	return f.recordingLog.LogWire(direction, text)
+}
+
+func (f failingLog) LogControl(direction string, control map[string]any) error {
+	if f.control {
+		return errLogWrite
+	}
+	return f.recordingLog.LogControl(direction, control)
 }
 
 func (f failingLog) LogSend(keys string) error {
@@ -66,6 +74,19 @@ func TestFrameSentReportsARefusedWireEntry(t *testing.T) {
 	}
 	if rec.eventSeq != 0 {
 		t.Fatalf("eventSeq = %d after a failed step", rec.eventSeq)
+	}
+	rec.AttemptEnded(nil)
+}
+
+// A refused control entry is returned too, after its wire entry was written.
+func TestFrameSentReportsARefusedControlEntry(t *testing.T) {
+	cfg := testRecordingConfig()
+	cfg.ControlChannelMode = "wire"
+	rec, _ := newTestRecorder(t, cfg)
+	rec.AttemptStarted()
+	wrapLog(t, rec, func(l recordingLog) recordingLog { return failingLog{recordingLog: l, control: true} })
+	if err := rec.FrameSent("x", map[string]any{"type": "hijack_state"}); !errors.Is(err, errLogWrite) {
+		t.Fatalf("FrameSent = %v, want the refused control write", err)
 	}
 	rec.AttemptEnded(nil)
 }
