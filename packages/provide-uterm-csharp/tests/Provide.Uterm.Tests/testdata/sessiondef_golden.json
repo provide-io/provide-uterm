@@ -184,6 +184,58 @@
       }
     },
     {
+      "name": "an identifier of exactly 200 bytes",
+      "kwargs": {
+        "session_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "accepted": {
+        "session_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "display_name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "connector_type": "shell",
+        "connector_config": {},
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "owner": null,
+        "visibility": "public",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      }
+    },
+    {
+      "name": "an identifier of 201 bytes",
+      "kwargs": {
+        "session_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must be at most 200 bytes (UTF-8), got: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'"
+        }
+      ]
+    },
+    {
+      "name": "an identifier of 67 three-byte letters",
+      "kwargs": {
+        "session_id": "端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "session_id"
+          ],
+          "msg": "Value error, session_id must be at most 200 bytes (UTF-8), got: '端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端端'"
+        }
+      ]
+    },
+    {
       "name": "an identifier in French",
       "kwargs": {
         "session_id": "café"
