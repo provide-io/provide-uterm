@@ -16,9 +16,8 @@ import json
 import sys
 from typing import Any
 
-from provide.uterm.redaction import make_redactor
-
 from provide.uterm.recording import InMemoryRecordingStore
+from provide.uterm.redaction import make_redactor
 from provide.uterm.session_logger import SessionLogger
 
 _REDACTOR = make_redactor([r"S3cret\w*"])

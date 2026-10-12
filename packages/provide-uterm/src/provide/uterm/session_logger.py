@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from provide.telemetry import get_logger
-from provide.uterm.redaction import redact_structure, redact_text
 
 from provide.uterm.file_io import secure_open_append
+from provide.uterm.redaction import redact_structure, redact_text
 
 if TYPE_CHECKING:
     from collections.abc import Callable
