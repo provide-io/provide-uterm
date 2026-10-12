@@ -376,7 +376,20 @@ func pamSessionID(ev pty.PamEvent) string {
 type pamLoginEntry struct {
 	id  string
 	seq uint64
+	// goneSince is when the entry was first seen gone (zero: not seen gone).
+	goneSince time.Time
 }
+
+// pamGoneGrace is how long an entry must have looked gone before it is
+// dropped. pam_uterm.so sends the close and the PAM process exits straight
+// after, so a login is "gone" by its start time before its own close has been
+// handled; dropping it then would leave the close to recompute an id it can no
+// longer reproduce (a random tag), and the capture session would leak. Port of
+// _GONE_GRACE_S.
+const pamGoneGrace = 60 * time.Second
+
+// pamNow is time.Now, swappable in tests.
+var pamNow = time.Now
 
 // maxRememberedLogins bounds the open-login map. Each open login holds one
 // entry, so this is far above any real concurrency; it only bounds the map
@@ -401,12 +414,27 @@ func loginIsGone(key pamLoginKey, id string) bool {
 	return !ok || strconv.FormatInt(ticks, 10) != tag
 }
 
-// pruneLoginsLocked forgets logins whose close never came: every entry whose
-// process has provably ended, then, past maxRememberedLogins, the oldest. keep
-// is never dropped. Caller holds instancesMu. Port of _prune_logins.
+// pruneLoginsLocked forgets logins whose close never came: an entry whose
+// process has provably ended once it has looked gone for pamGoneGrace (which
+// leaves its own close, already on its way, time to find it), then, past
+// maxRememberedLogins, the oldest. keep is never dropped. Caller holds
+// instancesMu. Port of _prune_logins.
 func (p *PamIntegration) pruneLoginsLocked(keep *pamLoginKey) {
+	now := pamNow()
 	for key, entry := range p.instances {
-		if (keep == nil || key != *keep) && loginIsGone(key, entry.id) {
+		if (keep != nil && key == *keep) || !loginIsGone(key, entry.id) {
+			if !entry.goneSince.IsZero() {
+				entry.goneSince = time.Time{}
+				p.instances[key] = entry
+			}
+			continue
+		}
+		if entry.goneSince.IsZero() {
+			entry.goneSince = now
+			p.instances[key] = entry
+			continue
+		}
+		if now.Sub(entry.goneSince) >= pamGoneGrace {
 			delete(p.instances, key)
 		}
 	}
