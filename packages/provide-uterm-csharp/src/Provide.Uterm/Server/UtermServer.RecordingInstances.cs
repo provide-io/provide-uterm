@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Provide.Uterm.Recording;
+using Provide.Uterm.ServerConfig;
 
 namespace Provide.Uterm.Server;
 
@@ -57,8 +58,12 @@ public sealed partial class UtermServer
     // lands before a session's recording is retired or not at all.
     private readonly SemaphoreSlim _recordingGate = new(1, 1);
 
-    // The instance each session's recording was started under. Guarded by _recordingGate.
-    private readonly Dictionary<string, string> _recordingInstances = new(StringComparer.Ordinal);
+    // The instance each session's recording was started under, with the
+    // session definition it was started for: a definition is the session's
+    // identity, so a re-created id (a new definition) never inherits an entry.
+    // Locked on itself: a retire whose gate wait timed out touches it ungated.
+    private readonly Dictionary<string, (string Instance, SessionDefinition Owner)> _recordingInstances =
+        new(StringComparer.Ordinal);
 
     private readonly object _retiringLock = new();
 
@@ -138,8 +143,7 @@ public sealed partial class UtermServer
             }
 
             var remaining = deadline - DateTime.UtcNow;
-            if (remaining <= TimeSpan.Zero
-                || await Task.WhenAny(pending, Task.Delay(remaining)).ConfigureAwait(false) != pending)
+            if (remaining <= TimeSpan.Zero || !await CompletesWithinAsync(pending, remaining).ConfigureAwait(false))
             {
                 return "session is being deleted: " + sessionId;
             }
@@ -150,13 +154,23 @@ public sealed partial class UtermServer
     /// Write <paramref name="events"/> to the session's recording, starting it
     /// first if this is the session's first write. A session that no longer
     /// exists, or is being deleted, writes nothing.
+    ///
+    /// <para>A retire whose wait on the gate timed out goes ahead without it, so
+    /// a write stuck in the store can outlive its session: the id retired,
+    /// released and created again before the store call returns. After every
+    /// await the write therefore checks that the id still names the session it
+    /// started for (the same definition, not reserved). If not, what it wrote
+    /// went to a recording that is no longer that session's: it records no
+    /// instance, retires the id's recording again -- the new holder cannot have
+    /// written yet, its first write waits on the gate this write holds -- and
+    /// is discarded.</para>
     /// </summary>
     private async Task AppendSessionRecordingAsync(string sessionId, IReadOnlyList<Event> events)
     {
         await _recordingGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (IsReserved(sessionId) || !_deps.Registry.TryGetDefinition(sessionId, out _))
+            if (!StillHolds(sessionId, null, out var owner))
             {
                 return;
             }
@@ -164,7 +178,8 @@ public sealed partial class UtermServer
             bool started;
             lock (_recordingInstances)
             {
-                started = _recordingInstances.ContainsKey(sessionId);
+                started = _recordingInstances.TryGetValue(sessionId, out var entry)
+                    && ReferenceEquals(entry.Owner, owner);
             }
 
             if (!started)
@@ -175,17 +190,68 @@ public sealed partial class UtermServer
                     ["started_at"] = _clock.Wall(),
                     [RecordingInstance.Key] = instance,
                 }).ConfigureAwait(false);
+                if (!StillHolds(sessionId, owner, out _))
+                {
+                    await DiscardStaleWriteAsync(sessionId).ConfigureAwait(false);
+                    return;
+                }
+
                 lock (_recordingInstances)
                 {
-                    _recordingInstances[sessionId] = instance;
+                    _recordingInstances[sessionId] = (instance, owner);
                 }
             }
 
             await _recording.AppendEventsAsync(sessionId, events).ConfigureAwait(false);
+            if (!StillHolds(sessionId, owner, out _))
+            {
+                await DiscardStaleWriteAsync(sessionId).ConfigureAwait(false);
+            }
         }
         finally
         {
             _recordingGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="sessionId"/> names a live, unreserved session --
+    /// and, when <paramref name="expected"/> is given, that very definition.
+    /// </summary>
+    private bool StillHolds(string sessionId, SessionDefinition? expected, out SessionDefinition owner)
+    {
+        if (IsReserved(sessionId) || !_deps.Registry.TryGetDefinition(sessionId, out owner))
+        {
+            owner = null!;
+            return false;
+        }
+
+        return expected is null || ReferenceEquals(owner, expected);
+    }
+
+    /// <summary>A write outlived its session: retire whatever it left under the id.</summary>
+    private async Task DiscardStaleWriteAsync(string sessionId)
+    {
+        RecordingLog.Error("session_recording_stale_write_discarded", new Dictionary<string, object?>
+        {
+            ["session_id"] = sessionId,
+        });
+        lock (_recordingInstances)
+        {
+            if (_recordingInstances.TryGetValue(sessionId, out var entry)
+                && !(_deps.Registry.TryGetDefinition(sessionId, out var current) && ReferenceEquals(entry.Owner, current)))
+            {
+                _recordingInstances.Remove(sessionId);
+            }
+        }
+
+        try
+        {
+            await _recording.RetireSessionAsync(sessionId).ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            // Another retire moved it first.
         }
     }
 
@@ -206,10 +272,10 @@ public sealed partial class UtermServer
                 started = _recordingInstances.Remove(sessionId);
             }
 
-            if (started)
+            if (started && gated)
             {
                 var end = _recording.EndSessionAsync(sessionId);
-                if (await Task.WhenAny(end, Task.Delay(RemovalStopTimeout)).ConfigureAwait(false) != end)
+                if (!await CompletesWithinAsync(end, RemovalStopTimeout).ConfigureAwait(false))
                 {
                     LogStopTimedOut(sessionId, "end_session");
                 }
@@ -229,6 +295,19 @@ public sealed partial class UtermServer
                 _recordingGate.Release();
             }
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="task"/> completes within <paramref name="timeout"/>.
+    /// The timer is cancelled either way, so no delay is left pending.
+    /// </summary>
+    private static async Task<bool> CompletesWithinAsync(Task task, TimeSpan timeout)
+    {
+        using var cts = new CancellationTokenSource();
+        var delay = Task.Delay(timeout, cts.Token);
+        var first = await Task.WhenAny(task, delay).ConfigureAwait(false);
+        await cts.CancelAsync().ConfigureAwait(false);
+        return first == task;
     }
 
     private static void LogStopTimedOut(string sessionId, string waitingOn) =>
