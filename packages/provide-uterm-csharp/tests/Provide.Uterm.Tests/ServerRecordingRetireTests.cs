@@ -25,7 +25,7 @@ namespace Provide.Uterm.Tests;
 /// </summary>
 public sealed class ServerRecordingRetireTests : IDisposable
 {
-    private const string Sid = "pam-suokki-capture-4242-777";
+    internal const string Sid = "pam-suokki-capture-4242-777";
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "uterm-rec-retire-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -45,7 +45,7 @@ public sealed class ServerRecordingRetireTests : IDisposable
         return port;
     }
 
-    private static async Task<(UtermServer Server, HttpClient Client)> StartAsync(IRecordingStore store)
+    internal static async Task<(UtermServer Server, HttpClient Client)> StartAsync(IRecordingStore store)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
@@ -78,18 +78,18 @@ public sealed class ServerRecordingRetireTests : IDisposable
         return (server, client);
     }
 
-    private static Task<HttpResponseMessage> Create(HttpClient client, string id) =>
+    internal static Task<HttpResponseMessage> Create(HttpClient client, string id) =>
         client.PostAsync("/api/sessions", new StringContent(
             JsonSerializer.Serialize(new { session_id = id, connector_type = "shell" }), Encoding.UTF8, "application/json"));
 
-    private static async Task Annotate(HttpClient client, string id, string label)
+    internal static async Task Annotate(HttpClient client, string id, string label)
     {
         var resp = await client.PostAsync($"/api/sessions/{id}/annotate", new StringContent(
             JsonSerializer.Serialize(new { label }), Encoding.UTF8, "application/json"));
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 
-    private static async Task<JsonElement> Entries(HttpClient client, string id)
+    internal static async Task<JsonElement> Entries(HttpClient client, string id)
     {
         var resp = await client.GetAsync($"/api/sessions/{id}/recording/entries?limit=500");
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
@@ -215,19 +215,46 @@ public sealed class ServerRecordingRetireTests : IDisposable
     }
 
     /// <summary>An in-memory store whose retire and end can be held up.</summary>
-    private sealed class GatedStore : IRecordingStore
+    internal sealed class GatedStore(IRecordingStore? inner = null) : IRecordingStore
     {
-        private readonly InMemoryStore _inner = new();
+        private readonly IRecordingStore _inner = inner ?? new InMemoryStore();
+
+        /// <summary>When set, the next append waits for it before it is written.</summary>
+        public TaskCompletionSource? HoldNextAppend { get; set; }
+
+        /// <summary>When set, the next start waits for it before it is written.</summary>
+        public TaskCompletionSource? HoldNextStart { get; set; }
+
+        /// <summary>Completes when a held write (start or append) is waiting.</summary>
+        public TaskCompletionSource AppendHeld { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource RetireEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource? HoldRetire { get; set; }
         public bool EndHangs { get; set; }
         public TimeSpan RetireDelay { get; set; }
 
-        public Task StartSessionAsync(string sessionId, IReadOnlyDictionary<string, object?> metadata) =>
-            _inner.StartSessionAsync(sessionId, metadata);
+        public async Task StartSessionAsync(string sessionId, IReadOnlyDictionary<string, object?> metadata)
+        {
+            if (HoldNextStart is { } hold)
+            {
+                HoldNextStart = null;
+                AppendHeld.TrySetResult();
+                await hold.Task;
+            }
 
-        public Task AppendEventsAsync(string sessionId, IReadOnlyList<Event> events) =>
-            _inner.AppendEventsAsync(sessionId, events);
+            await _inner.StartSessionAsync(sessionId, metadata);
+        }
+
+        public async Task AppendEventsAsync(string sessionId, IReadOnlyList<Event> events)
+        {
+            if (HoldNextAppend is { } hold)
+            {
+                HoldNextAppend = null;
+                AppendHeld.TrySetResult();
+                await hold.Task;
+            }
+
+            await _inner.AppendEventsAsync(sessionId, events);
+        }
 
         public Task EndSessionAsync(string sessionId) =>
             EndHangs ? new TaskCompletionSource().Task : _inner.EndSessionAsync(sessionId);
@@ -300,31 +327,108 @@ public sealed class ServerRecordingRetireTests : IDisposable
             }
         }
     }
+}
+
+/// <summary>Tests that shorten <see cref="UtermServer.RemovalStopTimeout"/>, a process-wide static: run alone.</summary>
+[CollectionDefinition(nameof(RecordingTimeoutCollection), DisableParallelization = true)]
+public sealed class RecordingTimeoutCollection;
+
+[Collection(nameof(RecordingTimeoutCollection))]
+public sealed class ServerRecordingTimeoutTests : IDisposable
+{
+    private const string Sid = ServerRecordingRetireTests.Sid;
+    private readonly TimeSpan _saved = UtermServer.RemovalStopTimeout;
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "uterm-rec-timeout-" + Guid.NewGuid().ToString("N"));
+
+    public ServerRecordingTimeoutTests() => UtermServer.RemovalStopTimeout = TimeSpan.FromMilliseconds(100);
+
+    public void Dispose()
+    {
+        UtermServer.RemovalStopTimeout = _saved;
+        if (Directory.Exists(_dir))
+        {
+            Directory.Delete(_dir, recursive: true);
+        }
+    }
+
+    private static Task<(UtermServer Server, HttpClient Client)> StartAsync(IRecordingStore store) =>
+        ServerRecordingRetireTests.StartAsync(store);
+
+    private static Task<HttpResponseMessage> Create(HttpClient client, string id) =>
+        ServerRecordingRetireTests.Create(client, id);
+
+    private static Task Annotate(HttpClient client, string id, string label) =>
+        ServerRecordingRetireTests.Annotate(client, id, label);
+
+    private static Task<JsonElement> Entries(HttpClient client, string id) =>
+        ServerRecordingRetireTests.Entries(client, id);
 
     [Fact]
     public async Task AHungEndStillRetiresAndReleasesTheId()
     {
-        var saved = UtermServer.RemovalStopTimeout;
-        UtermServer.RemovalStopTimeout = TimeSpan.FromMilliseconds(100);
-        try
+        var store = new ServerRecordingRetireTests.GatedStore();
+        var (server, client) = await StartAsync(store);
+        await using (server)
+        using (client)
         {
-            var store = new GatedStore();
-            var (server, client) = await StartAsync(store);
-            await using (server)
-            using (client)
-            {
-                await Create(client, Sid);
-                await Annotate(client, Sid, "secretA");
-                store.EndHangs = true;
-                var deleted = await client.DeleteAsync($"/api/sessions/{Sid}").WaitAsync(TimeSpan.FromSeconds(5));
-                Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
-                Assert.Equal(HttpStatusCode.OK, (await Create(client, Sid)).StatusCode);
-                Assert.Equal(0, (await Entries(client, Sid)).GetArrayLength());
-            }
+            await Create(client, Sid);
+            await Annotate(client, Sid, "secretA");
+            store.EndHangs = true;
+            var deleted = await client.DeleteAsync($"/api/sessions/{Sid}").WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(HttpStatusCode.OK, deleted.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await Create(client, Sid)).StatusCode);
+            Assert.Equal(0, (await Entries(client, Sid)).GetArrayLength());
         }
-        finally
+    }
+
+    /// <summary>
+    /// A write stuck in the store past the bound: the delete's gate wait times
+    /// out, the id is retired, released and created again, and only then does
+    /// the old write land. The new holder's recording must have none of it --
+    /// whether the old write was stuck starting the recording (it would then
+    /// record its instance for the id, and the new holder would append into
+    /// the old file) or appending to one already started.
+    /// </summary>
+    [Theory]
+    [InlineData("file", true)]
+    [InlineData("memory", true)]
+    [InlineData("file", false)]
+    [InlineData("memory", false)]
+    public async Task AWriteThatOutlivesItsSessionDoesNotReachTheNextHolder(string kind, bool stuckStarting)
+    {
+        var store = new ServerRecordingRetireTests.GatedStore(
+            kind == "file" ? new LocalFileStore(_dir) : new InMemoryStore());
+        var (server, client) = await StartAsync(store);
+        await using (server)
+        using (client)
         {
-            UtermServer.RemovalStopTimeout = saved;
+            await Create(client, Sid);
+            var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (stuckStarting)
+            {
+                store.HoldNextStart = hold;
+            }
+            else
+            {
+                await Annotate(client, Sid, "secret0");
+                store.HoldNextAppend = hold;
+            }
+
+            var stuck = client.PostAsync($"/api/sessions/{Sid}/annotate", new StringContent(
+                JsonSerializer.Serialize(new { label = "secretA" }), Encoding.UTF8, "application/json"));
+            await store.AppendHeld.Task.WaitAsync(TimeSpan.FromSeconds(5)); // the write holds the gate
+
+            // The delete's wait on the gate times out: it retires and releases anyway.
+            Assert.Equal(HttpStatusCode.OK, (await client.DeleteAsync($"/api/sessions/{Sid}")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await Create(client, Sid)).StatusCode);
+
+            hold.SetResult(); // the old write lands now
+            await stuck;
+            await Annotate(client, Sid, "secretB");
+            var entries = (await Entries(client, Sid)).GetRawText();
+            Assert.DoesNotContain("secretA", entries);
+            Assert.DoesNotContain("secret0", entries);
+            Assert.Contains("secretB", entries);
         }
     }
 }
