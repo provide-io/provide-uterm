@@ -325,7 +325,12 @@ func procStartTicks(pid int) (int64, bool) {
 	if err != nil {
 		return 0, false
 	}
-	text := string(raw)
+	return statStartTicks(string(raw))
+}
+
+// statStartTicks parses the start time out of a /proc/<pid>/stat line, or
+// reports false for a line too short or malformed to hold one.
+func statStartTicks(text string) (int64, bool) {
 	fields := strings.Fields(text[strings.LastIndex(text, ")")+1:])
 	if len(fields) < 20 {
 		return 0, false

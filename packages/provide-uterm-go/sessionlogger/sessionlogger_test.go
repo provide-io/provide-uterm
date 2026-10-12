@@ -400,3 +400,33 @@ func TestRedactValueNestedInKVData(t *testing.T) {
 		t.Fatalf("kv = %v", kv)
 	}
 }
+
+// Start names the logger's instance in log_start, so a store can tell this
+// recording from an earlier holder's of the same id.
+func TestStartNamesTheInstance(t *testing.T) {
+	store := recording.NewInMemoryStore()
+	newLogger(t, store, Options{Instance: "inst-7"})
+	got := entries(t, store, "log_start")
+	if len(got) != 1 || recording.Instance(got[0]["data"].(map[string]any)) != "inst-7" {
+		t.Fatalf("log_start = %v, want instance inst-7", got)
+	}
+}
+
+// Past the quota, a snapshot frame is dropped like any other write.
+func TestLogScreenFrameOverQuotaWritesNothing(t *testing.T) {
+	store := recording.NewInMemoryStore()
+	l := New(store, Options{MaxBytes: 10, Logger: slog.New(slog.DiscardHandler)})
+	l.sessionID = "sess-1"
+	if err := l.LogEvent("e", map[string]any{}); err != nil { // pushes usage over the quota
+		t.Fatal(err)
+	}
+	if err := l.LogScreenFrame(map[string]any{"type": "snapshot"}, []byte("$ ")); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if got := entries(t, store, "read"); len(got) != 0 {
+		t.Fatalf("reads = %v, want none past the quota", got)
+	}
+}

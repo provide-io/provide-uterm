@@ -194,3 +194,69 @@ func TestPamCloseInFlightStillFindsItsEntryAfterAnotherEventPrunes(t *testing.T)
 		t.Fatalf("close deleted %v, want [%v]", reg.deleted, opened)
 	}
 }
+
+// A stat line too short to hold a start time, or one whose start-time field is
+// not a number, says nothing; the command name may hold ") " itself.
+func TestStatStartTicksParsesOnlyAWellFormedLine(t *testing.T) {
+	tail := " S 1 1 1 0 -1 4194560 100 0 0 0 0 0 0 0 20 0 1 0 "
+	if got, ok := statStartTicks("42 (a) b) c)" + tail + "777 1 2"); !ok || got != 777 {
+		t.Fatalf("statStartTicks = %d, %t; want 777", got, ok)
+	}
+	for _, line := range []string{"42 (sshd) S 1 1", "42 (sshd)" + tail + "x77 1 2", ""} {
+		if got, ok := statStartTicks(line); ok {
+			t.Fatalf("statStartTicks(%q) = %d, want no start time", line, got)
+		}
+	}
+}
+
+// A tty-named notify id carries no pid, so nothing can prove its login gone.
+func TestPamTTYNamedLoginIsNeverProvenGone(t *testing.T) {
+	pinStartTicks(t, map[int]int64{})
+	if loginIsGone(pamLoginKey{"suokki", 5}, "pam-suokki-pts-3") {
+		t.Fatal("a tty-named id was reported gone")
+	}
+}
+
+// A login that looked gone once (its start time briefly unreadable) and then
+// reports its own start time again starts its grace afresh the next time.
+func TestPamLoginSeenGoneThenBackRestartsItsGrace(t *testing.T) {
+	ticks := map[int]int64{10: 1, 11: 2, 12: 3, 13: 4}
+	pinStartTicks(t, ticks)
+	now := time.Unix(1000, 0)
+	savedNow := pamNow
+	t.Cleanup(func() { pamNow = savedNow })
+	pamNow = func() time.Time { return now }
+	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, newFakeRegistry())
+	key := pamLoginKey{"suokki", 10}
+	pi.beginLogin(captureEvent("open", 10))
+	delete(ticks, 10)
+	pi.beginLogin(captureEvent("open", 11)) // pid 10 looks gone
+	if pi.instances[key].goneSince.IsZero() {
+		t.Fatal("pid 10 was not marked gone")
+	}
+	ticks[10] = 1
+	now = now.Add(30 * time.Second)
+	pi.beginLogin(captureEvent("open", 12)) // pid 10 is back
+	if !pi.instances[key].goneSince.IsZero() {
+		t.Fatal("pid 10 is still marked gone after it came back")
+	}
+	delete(ticks, 10)
+	now = now.Add(31 * time.Second) // past the grace since it was first seen gone
+	pi.beginLogin(captureEvent("open", 13))
+	if _, ok := pi.instances[key]; !ok {
+		t.Fatalf("instances = %v, want pid 10 kept: its grace restarted", pi.instances)
+	}
+}
+
+// The cap never drops the login being opened, even when it alone exceeds it.
+func TestPamCapNeverDropsTheLoginBeingOpened(t *testing.T) {
+	pinStartTicks(t, map[int]int64{})
+	saved := maxRememberedLogins
+	t.Cleanup(func() { maxRememberedLogins = saved })
+	maxRememberedLogins = 0
+	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, newFakeRegistry())
+	id := pi.beginLogin(captureEvent("open", 40))
+	if got := pi.instances[pamLoginKey{"suokki", 40}]; got.id != id || len(pi.instances) != 1 {
+		t.Fatalf("instances = %v, want only the login being opened", pi.instances)
+	}
+}

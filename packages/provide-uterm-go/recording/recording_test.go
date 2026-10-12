@@ -252,3 +252,23 @@ func TestNullStore(t *testing.T) {
 		t.Fatalf("path = %q", p)
 	}
 }
+
+// A store directory that cannot be created fails StartSession: here a dangling
+// symlink, which reads as absent (nothing to retire) yet cannot be made a
+// directory.
+func TestLocalFileStoreStartFailsWhenTheDirectoryCannotBeMade(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "dangling")
+	if err := os.Symlink(filepath.Join(root, "missing", "target"), dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewLocalFileStore(dir).StartSession("x", nil); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestNullStoreRetireIsANoOp(t *testing.T) {
+	if err := Retire(NullStore{}, "s"); err != nil {
+		t.Fatal(err)
+	}
+}

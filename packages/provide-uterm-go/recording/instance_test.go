@@ -167,3 +167,41 @@ func TestRetireSkipsAStoreWithoutIt(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A symlink planted at the recording path is not a recording this store wrote,
+// whatever its target says: it is moved aside and its target left untouched.
+func TestPlantedSymlinkIsNeverContinued(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(t.TempDir(), "elsewhere.jsonl")
+	planted := `{"event":"log_start","data":{"instance":"i1"}}` + "\n"
+	if err := os.WriteFile(target, []byte(planted), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, "s.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	s := NewLocalFileStore(dir)
+	recordOne(t, s, "s", map[string]any{"instance": "i1"}, "mine")
+	if got := readTexts(t, s, "s"); !slices.Equal(got, []string{"mine"}) {
+		t.Fatalf("entries = %v, want [mine]", got)
+	}
+	if raw, _ := os.ReadFile(target); string(raw) != planted {
+		t.Fatalf("the link's target was written: %q", raw)
+	}
+}
+
+// A first line longer than a log_start can be is not ours either.
+func TestOverlongFirstLineIsNeverContinued(t *testing.T) {
+	dir := t.TempDir()
+	pad := strings.Repeat("x", firstLineLimit)
+	old := `{"event":"log_start","data":{"instance":"i1","pad":"` + pad + `"}}` + "\n" +
+		`{"ts":1.0,"event":"read","data":{"text":"old"}}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "s.jsonl"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := NewLocalFileStore(dir)
+	recordOne(t, s, "s", map[string]any{"instance": "i1"}, "new")
+	if got := readTexts(t, s, "s"); !slices.Equal(got, []string{"new"}) {
+		t.Fatalf("entries = %v, want [new]", got)
+	}
+}
