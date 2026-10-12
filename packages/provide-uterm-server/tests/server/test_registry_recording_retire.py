@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 
 from provide.uterm.recording import InMemoryRecordingStore, LocalFileRecordingStore, RecordingStore
+from provide.uterm.server import registry as registry_module
 from provide.uterm.server.bridge.hub import TermHub
 from provide.uterm.server.config_schema import RecordingConfig
 from provide.uterm.server.registry import SessionRegistry, SessionValidationError
@@ -93,7 +94,11 @@ async def test_the_deleted_file_is_kept_aside_for_retention(tmp_path: Path) -> N
 
 
 async def test_the_old_runtimes_last_writes_land_before_the_id_is_released(tmp_path: Path) -> None:
-    """Delete waits for the old runtime's final flush, then retires; a create meanwhile is refused."""
+    """Delete waits for the old runtime's final flush, then retires; a create meanwhile waits for it.
+
+    This is also a tty-named PAM re-login (``pam-<user>-<tty>``): the next login
+    on the tty wants the id while the last one's session is still going.
+    """
     store = LocalFileRecordingStore(tmp_path)
     registry = _registry(store, tmp_path)
     await registry.create_session(_payload())
@@ -115,12 +120,14 @@ async def test_the_old_runtimes_last_writes_land_before_the_id_is_released(tmp_p
     deleting = asyncio.create_task(registry.delete_session(SID))
     await stopping.wait()
 
-    with pytest.raises(ValueError, match="being deleted"):
-        await registry.create_session(_payload())
+    creating = asyncio.create_task(registry.create_session(_payload()))
+    await asyncio.sleep(0.05)
+    assert not creating.done()  # waiting on the teardown, not refused
 
     release.set()
     await deleting
-    await registry.create_session(_payload())
+    await creating
+    assert await registry.get_definition(SID) is not None
     assert await registry.recording_entries(SID, limit=500) == []
     retired = list(tmp_path.glob(f"{SID}.*.jsonl"))
     assert len(retired) == 1
@@ -174,3 +181,57 @@ def test_a_configured_session_id_is_capped_too() -> None:
     SessionDefinition(session_id="a" * 200)
     with pytest.raises(ValidationError, match="at most 200 bytes"):
         SessionDefinition(session_id="a" * 201)
+
+
+async def test_a_create_that_outwaits_the_bound_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(registry_module, "_RESERVED_ID_WAIT_S", 0.05)
+    monkeypatch.setattr(registry_module, "_REMOVAL_STOP_TIMEOUT_S", 5.0)
+    registry = _registry(InMemoryRecordingStore(), tmp_path)
+    await registry.create_session(_payload())
+    runtime = registry.get_runtime(SID)
+    assert runtime is not None
+    release = asyncio.Event()
+
+    async def slow_stop() -> None:
+        await release.wait()
+
+    runtime.stop = slow_stop  # type: ignore[method-assign]
+    deleting = asyncio.create_task(registry.delete_session(SID))
+    await asyncio.sleep(0)
+    with pytest.raises(ValueError, match="being deleted"):
+        await registry.create_session(_payload())
+    release.set()
+    await deleting
+
+
+async def test_concurrent_creates_of_one_id_see_already_exists(tmp_path: Path) -> None:
+    """The relay retries an open: the loser must get "already exists", which the route treats as idempotent."""
+
+    class SlowRetire(InMemoryRecordingStore):
+        async def retire_session(self, session_id: str) -> None:
+            await asyncio.sleep(0.02)  # the first create is still retiring when the retries arrive
+            await super().retire_session(session_id)
+
+    registry = _registry(SlowRetire(), tmp_path)
+    results = await asyncio.gather(*(registry.create_session(_payload()) for _ in range(3)), return_exceptions=True)
+    errors = [r for r in results if isinstance(r, BaseException)]
+    assert len(errors) == 2
+    assert all(isinstance(e, ValueError) and "already exists" in str(e) for e in errors)
+
+
+async def test_a_hung_stop_still_retires_and_releases_the_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(registry_module, "_REMOVAL_STOP_TIMEOUT_S", 0.05)
+    store = InMemoryRecordingStore()
+    registry = _registry(store, tmp_path)
+    await registry.create_session(_payload())
+    await _record(store, "secretA")
+    runtime = registry.get_runtime(SID)
+    assert runtime is not None
+
+    async def hung_stop() -> None:
+        await asyncio.Event().wait()  # never returns
+
+    runtime.stop = hung_stop  # type: ignore[method-assign]
+    await asyncio.wait_for(registry.delete_session(SID), 2.0)
+    await registry.create_session(_payload())
+    assert await registry.recording_entries(SID, limit=500) == []
