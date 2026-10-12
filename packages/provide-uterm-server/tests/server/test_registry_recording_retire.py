@@ -235,3 +235,51 @@ async def test_a_hung_stop_still_retires_and_releases_the_id(tmp_path: Path, mon
     await asyncio.wait_for(registry.delete_session(SID), 2.0)
     await registry.create_session(_payload())
     assert await registry.recording_entries(SID, limit=500) == []
+
+
+async def test_a_create_cancelled_while_waiting_for_the_lock_releases_its_reservation(tmp_path: Path) -> None:
+    """Cancelled between its retire and the insert, a create must not leave the id reserved."""
+    retiring = asyncio.Event()
+    proceed = asyncio.Event()
+
+    class HeldRetire(InMemoryRecordingStore):
+        async def retire_session(self, session_id: str) -> None:
+            retiring.set()
+            await proceed.wait()
+            await super().retire_session(session_id)
+
+    registry = _registry(HeldRetire(), tmp_path)
+    creating = asyncio.create_task(registry.create_session(_payload()))
+    await retiring.wait()
+    async with registry._lock:  # contention: the create now has to wait for the lock
+        proceed.set()
+        await asyncio.sleep(0.01)
+        creating.cancel()
+        await asyncio.sleep(0)
+    with pytest.raises(asyncio.CancelledError):
+        await creating
+    assert SID not in registry._retiring
+    await asyncio.wait_for(registry.create_session(_payload()), 1.0)  # not 15 s, not refused
+
+
+async def test_a_delete_cancelled_mid_retire_releases_its_reservation(tmp_path: Path) -> None:
+    retiring = asyncio.Event()
+
+    class HangingRetire(InMemoryRecordingStore):
+        async def retire_session(self, session_id: str) -> None:
+            if retiring.is_set():
+                return
+            retiring.set()
+            await asyncio.Event().wait()
+
+    store = HangingRetire()
+    retiring.set()  # the create's own retire passes straight through
+    registry = _registry(store, tmp_path)
+    await registry.create_session(_payload())
+    retiring.clear()
+    deleting = asyncio.create_task(registry.delete_session(SID))
+    await retiring.wait()
+    deleting.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await deleting
+    assert SID not in registry._retiring

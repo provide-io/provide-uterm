@@ -162,13 +162,21 @@ class SessionRegistry:
         self._retiring[session_id] = asyncio.Event()
         return runtime
 
-    def _release_locked(self, session_id: str) -> None:
-        """Release a reserved id and wake whatever waits on it.  Caller holds ``self._lock``."""
-        released = self._retiring.pop(session_id, None)
-        if released is not None:
-            released.set()
+    def _release_mine(self, session_id: str, reservation: asyncio.Event) -> None:
+        """Release *reservation* if it still holds *session_id*; a no-op otherwise.
 
-    async def _reserve_for_create(self, session_id: str) -> None:
+        Synchronous, with no await, so it needs no lock: nothing else on the
+        event loop can run in between. That is what lets a ``finally`` call it
+        even when the task was cancelled while waiting for the lock, which would
+        otherwise leak the reservation (every later create would wait out
+        ``_RESERVED_ID_WAIT_S`` and be refused). Checking the event makes it safe
+        to call twice: a later holder's reservation is never released.
+        """
+        if self._retiring.get(session_id) is reservation:
+            del self._retiring[session_id]
+            reservation.set()
+
+    async def _reserve_for_create(self, session_id: str) -> asyncio.Event:
         """Reserve *session_id* for a create, waiting out a teardown that holds it.
 
         A delete (or another create) still retiring the id is waited for, up to
@@ -187,8 +195,9 @@ class SessionRegistry:
                     raise ValueError(f"session already exists: {session_id}")
                 pending = self._retiring.get(session_id)
                 if pending is None:
-                    self._retiring[session_id] = asyncio.Event()
-                    return
+                    reservation = asyncio.Event()
+                    self._retiring[session_id] = reservation
+                    return reservation
             remaining = deadline - asyncio.get_running_loop().time()
             try:
                 if remaining <= 0:
@@ -217,11 +226,12 @@ class SessionRegistry:
                         _REMOVAL_STOP_TIMEOUT_S,
                     )
         finally:
+            reservation = self._retiring.get(session_id)
             try:
                 await retire_recording(self._recording_store, session_id)
             finally:
-                async with self._lock:
-                    self._release_locked(session_id)
+                if reservation is not None:
+                    self._release_mine(session_id, reservation)
 
     def _require_session(self, session_id: str) -> SessionDefinition:
         """Return the session definition or raise ``KeyError``.  Caller must hold ``self._lock``."""
@@ -361,23 +371,23 @@ class SessionRegistry:
             visibility=visibility_raw,
             ephemeral=bool(payload.get("ephemeral")),
         )
-        await self._reserve_for_create(session.session_id)
+        reservation = await self._reserve_for_create(session.session_id)
         try:
             # A recording left under this id (a session from before a restart,
             # or one a store kept) is not this new session's: retire it before
             # the session becomes visible, so nothing can read it as this one's.
             await retire_recording(self._recording_store, session.session_id)
-        except BaseException:
             async with self._lock:
-                self._release_locked(session.session_id)
-            raise
-        async with self._lock:
-            # Released and inserted in one step: no other create can slip in.
-            self._release_locked(session.session_id)
-            if self._max_sessions is not None and len(self._sessions) >= self._max_sessions:
-                raise ValueError(f"session limit reached: max_sessions={self._max_sessions}")
-            self._sessions[session.session_id] = session
-            runtime = self._runtime_for(session)
+                # Released and inserted in one step: no other create can slip in.
+                self._release_mine(session.session_id, reservation)
+                if self._max_sessions is not None and len(self._sessions) >= self._max_sessions:
+                    raise ValueError(f"session limit reached: max_sessions={self._max_sessions}")
+                self._sessions[session.session_id] = session
+                runtime = self._runtime_for(session)
+        finally:
+            # However this ended -- cancelled while waiting for the lock
+            # included -- the reservation is not left behind.
+            self._release_mine(session.session_id, reservation)
         if session.auto_start:
             await runtime.start()
         return runtime.status()
