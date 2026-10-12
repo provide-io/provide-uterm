@@ -73,6 +73,13 @@ func (s *WebhookRecordingStore) EndSession(sessionID string) error {
 	return nil
 }
 
+// RetireSession posts the "retire" action: the session is gone, and the id's
+// next holder must not be served this recording.
+func (s *WebhookRecordingStore) RetireSession(sessionID string) error {
+	s.post(sessionID, "retire", map[string]any{})
+	return nil
+}
+
 // RecordingMeta reads the endpoint's meta, or an absent recording's when the
 // endpoint gives nothing usable.
 func (s *WebhookRecordingStore) RecordingMeta(sessionID string) (recording.Meta, error) {

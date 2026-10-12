@@ -8,6 +8,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -182,6 +183,20 @@ type failAfter struct {
 	*recording.InMemoryStore
 	mu sync.Mutex
 	ok int
+	// retired is what the recording held when it was retired (a deleted
+	// session's recording is dropped from the store, then and there).
+	retired []recording.Event
+}
+
+func (f *failAfter) RetireSession(id string) error {
+	got, err := f.InMemoryStore.GetEntries(id, recording.Query{Limit: 500})
+	if err != nil {
+		return err
+	}
+	f.mu.Lock()
+	f.retired = got
+	f.mu.Unlock()
+	return f.InMemoryStore.RetireSession(id)
 }
 
 func (f *failAfter) AppendEvents(id string, events []recording.Event) error {
@@ -627,8 +642,20 @@ func TestTheFinalStopSettlesAnUnclosedRecording(t *testing.T) {
 			r, store, rec := unclosedRegistry(t)
 			stop(r)
 			want := []string{"log_start", "runtime_started", "log_stop"}
+			entries := entriesOf(t, store, "provide-shell", "")
+			if name == "DeleteSession" {
+				// Settled first, then retired with the deleted session.
+				if len(entries) != 0 {
+					t.Fatalf("a deleted session's recording is still served: %v", entries)
+				}
+				store.mu.Lock()
+				raw, _ := json.Marshal(store.retired)
+				store.mu.Unlock()
+				entries = nil
+				must(t, json.Unmarshal(raw, &entries))
+			}
 			var got []string
-			for _, e := range entriesOf(t, store, "provide-shell", "") {
+			for _, e := range entries {
 				got = append(got, e["event"].(string))
 			}
 			if !reflect.DeepEqual(got, want) {

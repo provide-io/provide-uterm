@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+// MaxSessionIDBytes is the longest session id, in UTF-8 bytes. A recording is
+// <id>.jsonl and a retired one <id>.<19-digit ns>-<8 hex>.jsonl (35 bytes past
+// the id); 200 keeps both inside the 255-byte filename limit, so every id can
+// be retired. Port of MAX_SESSION_ID_BYTES; the same limit holds in every port.
+const MaxSessionIDBytes = 200
+
 // sessionIDPattern mirrors ^[\w\-]+$ from config_schema_session.py.
 var sessionIDPattern = regexp.MustCompile(`^[\w\-]+$`)
 
@@ -194,6 +200,9 @@ func validateSessionID(value string) (string, error) {
 	}
 	if !sessionIDPattern.MatchString(sid) {
 		return "", fmt.Errorf("session_id must match ^[\\w\\-]+$, got: %q", sid)
+	}
+	if len(sid) > MaxSessionIDBytes {
+		return "", fmt.Errorf("session_id must be at most %d bytes (UTF-8), got: %q", MaxSessionIDBytes, sid)
 	}
 	return sid, nil
 }
