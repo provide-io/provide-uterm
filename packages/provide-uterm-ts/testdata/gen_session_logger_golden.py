@@ -21,9 +21,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from provide.uterm.redaction import make_redactor
-
 from provide.uterm.recording import InMemoryRecordingStore
+from provide.uterm.redaction import make_redactor
 from provide.uterm.session_logger import SessionLogger
 
 OUT = Path(__file__).with_name("session_logger_golden.json")
