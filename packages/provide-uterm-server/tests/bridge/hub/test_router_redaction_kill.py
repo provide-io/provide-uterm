@@ -18,9 +18,10 @@ terminal frame's payload should be, because ``str(None)`` is not empty.
 levels deep, so the ``_depth`` arithmetic is unobservable: the counter can start
 at 1, count by 2, count backwards, or not be passed at all, and every shallow
 assertion still passes. The cap is what stops a hostile payload from driving a
-``RecursionError`` on a hot broadcast path, and its cost is that secrets below
-it ship unredacted — so where exactly it falls is a security boundary, not an
-implementation detail, and it is pinned here to the level.
+``RecursionError`` on a hot broadcast path. A container at the cap is replaced
+by ``DEPTH_LIMIT_MARKER`` (it used to ship verbatim, secret and all), so where
+exactly it falls decides how much structure survives — it is pinned here to
+the level. The walker itself is ``provide.uterm.redaction.redact_structure``.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from typing import Any
 
 import pytest
 
+from provide.uterm.redaction import DEPTH_LIMIT_MARKER
 from provide.uterm.server.bridge.hub.ext import RedactionRule
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.router_redaction import (
@@ -100,20 +102,20 @@ def test_a_secret_at_the_last_walked_level_is_still_redacted(container: str) -> 
 
 
 @pytest.mark.parametrize("container", ["dict", "list"])
-def test_a_container_at_the_cap_is_returned_unwalked_so_a_deeper_secret_survives(
+def test_a_container_at_the_cap_is_replaced_whole_so_a_deeper_secret_cannot_survive(
     container: str,
 ) -> None:
-    """One level further and the container is returned verbatim, secret intact.
+    """One level further and the innermost container becomes the depth marker.
 
-    This is the documented trade — failing closed on depth returns raw rather
-    than raising on a broadcast path — so it is asserted rather than assumed.
-    Pins the far side: a counter that never advances (not passed, or counting
-    down) walks forever and redacts here, and ``>`` instead of ``>=`` moves the
-    boundary by exactly this one level.
+    It used to be returned verbatim, so nesting a secret 33 levels deep was a
+    redaction bypass. Pins the far side: a counter that never advances walks
+    forever and redacts the string instead of replacing its container, and
+    ``>`` instead of ``>=`` moves the boundary by exactly this one level.
     """
     result = _redact_value(_nest(_REDACT_MAX_DEPTH + 1, container=container), _redactor())
 
-    assert _innermost(result) == _PLANTED
+    assert _innermost(result) == DEPTH_LIMIT_MARKER
+    assert _PLANTED not in repr(result)
 
 
 def test_the_cap_is_the_value_the_boundary_tests_are_written_against() -> None:
