@@ -305,6 +305,25 @@ async def test_close_finds_the_id_open_gave_even_after_the_process_is_gone(
     assert instances == {}
 
 
+async def test_open_never_reuses_an_id_a_closeless_login_left(start_ticks: dict[int, int | None]) -> None:
+    """A login drawing a pid whose earlier login never saw its close is a new session."""
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.server.models import PamConfig
+
+    cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture")
+    registry = MagicMock()
+    registry.create_session = AsyncMock()
+    instances: dict[tuple[str, int], str] = {}
+
+    start_ticks[9] = 100
+    await _on_open(_capture_event(9), cfg, registry, None, instances)  # type: ignore[arg-type]
+    start_ticks[9] = 200  # no close came; the pid is now a later login's
+    await _on_open(_capture_event(9), cfg, registry, None, instances)  # type: ignore[arg-type]
+    ids = [c.args[0]["session_id"] for c in registry.create_session.call_args_list]
+    assert ids == ["pam-suokki-capture-9-100", "pam-suokki-capture-9-200"]
+    assert instances == {("suokki", 9): "pam-suokki-capture-9-200"}
+
+
 def test_capture_session_id_uses_pid_when_openssh_reports_placeholder_tty(
     start_ticks: dict[int, int | None],
 ) -> None:
