@@ -78,6 +78,10 @@ CASES: list[tuple[str, dict[str, Any]]] = [
     ("an identifier with a slash in it", {"session_id": "a/b"}),
     ("an identifier with dashes and underscores", {"session_id": "my-shell_2"}),
     ("an identifier of digits", {"session_id": "12345"}),
+    # Capped at 200 UTF-8 bytes, so a recording and its retired name fit a filename.
+    ("an identifier of exactly 200 bytes", {"session_id": "a" * 200}),
+    ("an identifier of 201 bytes", {"session_id": "a" * 201}),
+    ("an identifier of 67 three-byte letters", {"session_id": "端" * 67}),
     # CPython's \w is Unicode-aware and JavaScript's is not, so these are the
     # cases that tell a literal reading of the pattern apart from a faithful one.
     ("an identifier in French", {"session_id": "café"}),
