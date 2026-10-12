@@ -5,7 +5,17 @@
 
 import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
-import { makeRedactor, redactText } from "./index.ts";
+import {
+  DEPTH_LIMIT_MARKER,
+  isSensitiveKey,
+  makeRedactor,
+  REDACT_MAX_DEPTH,
+  redactStructure,
+  redactText,
+  SENSITIVE_KEY_MARKER,
+  SENSITIVE_KEY_NAMES,
+  SENSITIVE_KEY_SUFFIXES,
+} from "./index.ts";
 
 interface RedactionGolden {
   cases: Array<{ patterns: string[]; text: string; out: string; identity: string }>;
@@ -108,4 +118,122 @@ describe("differential parity with CPython", () => {
       { patterns: ["\\w+"], cpython: "[REDACTED]", host: "[REDACTED]ï[REDACTED]" },
     ]);
   });
+});
+
+describe("redactStructure", () => {
+  const r = makeRedactor(["S3cret\\w*"]);
+
+  function nest(depth: number, leaf: unknown, kind: "object" | "array"): unknown {
+    let value = leaf;
+    for (let i = 0; i < depth; i++) {
+      value = kind === "object" ? { k: value } : [value];
+    }
+    return value;
+  }
+
+  function innermost(value: unknown): unknown {
+    let cur = value;
+    while (typeof cur === "object" && cur !== null) {
+      cur = Array.isArray(cur) ? cur[0] : (cur as Record<string, unknown>).k;
+    }
+    return cur;
+  }
+
+  it("pins the constants shared with the reference", () => {
+    expect(REDACT_MAX_DEPTH).toBe(32);
+    expect(DEPTH_LIMIT_MARKER).toBe("[NESTED_REDACTED]");
+    expect(SENSITIVE_KEY_MARKER).toBe("[SECRET_REDACTED]");
+    expect([...SENSITIVE_KEY_NAMES].sort()).toStrictEqual([
+      "api_key",
+      "apikey",
+      "authorization",
+      "cookie",
+      "passphrase",
+      "passwd",
+      "password",
+      "private_key",
+      "secret",
+      "token",
+    ]);
+    expect(SENSITIVE_KEY_SUFFIXES).toStrictEqual(["_token", "_password", "_passphrase", "_secret", "_api_key"]);
+  });
+
+  it("redacts strings at every level and keeps other scalars", () => {
+    expect(redactStructure("a S3cretX", r)).toBe("a [REDACTED]");
+    expect(redactStructure({ a: ["S3cret1", { b: "S3cret2" }, 1, true, null] }, r)).toStrictEqual({
+      a: ["[REDACTED]", { b: "[REDACTED]" }, 1, true, null],
+    });
+    expect(redactStructure(undefined, r)).toBeUndefined();
+  });
+
+  it("never mutates its input", () => {
+    const input = { a: ["S3cret1"] };
+    const out = redactStructure(input, r) as { a: string[] };
+    expect(input).toStrictEqual({ a: ["S3cret1"] });
+    expect(out.a).not.toBe(input.a);
+  });
+
+  it.each(["object", "array"] as const)("walks the last level inside the cap (%s)", (kind) => {
+    expect(innermost(redactStructure(nest(REDACT_MAX_DEPTH, "S3cretLeaf", kind), r))).toBe("[REDACTED]");
+  });
+
+  it.each(["object", "array"] as const)("replaces a container at the cap with the marker (%s)", (kind) => {
+    const out = redactStructure(nest(REDACT_MAX_DEPTH + 1, "S3cretLeaf", kind), r);
+    expect(innermost(out)).toBe(DEPTH_LIMIT_MARKER);
+    expect(JSON.stringify(out)).not.toContain("S3cretLeaf");
+  });
+
+  it("honours an explicit maxDepth", () => {
+    expect(redactStructure({ a: { b: "x" } }, r, { maxDepth: 1 })).toStrictEqual({ a: DEPTH_LIMIT_MARKER });
+    expect(redactStructure(["x"], r, { maxDepth: 0 })).toBe(DEPTH_LIMIT_MARKER);
+  });
+
+  it("survives a structure far deeper than the stack", () => {
+    const out = redactStructure(nest(100_000, "S3cretLeaf", "object"), r, { keyAware: true });
+    expect(innermost(out)).toBe(DEPTH_LIMIT_MARKER);
+  });
+
+  it("masks sensitive keys only when key-aware, and keeps a null credential null", () => {
+    const frame = { type: "resume", token: "abc", wrap: [{ resume_token: "x", password: null, keep: "S3cret" }] };
+    expect(redactStructure(frame, r)).toStrictEqual({
+      type: "resume",
+      token: "abc",
+      wrap: [{ resume_token: "x", password: null, keep: "[REDACTED]" }],
+    });
+    expect(redactStructure(frame, r, { keyAware: true })).toStrictEqual({
+      type: "resume",
+      token: SENSITIVE_KEY_MARKER,
+      wrap: [{ resume_token: SENSITIVE_KEY_MARKER, password: null, keep: "[REDACTED]" }],
+    });
+    expect(redactStructure({ token: undefined }, r, { keyAware: true })).toStrictEqual({ token: undefined });
+    expect(redactStructure({ secret: { a: 1 } }, r, { keyAware: true })).toStrictEqual({
+      secret: SENSITIVE_KEY_MARKER,
+    });
+  });
+
+  it.each([
+    "token",
+    "TOKEN",
+    "Resume-Token",
+    "session_token",
+    "passwd",
+    "ssh_passphrase",
+    "client_secret",
+    "api-key",
+    "apikey",
+    "openai_api_key",
+    "Authorization",
+    "cookie",
+    "private_key",
+    "db_password",
+  ])("treats %s as sensitive", (key) => {
+    expect(isSensitiveKey(key)).toBe(true);
+  });
+
+  it.each(["", "tokens", "token_count", "max_tokens", "secretary", "type", "tokenizer"])(
+    "treats %s as ordinary",
+    (key) => {
+      expect(isSensitiveKey(key)).toBe(false);
+    },
+  );
 });

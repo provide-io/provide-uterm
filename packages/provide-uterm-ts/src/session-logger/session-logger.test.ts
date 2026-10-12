@@ -17,7 +17,17 @@ interface SessionLoggerGolden {
   quota: { entries: RecordingEvent[] };
   quota_boundary: { max_bytes: number; payload: Record<string, unknown>; attempts: number; written: number };
   batch: { after_one: number; after_two: number };
+  payloads: {
+    patterns: string[];
+    calls: PayloadCall[];
+    redacted: RecordingEvent[];
+    verbatim: RecordingEvent[];
+  };
 }
+
+type PayloadCall =
+  | { method: "event"; name: string; data: Record<string, unknown> }
+  | { method: "control"; direction: "send" | "recv"; data: Record<string, unknown> };
 
 const golden = loadGolden<SessionLoggerGolden>("session_logger_golden.json");
 
@@ -369,6 +379,22 @@ describe("SessionLogger quota", () => {
     expect(await store.getEntries("s1", { event: "e" })).toHaveLength(1);
   });
 
+  it("re-checks the quota at write time for calls already past the entry check", async () => {
+    const store = new InMemoryRecordingStore();
+    const logger = new SessionLogger(store, { flushIntervalS: 3600, logger: noopLogger, maxBytes: 10_000 });
+    await logger.start("s1");
+    // Both calls pass the entry check before either is written; the first
+    // write crosses the budget, so the second is dropped on the chain.
+    const big = "x".repeat(20_000);
+    await Promise.all([logger.logEvent("first", { big }), logger.logEvent("second", {})]);
+    await logger.stop();
+    expect((await store.getEntries("s1", { limit: 500 })).map((e) => e.event)).toStrictEqual([
+      "log_start",
+      "first",
+      "log_stop",
+    ]);
+  });
+
   it("writes without limit when no budget is set", async () => {
     const store = new InMemoryRecordingStore();
     const logger = new SessionLogger(store, { flushIntervalS: 3600, logger: noopLogger });
@@ -379,7 +405,125 @@ describe("SessionLogger quota", () => {
   });
 });
 
+/** Replay the corpus's caller payloads through a wire-mode logger. */
+async function drivePayloads(options: SessionLoggerOptions = {}): Promise<RecordingEvent[]> {
+  const store = new InMemoryRecordingStore();
+  const logger = new SessionLogger(store, {
+    flushIntervalS: 3600,
+    logger: noopLogger,
+    controlChannelMode: "wire",
+    ...options,
+  });
+  await logger.start("s1");
+  for (const call of golden.payloads.calls) {
+    if (call.method === "event") {
+      await logger.logEvent(call.name, call.data);
+    } else {
+      await logger.logControl(call.direction, call.data);
+    }
+  }
+  await logger.stop();
+  return strip(await store.getEntries("s1", { limit: 500 }));
+}
+
+describe("SessionLogger caller payloads", () => {
+  it("masks a resume frame's token by field name", async () => {
+    const store = new InMemoryRecordingStore();
+    const logger = new SessionLogger(store, {
+      flushIntervalS: 3600,
+      logger: noopLogger,
+      controlChannelMode: "wire",
+      redactor: makeRedactor(["secret\\w*"]),
+    });
+    await logger.start("s1");
+    await logger.logControl("recv", { type: "resume", token: "rt_1", player_id: 2 });
+    await logger.stop();
+    const control = (await store.getEntries("s1", { limit: 500 })).find((e) => e.event === "control_recv");
+    expect(control?.data).toStrictEqual({ control: { type: "resume", token: "[SECRET_REDACTED]", player_id: 2 } });
+  });
+
+  it("records a 5000-deep frame without overflowing the stack", async () => {
+    let deep: unknown = "secretDeep";
+    for (let i = 0; i < 5000; i++) {
+      deep = { a: deep };
+    }
+    const store = new InMemoryRecordingStore();
+    const logger = new SessionLogger(store, {
+      flushIntervalS: 3600,
+      logger: noopLogger,
+      controlChannelMode: "wire",
+      redactor: makeRedactor(["secret\\w*"]),
+    });
+    await logger.start("s1");
+    await logger.logControl("recv", { type: "x", payload: deep });
+    await logger.logEvent("deep", { payload: deep });
+    await logger.stop();
+    const text = JSON.stringify(await store.getEntries("s1", { limit: 500 }));
+    expect(text).not.toContain("secretDeep");
+    expect(text.split("[NESTED_REDACTED]")).toHaveLength(3);
+  });
+
+  it("copies the payload without a redactor, so later caller mutation cannot rewrite it", async () => {
+    const store = new InMemoryRecordingStore();
+    const logger = new SessionLogger(store, { flushIntervalS: 3600, logger: noopLogger, controlChannelMode: "wire" });
+    await logger.start("s1");
+    const data: Record<string, unknown> = { description: "secretValue", token: "abc" };
+    const frame: Record<string, unknown> = { type: "paste", text: "secretPaste" };
+    const snapshot: Record<string, unknown> = { screen: "abc" };
+    await logger.logEvent("annotation", data);
+    await logger.logControl("send", frame);
+    await logger.logScreen(snapshot, new Uint8Array());
+    data.description = "changed";
+    frame.text = "changed";
+    snapshot.screen = "changed";
+    await logger.stop();
+    const entries = await store.getEntries("s1", { limit: 500 });
+    expect(entries.find((e) => e.event === "annotation")?.data).toStrictEqual({
+      description: "secretValue",
+      token: "abc",
+    });
+    expect(entries.find((e) => e.event === "control_send")?.data).toStrictEqual({
+      control: { type: "paste", text: "secretPaste" },
+    });
+    expect(must(entries.find((e) => e.event === "read"), "a read entry").data).toMatchObject({ screen: "abc" });
+  });
+
+  it("redacts nothing for a record past the quota", async () => {
+    const seen: string[] = [];
+    const store = new InMemoryRecordingStore();
+    const logger = new SessionLogger(store, {
+      maxBytes: 1,
+      flushIntervalS: 3600,
+      logger: noopLogger,
+      controlChannelMode: "wire",
+      redactor: (text) => {
+        seen.push(text);
+        return text;
+      },
+    });
+    await logger.start("s1");
+    await logger.logEvent("dropped", { d: "dropped" });
+    await logger.logControl("send", { type: "paste", text: "dropped" });
+    await logger.logScreen({ screen: "dropped" }, new Uint8Array([0x41]));
+    await logger.logWire("send", "dropped");
+    await logger.logSend("dropped");
+    await logger.stop();
+    expect(seen).toStrictEqual([]);
+    expect((await store.getEntries("s1", { limit: 500 })).map((e) => e.event)).toStrictEqual(["log_start", "log_stop"]);
+  });
+});
+
 describe("differential parity with CPython", () => {
+  it("matches the recorded caller payloads with a redactor configured", async () => {
+    expect(await drivePayloads({ redactor: makeRedactor(golden.payloads.patterns) })).toStrictEqual(
+      golden.payloads.redacted,
+    );
+  });
+
+  it("matches the recorded caller payloads verbatim without a redactor", async () => {
+    expect(await drivePayloads()).toStrictEqual(golden.payloads.verbatim);
+  });
+
   it("matches the recorded entries with control frames excluded", async () => {
     expect(await driveScript()).toStrictEqual(golden.exclude_mode);
   });

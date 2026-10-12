@@ -149,6 +149,9 @@ func (l *SessionLogger) Stop() error {
 
 // LogSend logs sent keystrokes (redacted, with CP437 wire bytes).
 func (l *SessionLogger) LogSend(keys string) error {
+	if l.quotaReached() {
+		return nil
+	}
 	keys = l.redactText(keys)
 	payload := screen.EncodeCP437(keys)
 	return l.writeEvent("send", map[string]any{
@@ -169,9 +172,12 @@ func (l *SessionLogger) LogSendMasked(byteCount int) error {
 
 // LogScreen logs a screen snapshot with its raw bytes.
 func (l *SessionLogger) LogScreen(snapshot session.Snapshot, raw []byte) error {
+	if l.quotaReached() {
+		return nil
+	}
 	rawText := l.redactText(screen.DecodeCP437(raw))
 	rawBytes := screen.EncodeCP437(rawText)
-	data := l.snapshotData(snapshot)
+	data := l.redactPayload(snapshotData(snapshot))
 	data["raw"] = rawText
 	data["raw_bytes_b64"] = base64.StdEncoding.EncodeToString(rawBytes)
 	return l.writeEvent("read", data)
@@ -179,27 +185,28 @@ func (l *SessionLogger) LogScreen(snapshot session.Snapshot, raw []byte) error {
 
 // LogScreenFrame logs a snapshot given as the wire frame (a decoded snapshot
 // control message) with its raw bytes. This is the reference's log_screen
-// exactly: every key of the frame is kept, string values redacted at any
-// depth, and "raw"/"raw_bytes_b64" added. LogScreen, which takes the emulator's
-// struct, writes that struct's own field set instead; a hosted session records
-// the frames it actually sent, so it uses this one.
+// exactly: every key of the frame is kept, the frame redacted as a whole
+// through redactPayload, and "raw"/"raw_bytes_b64" added. LogScreen, which
+// takes the emulator's struct, writes that struct's own field set instead; a
+// hosted session records the frames it actually sent, so it uses this one.
 func (l *SessionLogger) LogScreenFrame(frame map[string]any, raw []byte) error {
+	if l.quotaReached() {
+		return nil
+	}
 	rawText := l.redactText(screen.DecodeCP437(raw))
 	rawBytes := screen.EncodeCP437(rawText)
-	data := make(map[string]any, len(frame)+2)
-	for k, v := range frame {
-		data[k] = l.redactValue(v)
-	}
+	data := l.redactPayload(frame)
 	data["raw"] = rawText
 	data["raw_bytes_b64"] = base64.StdEncoding.EncodeToString(rawBytes)
 	return l.writeEvent("read", data)
 }
 
-// snapshotData converts a snapshot to the Python dict shape with redacted
-// string values.
-func (l *SessionLogger) snapshotData(snap session.Snapshot) map[string]any {
+// snapshotData converts a snapshot to the Python dict shape. LogScreen
+// redacts it as a whole through redactPayload, exactly as the reference
+// redacts the snapshot dict it is handed.
+func snapshotData(snap session.Snapshot) map[string]any {
 	data := map[string]any{
-		"screen":             l.redactText(snap.Screen),
+		"screen":             snap.Screen,
 		"screen_hash":        snap.ScreenHash,
 		"cursor":             map[string]any{"x": snap.Cursor.X, "y": snap.Cursor.Y},
 		"cols":               snap.Cols,
@@ -207,7 +214,7 @@ func (l *SessionLogger) snapshotData(snap session.Snapshot) map[string]any {
 		"term":               snap.Term,
 		"cursor_at_end":      snap.CursorAtEnd,
 		"has_trailing_space": snap.HasTrailingSpace,
-		"raw_tail":           l.redactText(snap.RawTail),
+		"raw_tail":           snap.RawTail,
 		"captured_at":        snap.CapturedAt,
 	}
 	if snap.PromptDetected != nil {
@@ -215,21 +222,28 @@ func (l *SessionLogger) snapshotData(snap session.Snapshot) map[string]any {
 			"prompt_id":  snap.PromptDetected.PromptID,
 			"input_type": snap.PromptDetected.InputType,
 			"is_idle":    snap.PromptDetected.IsIdle,
-			"kv_data":    l.redactValue(snap.PromptDetected.KVData),
+			"kv_data":    snap.PromptDetected.KVData,
 		}
 	}
 	return data
 }
 
-// LogEvent logs an arbitrary named event.
+// LogEvent logs an arbitrary named event. data is redacted like a screen
+// (see redactPayload): callers put terminal-derived text here -- detector
+// annotations quote the matched command line, runtime errors carry the error
+// text -- so recording it verbatim would store the secret the screen beside it
+// had redacted.
 func (l *SessionLogger) LogEvent(event string, data map[string]any) error {
-	return l.writeEvent(event, data)
+	if l.quotaReached() {
+		return nil
+	}
+	return l.writeEvent(event, l.redactPayload(data))
 }
 
 // LogWire logs a raw wire chunk when wire-mode recording is enabled.
 // direction is "send" or "recv".
 func (l *SessionLogger) LogWire(direction, text string) error {
-	if l.controlChannelMode != ModeWire {
+	if l.controlChannelMode != ModeWire || l.quotaReached() {
 		return nil
 	}
 	text = l.redactText(text)
@@ -240,12 +254,15 @@ func (l *SessionLogger) LogWire(direction, text string) error {
 }
 
 // LogControl logs a decoded control frame when wire-mode recording is
-// enabled. direction is "send" or "recv".
+// enabled. direction is "send" or "recv". Key-aware: a resume/session_token
+// frame is a bare {"token": ...} with no `token=` context for the text rules,
+// so such values are masked by field name. Depth-capped, since inbound frames
+// are attacker-shaped.
 func (l *SessionLogger) LogControl(direction string, control map[string]any) error {
-	if l.controlChannelMode != ModeWire {
+	if l.controlChannelMode != ModeWire || l.quotaReached() {
 		return nil
 	}
-	return l.writeEvent("control_"+direction, map[string]any{"control": control})
+	return l.writeEvent("control_"+direction, map[string]any{"control": l.redactPayload(control)})
 }
 
 // SetContext sets metadata context attached to subsequent log entries.
@@ -276,11 +293,7 @@ func (l *SessionLogger) writeEvent(event string, data map[string]any) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.maxBytes > 0 && l.bytesWritten >= l.maxBytes {
-		if !l.quotaWarned {
-			l.quotaWarned = true
-			l.logger.Warn("session_logger_quota_reached — further writes suppressed")
-		}
+	if l.quotaReachedLocked() {
 		return nil
 	}
 
@@ -358,23 +371,44 @@ func (l *SessionLogger) redactText(value string) string {
 	return redaction.RedactText(value, l.redactor)
 }
 
-func (l *SessionLogger) redactValue(value any) any {
-	switch v := value.(type) {
-	case string:
-		return l.redactText(v)
-	case []any:
-		out := make([]any, len(v))
-		for i, item := range v {
-			out[i] = l.redactValue(item)
+// quotaReached reports (warning once) whether the byte quota is exhausted.
+// Every Log* entry point checks it before redacting, so nothing is redacted
+// for a record writeEvent would only drop; writeEvent re-checks under the
+// lock, since another goroutine may cross the quota in between.
+func (l *SessionLogger) quotaReached() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.quotaReachedLocked()
+}
+
+func (l *SessionLogger) quotaReachedLocked() bool {
+	if l.maxBytes > 0 && l.bytesWritten >= l.maxBytes {
+		if !l.quotaWarned {
+			l.quotaWarned = true
+			l.logger.Warn("session_logger_quota_reached — further writes suppressed")
 		}
-		return out
-	case map[string]any:
-		out := make(map[string]any, len(v))
-		for k, item := range v {
-			out[k] = l.redactValue(item)
-		}
-		return out
-	default:
-		return value
+		return true
 	}
+	return false
+}
+
+// redactPayload returns the recordable copy of a caller payload: screens,
+// named events and control frames. With a redactor, every string is
+// redacted, sensitive-key values are masked and anything nested past the
+// depth cap is replaced (redaction.RedactStructure). Without one the payload
+// is recorded verbatim but still copied (shallowly), so a caller that mutates
+// its map after logging cannot rewrite the buffered record.
+func (l *SessionLogger) redactPayload(data map[string]any) map[string]any {
+	if l.redactor == nil {
+		out := make(map[string]any, len(data))
+		for k, v := range data {
+			out[k] = v
+		}
+		return out
+	}
+	out, _ := redaction.RedactStructure(data, l.redactor, redaction.StructureOptions{KeyAware: true}).(map[string]any)
+	if out == nil {
+		out = map[string]any{}
+	}
+	return out
 }

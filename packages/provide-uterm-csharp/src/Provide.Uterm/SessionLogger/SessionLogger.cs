@@ -116,6 +116,11 @@ public sealed class SessionLogger : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Log a named event. In <see cref="ControlChannelMode.Exclude"/> mode the "wire" and
+    /// "control" events are dropped. The payload is redacted like every other caller payload
+    /// (see <see cref="RedactPayload"/>).
+    /// </summary>
     public async Task LogAsync(string eventName, IReadOnlyDictionary<string, object?> data)
     {
         if (_controlChannelMode == ControlChannelMode.Exclude &&
@@ -124,22 +129,77 @@ public sealed class SessionLogger : IAsyncDisposable
             return;
         }
 
-        var payload = new Dictionary<string, object?>(data);
-        if (_redactor is not null)
+        if (QuotaReached())
         {
-            foreach (var key in payload.Keys.ToList())
-            {
-                if (payload[key] is string s)
-                {
-                    payload[key] = Redaction.Redaction.RedactText(s, _redactor);
-                }
-            }
+            return;
         }
 
-        string sessionId;
+        await WriteAsync(eventName, RedactPayload(data));
+    }
+
+    /// <summary>
+    /// Log an arbitrary named event (Python <c>log_event</c>). Callers put terminal-derived
+    /// text here -- detector annotations quote the matched command line, runtime errors carry
+    /// the exception text -- so it is redacted exactly like a screen.
+    /// </summary>
+    public async Task LogEventAsync(string eventName, IReadOnlyDictionary<string, object?> data)
+    {
+        if (QuotaReached())
+        {
+            return;
+        }
+
+        await WriteAsync(eventName, RedactPayload(data));
+    }
+
+    /// <summary>
+    /// Log a decoded control frame when wire-mode recording is enabled (Python
+    /// <c>log_control</c>). Key-aware: a resume/session_token frame is a bare
+    /// <c>{"token": ...}</c> with no <c>token=</c> context for the text rules, so such values
+    /// are masked by field name. Depth-capped, since inbound frames are attacker-shaped.
+    /// </summary>
+    public async Task LogControlAsync(string direction, IReadOnlyDictionary<string, object?> control)
+    {
+        if (_controlChannelMode != ControlChannelMode.Wire || QuotaReached())
+        {
+            return;
+        }
+
+        await WriteAsync("control_" + direction, new Dictionary<string, object?> { ["control"] = RedactPayload(control) });
+    }
+
+    /// <summary>
+    /// Whether the byte quota is spent. Checked before any redaction so nothing is redacted
+    /// for a record that would only be dropped; <see cref="WriteAsync"/> re-checks under the lock.
+    /// </summary>
+    private bool QuotaReached()
+    {
         lock (_lock)
         {
-            sessionId = _sessionId;
+            return _maxBytes > 0 && _bytesWritten >= _maxBytes;
+        }
+    }
+
+    /// <summary>
+    /// The recordable copy of a caller payload. With a redactor every string is redacted,
+    /// sensitive-key values masked and anything nested past the depth cap replaced
+    /// (<see cref="RedactionStructure.Redact"/>). Without one the payload is recorded verbatim
+    /// but still copied, so a caller mutating it afterwards cannot rewrite the buffered record.
+    /// </summary>
+    private Dictionary<string, object?> RedactPayload(IReadOnlyDictionary<string, object?> data)
+    {
+        if (_redactor is null)
+        {
+            return new Dictionary<string, object?>(data);
+        }
+
+        return (Dictionary<string, object?>)RedactionStructure.Redact(data, _redactor, keyAware: true)!;
+    }
+
+    private async Task WriteAsync(string eventName, Dictionary<string, object?> payload)
+    {
+        lock (_lock)
+        {
             if (_maxBytes > 0 && _bytesWritten >= _maxBytes)
             {
                 return;
@@ -150,14 +210,10 @@ public sealed class SessionLogger : IAsyncDisposable
                 ["ts"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0,
                 ["event"] = eventName,
                 ["data"] = payload,
-                ["session_id"] = sessionId,
+                ["session_id"] = _sessionId,
             };
             _buffer.Add(evt);
-            if (_buffer.Count >= _batchSize)
-            {
-                // fall through to flush
-            }
-            else
+            if (_buffer.Count < _batchSize)
             {
                 return;
             }

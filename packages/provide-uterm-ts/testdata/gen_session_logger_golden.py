@@ -139,6 +139,75 @@ async def _batch_record() -> dict[str, Any]:
     return {"after_one": before, "after_two": after}
 
 
+def _nest(depth: int, leaf: Any, *, container: str) -> Any:
+    """Wrap *leaf* in *depth* nested dicts or lists (iteratively)."""
+    value = leaf
+    for _ in range(depth):
+        value = {"k": value} if container == "dict" else [value]
+    return value
+
+
+# Caller payloads for log_event / log_control, replayed verbatim by the ports.
+# They cover string redaction at every level, key-aware masking (a bare
+# {"token": ...} has no ``token=`` context for the text rules), a null
+# credential staying null, and the depth cap from both sides: a container 31
+# levels down is walked, one at 32 becomes the marker. ``data`` is the payload
+# itself; the root payload dict is level 0.
+PAYLOAD_CALLS: list[dict[str, Any]] = [
+    {
+        "method": "event",
+        "name": "annotation",
+        "data": {
+            "label": "rotate",
+            "description": "curl --data secretPW https://x",
+            "severity": "info",
+            "span": {"from_seq": 1, "to_seq": 2},
+            "notes": ["a secret1 b", {"inner": "secret2"}, 3, 0.5, True, None],
+        },
+    },
+    {
+        "method": "event",
+        "name": "credentials",
+        "data": {
+            "token": "abc",
+            "Resume-Token": "rt",
+            "client_secret": "cs",
+            "api_key": 42,
+            "password": None,
+            "Authorization": {"scheme": "Bearer"},
+            "tokens": "secret3",
+            "max_tokens": 5,
+            "nested": [{"session_token": "st", "keep": "plain"}],
+        },
+    },
+    {"method": "control", "direction": "recv", "data": {"type": "resume", "token": "rt_8f3a", "player_id": 2}},
+    {"method": "control", "direction": "send", "data": {"type": "session_token", "token": "st_1", "player_id": None}},
+    {
+        "method": "control",
+        "direction": "recv",
+        "data": {"type": "hello", "resume_token": "rt_2", "capabilities": {"x": ["secret4"]}},
+    },
+    # payload is level 1, so 31 more containers put the innermost at level 31.
+    {"method": "event", "name": "at_cap", "data": {"payload": _nest(31, "secret5", container="dict")}},
+    {"method": "event", "name": "past_cap_dict", "data": {"payload": _nest(32, "secret6", container="dict")}},
+    {"method": "control", "direction": "recv", "data": {"type": "x", "list": _nest(34, "secret7", container="list")}},
+]
+
+
+async def _payload_record(redactor: Any) -> list[dict[str, Any]]:
+    """Replay PAYLOAD_CALLS through a wire-mode logger."""
+    store = InMemoryRecordingStore()
+    logger = SessionLogger(store, flush_interval_s=3600, control_channel_mode="wire", redactor=redactor)
+    await logger.start("s1")
+    for call in PAYLOAD_CALLS:
+        if call["method"] == "event":
+            await logger.log_event(call["name"], call["data"])
+        else:
+            await logger.log_control(call["direction"], call["data"])
+    await logger.stop()
+    return _strip(await store.get_entries("s1", limit=500))
+
+
 async def _run() -> dict[str, Any]:
     """Build every section of the corpus."""
     redactor = make_redactor([r"secret\w*"])
@@ -149,6 +218,12 @@ async def _run() -> dict[str, Any]:
         "quota": await _quota_record(),
         "quota_boundary": await _quota_boundary_record(),
         "batch": await _batch_record(),
+        "payloads": {
+            "patterns": [r"secret\w*"],
+            "calls": PAYLOAD_CALLS,
+            "redacted": await _payload_record(redactor),
+            "verbatim": await _payload_record(None),
+        },
     }
 
 

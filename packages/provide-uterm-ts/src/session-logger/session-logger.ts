@@ -15,7 +15,7 @@
  */
 
 import { pyJsonSize, type RecordingEvent, type RecordingStore } from "../recording/index.ts";
-import { type Redactor, redactText } from "../redaction/index.ts";
+import { type Redactor, redactStructure, redactText } from "../redaction/index.ts";
 import { decodeCp437, encodeCp437 } from "../screen/index.ts";
 import { getLogger, type Logger } from "../telemetry/index.ts";
 
@@ -128,6 +128,9 @@ export class SessionLogger {
 
   /** Log sent keystrokes. */
   async logSend(keys: string): Promise<void> {
+    if (this.#quotaReached()) {
+      return;
+    }
     const redacted = this.#redact(keys);
     await this.#write("send", { keys: redacted, bytes_b64: toBase64(encodeCp437(redacted)) });
   }
@@ -144,22 +147,35 @@ export class SessionLogger {
 
   /** Log a screen snapshot alongside the raw bytes that produced it. */
   async logScreen(snapshot: Record<string, unknown>, raw: Uint8Array): Promise<void> {
+    if (this.#quotaReached()) {
+      return;
+    }
     const rawText = this.#redact(decodeCp437(raw));
     await this.#write("read", {
-      ...(this.#redactValue(snapshot) as Record<string, unknown>),
+      ...this.#redactPayload(snapshot),
       raw: rawText,
       raw_bytes_b64: toBase64(encodeCp437(rawText)),
     });
   }
 
-  /** Log an arbitrary named event. */
+  /**
+   * Log an arbitrary named event.
+   *
+   * `data` is redacted like a screen: callers put terminal-derived text here
+   * (detector annotations quote the matched command line, runtime errors
+   * carry the exception text), so recording it verbatim would store the
+   * secret the screen beside it had redacted.
+   */
   async logEvent(event: string, data: Record<string, unknown>): Promise<void> {
-    await this.#write(event, data);
+    if (this.#quotaReached()) {
+      return;
+    }
+    await this.#write(event, this.#redactPayload(data));
   }
 
   /** Log a raw wire chunk, when wire-mode recording is enabled. */
   async logWire(direction: Direction, text: string): Promise<void> {
-    if (this.#controlChannelMode !== "wire") {
+    if (this.#controlChannelMode !== "wire" || this.#quotaReached()) {
       return;
     }
     const redacted = this.#redact(text);
@@ -169,12 +185,18 @@ export class SessionLogger {
     });
   }
 
-  /** Log a decoded control frame, when wire-mode recording is enabled. */
+  /**
+   * Log a decoded control frame, when wire-mode recording is enabled.
+   *
+   * Key-aware: a `resume` / `session_token` frame is a bare `{"token": ...}`
+   * with no `token=` context for the text rules, so such values are masked
+   * by field name. Depth-capped, since inbound frames are attacker-shaped.
+   */
   async logControl(direction: Direction, control: Record<string, unknown>): Promise<void> {
-    if (this.#controlChannelMode !== "wire") {
+    if (this.#controlChannelMode !== "wire" || this.#quotaReached()) {
       return;
     }
-    await this.#write(`control_${direction}`, { control });
+    await this.#write(`control_${direction}`, { control: this.#redactPayload(control) });
   }
 
   /**
@@ -216,14 +238,7 @@ export class SessionLogger {
   /** Buffer one entry, flushing when the batch is full. */
   #write(event: string, data: Record<string, unknown>): Promise<void> {
     return this.#serialise(async () => {
-      if (this.#maxBytes > 0 && this.#bytesWritten >= this.#maxBytes) {
-        if (!this.#quotaWarned) {
-          this.#quotaWarned = true;
-          this.#logger.warn(
-            { event: "session_logger_quota_reached", session_id: this.#sessionId },
-            "further writes suppressed",
-          );
-        }
+      if (this.#quotaReached()) {
         return;
       }
 
@@ -252,17 +267,39 @@ export class SessionLogger {
     return redactText(value, this.#redactor);
   }
 
-  /** Apply the redactor to every string inside a value, recursively. */
-  #redactValue(value: unknown): unknown {
-    if (typeof value === "string") {
-      return this.#redact(value);
+  /**
+   * Whether the byte quota is exhausted, warning once.
+   *
+   * Checked by every `log*` entry point before any redaction, so nothing is
+   * redacted for a record that would only be dropped; `#write` re-checks
+   * once its turn on the chain comes.
+   */
+  #quotaReached(): boolean {
+    if (this.#maxBytes > 0 && this.#bytesWritten >= this.#maxBytes) {
+      if (!this.#quotaWarned) {
+        this.#quotaWarned = true;
+        this.#logger.warn(
+          { event: "session_logger_quota_reached", session_id: this.#sessionId },
+          "further writes suppressed",
+        );
+      }
+      return true;
     }
-    if (Array.isArray(value)) {
-      return value.map((item) => this.#redactValue(item));
+    return false;
+  }
+
+  /**
+   * The recordable copy of a caller payload: screens, events and control frames.
+   *
+   * With a redactor, every string is redacted, sensitive-key values masked
+   * and anything past the depth cap replaced (`redactStructure`). Without
+   * one the payload is recorded verbatim but still copied, so a caller that
+   * mutates it after logging cannot rewrite the buffered record.
+   */
+  #redactPayload(data: Record<string, unknown>): Record<string, unknown> {
+    if (this.#redactor === undefined) {
+      return { ...data };
     }
-    if (typeof value === "object" && value !== null) {
-      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, this.#redactValue(item)]));
-    }
-    return value;
+    return redactStructure(data, this.#redactor, { keyAware: true }) as Record<string, unknown>;
   }
 }
