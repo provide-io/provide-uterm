@@ -8,6 +8,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -287,12 +288,25 @@ func (r *SessionRegistryImpl) createSession(
 
 // reservedIDWait is how long a create waits for a teardown holding its id.
 // Port of _RESERVED_ID_WAIT_S.
-var reservedIDWait = 15 * time.Second
+//
+// Both waits are computed by a function, not a bare `15 * time.Second`
+// initializer: a package-level initializer carries no coverage counter, so a
+// mutation of it is permanently NOT_COVERED (see egressResolveTimeout).
+var reservedIDWait = defaultReservedIDWait()
+
+func defaultReservedIDWait() time.Duration { return 15 * time.Second }
 
 // removalStopTimeout is how long DeleteSession waits for the session to stop
 // before it retires the recording and releases the id regardless. Port of
 // _REMOVAL_STOP_TIMEOUT_S.
-var removalStopTimeout = 10 * time.Second
+var removalStopTimeout = defaultRemovalStopTimeout()
+
+func defaultRemovalStopTimeout() time.Duration { return 10 * time.Second }
+
+// registryLogger is where stopRemoved logs; swappable in tests.
+var registryLogger = func(ctx context.Context) *slog.Logger {
+	return ptel.GetLogger(ctx, "provide.uterm.server.registry")
+}
 
 // reserveForCreate reserves id for a create, waiting out a teardown (or
 // another create) that holds it for up to reservedIDWait: a tty-named PAM id
@@ -422,7 +436,7 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 // logged and left running, and the delete goes on to retire and release. A
 // panic in it is recovered and logged for the same reason.
 func stopRemoved(ctx context.Context, id string, br *bridge.TermBridge, rec *sessionRecorder, conn connectors.Connector) {
-	logger := ptel.GetLogger(ctx, "provide.uterm.server.registry")
+	logger := registryLogger(ctx)
 	timeout := removalStopTimeout // read once: the goroutine may outlive this call
 	done := make(chan struct{})
 	go func() {
