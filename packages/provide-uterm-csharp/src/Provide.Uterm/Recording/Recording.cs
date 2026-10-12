@@ -55,6 +55,16 @@ public interface IRecordingStore
     Task<Meta> RecordingMetaAsync(string sessionId);
     Task<IReadOnlyList<Event>> GetEntriesAsync(string sessionId, Query query);
     Task<string> GetPathAsync(string sessionId);
+
+    /// <summary>
+    /// Retire the session's recording: afterwards nothing is served for the id
+    /// until a new recording starts. Called when a session is deleted (and
+    /// before one is created), so the id's next holder is never served this
+    /// one's entries. A file store moves the recording aside, an in-memory store
+    /// drops it. The default does nothing, so a store written before this
+    /// existed still compiles and keeps only the StartSessionAsync instance rule.
+    /// </summary>
+    Task RetireSessionAsync(string sessionId) => Task.CompletedTask;
 }
 
 /// <summary>
@@ -240,6 +250,18 @@ public sealed class InMemoryStore : IRecordingStore
         return Task.CompletedTask;
     }
 
+    /// <summary>Drop the session's recording: no later holder of the id is served it.</summary>
+    public Task RetireSessionAsync(string sessionId)
+    {
+        lock (_lock)
+        {
+            _sessions.Remove(sessionId);
+            _instances.Remove(sessionId);
+        }
+
+        return Task.CompletedTask;
+    }
+
     public Task<Meta> RecordingMetaAsync(string sessionId)
     {
         lock (_lock)
@@ -374,6 +396,26 @@ public sealed class LocalFileStore : IRecordingStore, IDisposable
         }
 
         await WriteEventsAsync(fs, events);
+    }
+
+    /// <summary>
+    /// Move the session's recording aside: kept for retention, served to nobody.
+    /// A handle still open for it is closed first, without a log_stop: the
+    /// session is gone, and anything written after lands in a new file.
+    /// </summary>
+    public Task RetireSessionAsync(string sessionId)
+    {
+        lock (_lock)
+        {
+            if (_files.Remove(sessionId, out var stale))
+            {
+                stale.Dispose();
+            }
+
+            RecordingInstance.RetireForeign(PathFor(sessionId), sessionId, null);
+        }
+
+        return Task.CompletedTask;
     }
 
     public async Task EndSessionAsync(string sessionId)

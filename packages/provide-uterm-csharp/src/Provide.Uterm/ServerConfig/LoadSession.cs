@@ -44,6 +44,13 @@ internal static class SessionLoader
         };
 
         if (Str(table, "session_id") is { } sessionId) def.SessionId = sessionId.Trim();
+        if (def.SessionId.Length > 0 && Server.UtermServer.SessionIdError(def.SessionId) is { } idError)
+        {
+            // The reference's session_id validator: a configured id obeys the
+            // same rule as a created one, so its recording can always be retired.
+            throw new ArgumentException($"{idError}, got: '{def.SessionId}'");
+        }
+
         // display_name defaults to session_id, as the before-validator does.
         def.DisplayName = Str(table, "display_name") is { Length: > 0 } name ? name : def.SessionId;
         if (Str(table, "connector_type") is { } connectorType && connectorType.Trim().Length > 0)

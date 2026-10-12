@@ -480,7 +480,19 @@ public sealed partial class UtermServer
         if (!_deps.Authz.IsAdmin(p)) return DetailError(403, "insufficient privileges");
         var state = ctx.Request.Query["lifecycle_state"].ToString();
         if (string.IsNullOrEmpty(state)) state = null;
-        var n = _deps.Registry.BulkDelete(state);
+        // One by one through DeleteSessionAsync, so each deleted session's
+        // recording is retired before its id is free again.
+        var ids = _deps.Registry.ListWithDefinitions()
+            .Where(item => item.Status is not null
+                && (state is null || item.Status.LifecycleState == state))
+            .Select(item => item.Status!.SessionId)
+            .ToList();
+        var n = 0;
+        foreach (var id in ids)
+        {
+            if (await DeleteSessionAsync(id).ConfigureAwait(false)) n++;
+        }
+
         return Results.Json(new { ok = true, deleted = n }, JsonOpts);
     }
 
