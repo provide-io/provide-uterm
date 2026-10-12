@@ -264,7 +264,21 @@ func TestKeySegments(t *testing.T) {
 		"AB":           {"ab"},
 		"ABc":          {"a", "bc"},
 		"ABC":          {"abc"},
-		"":             {},
+		// Character-class boundaries, each pinned by a key that splits on it.
+		"aZ":  {"a", "z"},
+		"zA":  {"z", "a"},
+		"0A":  {"0", "a"},
+		"9A":  {"9", "a"},
+		"YZ":  {"yz"},
+		"@Z":  {"@z"},
+		"[Z":  {"[z"},
+		"ABa": {"a", "ba"},
+		"ABz": {"a", "bz"},
+		"AB{": {"ab{"},
+		"AB`": {"ab`"},
+		"/A":  {"/a"},
+		":A":  {":a"},
+		"":    {},
 	}
 	for key, want := range cases {
 		if got := KeySegments(key); !reflect.DeepEqual(got, want) {
