@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import re
 import time
+import uuid
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from provide.telemetry import get_logger
@@ -98,6 +99,11 @@ class HostedSessionRuntime:
         # once everything is down. See _end_connection_recording.
         self._pending_close_failure: Exception | None = None
         self._recording_path: Path | None = None
+        # Names this runtime's recording to the store. A session id outlives the
+        # session it names -- a PAM capture id is a pid, and pids are reused --
+        # so a reconnect continues the recording only under the same instance,
+        # and a later session reusing the id starts its own.
+        self._recording_instance = uuid.uuid4().hex
         self._logger: SessionLogger | None = None
         self._detector = detector
         # Per-session streaming wrapper for the *send* path only: keystroke
@@ -384,6 +390,7 @@ class HostedSessionRuntime:
                 # name (batch_size) — so the mismatch never looked like one.
                 flush_interval_s=self._recording_cfg.flush_interval_s,
                 batch_size=self._recording_cfg.flush_batch_size,
+                instance=self._recording_instance,
             )
             await self._logger.start(self.definition.session_id)
             self._recording_path = await self._recording_store.get_path(self.definition.session_id)

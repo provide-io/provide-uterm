@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os  # noqa: F401  # re-exported for tests that monkeypatch syscall helpers
+import os
+import secrets
 import time
 from collections import deque
 from pathlib import Path
@@ -72,6 +73,67 @@ def _open_append_owner_only(path: Path) -> TextIOWrapper:
     return secure_open_append(path)
 
 
+#: Metadata key naming the session instance a recording belongs to.
+#:
+#: A session id can be reused (a PAM capture session is named after a pid, and
+#: pids are reused), so the id alone does not say whose recording a file is.
+#: ``start_session`` resumes the recording on file only when it was started
+#: under the same instance -- a reconnect of the same session -- and otherwise
+#: begins a fresh one, so a new session never inherits an old one's entries.
+RECORDING_INSTANCE_KEY = "instance"
+
+# The most of a recording's first line read to find its instance. A log_start
+# line is small; one longer than this is not one this store wrote.
+_FIRST_LINE_LIMIT = 64 * 1024
+
+
+def recording_instance(metadata: dict[str, Any]) -> str | None:
+    """The instance named by ``start_session`` metadata, or None when it names none."""
+    value = metadata.get(RECORDING_INSTANCE_KEY) if isinstance(metadata, dict) else None
+    return value if isinstance(value, str) and value else None
+
+
+def _instance_on_file(path: Path) -> str | None:
+    """The instance that started the recording at ``path``, or None if it cannot say.
+
+    Read without following a symlink: a link planted at the path is not a
+    recording this store wrote, and None retires it like any other stranger.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        first = f.readline(_FIRST_LINE_LIMIT)
+    try:
+        start = json.loads(first)
+    except ValueError:
+        return None
+    if not isinstance(start, dict) or start.get("event") != "log_start":
+        return None
+    data = start.get("data")
+    return recording_instance(data) if isinstance(data, dict) else None
+
+
+def retired_recording_name(session_id: str) -> str:
+    """A unique name to move a superseded recording aside to.
+
+    It keeps the ``.jsonl`` suffix, so the retention sweep still ages it out,
+    and puts a ``.`` before it that no session id may contain, so no session's
+    recording path can ever name it: the file is kept, but served to nobody.
+    """
+    return f"{session_id}.{time.time_ns()}-{secrets.token_hex(4)}.jsonl"
+
+
+def _retire_foreign_recording(path: Path, session_id: str, instance: str | None) -> None:
+    """Move the recording at ``path`` aside unless ``instance`` started it."""
+    if not os.path.lexists(path):
+        return
+    if instance is not None and _instance_on_file(path) == instance:
+        return
+    path.rename(path.with_name(retired_recording_name(session_id)))
+
+
 @runtime_checkable
 class RecordingStore(Protocol):  # pragma: no mutate block — stub-only Protocol; trampolined members break isinstance
     """Protocol for persisting and retrieving session recordings.
@@ -79,8 +141,15 @@ class RecordingStore(Protocol):  # pragma: no mutate block — stub-only Protoco
     Implement this protocol to provide a custom recording backend (e.g. S3,
     GCS, a database, or any remote object store).  The lifecycle is:
 
-    1. ``start_session`` -- called once when a session begins recording.
-       Persist *metadata* keyed by *session_id*.
+    1. ``start_session`` -- called when a session begins recording.
+       Persist *metadata* keyed by *session_id*. A session id may be reused by
+       a later, unrelated session, so a store must never let one session
+       instance read another's entries: when ``metadata["instance"]`` (see
+       :data:`RECORDING_INSTANCE_KEY`) matches the instance that started the
+       recording already held for *session_id*, continue it (a reconnect);
+       otherwise -- a different instance, or none named -- begin a fresh
+       recording, keeping or dropping the old one but never serving it under
+       *session_id* again.
     2. ``append_events`` -- called repeatedly with batches of JSON-serialisable
        event dicts.  Each dict has at minimum ``ts``, ``event``, and ``data``.
     3. ``end_session`` -- called once when the session stops recording.
@@ -186,6 +255,12 @@ class LocalFileRecordingStore(RecordingStore):
         async with self._get_lock(session_id):
             path = self._get_path(session_id)
             _ensure_owner_only_dir(path.parent)
+            # A handle an earlier start left open is closed first: whether this
+            # start continues that recording is decided from the file alone.
+            stale = self._files.pop(session_id, None)
+            if stale is not None:
+                stale.close()
+            _retire_foreign_recording(path, session_id, recording_instance(metadata))
             f = _open_append_owner_only(path)
             self._files[session_id] = f
             event = {"ts": time.time(), "event": "log_start", "data": metadata, "session_id": session_id}
@@ -291,8 +366,12 @@ class InMemoryRecordingStore:
         self._events: dict[str, list[dict[str, Any]]] = {}
 
     async def start_session(self, session_id: str, metadata: dict[str, Any]) -> None:
+        instance = recording_instance(metadata)
+        previous = self._sessions.get(session_id)
+        if instance is None or previous is None or recording_instance(previous["metadata"]) != instance:
+            # Another instance's entries are dropped, never carried over.
+            self._events[session_id] = []
         self._sessions[session_id] = {"metadata": metadata, "active": True}
-        self._events.setdefault(session_id, [])
         start_event = {"ts": time.time(), "event": "log_start", "data": metadata, "session_id": session_id}
         self._events[session_id].append(start_event)
 
