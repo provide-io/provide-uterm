@@ -256,7 +256,7 @@ class TestBridgeSession:
         rt._queue = asyncio.Queue()
         rt._stop = asyncio.Event()
         connector = _make_connector()
-        connector.handle_control = AsyncMock(return_value=[])
+        connector.handle_control = AsyncMock(return_value=[{"type": "analysis", "formatted": "x"}])
         rt._connector = connector
         mock_logger = AsyncMock()
         rt._logger = mock_logger
@@ -265,11 +265,15 @@ class TestBridgeSession:
         await rt._bridge_session(ws)
 
         wire_directions = [call.args[0] for call in mock_logger.log_wire.call_args_list]
-        control_directions = [call.args[0] for call in mock_logger.log_control.call_args_list]
+        control_calls = [(call.args[0], call.args[1]["type"]) for call in mock_logger.log_control.call_args_list]
         assert "recv" in wire_directions
         assert "send" in wire_directions
-        assert "recv" in control_directions
-        assert "send" in control_directions
+        assert ("recv", "control") in control_calls
+        assert ("send", "analysis") in control_calls
+        # The initial snapshot went out on the wire and was recorded as a "read"
+        # event, but not a third time as a decoded control_send.
+        assert ("send", "snapshot") not in control_calls
+        mock_logger.log_screen.assert_awaited()
 
 
 # ---------------------------------------------------------------------------

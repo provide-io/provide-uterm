@@ -143,16 +143,28 @@ class TestLogWireSendTermBranch:
 
     @pytest.mark.asyncio
     async def test_non_term_type_calls_log_control(self) -> None:
-        """Contrasting test: non-term type → log_control IS called."""
+        """Contrasting test: non-term, non-snapshot type → log_control IS called."""
         rt = _make_runtime()
         mock_logger = AsyncMock()
         rt._logger = mock_logger
 
-        msg = {"type": "snapshot", "screen": "x"}
+        msg = {"type": "analysis", "formatted": "x"}
         await rt._log_wire_send("encoded", msg)
 
         mock_logger.log_wire.assert_called_once_with("send", "encoded")
         mock_logger.log_control.assert_called_once_with("send", msg)
+
+    @pytest.mark.asyncio
+    async def test_snapshot_type_skips_log_control(self) -> None:
+        """A snapshot is recorded as a "read" event by _log_snapshot; no decoded control copy."""
+        rt = _make_runtime()
+        mock_logger = AsyncMock()
+        rt._logger = mock_logger
+
+        await rt._log_wire_send("encoded", {"type": "snapshot", "screen": "x"})
+
+        mock_logger.log_wire.assert_called_once_with("send", "encoded")
+        mock_logger.log_control.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_logger_none_returns_early(self) -> None:
