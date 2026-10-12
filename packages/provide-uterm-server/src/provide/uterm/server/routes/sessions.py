@@ -366,7 +366,10 @@ def session_capability_handlers() -> dict[str, Callable[..., object]]:
         }
         if runtime._logger is not None:
             await runtime._logger.log_event("annotation", annotation_data)
-        # Publish to EventBus so live browser observers see annotations in real-time
+        # Publish to EventBus so live browser observers see annotations in real-time.
+        # The hub redacts annotation events before they enter the ring (the
+        # recording above follows recording.redact_sensitive instead), and the
+        # audit trail records that redacted copy rather than the raw description.
         hub = request.app.state.uterm_hub
         evt = await hub.append_event(session_id, "annotation", annotation_data)
         audit_event(
@@ -374,7 +377,7 @@ def session_capability_handlers() -> dict[str, Callable[..., object]]:
             principal=p.subject_id,
             session_id=session_id,
             source_ip=source_ip(request),
-            detail=annotation_data,
+            detail=evt["data"],
         )
         return {"ts": time.time(), "seq": evt.get("seq", 0)}
 

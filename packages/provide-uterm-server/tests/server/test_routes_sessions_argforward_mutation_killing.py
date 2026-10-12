@@ -86,7 +86,9 @@ def _registry(**overrides: Any) -> MagicMock:
 
 def _request(*, registry: Any, authz_obj: Any = None, principal: Any = None) -> MagicMock:
     hub = MagicMock(name="hub")
-    hub.append_event = AsyncMock(return_value={"seq": 1})
+    # The real hub returns the stored event, whose ``data`` is the (redacted)
+    # payload; the annotate route audits that copy.
+    hub.append_event = AsyncMock(side_effect=lambda _sid, _type, data=None: {"seq": 1, "data": data})
     req = MagicMock(name="request")
     req.app.state = SimpleNamespace(
         uterm_registry=registry,

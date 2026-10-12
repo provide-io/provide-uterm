@@ -21,6 +21,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from provide.uterm.annotation import PatternDetector
@@ -113,3 +114,56 @@ def test_operator_annotation_is_redacted_when_redact_sensitive_on() -> None:
 def test_operator_annotation_is_verbatim_when_redact_sensitive_off() -> None:
     data = _annotate_via_route(redact_sensitive=False)
     assert data["description"] == f"rotated password={_SECRET} today"
+
+
+def _annotate_live(*, redact_sensitive: bool) -> tuple[list[dict[str, Any]], list[Any]]:
+    """Annotate via the route; return the ring's annotation events and the audit details."""
+    from unittest.mock import patch
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        cfg = default_server_config()
+        cfg.auth.mode = "header"
+        cfg.auth.header_mode_acknowledged = True
+        cfg.auth.worker_bearer_token = "test-bearer-token-32-chars-long-x"
+        cfg.recording.enabled_by_default = True
+        cfg.recording.redact_sensitive = redact_sensitive
+        cfg.recording.directory = Path(tmpdir)  # type: ignore[assignment]
+
+        app = create_server_app(cfg)
+        with (
+            TestClient(app) as client,
+            patch("provide.uterm.server.routes.sessions.audit_event") as audit,
+        ):
+            hub = app.state.uterm_hub
+            stored: list[dict[str, Any]] = []
+            real_append = hub.append_event
+
+            async def _spy(worker_id: str, event_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
+                evt: dict[str, Any] = await real_append(worker_id, event_type, data)
+                if event_type == "annotation":
+                    stored.append(evt)
+                return evt
+
+            hub.append_event = _spy
+            client.post("/api/sessions/provide-shell/connect")
+            r = client.post(
+                "/api/sessions/provide-shell/annotate",
+                json={"label": "rotate", "description": f"rotated password={_SECRET} today", "severity": "info"},
+            )
+            assert r.status_code == 200
+            return stored, [c.kwargs["detail"] for c in audit.call_args_list]
+
+
+@pytest.mark.parametrize("redact_sensitive", [True, False])
+def test_operator_annotation_is_redacted_in_the_live_ring_and_the_audit(redact_sensitive: bool) -> None:
+    """The event ring and the audit trail redact regardless of the recording setting.
+
+    ``recording.redact_sensitive`` governs the recording only; the ring is
+    redacted with the server defaults like every other content event, and the
+    audit records the ring's copy.
+    """
+    ring, audits = _annotate_live(redact_sensitive=redact_sensitive)
+    assert len(ring) == 1
+    assert ring[0]["data"]["description"] == "rotated [PASSWORD_REDACTED] today"
+    assert audits == [ring[0]["data"]]
+    assert _SECRET not in str(audits)
