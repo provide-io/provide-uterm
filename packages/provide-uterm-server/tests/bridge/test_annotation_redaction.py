@@ -12,7 +12,9 @@ redactor that already scrubbed the screen and keystrokes beside them.
 
 ``password=S3cretValue`` is chosen because the default recording rules
 (``redaction_defaults._GENERIC_PASSWORD``) redact it *and* the curl detector
-rule embeds it in its description.
+rule quotes it in its description. The detector masks the value itself
+(``password=[SECRET]``) before the recording sees it; the recording's rules
+then redact what remains when ``redact_sensitive`` is on.
 """
 
 from __future__ import annotations
@@ -76,7 +78,13 @@ async def test_send_side_detector_annotation_is_redacted() -> None:
 
 async def test_detector_annotation_is_verbatim_when_redact_sensitive_off() -> None:
     annotations = await _recorded_annotations(redact_sensitive=False)
-    assert f"password={_SECRET}" in _curl_description(annotations)
+    # Off, the recording writes the detector's description as the detector
+    # wrote it. The detector masks credential material itself, whatever the
+    # recording's setting, so the secret is absent either way; what "off"
+    # changes is that the recording's own ruleset does not run over it.
+    description = _curl_description(annotations)
+    assert description == "curl HTTP request detected: curl --data password=[SECRET] https://"
+    assert "[PASSWORD_REDACTED]" not in description
 
 
 def _annotate_via_route(*, redact_sensitive: bool) -> dict[str, Any]:
