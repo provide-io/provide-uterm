@@ -264,6 +264,14 @@ func (b *TermBridge) AttachSession() {
 	b.mu.Unlock()
 
 	session.AddWatch(func(snapshot map[string]any, raw []byte) {
+		if resized, _ := snapshot["resized"].(bool); resized && len(raw) == 0 {
+			// The session changed size without any output (a capture
+			// session's geometry frame). The hub learns sizes from
+			// snapshots, and broadcasts a worker's snapshot to every viewer,
+			// so repaint it now rather than wait for one to be asked for.
+			b.sendSnapshot()
+			return
+		}
 		b.mu.Lock()
 		b.latestSnapshot = snapshot
 		b.mu.Unlock()

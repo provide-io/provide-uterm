@@ -658,3 +658,53 @@ func waitUntilTermsession(t *testing.T, cond func() bool) {
 	}
 	t.Fatal("condition not met before timeout")
 }
+
+// Resize redraws the screen at the new size from what the caller says drew it,
+// and tells every watcher the size moved (raw nil, state resized/cols/rows) so
+// a worker can repaint its viewers.
+func TestResizeRedrawsAtTheNewSizeAndTellsWatchers(t *testing.T) {
+	ft := &fakeTransport{}
+	s := New(ft, func(context.Context) error { return nil }, Options{Cols: 80, Rows: 24})
+	type note struct {
+		state map[string]any
+		raw   []byte
+	}
+	notes := make(chan note, 4)
+	s.AddWatch(func(state map[string]any, raw []byte) { notes <- note{state, raw} })
+
+	redraw := []byte("\x1b[2J\x1b[H" + strings.Repeat("x", 90))
+	s.Emulator().Process(redraw) // wraps at 80
+	before := s.ScreenChangeSeq()
+
+	s.Resize(100, 40, redraw)
+
+	snap := s.Snapshot()
+	if snap.Cols != 100 || snap.Rows != 40 {
+		t.Fatalf("snapshot size = %dx%d, want 100x40", snap.Cols, snap.Rows)
+	}
+	if first := strings.SplitN(snap.Screen, "\n", 2)[0]; strings.TrimRight(first, " ") != strings.Repeat("x", 90) {
+		t.Fatalf("first row = %q, want the 90 x's redrawn on one row", first)
+	}
+	if s.ScreenChangeSeq() <= before {
+		t.Fatal("a resize must count as a screen change")
+	}
+	select {
+	case n := <-notes:
+		if n.raw != nil || n.state["resized"] != true || n.state["cols"] != 100 || n.state["rows"] != 40 {
+			t.Fatalf("watch saw state=%v raw=%q", n.state, n.raw)
+		}
+	default:
+		t.Fatal("no watcher heard about the resize")
+	}
+}
+
+func TestResizeToTheSameSizeDoesNothing(t *testing.T) {
+	s := New(&fakeTransport{}, func(context.Context) error { return nil }, Options{Cols: 80, Rows: 24})
+	heard := false
+	s.AddWatch(func(map[string]any, []byte) { heard = true })
+	before := s.ScreenChangeSeq()
+	s.Resize(80, 24, []byte("x"))
+	if heard || s.ScreenChangeSeq() != before {
+		t.Fatal("a resize to the current size must change nothing")
+	}
+}

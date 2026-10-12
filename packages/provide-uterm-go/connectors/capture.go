@@ -6,8 +6,10 @@
 package connectors
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -19,6 +21,16 @@ import (
 // capturePollInterval is how long CaptureTransport.Receive sleeps between
 // drains of the capture queue while it waits for output.
 const capturePollInterval = 10 * time.Millisecond
+
+// captureFullClear matches a full clear: erase display, switch to the
+// alternate screen, or full reset. A full-screen program begins every whole
+// paint with one, so the output after the last of them is what draws the
+// current screen from nothing. Port of capture_connector.py _FULL_CLEAR.
+var captureFullClear = regexp.MustCompile(`\x1b\[2J|\x1b\[\?1049h|\x1bc`)
+
+// captureReplayMax bounds that output; past it a redraw starts mid-paint and
+// settles at the next clear. Port of capture_connector.py _REPLAY_MAX.
+const captureReplayMax = 512 * 1024
 
 // newCapture builds a "pty_capture" connector: it observes a shell that
 // libuterm_capture has hooked (the PAM capture-mode login) through the Unix
@@ -43,19 +55,25 @@ func newCapture(sessionID, displayName string, config map[string]any) (*transpor
 		return nil, err
 	}
 	inputMode := configStr(config, "input_mode", "open")
-	cols := configInt(config, "cols", 80)
-	rows := configInt(config, "rows", 24)
 
 	build := func() *termsession.TransportSession {
+		// The size the capture side holds, not the configured one: after a
+		// geometry frame they differ, and a restarted session built at the
+		// old size would never be told the new one again.
+		cols, rows := capture.Size()
 		tr := NewCaptureTransport(capture)
 		connect := func(ctx context.Context) error {
 			return tr.Connect(ctx, "", 0, transports.ConnectOptions{Cols: cols, Rows: rows})
 		}
-		return termsession.New(tr, connect, termsession.Options{
+		sess := termsession.New(tr, connect, termsession.Options{
 			Cols:         cols,
 			Rows:         rows,
 			SendEncoding: termsession.EncodingUTF8,
 		})
+		// A geometry frame on the capture wire resizes the session viewers
+		// see, redrawn from what was drawn since the last clear.
+		tr.OnResize(sess.Resize)
+		return sess
 	}
 	upstream := fmt.Sprintf("unix:%v", config["socket_path"])
 	return newTransportConnector(sessionID, displayName, "pty_capture", upstream, inputMode, build), nil
@@ -64,12 +82,20 @@ func newCapture(sessionID, displayName string, config map[string]any) (*transpor
 // CaptureTransport adapts a pty.CaptureConnector to transports.ConnectionTransport.
 // Connect binds the capture socket, Receive yields the captured stdout (already
 // CRLF-normalised by the connector), and Send forwards keystrokes to the stdin
-// socket when one is configured.
+// socket when one is configured. A geometry frame, which the connector answers
+// with a snapshot at the new size, reaches the OnResize hook.
 type CaptureTransport struct {
 	capture *uptty.CaptureConnector
 
-	mu      sync.Mutex
-	pending []byte
+	mu       sync.Mutex
+	pending  []byte
+	onResize func(cols, rows int, redraw []byte)
+	// sinceClear is the output since the last full clear, the redraw handed
+	// to onResize. resize is a size not yet applied: it waits until every
+	// byte that preceded it has been handed to the reader, so that output
+	// is not drawn after the redraw that already contains it.
+	sinceClear []byte
+	resize     *[2]int
 }
 
 var _ transports.ConnectionTransport = (*CaptureTransport)(nil)
@@ -77,6 +103,16 @@ var _ transports.ConnectionTransport = (*CaptureTransport)(nil)
 // NewCaptureTransport wraps capture. It does not bind anything until Connect.
 func NewCaptureTransport(capture *uptty.CaptureConnector) *CaptureTransport {
 	return &CaptureTransport{capture: capture}
+}
+
+// OnResize sets the hook a geometry frame reaches: the new size and the output
+// since the last full clear, to redraw the screen from. It is called from
+// Receive, between reads, once all output that preceded the frame has been
+// returned.
+func (t *CaptureTransport) OnResize(hook func(cols, rows int, redraw []byte)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.onResize = hook
 }
 
 // Connect binds the capture socket. host, port and opts are meaningless for a
@@ -109,8 +145,26 @@ func (t *CaptureTransport) Receive(ctx context.Context, maxBytes int, timeout ti
 	for {
 		t.mu.Lock()
 		for _, frame := range t.capture.PollMessages() {
+			if frame["type"] == "snapshot" {
+				// The connector repaints after a geometry frame; the size is
+				// what this side needs from it.
+				cols, _ := frame["cols"].(int)
+				rows, _ := frame["rows"].(int)
+				t.resize = &[2]int{cols, rows}
+				continue
+			}
 			data, _ := frame["data"].(string)
 			t.pending = append(t.pending, data...)
+			t.noteOutput([]byte(data))
+		}
+		if len(t.pending) == 0 && t.resize != nil {
+			size, hook, redraw := *t.resize, t.onResize, append([]byte(nil), t.sinceClear...)
+			t.resize = nil
+			t.mu.Unlock()
+			if hook != nil {
+				hook(size[0], size[1], redraw)
+			}
+			t.mu.Lock()
 		}
 		if len(t.pending) > 0 {
 			n := min(len(t.pending), maxBytes)
@@ -132,5 +186,18 @@ func (t *CaptureTransport) Receive(ctx context.Context, maxBytes int, timeout ti
 			return nil, ctx.Err()
 		case <-time.After(min(remaining, capturePollInterval)):
 		}
+	}
+}
+
+// noteOutput keeps sinceClear: the output after the last full clear, bounded.
+// Caller holds t.mu.
+func (t *CaptureTransport) noteOutput(data []byte) {
+	if locs := captureFullClear.FindAllIndex(data, -1); len(locs) > 0 {
+		t.sinceClear = append(t.sinceClear[:0], data[locs[len(locs)-1][0]:]...)
+	} else {
+		t.sinceClear = append(t.sinceClear, data...)
+	}
+	if over := len(t.sinceClear) - captureReplayMax; over > 0 {
+		t.sinceClear = bytes.Clone(t.sinceClear[over:])
 	}
 }

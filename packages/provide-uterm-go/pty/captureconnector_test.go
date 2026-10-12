@@ -347,3 +347,15 @@ func TestCaptureConnectorGeometryThereAndBackRepaintsNothing(t *testing.T) {
 		t.Fatalf("frames = %v", frameKinds(frames))
 	}
 }
+
+func TestCaptureConnectorSizeFollowsGeometry(t *testing.T) {
+	c := startedCaptureConn(t)
+	if cols, rows := c.Size(); cols != 80 || rows != 24 {
+		t.Fatalf("Size = %dx%d, want the configured 80x24", cols, rows)
+	}
+	c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: geometryPayload(132, 50)})
+	c.PollMessages()
+	if cols, rows := c.Size(); cols != 132 || rows != 50 {
+		t.Fatalf("Size = %dx%d, want 132x50", cols, rows)
+	}
+}

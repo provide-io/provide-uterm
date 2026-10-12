@@ -35,8 +35,11 @@ const (
 )
 
 // WatchFunc receives each raw byte chunk read from the wire, IAC-stripped
-// and ANSI/CP437-intact, BEFORE the emulator consumes it. The state map is
-// currently always empty. Callbacks must not block.
+// and ANSI/CP437-intact, BEFORE the emulator consumes it, with an empty state
+// map. After a Resize it is called once more with raw nil and state
+// {"resized": true, "cols": c, "rows": r}: the screen changed without any
+// bytes, and a watcher that serves viewers repaints them. Callbacks must not
+// block.
 type WatchFunc func(state map[string]any, raw []byte)
 
 // ControlFrameFunc receives one parsed inline control-frame payload (e.g.
@@ -309,9 +312,42 @@ func (s *TransportSession) AddControlFrameWatch(callback ControlFrameFunc) {
 	s.controlWatchers = append(s.controlWatchers, callback)
 }
 
-// Emulator exposes the underlying terminal emulator.
+// Emulator exposes the underlying terminal emulator. A Resize replaces it, so
+// fetch it again rather than holding on to it.
 func (s *TransportSession) Emulator() *emulator.TerminalEmulator {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.emu
+}
+
+// Resize puts the screen at cols x rows, redrawn from redraw: the output that
+// drew the current screen (for a capture session, everything since the last
+// full clear). Not emulator.Resize: what a program drew for the real size and
+// the old one clipped is gone from the old screen, so the screen is rebuilt
+// from the output instead, as the Python CaptureConnector does. A size equal
+// to the current one, or not positive, changes nothing. Watchers then hear
+// about it with raw nil (see WatchFunc).
+func (s *TransportSession) Resize(cols, rows int, redraw []byte) {
+	s.mu.Lock()
+	if cols <= 0 || rows <= 0 || (cols == s.cols && rows == s.rows) {
+		s.mu.Unlock()
+		return
+	}
+	s.cols, s.rows = cols, rows
+	s.emu = emulator.New(cols, rows, "")
+	s.emu.Process(redraw)
+	s.changeSeq++
+	close(s.updateCh)
+	s.updateCh = make(chan struct{})
+	watchers := make([]WatchFunc, len(s.watchers))
+	copy(watchers, s.watchers)
+	s.mu.Unlock()
+	for _, cb := range watchers {
+		func() {
+			defer func() { _ = recover() }() // watcher panics must not kill the caller
+			cb(map[string]any{"resized": true, "cols": cols, "rows": rows}, nil)
+		}()
+	}
 }
 
 // readerLoop reads from the transport (IAC-stripped) and feeds the emulator,
