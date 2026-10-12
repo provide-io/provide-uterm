@@ -444,6 +444,33 @@
     }
    },
    {
+    "method": "event",
+    "name": "key_rule",
+    "data": {
+     "accessToken": "at",
+     "clientSecret": "cs",
+     "privateKey": "pk",
+     "Set-Cookie": "sid=1",
+     "Proxy-Authorization": "Basic x",
+     "credentials": {
+      "user": "u"
+     },
+     "aws_secret_access_key": "k",
+     "APIKey": "k2",
+     "x-api-key": "k3",
+     "access_key_id": "AKIA",
+     "HTTPCookie": "c",
+     "refresh.token": "rt",
+     "token_count": 3,
+     "token_type": "Bearer",
+     "password_required": true,
+     "secret_hash": "h",
+     "session_id": "s-1",
+     "secretary": "plain",
+     "tokenizer": "bpe"
+    }
+   },
+   {
     "method": "control",
     "direction": "recv",
     "data": {
@@ -739,6 +766,31 @@
        "keep": "plain"
       }
      ]
+    },
+    "session_id": "s1"
+   },
+   {
+    "event": "key_rule",
+    "data": {
+     "accessToken": "[SECRET_REDACTED]",
+     "clientSecret": "[SECRET_REDACTED]",
+     "privateKey": "[SECRET_REDACTED]",
+     "Set-Cookie": "[SECRET_REDACTED]",
+     "Proxy-Authorization": "[SECRET_REDACTED]",
+     "credentials": "[SECRET_REDACTED]",
+     "aws_secret_access_key": "[SECRET_REDACTED]",
+     "APIKey": "[SECRET_REDACTED]",
+     "x-api-key": "[SECRET_REDACTED]",
+     "access_key_id": "[SECRET_REDACTED]",
+     "HTTPCookie": "[SECRET_REDACTED]",
+     "refresh.token": "[SECRET_REDACTED]",
+     "token_count": 3,
+     "token_type": "Bearer",
+     "password_required": true,
+     "secret_hash": "h",
+     "session_id": "s-1",
+     "secretary": "plain",
+     "tokenizer": "bpe"
     },
     "session_id": "s1"
    },
@@ -1049,6 +1101,33 @@
     "session_id": "s1"
    },
    {
+    "event": "key_rule",
+    "data": {
+     "accessToken": "at",
+     "clientSecret": "cs",
+     "privateKey": "pk",
+     "Set-Cookie": "sid=1",
+     "Proxy-Authorization": "Basic x",
+     "credentials": {
+      "user": "u"
+     },
+     "aws_secret_access_key": "k",
+     "APIKey": "k2",
+     "x-api-key": "k3",
+     "access_key_id": "AKIA",
+     "HTTPCookie": "c",
+     "refresh.token": "rt",
+     "token_count": 3,
+     "token_type": "Bearer",
+     "password_required": true,
+     "secret_hash": "h",
+     "session_id": "s-1",
+     "secretary": "plain",
+     "tokenizer": "bpe"
+    },
+    "session_id": "s1"
+   },
+   {
     "event": "control_recv",
     "data": {
      "control": {
@@ -1188,9 +1267,7 @@
                                  "k": {
                                   "k": {
                                    "k": {
-                                    "k": {
-                                     "k": "secret6"
-                                    }
+                                    "k": "[NESTED_REDACTED]"
                                    }
                                   }
                                  }
@@ -1261,13 +1338,7 @@
                                   [
                                    [
                                     [
-                                     [
-                                      [
-                                       [
-                                        "secret7"
-                                       ]
-                                      ]
-                                     ]
+                                     "[NESTED_REDACTED]"
                                     ]
                                    ]
                                   ]

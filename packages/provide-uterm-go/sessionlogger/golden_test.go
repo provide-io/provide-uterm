@@ -378,6 +378,34 @@ func TestPayloadIsCopiedWithoutRedactor(t *testing.T) {
 	}
 }
 
+func TestPayloadIsDeepCopiedWithoutRedactor(t *testing.T) {
+	store := recording.NewInMemoryStore()
+	l := newLogger(t, store, Options{ControlChannelMode: ModeWire})
+	cursor := map[string]any{"x": 1}
+	notes := []any{"n"}
+	inner := map[string]any{"k": []any{1}}
+	if err := l.LogEvent("annotation", map[string]any{"cursor": cursor, "notes": notes}); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.LogControl("send", map[string]any{"inner": inner}); err != nil {
+		t.Fatal(err)
+	}
+	cursor["x"] = 99
+	notes[0] = "changed"
+	inner["k"] = "changed"
+	if err := l.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	ann := entries(t, store, "annotation")[0]["data"].(map[string]any)
+	if ann["cursor"].(map[string]any)["x"] != 1 || ann["notes"].([]any)[0] != "n" {
+		t.Fatalf("annotation aliased the caller's containers: %v", ann)
+	}
+	ctrl := entries(t, store, "control_send")[0]["data"].(map[string]any)["control"].(map[string]any)
+	if _, ok := ctrl["inner"].(map[string]any)["k"].([]any); !ok {
+		t.Fatalf("control aliased the caller's containers: %v", ctrl)
+	}
+}
+
 func TestNilPayloadWithRedactorRecordsEmptyObject(t *testing.T) {
 	store := recording.NewInMemoryStore()
 	redactor, _ := redaction.MakeRedactor([]string{`x`})
@@ -422,9 +450,7 @@ func TestNothingIsRedactedPastTheQuota(t *testing.T) {
 func TestWriteEventRechecksQuotaUnderLock(t *testing.T) {
 	store := recording.NewInMemoryStore()
 	l := newLogger(t, store, Options{MaxBytes: 1 << 20})
-	l.mu.Lock()
-	l.bytesWritten = l.maxBytes
-	l.mu.Unlock()
+	l.bytesWritten.Store(int64(l.maxBytes))
 	if err := l.writeEvent("late", map[string]any{"a": 1}); err != nil {
 		t.Fatal(err)
 	}

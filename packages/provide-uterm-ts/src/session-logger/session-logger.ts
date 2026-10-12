@@ -41,6 +41,9 @@ export interface SessionLoggerOptions {
   logger?: Logger;
 }
 
+/** Identity redactor: the no-redactor path still deep-copies through redactStructure. */
+const verbatim: Redactor = (text) => text;
+
 /** Base64-encode bytes the way the reference does. */
 function toBase64(data: Uint8Array): string {
   return Buffer.from(data).toString("base64");
@@ -293,13 +296,14 @@ export class SessionLogger {
    *
    * With a redactor, every string is redacted, sensitive-key values masked
    * and anything past the depth cap replaced (`redactStructure`). Without
-   * one the payload is recorded verbatim but still copied, so a caller that
-   * mutates it after logging cannot rewrite the buffered record.
+   * one, strings and keys are recorded verbatim but the containers are still
+   * rebuilt by the same walker (a deep copy, same depth cap), so a caller that
+   * mutates any nested object or array after logging cannot rewrite the
+   * buffered record.
    */
   #redactPayload(data: Record<string, unknown>): Record<string, unknown> {
-    if (this.#redactor === undefined) {
-      return { ...data };
-    }
-    return redactStructure(data, this.#redactor, { keyAware: true }) as Record<string, unknown>;
+    return redactStructure(data, this.#redactor ?? verbatim, {
+      keyAware: this.#redactor !== undefined,
+    }) as Record<string, unknown>;
   }
 }

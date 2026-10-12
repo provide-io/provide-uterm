@@ -15,6 +15,7 @@ import (
 	"encoding/base64"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
@@ -63,11 +64,14 @@ type SessionLogger struct {
 	batchSize          int
 	logger             *slog.Logger
 
-	mu           sync.Mutex
-	sessionID    string
-	context      map[string]string
-	bytesWritten int
-	quotaWarned  bool
+	mu        sync.Mutex
+	sessionID string
+	context   map[string]string
+	// bytesWritten and quotaWarned are atomics so every Log* entry point can
+	// check the quota before redacting without taking mu; writes to
+	// bytesWritten still happen under mu, in writeEvent.
+	bytesWritten atomic.Int64
+	quotaWarned  atomic.Bool
 	buffer       []recording.Event
 
 	flushStop chan struct{}
@@ -115,7 +119,7 @@ func (l *SessionLogger) Start(sessionID string) error {
 		return err
 	}
 	l.mu.Lock()
-	l.bytesWritten = int(meta.SizeBytes)
+	l.bytesWritten.Store(meta.SizeBytes)
 	l.flushStop = make(chan struct{})
 	l.flushDone = make(chan struct{})
 	l.mu.Unlock()
@@ -293,7 +297,7 @@ func (l *SessionLogger) writeEvent(event string, data map[string]any) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if l.quotaReachedLocked() {
+	if l.quotaReached() {
 		return nil
 	}
 
@@ -320,7 +324,7 @@ func (l *SessionLogger) writeEvent(event string, data map[string]any) error {
 	if err != nil {
 		return err
 	}
-	l.bytesWritten += size + 1
+	l.bytesWritten.Add(int64(size + 1))
 
 	if len(l.buffer) >= l.batchSize {
 		return l.flushLocked()
@@ -373,42 +377,37 @@ func (l *SessionLogger) redactText(value string) string {
 
 // quotaReached reports (warning once) whether the byte quota is exhausted.
 // Every Log* entry point checks it before redacting, so nothing is redacted
-// for a record writeEvent would only drop; writeEvent re-checks under the
-// lock, since another goroutine may cross the quota in between.
+// for a record writeEvent would only drop; it reads atomics and takes no
+// lock, so the check costs nothing on the hot path. writeEvent re-checks it
+// under mu, since another goroutine may cross the quota in between.
 func (l *SessionLogger) quotaReached() bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.quotaReachedLocked()
-}
-
-func (l *SessionLogger) quotaReachedLocked() bool {
-	if l.maxBytes > 0 && l.bytesWritten >= l.maxBytes {
-		if !l.quotaWarned {
-			l.quotaWarned = true
-			l.logger.Warn("session_logger_quota_reached — further writes suppressed")
-		}
-		return true
+	if l.maxBytes <= 0 || l.bytesWritten.Load() < int64(l.maxBytes) {
+		return false
 	}
-	return false
+	if l.quotaWarned.CompareAndSwap(false, true) {
+		l.logger.Warn("session_logger_quota_reached — further writes suppressed")
+	}
+	return true
 }
 
 // redactPayload returns the recordable copy of a caller payload: screens,
 // named events and control frames. With a redactor, every string is
 // redacted, sensitive-key values are masked and anything nested past the
-// depth cap is replaced (redaction.RedactStructure). Without one the payload
-// is recorded verbatim but still copied (shallowly), so a caller that mutates
-// its map after logging cannot rewrite the buffered record.
+// depth cap is replaced (redaction.RedactStructure). Without one, strings and
+// keys are recorded verbatim but the containers are still rebuilt by the same
+// walker (a deep copy, same depth cap), so a caller that mutates any nested
+// map or slice after logging cannot rewrite the buffered record.
 func (l *SessionLogger) redactPayload(data map[string]any) map[string]any {
-	if l.redactor == nil {
-		out := make(map[string]any, len(data))
-		for k, v := range data {
-			out[k] = v
-		}
-		return out
+	redactor, keyAware := l.redactor, true
+	if redactor == nil {
+		redactor, keyAware = verbatim, false
 	}
-	out, _ := redaction.RedactStructure(data, l.redactor, redaction.StructureOptions{KeyAware: true}).(map[string]any)
+	out, _ := redaction.RedactStructure(data, redactor, redaction.StructureOptions{KeyAware: keyAware}).(map[string]any)
 	if out == nil {
 		out = map[string]any{}
 	}
 	return out
 }
+
+// verbatim is the identity redactor the no-redactor path deep-copies with.
+func verbatim(text string) string { return text }

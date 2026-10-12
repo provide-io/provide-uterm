@@ -485,7 +485,57 @@ describe("SessionLogger caller payloads", () => {
     expect(entries.find((e) => e.event === "control_send")?.data).toStrictEqual({
       control: { type: "paste", text: "secretPaste" },
     });
-    expect(must(entries.find((e) => e.event === "read"), "a read entry").data).toMatchObject({ screen: "abc" });
+    expect(
+      must(
+        entries.find((e) => e.event === "read"),
+        "a read entry",
+      ).data,
+    ).toMatchObject({ screen: "abc" });
+  });
+
+  it("deep-copies nested containers without a redactor", async () => {
+    const store = new InMemoryRecordingStore();
+    const logger = new SessionLogger(store, { flushIntervalS: 3600, logger: noopLogger, controlChannelMode: "wire" });
+    await logger.start("s1");
+    const snap = { screen: "abc", cursor: { x: 1 }, rows: [["a"]] };
+    const event = { span: { from_seq: 1 }, notes: ["n"] };
+    const frame = { type: "x", inner: { k: [1] } };
+    await logger.logScreen(snap, new Uint8Array());
+    await logger.logEvent("annotation", event);
+    await logger.logControl("send", frame);
+    snap.cursor.x = 99;
+    snap.rows[0]?.push("b");
+    event.span.from_seq = 99;
+    event.notes.push("m");
+    frame.inner.k.push(2);
+    await logger.stop();
+    const entries = await store.getEntries("s1", { limit: 500 });
+    expect(
+      must(
+        entries.find((e) => e.event === "read"),
+        "read",
+      ).data,
+    ).toMatchObject({
+      cursor: { x: 1 },
+      rows: [["a"]],
+    });
+    expect(
+      must(
+        entries.find((e) => e.event === "annotation"),
+        "annotation",
+      ).data,
+    ).toStrictEqual({
+      span: { from_seq: 1 },
+      notes: ["n"],
+    });
+    expect(
+      must(
+        entries.find((e) => e.event === "control_send"),
+        "control",
+      ).data,
+    ).toStrictEqual({
+      control: { type: "x", inner: { k: [1] } },
+    });
   });
 
   it("redacts nothing for a record past the quota", async () => {

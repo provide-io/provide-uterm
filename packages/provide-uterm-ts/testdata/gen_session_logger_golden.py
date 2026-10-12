@@ -180,6 +180,33 @@ PAYLOAD_CALLS: list[dict[str, Any]] = [
             "nested": [{"session_token": "st", "keep": "plain"}],
         },
     },
+    {
+        "method": "event",
+        "name": "key_rule",
+        # camelCase / header-style names, pairs, and the describe-not-hold
+        # suffixes that keep a field visible (see provide.uterm.redaction).
+        "data": {
+            "accessToken": "at",
+            "clientSecret": "cs",
+            "privateKey": "pk",
+            "Set-Cookie": "sid=1",
+            "Proxy-Authorization": "Basic x",
+            "credentials": {"user": "u"},
+            "aws_secret_access_key": "k",
+            "APIKey": "k2",
+            "x-api-key": "k3",
+            "access_key_id": "AKIA",
+            "HTTPCookie": "c",
+            "refresh.token": "rt",
+            "token_count": 3,
+            "token_type": "Bearer",
+            "password_required": True,
+            "secret_hash": "h",
+            "session_id": "s-1",
+            "secretary": "plain",
+            "tokenizer": "bpe",
+        },
+    },
     {"method": "control", "direction": "recv", "data": {"type": "resume", "token": "rt_8f3a", "player_id": 2}},
     {"method": "control", "direction": "send", "data": {"type": "session_token", "token": "st_1", "player_id": None}},
     {

@@ -26,35 +26,78 @@ const DepthLimitMarker = "[NESTED_REDACTED]"
 // redaction.
 const SensitiveKeyMarker = "[SECRET_REDACTED]"
 
-// sensitiveKeyNames are field names whose value is a credential regardless of
-// what it looks like: the text rules need context such as `token=` to fire,
-// and a bare {"token": "..."} has none.
-var sensitiveKeyNames = map[string]bool{
+// Key-aware rule, ported from provide.uterm.redaction. A key is split into
+// lower-case segments (camelCase split: accessToken -> access, token; APIKey ->
+// api, key; "-", "." and " " act like "_"). It is sensitive when any segment is
+// in sensitiveKeySegments, or two adjacent segments form a pair in
+// sensitiveKeyPairs -- unless its last segment is in nonSecretKeySuffixes
+// (token_count, token_type describe a credential rather than hold one).
+var sensitiveKeySegments = map[string]bool{
 	"token":         true,
+	"secret":        true,
 	"password":      true,
 	"passwd":        true,
 	"passphrase":    true,
-	"secret":        true,
-	"api_key":       true,
-	"apikey":        true,
-	"authorization": true,
+	"credential":    true,
+	"credentials":   true,
 	"cookie":        true,
-	"private_key":   true,
+	"authorization": true,
+	"apikey":        true,
 }
 
-// sensitiveKeySuffixes mark any key ending in them as sensitive too
-// (resume_token, client_secret, ssh_passphrase, ...).
-var sensitiveKeySuffixes = []string{"_token", "_password", "_passphrase", "_secret", "_api_key"}
+var sensitiveKeyPairs = map[[2]string]bool{
+	{"api", "key"}:     true,
+	{"private", "key"}: true,
+	{"access", "key"}:  true,
+}
 
-// IsSensitiveKey reports whether key names a credential field. Matching is on
-// the lower-cased key with "-" folded to "_".
-func IsSensitiveKey(key string) bool {
-	folded := strings.ReplaceAll(strings.ToLower(key), "-", "_")
-	if sensitiveKeyNames[folded] {
-		return true
+var nonSecretKeySuffixes = map[string]bool{
+	"count": true, "len": true, "length": true, "size": true, "type": true, "kind": true,
+	"ttl": true, "expiry": true, "expires": true, "hash": true, "required": true, "enabled": true,
+}
+
+func isASCIIUpper(c byte) bool { return c >= 'A' && c <= 'Z' }
+
+func isASCIILowerOrDigit(c byte) bool { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') }
+
+// KeySegments splits key into lower-case segments, exactly as the reference
+// key_segments does.
+func KeySegments(key string) []string {
+	var b strings.Builder
+	last := len(key) - 1
+	for i := 0; i < len(key); i++ {
+		c := key[i]
+		if i > 0 && isASCIIUpper(c) {
+			prev := key[i-1]
+			endsAcronym := isASCIIUpper(prev) && i < last && key[i+1] >= 'a' && key[i+1] <= 'z'
+			if isASCIILowerOrDigit(prev) || endsAcronym {
+				b.WriteByte('_')
+			}
+		}
+		b.WriteByte(c)
 	}
-	for _, suffix := range sensitiveKeySuffixes {
-		if strings.HasSuffix(folded, suffix) {
+	folded := strings.NewReplacer("-", "_", ".", "_", " ", "_").Replace(strings.ToLower(b.String()))
+	segments := []string{}
+	for _, segment := range strings.Split(folded, "_") {
+		if segment != "" {
+			segments = append(segments, segment)
+		}
+	}
+	return segments
+}
+
+// IsSensitiveKey reports whether key names a credential field (see the rule
+// above sensitiveKeySegments).
+func IsSensitiveKey(key string) bool {
+	segments := KeySegments(key)
+	if len(segments) == 0 || nonSecretKeySuffixes[segments[len(segments)-1]] {
+		return false
+	}
+	for i, segment := range segments {
+		if sensitiveKeySegments[segment] {
+			return true
+		}
+		if i > 0 && sensitiveKeyPairs[[2]string{segments[i-1], segment}] {
 			return true
 		}
 	}
@@ -66,9 +109,9 @@ type StructureOptions struct {
 	// KeyAware masks the value of every sensitive key (see IsSensitiveKey)
 	// with SensitiveKeyMarker, unless the value is nil.
 	KeyAware bool
-	// MaxDepth overrides the depth cap; zero or negative selects
-	// RedactMaxDepth.
-	MaxDepth int
+	// MaxDepth overrides the depth cap when non-nil (0 caps at the root,
+	// exactly like the reference's max_depth=0); nil selects RedactMaxDepth.
+	MaxDepth *int
 }
 
 // RedactStructure returns a redacted copy of a JSON-like value. Port of
@@ -80,13 +123,14 @@ type StructureOptions struct {
 //     treats it;
 //   - a container MaxDepth levels below the root (the root is level 0) is
 //     replaced by DepthLimitMarker;
-//   - with KeyAware, a non-nil value under a sensitive key becomes
-//     SensitiveKeyMarker;
+//   - with KeyAware, a value under a sensitive key becomes SensitiveKeyMarker
+//     unless it is nil -- untyped, or a typed nil pointer/map/slice/interface,
+//     the shapes that encode as JSON null (the reference keeps None);
 //   - every other value is returned unchanged.
 func RedactStructure(value any, r Redactor, opts StructureOptions) any {
-	maxDepth := opts.MaxDepth
-	if maxDepth <= 0 {
-		maxDepth = RedactMaxDepth
+	maxDepth := RedactMaxDepth
+	if opts.MaxDepth != nil {
+		maxDepth = *opts.MaxDepth
 	}
 	w := walker{redact: r, keyAware: opts.KeyAware, maxDepth: maxDepth}
 	return w.walk(value, 0)
@@ -133,8 +177,21 @@ func (w walker) walk(value any, depth int) any {
 }
 
 func (w walker) entry(key string, item any, depth int) any {
-	if w.keyAware && item != nil && IsSensitiveKey(key) {
+	if w.keyAware && !isNil(item) && IsSensitiveKey(key) {
 		return SensitiveKeyMarker
 	}
 	return w.walk(item, depth)
+}
+
+// isNil reports whether v is nil or a typed nil that encodes as JSON null.
+func isNil(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface, reflect.Func, reflect.Chan:
+		return rv.IsNil()
+	}
+	return false
 }
