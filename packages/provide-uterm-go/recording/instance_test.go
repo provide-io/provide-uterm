@@ -132,3 +132,38 @@ func TestHandleLeftOpenByUnendedInstanceIsNotReused(t *testing.T) {
 		t.Fatalf("entries = %v, want [new]", got)
 	}
 }
+
+func TestRetireLeavesNothingToServe(t *testing.T) {
+	for name, s := range bothStores(t) {
+		t.Run(name, func(t *testing.T) {
+			if err := s.StartSession("s", map[string]any{"instance": "a"}); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.AppendEvents("s", []Event{{"ts": 1.0, "event": "read", "data": map[string]any{"text": "old"}}}); err != nil {
+				t.Fatal(err)
+			}
+			if err := Retire(s, "s"); err != nil { // an open handle too: no EndSession first
+				t.Fatal(err)
+			}
+			if got := readTexts(t, s, "s"); len(got) != 0 {
+				t.Fatalf("served %v after retire", got)
+			}
+			if meta, _ := s.RecordingMeta("s"); meta.Exists {
+				t.Fatalf("meta %+v after retire", meta)
+			}
+			recordOne(t, s, "s", map[string]any{"instance": "a"}, "new")
+			if got := readTexts(t, s, "s"); !slices.Equal(got, []string{"new"}) {
+				t.Fatalf("entries = %v, want [new]", got)
+			}
+		})
+	}
+}
+
+type legacyStore struct{ NullStore }
+
+func TestRetireSkipsAStoreWithoutIt(t *testing.T) {
+	var s Store = struct{ Store }{legacyStore{}}
+	if err := Retire(s, "s"); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -146,6 +146,27 @@ func retireForeign(path, sessionID, instance string) error {
 	return os.Rename(path, filepath.Join(filepath.Dir(path), RetiredName(sessionID)))
 }
 
+// Retirer is a Store that can retire a session's recording: after
+// RetireSession nothing is served for the id until a new recording starts. A
+// file store moves the recording aside, an in-memory store drops it. Optional,
+// so a Store written before it existed still satisfies Store; such a store
+// keeps only the StartSession instance rule.
+type Retirer interface {
+	RetireSession(sessionID string) error
+}
+
+// Retire retires sessionID's recording in store when the store can, and does
+// nothing otherwise. Called when a session is deleted (and before one is
+// created), so the id's next holder is never served this one's entries — not
+// before it starts recording, and not if it never records. Port of
+// retire_recording.
+func Retire(store Store, sessionID string) error {
+	if r, ok := store.(Retirer); ok {
+		return r.RetireSession(sessionID)
+	}
+	return nil
+}
+
 func normalizeLimit(limit int) int {
 	if limit == 0 {
 		limit = 200
@@ -236,6 +257,20 @@ func (s *LocalFileStore) AppendEvents(sessionID string, events []Event) error {
 		s.files[sessionID] = f
 	}
 	return writeEvents(f, events)
+}
+
+// RetireSession moves the session's recording aside: kept for retention,
+// served to nobody. A handle still open for it is closed first, without a
+// log_stop: the session is gone, and anything written after lands in a new
+// file.
+func (s *LocalFileStore) RetireSession(sessionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if stale, ok := s.files[sessionID]; ok {
+		delete(s.files, sessionID)
+		_ = stale.Close()
+	}
+	return retireForeign(s.path(sessionID), sessionID, "")
 }
 
 // EndSession writes the log_stop event and closes the file.
@@ -358,6 +393,17 @@ func (s *InMemoryStore) AppendEvents(sessionID string, events []Event) error {
 	return nil
 }
 
+// RetireSession drops the session's recording: no later holder of the id is
+// served it.
+func (s *InMemoryStore) RetireSession(sessionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, sessionID)
+	delete(s.instances, sessionID)
+	delete(s.events, sessionID)
+	return nil
+}
+
 // EndSession records the log_stop event and marks the session inactive.
 func (s *InMemoryStore) EndSession(sessionID string) error {
 	s.mu.Lock()
@@ -430,6 +476,9 @@ type NullStore struct{}
 
 // StartSession is a no-op.
 func (NullStore) StartSession(string, map[string]any) error { return nil }
+
+// RetireSession is a no-op.
+func (NullStore) RetireSession(string) error { return nil }
 
 // AppendEvents is a no-op.
 func (NullStore) AppendEvents(string, []Event) error { return nil }

@@ -7,6 +7,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -55,9 +56,16 @@ type connectFn func(ctx context.Context, def serverconfig.SessionDefinition) (co
 // `uterm server` hosts live terminals rather than not-connected stubs. It
 // satisfies server.SessionRegistry.
 type SessionRegistryImpl struct {
-	mu       sync.Mutex
-	order    []string
-	entries  map[string]*sessionEntry
+	mu      sync.Mutex
+	order   []string
+	entries map[string]*sessionEntry
+	// retiring holds ids whose session is being torn down, or whose leftover
+	// recording is being retired before a new session takes them. Held until
+	// the old session's recording is closed (its last flush written) and then
+	// retired, so a new session under the id can neither be served the old
+	// recording nor receive the old one's late writes. Port of the
+	// reference's registry._retiring.
+	retiring map[string]bool
 	recDeflt bool
 	// recCfg is the recording section sessions record under, and recording
 	// the store they record into (nil: nothing is recorded). Wired by
@@ -94,6 +102,7 @@ var _ server.SessionRegistry = (*SessionRegistryImpl)(nil)
 func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImpl {
 	r := &SessionRegistryImpl{
 		entries:      map[string]*sessionEntry{},
+		retiring:     map[string]bool{},
 		recDeflt:     cfg.Recording.EnabledByDefault,
 		recCfg:       cfg.Recording,
 		connect:      defaultConnect,
@@ -245,12 +254,42 @@ func (r *SessionRegistryImpl) createSession(
 		}
 	}
 	r.mu.Lock()
+	if _, exists := r.entries[def.SessionID]; exists {
+		r.mu.Unlock()
+		return nil, &server.SessionConflictError{Msg: "session already exists: " + def.SessionID}
+	}
+	if r.retiring[def.SessionID] {
+		// The previous holder is still stopping, or its recording is still
+		// being retired: refuse rather than share either.
+		r.mu.Unlock()
+		return nil, &server.SessionConflictError{Msg: "session is being deleted: " + def.SessionID}
+	}
+	r.retiring[def.SessionID] = true
+	store := r.recording
+	r.mu.Unlock()
+	// A recording left under this id (a session from before a restart, or one
+	// a store kept) is not this new session's: retire it before the session
+	// becomes visible, so nothing can read it as this one's.
+	retireErr := retireIn(store, def.SessionID)
+	r.mu.Lock()
 	defer r.mu.Unlock()
+	delete(r.retiring, def.SessionID)
+	if retireErr != nil {
+		return nil, retireErr
+	}
 	if _, exists := r.entries[def.SessionID]; exists {
 		return nil, &server.SessionConflictError{Msg: "session already exists: " + def.SessionID}
 	}
 	r.seed(def)
 	return r.snapshotStatus(r.entries[def.SessionID]), nil
+}
+
+// retireIn retires id's recording in store; a nil store records nothing.
+func retireIn(store recording.Store, id string) error {
+	if store == nil {
+		return nil
+	}
+	return recording.Retire(store, id)
 }
 
 // UpdateSession applies a partial update (display_name, input_mode, visibility,
@@ -285,6 +324,13 @@ func (r *SessionRegistryImpl) UpdateSession(_ context.Context, id string, payloa
 // stopping any live connector.
 func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) error {
 	r.mu.Lock()
+	if r.retiring[id] {
+		// Already being torn down by another call; that call retires it.
+		r.mu.Unlock()
+		return nil
+	}
+	r.retiring[id] = true
+	store := r.recording
 	e, ok := r.entries[id]
 	var br *bridge.TermBridge
 	var conn connectors.Connector
@@ -309,7 +355,13 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 	if conn != nil {
 		_ = conn.Stop(ctx)
 	}
-	return nil
+	// Only now, with the recording closed and its last writes in it, is it
+	// retired and the id released for a new session.
+	err := retireIn(store, id)
+	r.mu.Lock()
+	delete(r.retiring, id)
+	r.mu.Unlock()
+	return err
 }
 
 // definitionFromPayload builds a SessionDefinition from a create payload,
@@ -321,6 +373,11 @@ func definitionFromPayload(payload map[string]any) (serverconfig.SessionDefiniti
 	}
 	if !sessionIDValid(id) {
 		return serverconfig.SessionDefinition{}, &server.SessionValidationError{Msg: "session_id must match ^[\\w\\-]+$"}
+	}
+	if len(id) > serverconfig.MaxSessionIDBytes {
+		return serverconfig.SessionDefinition{}, &server.SessionValidationError{
+			Msg: fmt.Sprintf("session_id must be at most %d bytes (UTF-8)", serverconfig.MaxSessionIDBytes),
+		}
 	}
 	connType, _ := payload["connector_type"].(string)
 	if connType == "" {
