@@ -189,7 +189,7 @@ type failAfter struct {
 }
 
 func (f *failAfter) RetireSession(id string) error {
-	got, err := f.InMemoryStore.GetEntries(id, recording.Query{Limit: 500})
+	got, err := f.GetEntries(id, recording.Query{Limit: 500})
 	if err != nil {
 		return err
 	}
