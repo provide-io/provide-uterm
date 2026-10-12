@@ -21,7 +21,7 @@ import type { Screen } from "./screen.ts";
  * Parser states. A union of literals rather than an enum, because an enum is
  * not erasable syntax and this package compiles under `erasableSyntaxOnly`.
  */
-type State = "ground" | "escape" | "csi" | "osc";
+type State = "ground" | "escape" | "charset" | "csi" | "osc";
 
 /** Control characters handled directly in the ground state. */
 const BEL = "\x07";
@@ -31,19 +31,38 @@ const LF = "\x0a";
 const VT = "\x0b";
 const FF = "\x0c";
 const CR = "\x0d";
+const SO = "\x0e";
+const SI = "\x0f";
 const ESC = "\x1b";
 const NUL = "\x00";
 const DEL = "\x7f";
 
+/** Construction options for {@link Stream}. */
+export interface StreamOptions {
+  /**
+   * Honour `ESC ( 0` / `ESC ) 0` (and `ESC ( B` / `ESC ) B`) and SO/SI, so
+   * DEC special graphics draw as line-drawing characters, as pyte does with
+   * `use_utf8` off and as xterm does. Off by default, which keeps the
+   * reference's UTF-8 mode: the designation is not interpreted and SO/SI
+   * are not shifts. A UTF-8 emulator turns it on; a CP437 one leaves it off,
+   * so a stray SO in BBS art never starts drawing lines.
+   */
+  decGraphics?: boolean;
+}
+
 /** Feeds terminal output into a {@link Screen}. */
 export class Stream {
   readonly #screen: Screen;
+  readonly #decGraphics: boolean;
   #state: State = "ground";
   /** Parameter and intermediate bytes accumulated for the current sequence. */
   #buffer = "";
+  /** The slot an `ESC (` or `ESC )` designates into, awaiting its code. */
+  #charsetSlot: "(" | ")" = "(";
 
-  constructor(screen: Screen) {
+  constructor(screen: Screen, options: StreamOptions = {}) {
     this.#screen = screen;
+    this.#decGraphics = options.decGraphics ?? false;
   }
 
   /** Feed a chunk of terminal output, resuming any sequence in progress. */
@@ -57,6 +76,11 @@ export class Stream {
   #consume(char: string): void {
     if (this.#state === "escape") {
       this.#consumeEscape(char);
+      return;
+    }
+    if (this.#state === "charset") {
+      this.#state = "ground";
+      this.#screen.defineCharset(char, this.#charsetSlot);
       return;
     }
     if (this.#state === "csi") {
@@ -97,6 +121,18 @@ export class Stream {
       case DEL:
         // Explicitly ignored, matching the Go port.
         return;
+      case SO:
+        if (this.#decGraphics) {
+          this.#screen.shiftOut();
+          return;
+        }
+        break;
+      case SI:
+        if (this.#decGraphics) {
+          this.#screen.shiftIn();
+          return;
+        }
+        break;
       default:
         break;
     }
@@ -120,6 +156,11 @@ export class Stream {
       this.#buffer = "";
       return;
     }
+    if (this.#decGraphics && (char === "(" || char === ")")) {
+      this.#state = "charset";
+      this.#charsetSlot = char;
+      return;
+    }
     this.#state = "ground";
     switch (char) {
       case "7":
@@ -139,8 +180,8 @@ export class Stream {
         this.#screen.reverseIndex();
         return;
       default:
-        // Charset selection and every other two-character escape is consumed
-        // without effect.
+        // Every other two-character escape is consumed without effect, and so
+        // is charset selection while `decGraphics` is off.
         return;
     }
   }

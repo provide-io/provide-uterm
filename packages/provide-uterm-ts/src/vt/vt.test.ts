@@ -32,15 +32,16 @@ interface VtGolden {
       }>;
     };
   }>;
+  dec_graphics_cases: VtGolden["cases"];
   stall_divergences: Array<{ name: string; chunks: string[]; pyte: { cursor: { x: number; y: number } } }>;
 }
 
 const golden = loadGolden<VtGolden>("vt_golden.json");
 
 /** Feed `chunks` to a fresh screen and return it. */
-function drive(cols: number, rows: number, chunks: readonly string[]): Screen {
+function drive(cols: number, rows: number, chunks: readonly string[], decGraphics = false): Screen {
   const screen = new Screen(cols, rows);
-  const stream = new Stream(screen);
+  const stream = decGraphics ? new Stream(screen, { decGraphics }) : new Stream(screen);
   for (const chunk of chunks) {
     stream.feed(chunk);
   }
@@ -249,5 +250,33 @@ describe("differential parity with pyte", () => {
     }
     expect(mismatches).toStrictEqual([]);
     expect(golden.cases.length).toBeGreaterThan(70);
+  });
+});
+
+describe("DEC special graphics", () => {
+  it("matches pyte with use_utf8 off for every case", () => {
+    const mismatches: string[] = [];
+    for (const testCase of golden.dec_graphics_cases) {
+      const actual = capture(drive(testCase.cols, testCase.rows, testCase.chunks, true));
+      if (JSON.stringify(actual) !== JSON.stringify(testCase.state)) {
+        mismatches.push(testCase.name);
+      }
+    }
+    expect(mismatches).toStrictEqual([]);
+    expect(golden.dec_graphics_cases.length).toBeGreaterThan(10);
+  });
+
+  it("is off by default, leaving the stream as it was", () => {
+    expect(drive(20, 2, ["\x1b(0q\x1b(Bq"]).display[0]?.slice(0, 5)).toBe("0qBq ");
+    expect(drive(20, 2, ["a\x0eq\x0fb"]).display[0]?.slice(0, 5)).toBe("a\x0eq\x0fb");
+  });
+
+  it("returns to ASCII when the screen is reset", () => {
+    const screen = new Screen(20, 2);
+    const stream = new Stream(screen, { decGraphics: true });
+    stream.feed("\x1b(0\x1b)0\x0e");
+    screen.reset();
+    stream.feed("q");
+    expect(screen.display[0]?.slice(0, 2)).toBe("q ");
   });
 });

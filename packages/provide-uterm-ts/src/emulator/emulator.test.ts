@@ -374,3 +374,28 @@ describe("differential parity with CPython", () => {
     expect(golden.styles.length).toBeGreaterThan(15);
   });
 });
+
+describe("TerminalEmulator DEC special graphics", () => {
+  it("draws DEC special graphics as box characters in a UTF-8 session", () => {
+    const emulator = new TerminalEmulator({ cols: 80, rows: 24, receiveEncoding: "utf-8" });
+    emulator.process(new TextEncoder().encode("\x1b(0lqqk\x1b(B café ─│ \x0eqq\x0f x"));
+    expect(emulator.getSnapshot().screen.startsWith("┌──┐ café ─│ ── x")).toBe(true);
+  });
+
+  it("draws in a CP437 session what it always drew", () => {
+    // A stray SO in CP437 art must not start drawing lines. The leaked `0`
+    // and `B` and the drawn SO/SI are this stream's long-standing CP437
+    // behaviour (pyte and the Go port swallow them), pinned here unchanged.
+    const emulator = new TerminalEmulator({ cols: 80, rows: 24 });
+    emulator.process(cp437("AB\x0eqq\x0fCD \x1b(0lqqk\x1b(B"));
+    expect(emulator.getSnapshot().screen.startsWith("AB\x0eqq\x0fCD 0lqqkB ")).toBe(true);
+  });
+
+  it("drops DEC special graphics on reset", () => {
+    const emulator = new TerminalEmulator({ cols: 80, rows: 24, receiveEncoding: "utf-8" });
+    emulator.process(new TextEncoder().encode("\x1b(0"));
+    emulator.reset();
+    emulator.process(new TextEncoder().encode("q"));
+    expect(emulator.getSnapshot().screen.startsWith("q ")).toBe(true);
+  });
+});

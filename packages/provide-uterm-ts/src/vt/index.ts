@@ -16,4 +16,4 @@
 
 export { type Char, defaultChar, FG_BG_256, isDefaultChar } from "./char.ts";
 export { type Cursor, Screen } from "./screen.ts";
-export { Stream } from "./stream.ts";
+export { Stream, type StreamOptions } from "./stream.ts";

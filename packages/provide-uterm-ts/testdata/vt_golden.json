@@ -7201,6 +7201,1585 @@
    }
   }
  ],
+ "dec_graphics_cases": [
+  {
+   "name": "dec graphics in a utf-8 line",
+   "cols": 30,
+   "rows": 6,
+   "chunks": [
+    "\u001b(0lqqk\u001b(B café ─│ \u000eqq\u000f x"
+   ],
+   "state": {
+    "display": [
+     "┌──┐ café ─│ ── x             ",
+     "                              ",
+     "                              ",
+     "                              ",
+     "                              ",
+     "                              "
+    ],
+    "cursor": {
+     "x": 17,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "┌",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 3,
+      "data": "┐",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 5,
+      "data": "c",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 6,
+      "data": "a",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 7,
+      "data": "f",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 8,
+      "data": "é",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 10,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 11,
+      "data": "│",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 13,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 14,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 16,
+      "data": "x",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "a box",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b(0lqqk\r\nx  x\r\nmqqj\u001b(B ok"
+   ],
+   "state": {
+    "display": [
+     "┌──┐                ",
+     "│  │                ",
+     "└──┘ ok             ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 7,
+     "y": 2,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "┌",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 3,
+      "data": "┐",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 0,
+      "data": "│",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 3,
+      "data": "│",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 2,
+      "x": 0,
+      "data": "└",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 2,
+      "x": 1,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 2,
+      "x": 2,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 2,
+      "x": 3,
+      "data": "┘",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 2,
+      "x": 5,
+      "data": "o",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 2,
+      "x": 6,
+      "data": "k",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "every mapped character",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b(0+,-.0_`abcdefghijklmnopqrstuvwxyz{|}~"
+   ],
+   "state": {
+    "display": [
+     "→←↑↓█ ◆▒␉␌␍␊°±░␋┘┐┌└",
+     "┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·   ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 17,
+     "y": 1,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "→",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "←",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "↑",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 3,
+      "data": "↓",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 4,
+      "data": "█",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 5,
+      "data": " ",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 6,
+      "data": "◆",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 7,
+      "data": "▒",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 8,
+      "data": "␉",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 9,
+      "data": "␌",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 10,
+      "data": "␍",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 11,
+      "data": "␊",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 12,
+      "data": "°",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 13,
+      "data": "±",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 14,
+      "data": "░",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 15,
+      "data": "␋",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 16,
+      "data": "┘",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 17,
+      "data": "┐",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 18,
+      "data": "┌",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 19,
+      "data": "└",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 0,
+      "data": "┼",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 1,
+      "data": "⎺",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 2,
+      "data": "⎻",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 3,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 4,
+      "data": "⎼",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 5,
+      "data": "⎽",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 6,
+      "data": "├",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 7,
+      "data": "┤",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 8,
+      "data": "┴",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 9,
+      "data": "┬",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 10,
+      "data": "│",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 11,
+      "data": "≤",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 12,
+      "data": "≥",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 13,
+      "data": "π",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 14,
+      "data": "≠",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 15,
+      "data": "£",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 1,
+      "x": 16,
+      "data": "·",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "characters the set leaves alone",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b(0AZ19/^"
+   ],
+   "state": {
+    "display": [
+     "AZ19/^              ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 6,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "A",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "Z",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "1",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 3,
+      "data": "9",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 4,
+      "data": "/",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 5,
+      "data": "^",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "g1 designated and shifted",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b)0ab\u000elqk\u000fcd"
+   ],
+   "state": {
+    "display": [
+     "ab┌─┐cd             ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 7,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "a",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "b",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "┌",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 3,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 4,
+      "data": "┐",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 5,
+      "data": "c",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 6,
+      "data": "d",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "g1 back to ascii",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b)0\u001b)B\u000elqk"
+   ],
+   "state": {
+    "display": [
+     "lqk                 ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 3,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "l",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "q",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "k",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "shift out with g1 untouched",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "ab\u000eqq\u000fcd"
+   ],
+   "state": {
+    "display": [
+     "ab──cd              ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 6,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "a",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "b",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 3,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 4,
+      "data": "c",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 5,
+      "data": "d",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "designation split across feeds",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b(",
+    "0q",
+    "\u001b",
+    "(Bq"
+   ],
+   "state": {
+    "display": [
+     "─q                  ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 2,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "q",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "unknown designator is consumed",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b(Zabc"
+   ],
+   "state": {
+    "display": [
+     "abc                 ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 3,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "a",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "b",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "c",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "save and restore keep the charset",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b(0\u001b7\u001b(B\u001b8lqk"
+   ],
+   "state": {
+    "display": [
+     "┌─┐                 ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 3,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "┌",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "┐",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "restore with nothing saved keeps the charset",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b(0\u001b8lqk"
+   ],
+   "state": {
+    "display": [
+     "┌─┐                 ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 3,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "┌",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "─",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "┐",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  },
+  {
+   "name": "styled graphics keep their attributes",
+   "cols": 20,
+   "rows": 6,
+   "chunks": [
+    "\u001b[1;32m\u001b(0qq\u001b(B\u001b[0mq"
+   ],
+   "state": {
+    "display": [
+     "──q                 ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    ",
+     "                    "
+    ],
+    "cursor": {
+     "x": 3,
+     "y": 0,
+     "hidden": false
+    },
+    "cells": [
+     {
+      "y": 0,
+      "x": 0,
+      "data": "─",
+      "fg": "green",
+      "bg": "default",
+      "bold": true,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 1,
+      "data": "─",
+      "fg": "green",
+      "bg": "default",
+      "bold": true,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     },
+     {
+      "y": 0,
+      "x": 2,
+      "data": "q",
+      "fg": "default",
+      "bg": "default",
+      "bold": false,
+      "italics": false,
+      "underscore": false,
+      "reverse": false,
+      "strikethrough": false,
+      "blink": false
+     }
+    ]
+   }
+  }
+ ],
  "stall_divergences": [
   {
    "name": "unhandled c0 swallows the rest of the stream",
