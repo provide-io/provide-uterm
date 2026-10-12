@@ -59,7 +59,8 @@ type PamIntegration struct {
 	// longer be able to read, and failing that a random tag no second
 	// computation reproduces. Guarded by instancesMu.
 	instancesMu sync.Mutex
-	instances   map[pamLoginKey]string
+	instances   map[pamLoginKey]pamLoginEntry
+	loginSeq    uint64
 
 	// newTunnel, when non-nil, overrides the tunnel-client factory a provisioned
 	// bridge uses (test seam; production leaves it nil → the real client).
@@ -94,7 +95,7 @@ func NewPamIntegration(cfg serverconfig.PamConfig, registry SessionRegistry, egr
 		client:    &http.Client{Timeout: 5 * time.Second},
 		logger:    logger,
 		bridges:   map[string]*PamTunnelBridge{},
-		instances: map[pamLoginKey]string{},
+		instances: map[pamLoginKey]pamLoginEntry{},
 	}
 }
 
@@ -138,18 +139,18 @@ func (p *PamIntegration) handle(ctx context.Context, ev pty.PamEvent) {
 
 // onOpen creates the companion/live session then best-effort relays the event.
 func (p *PamIntegration) onOpen(ctx context.Context, ev pty.PamEvent) {
-	p.beginLogin(ev)
+	sessionID := p.beginLogin(ev)
 	switch {
 	case p.cfg.Mode == "capture" && ev.CaptureSocket != "":
-		p.createCaptureSession(ctx, ev)
+		p.createCaptureSession(ctx, ev, sessionID)
 	case p.cfg.AutoSession:
-		p.createNotifySession(ctx, ev)
+		p.createNotifySession(ctx, ev, sessionID)
 	}
 	if p.relayConfigured() {
 		p.forwardToRelay(ctx, map[string]any{
 			"event": "open", "username": ev.Username, "tty": ev.TTY, "pid": ev.PID, "mode": ev.Mode,
 		})
-		p.provisionTunnel(ctx, ev)
+		p.provisionTunnel(ctx, ev, sessionID)
 	}
 }
 
@@ -185,13 +186,13 @@ func (p *PamIntegration) relayConfigured() bool {
 
 // createNotifySession auto-creates a companion shell as the authenticated user.
 // Port of _create_notify_session.
-func (p *PamIntegration) createNotifySession(ctx context.Context, ev pty.PamEvent) {
+func (p *PamIntegration) createNotifySession(ctx context.Context, ev pty.PamEvent, sessionID string) {
 	command := p.cfg.AutoSessionCommand
 	if command == "" {
 		command = "/bin/bash"
 	}
 	p.safeCreate(ctx, map[string]any{
-		"session_id":     p.loginID(ev),
+		"session_id":     sessionID,
 		"display_name":   ev.Username + " (" + ttyOrPam(ev.TTY) + ")",
 		"connector_type": "pty",
 		"connector_config": map[string]any{
@@ -209,7 +210,7 @@ func (p *PamIntegration) createNotifySession(ctx context.Context, ev pty.PamEven
 // createCaptureSession attaches to the live SSH session's capture socket, after
 // confining the socket path to a trusted directory. Port of
 // _create_capture_session (including the path-confinement guard).
-func (p *PamIntegration) createCaptureSession(ctx context.Context, ev pty.PamEvent) {
+func (p *PamIntegration) createCaptureSession(ctx context.Context, ev pty.PamEvent, sessionID string) {
 	if ev.CaptureSocket == "" {
 		return
 	}
@@ -217,7 +218,7 @@ func (p *PamIntegration) createCaptureSession(ctx context.Context, ev pty.PamEve
 		return
 	}
 	p.safeCreate(ctx, map[string]any{
-		"session_id":       p.loginID(ev),
+		"session_id":       sessionID,
 		"display_name":     ev.Username + " (" + ttyOrPam(ev.TTY) + ") [live]",
 		"connector_type":   "pty_capture",
 		"connector_config": map[string]any{"socket_path": ev.CaptureSocket},
@@ -370,28 +371,76 @@ func pamSessionID(ev pty.PamEvent) string {
 	return "pam-" + ev.Username + "-" + slug
 }
 
-// beginLogin gives an opening login a new id and remembers it for the close.
-// Always new: an id left by an earlier login on the same pid whose close never
-// came belongs to that login, not this one.
-func (p *PamIntegration) beginLogin(ev pty.PamEvent) string {
-	id := pamSessionID(ev)
-	p.instancesMu.Lock()
-	p.instances[pamLoginKey{ev.Username, ev.PID}] = id
-	p.instancesMu.Unlock()
-	return id
+// pamLoginEntry is a remembered login: the id its open gave it, and when it
+// was remembered (for the cap to drop the oldest first).
+type pamLoginEntry struct {
+	id  string
+	seq uint64
 }
 
-// loginID returns the id the login was given at open, giving it one if it
-// has none yet (a helper reached without an open).
-func (p *PamIntegration) loginID(ev pty.PamEvent) string {
+// maxRememberedLogins bounds the open-login map. Each open login holds one
+// entry, so this is far above any real concurrency; it only bounds the map
+// when closes go missing on a host where start times cannot be read (see
+// pruneLoginsLocked). Port of _MAX_REMEMBERED_LOGINS.
+var maxRememberedLogins = 4096
+
+// loginIsGone reports whether the process an entry's id names has provably
+// ended: only an id carrying a start time can say, and the login is gone when
+// its pid now reports another start time, or none. Port of _login_is_gone.
+func loginIsGone(key pamLoginKey, id string) bool {
+	suffix := "-" + strconv.Itoa(key.pid) + "-"
+	i := strings.LastIndex(id, suffix)
+	if i < 0 {
+		return false
+	}
+	tag := id[i+len(suffix):]
+	if tag == "" || strings.Trim(tag, "0123456789") != "" {
+		return false // a random tag proves nothing
+	}
+	ticks, ok := pamProcessStartTicks(key.pid)
+	return !ok || strconv.FormatInt(ticks, 10) != tag
+}
+
+// pruneLoginsLocked forgets logins whose close never came: every entry whose
+// process has provably ended, then, past maxRememberedLogins, the oldest. keep
+// is never dropped. Caller holds instancesMu. Port of _prune_logins.
+func (p *PamIntegration) pruneLoginsLocked(keep *pamLoginKey) {
+	for key, entry := range p.instances {
+		if (keep == nil || key != *keep) && loginIsGone(key, entry.id) {
+			delete(p.instances, key)
+		}
+	}
+	for len(p.instances) > maxRememberedLogins {
+		var oldest pamLoginKey
+		found := false
+		for key, entry := range p.instances {
+			if keep != nil && key == *keep {
+				continue
+			}
+			if !found || entry.seq < p.instances[oldest].seq {
+				oldest, found = key, true
+			}
+		}
+		if !found {
+			return
+		}
+		delete(p.instances, oldest)
+	}
+}
+
+// beginLogin gives an opening login a new id and remembers it for the close.
+// Always new: an id left by an earlier login on the same pid whose close never
+// came belongs to that login, not this one. The caller passes the returned id
+// down rather than looking it up again, so a close racing a slow open cannot
+// make it mint another.
+func (p *PamIntegration) beginLogin(ev pty.PamEvent) string {
+	id := pamSessionID(ev)
 	key := pamLoginKey{ev.Username, ev.PID}
 	p.instancesMu.Lock()
-	defer p.instancesMu.Unlock()
-	if id, ok := p.instances[key]; ok {
-		return id
-	}
-	id := pamSessionID(ev)
-	p.instances[key] = id
+	p.loginSeq++
+	p.instances[key] = pamLoginEntry{id: id, seq: p.loginSeq}
+	p.pruneLoginsLocked(&key)
+	p.instancesMu.Unlock()
 	return id
 }
 
@@ -402,11 +451,12 @@ func (p *PamIntegration) loginID(ev pty.PamEvent) string {
 func (p *PamIntegration) endLogin(ev pty.PamEvent) string {
 	key := pamLoginKey{ev.Username, ev.PID}
 	p.instancesMu.Lock()
-	id, ok := p.instances[key]
+	entry, ok := p.instances[key]
 	delete(p.instances, key)
+	p.pruneLoginsLocked(nil)
 	p.instancesMu.Unlock()
 	if ok {
-		return id
+		return entry.id
 	}
 	return pamSessionID(ev)
 }
