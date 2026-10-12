@@ -38,7 +38,9 @@ Session ids
   The id is computed once, at open, and remembered for the close: by the time a
   close is handled the process may already be gone. The memory is bounded: on
   every open and close, entries whose process has provably ended (its pid now
-  reports another start time) are dropped, and past 4096 entries the oldest go.
+  reports another start time) for at least 60 s are dropped -- the grace lets a
+  close that is already on its way find its entry -- and past 4096 entries the
+  oldest go.
 """
 
 from __future__ import annotations
@@ -48,6 +50,7 @@ import contextlib
 import logging
 import re
 import secrets
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -189,21 +192,54 @@ def _login_is_gone(key: tuple[str, int], session_id: str) -> bool:
     return match is not None and str(_process_start_ticks(key[1])) != match.group(1)
 
 
+# How long an entry must have looked gone before it is dropped. pam_uterm.so
+# sends the close and the PAM process exits straight after, so a login is
+# "gone" by its start time before its own close has been handled; dropping it
+# then would leave the close to recompute an id it can no longer reproduce
+# (a random tag), and the capture session would never be deleted.
+_GONE_GRACE_S = 60.0
+
+# The clock the grace is measured on; swappable in tests.
+_monotonic = time.monotonic
+
+
+class OpenLogins(dict[tuple[str, int], str]):
+    """The id each open login was given, plus when an entry was first seen gone."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gone_since: dict[tuple[str, int], float] = {}
+
+
 def _prune_logins(instances: dict[tuple[str, int], str], keep: tuple[str, int] | None = None) -> None:
     """Forget logins whose close never came, so the map stays bounded.
 
-    First every entry whose process has provably ended (:func:`_login_is_gone`);
-    then, if still over :data:`_MAX_REMEMBERED_LOGINS`, the oldest. *keep* is
-    never dropped.
+    An entry whose process has provably ended (:func:`_login_is_gone`) is
+    dropped once it has looked gone for :data:`_GONE_GRACE_S`, which leaves its
+    own close, already on its way, time to find it. Past
+    :data:`_MAX_REMEMBERED_LOGINS` the oldest go regardless. *keep* is never
+    dropped. A plain dict (no :class:`OpenLogins` bookkeeping) is only capped.
     """
-    for key, session_id in list(instances.items()):
-        if key != keep and _login_is_gone(key, session_id):
-            del instances[key]
+    gone_since = getattr(instances, "gone_since", None)
+    if gone_since is not None:
+        now = _monotonic()
+        for key in list(gone_since):
+            if key not in instances:
+                del gone_since[key]
+        for key, session_id in list(instances.items()):
+            if key == keep or not _login_is_gone(key, session_id):
+                gone_since.pop(key, None)
+                continue
+            if now - gone_since.setdefault(key, now) >= _GONE_GRACE_S:
+                del instances[key]
+                del gone_since[key]
     for key in list(instances):
         if len(instances) <= _MAX_REMEMBERED_LOGINS:
             break
         if key != keep:
             del instances[key]
+            if gone_since is not None:
+                gone_since.pop(key, None)
 
 
 def _remember_login(instances: dict[tuple[str, int], str], key: tuple[str, int], session_id: str) -> None:
@@ -231,7 +267,7 @@ async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -
 
     _bridges: dict[str, object] = {}
     # The id each open login was given, for its close to find (see _on_open).
-    _instances: dict[tuple[str, int], str] = {}
+    _instances = OpenLogins()
 
     async def handle(event: PamEvent) -> None:
         ev = event
