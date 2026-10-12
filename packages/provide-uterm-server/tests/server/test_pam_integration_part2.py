@@ -324,23 +324,54 @@ async def test_open_never_reuses_an_id_a_closeless_login_left(start_ticks: dict[
     assert instances == {("suokki", 9): "pam-suokki-capture-9-200"}
 
 
-async def test_a_login_whose_close_never_came_is_forgotten_once_its_pid_moves_on(
-    start_ticks: dict[int, int | None],
+async def test_a_login_whose_close_never_came_is_forgotten_after_the_grace(
+    start_ticks: dict[int, int | None], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
     from provide.uterm.server.models import PamConfig
 
+    clock = [1000.0]
+    monkeypatch.setattr(pam_integration, "_monotonic", lambda: clock[0])
     cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture")
     registry = MagicMock()
     registry.create_session = AsyncMock()
-    instances: dict[tuple[str, int], str] = {}
+    instances = pam_integration.OpenLogins()
 
-    start_ticks.update({10: 1, 11: 2, 12: 3})
+    start_ticks.update({10: 1, 11: 2, 12: 3, 13: 4})
     for pid in (10, 11):
         await _on_open(_capture_event(pid), cfg, registry, None, instances)  # type: ignore[arg-type]
     start_ticks[10] = 5  # pid 10's sshd exited without a close; the pid is someone else's now
     await _on_open(_capture_event(12), cfg, registry, None, instances)  # type: ignore[arg-type]
-    assert sorted(instances) == [("suokki", 11), ("suokki", 12)]
+    assert ("suokki", 10) in instances  # seen gone, but not for long enough
+    clock[0] += 61
+    await _on_open(_capture_event(13), cfg, registry, None, instances)  # type: ignore[arg-type]
+    assert sorted(instances) == [("suokki", 11), ("suokki", 12), ("suokki", 13)]
+    assert instances.gone_since == {}
+
+
+async def test_a_close_in_flight_still_finds_its_entry_after_another_event_prunes(
+    start_ticks: dict[int, int | None], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """pam_uterm.so sends the close and exits; another login's event runs first."""
+    pytest.importorskip("provide.uterm.pty.pam_listener", reason="provide-uterm-platform not installed")
+    from provide.uterm.server.models import PamConfig
+
+    clock = [1000.0]
+    monkeypatch.setattr(pam_integration, "_monotonic", lambda: clock[0])
+    cfg = PamConfig(notify_socket="/run/uterm-notify.sock", mode="capture")
+    registry = MagicMock()
+    registry.create_session = AsyncMock()
+    registry.delete_session = AsyncMock()
+    instances = pam_integration.OpenLogins()
+
+    start_ticks.update({30: 7, 31: 8})
+    await _on_open(_capture_event(30), cfg, registry, None, instances)  # type: ignore[arg-type]
+    opened = registry.create_session.call_args[0][0]["session_id"]
+    del start_ticks[30]  # pid 30's PAM process exits right after sending its close
+    await _on_open(_capture_event(31), cfg, registry, None, instances)  # type: ignore[arg-type]  # prunes first
+    clock[0] += 5
+    await _on_close(_capture_event(30, "close"), cfg, registry, None, instances)  # type: ignore[arg-type]
+    registry.delete_session.assert_awaited_once_with(opened)
 
 
 async def test_logins_that_cannot_be_proven_gone_are_capped(
