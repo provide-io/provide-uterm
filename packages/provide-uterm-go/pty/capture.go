@@ -18,11 +18,45 @@ import (
 )
 
 // Capture frame channel identifiers. Port of capture.py CHANNEL_* constants.
+// A reader ignores a channel it does not know, so a producer may send a newer
+// one to an older reader.
 const (
 	ChannelStdout  = 0x01
 	ChannelStdin   = 0x02
 	ChannelConnect = 0x03
+	// ChannelStats is the shim's own writer counters, as an ASCII key=value
+	// line. The Go connector does not report them; it ignores the channel.
+	ChannelStats = 0x04
+	// ChannelGeometry is the terminal's size, from whoever owns the pty (a
+	// supervisor), as >HH: cols, rows. The LD_PRELOAD shim never sends it: it
+	// cannot see a resize.
+	ChannelGeometry = 0x05
 )
+
+// geometryPayloadSize, geometryMin and geometryMax bound a geometry payload:
+// exactly four bytes, each side 1..1000 inclusive. Port of capture.py GEOMETRY,
+// GEOMETRY_MIN and GEOMETRY_MAX.
+const (
+	geometryPayloadSize = 4
+	geometryMin         = 1
+	geometryMax         = 1000
+)
+
+// ParseGeometry reads (cols, rows) from a geometry payload. ok is false for
+// anything malformed, which the caller ignores: the frame's own length kept the
+// stream in step, so only this frame is untrustworthy. Port of
+// capture.parse_geometry.
+func ParseGeometry(payload []byte) (cols, rows int, ok bool) {
+	if len(payload) != geometryPayloadSize {
+		return 0, 0, false
+	}
+	cols = int(binary.BigEndian.Uint16(payload[0:2]))
+	rows = int(binary.BigEndian.Uint16(payload[2:4]))
+	if cols < geometryMin || cols > geometryMax || rows < geometryMin || rows > geometryMax {
+		return 0, 0, false
+	}
+	return cols, rows, true
+}
 
 const (
 	// headerSize is the framing header width: 1B channel + 4B big-endian length.

@@ -29,7 +29,9 @@ var captureConnectorKeys = map[string]struct{}{
 // capture_connector.CaptureConnector.
 //
 // Only CHANNEL_STDOUT contributes to the visible screen; CHANNEL_STDIN and
-// CHANNEL_CONNECT frames are recorded for the analysis log.
+// CHANNEL_CONNECT frames are recorded for the analysis log. CHANNEL_GEOMETRY,
+// sent by whoever owns the pty, sets the session's size and repaints it with a
+// snapshot.
 type CaptureConnector struct {
 	sessionID       string
 	displayName     string
@@ -119,8 +121,9 @@ func (c *CaptureConnector) IsConnected() bool {
 }
 
 // PollMessages drains all immediately-available capture frames, updating the
-// buffer/analysis state, and returns a single "term" frame with the newly
-// captured stdout (or nil). Port of CaptureConnector.poll_messages.
+// buffer/analysis state, and returns a "term" frame with the newly captured
+// stdout, then a "snapshot" frame if a geometry frame changed the size (or
+// nil). Port of CaptureConnector.poll_messages.
 func (c *CaptureConnector) PollMessages() []Frame {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -128,6 +131,7 @@ func (c *CaptureConnector) PollMessages() []Frame {
 		return nil
 	}
 	changed := false
+	wantCols, wantRows := c.cols, c.rows
 	for {
 		frame, ok := c.capture.ReadNowait()
 		if !ok {
@@ -153,14 +157,32 @@ func (c *CaptureConnector) PollMessages() []Frame {
 			if len(c.connectLog) > 100 {
 				c.connectLog = c.connectLog[len(c.connectLog)-100:]
 			}
+		case ChannelGeometry:
+			// The terminal's size, from whoever owns the pty. Malformed is
+			// ignored. This port renders no screen (its snapshot is the raw
+			// output tail), so taking a size is recording it; Python also
+			// re-emulates what was drawn since the last clear.
+			if cols, rows, ok := ParseGeometry(frame.Data); ok {
+				wantCols, wantRows = cols, rows
+			}
 		}
 	}
+	// The last valid size of the drain, as Python applies it: once, and only
+	// if it differs from the size the drain started at.
+	resized := wantCols != c.cols || wantRows != c.rows
+	c.cols, c.rows = wantCols, wantRows
+	var frames []Frame
 	if changed && c.pending != "" {
 		data := c.pending
 		c.pending = ""
-		return []Frame{{"type": "term", "data": data}}
+		frames = append(frames, Frame{"type": "term", "data": data})
 	}
-	return nil
+	if resized {
+		// After the output, which the snapshot already contains; the snapshot
+		// carries cols and rows, which is how every viewer learns the size.
+		frames = append(frames, c.snapshotLocked())
+	}
+	return frames
 }
 
 // HandleInput forwards keystrokes to the stdin socket when configured. Port of

@@ -23,6 +23,33 @@ CHANNEL_CONNECT = 0x03
 # channel says what the terminal did; this one says what the capture path
 # failed to deliver, which is otherwise invisible from this side.
 CHANNEL_STATS = 0x04
+# The terminal's size, from whoever owns the pty (a supervisor), as >HH: cols,
+# rows. The LD_PRELOAD shim never sends it: it cannot see a resize. A reader
+# that predates it ignores it, as it does any channel it does not know, so a
+# producer can send it unconditionally.
+CHANNEL_GEOMETRY = 0x05
+GEOMETRY = struct.Struct(">HH")
+# Inclusive bounds on each side. Nothing real is wider or taller, and a size
+# the emulator would allocate a screen for must not be the producer's choice.
+GEOMETRY_MIN = 1
+GEOMETRY_MAX = 1000
+
+
+def parse_geometry(payload: bytes) -> tuple[int, int] | None:
+    """(cols, rows) from a geometry payload, or None for anything malformed.
+
+    Malformed is ignored rather than fatal: the frame boundary is intact (the
+    header said how long it was), so the stream is still trustworthy and only
+    this one frame is not.
+    """
+
+    if len(payload) != GEOMETRY.size:
+        return None
+    cols, rows = GEOMETRY.unpack(payload)
+    if not (GEOMETRY_MIN <= cols <= GEOMETRY_MAX and GEOMETRY_MIN <= rows <= GEOMETRY_MAX):
+        return None
+    return cols, rows
+
 
 _HEADER = struct.Struct(">BI")  # channel (1B) + length (4B big-endian)
 

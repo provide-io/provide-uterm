@@ -22,10 +22,54 @@
  * something has to go is the most recent screen rather than the stalest.
  */
 
-/** Which stream a frame came from. */
+/**
+ * Which stream a frame came from.
+ *
+ * A reader passes on a channel it does not know rather than refusing it, so a
+ * producer may send a newer one to an older reader.
+ */
 export const CHANNEL_STDOUT = 0x01;
 export const CHANNEL_STDIN = 0x02;
 export const CHANNEL_CONNECT = 0x03;
+/** The capture shim's own writer counters, as an ASCII `key=value` line. */
+export const CHANNEL_STATS = 0x04;
+/**
+ * The terminal's size, from whoever owns the pty (a supervisor): cols then
+ * rows, each a big-endian `uint16`. The LD_PRELOAD shim never sends it: it
+ * cannot see a resize.
+ */
+export const CHANNEL_GEOMETRY = 0x05;
+
+/** A geometry payload is exactly this long. */
+export const GEOMETRY_PAYLOAD_SIZE = 4;
+/** The smallest and largest cols or rows a geometry frame may name, inclusive. */
+export const GEOMETRY_MIN = 1;
+export const GEOMETRY_MAX = 1000;
+
+/** A terminal size, as a geometry frame names it. */
+export interface CaptureGeometry {
+  cols: number;
+  rows: number;
+}
+
+/**
+ * The size a geometry payload names, or `null` for anything malformed.
+ *
+ * Malformed is ignored rather than fatal: the frame's own length kept the
+ * stream in step, so only this one frame is untrustworthy.
+ */
+export function parseGeometry(payload: Uint8Array): CaptureGeometry | null {
+  if (payload.length !== GEOMETRY_PAYLOAD_SIZE) {
+    return null;
+  }
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const cols = view.getUint16(0, false);
+  const rows = view.getUint16(2, false);
+  if (cols < GEOMETRY_MIN || cols > GEOMETRY_MAX || rows < GEOMETRY_MIN || rows > GEOMETRY_MAX) {
+    return null;
+  }
+  return { cols, rows };
+}
 
 /** Channel byte plus a four-byte length. */
 export const CAPTURE_HEADER_SIZE = 5;

@@ -1,4 +1,70 @@
 {
+  "capture_geometry_frame": [
+    {
+      "frame": "050000000400640028",
+      "name": "100x40",
+      "size": {
+        "cols": 100,
+        "rows": 40
+      }
+    },
+    {
+      "frame": "050000000400010001",
+      "name": "1x1",
+      "size": {
+        "cols": 1,
+        "rows": 1
+      }
+    },
+    {
+      "frame": "050000000403e803e8",
+      "name": "1000x1000",
+      "size": {
+        "cols": 1000,
+        "rows": 1000
+      }
+    },
+    {
+      "frame": "050000000400000028",
+      "name": "0-cols",
+      "size": null
+    },
+    {
+      "frame": "050000000400640000",
+      "name": "0-rows",
+      "size": null
+    },
+    {
+      "frame": "050000000403e90028",
+      "name": "1001-cols",
+      "size": null
+    },
+    {
+      "frame": "0500000004006403e9",
+      "name": "1001-rows",
+      "size": null
+    },
+    {
+      "frame": "0500000004ffffffff",
+      "name": "65535x65535",
+      "size": null
+    },
+    {
+      "frame": "0500000000",
+      "name": "empty-payload",
+      "size": null
+    },
+    {
+      "frame": "0500000003006400",
+      "name": "three-byte-payload",
+      "size": null
+    },
+    {
+      "frame": "05000000050064002800",
+      "name": "five-byte-payload",
+      "size": null
+    }
+  ],
   "close_cases": {
     "chaos": [
       {

@@ -385,6 +385,9 @@ export class UtermSessionElement extends LitElement {
   private _activityFlashTimer: ReturnType<typeof setTimeout> | null = null;
   /** Clears the brief "Resumed" status after a successful resume-token reclaim. */
   private _resumeFlashTimer: number | null = null;
+  /** The size the last `uterm:geometry` announced; 0 until a snapshot names one. */
+  private _lastCols = 0;
+  private _lastRows = 0;
 
   static override styles = [hijackStyles];
 
@@ -619,6 +622,21 @@ export class UtermSessionElement extends LitElement {
         this._promptId = promptDetected?.prompt_id ?? "";
         try {
           const t = this._ensureTerm();
+          // The session's size, for a page that sizes its terminal itself.
+          // After _ensureTerm, not before: on a view's first snapshot the
+          // terminal does not exist until then, and a listener that resizes
+          // `element.terminal` would find null -- with the size already
+          // recorded as seen, so no later snapshot would announce it again.
+          // Before the paint, so the screen lands in a terminal of its size.
+          if (
+            typeof msg.cols === "number" &&
+            typeof msg.rows === "number" &&
+            (msg.cols !== this._lastCols || msg.rows !== this._lastRows)
+          ) {
+            this._lastCols = msg.cols;
+            this._lastRows = msg.rows;
+            this.dispatchEvent(new CustomEvent("uterm:geometry", { detail: { cols: msg.cols, rows: msg.rows } }));
+          }
           t.write("\x1b[!p\x1b[2J\x1b[H");
           t.write((msg.screen ?? "").replace(/\n/g, "\r\n"));
         } catch (err) {

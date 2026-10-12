@@ -11,6 +11,8 @@ Incoming frames are accumulated into a text buffer and exposed as snapshots.
 
 Only CHANNEL_STDOUT (0x01) contributes to the visible screen; CHANNEL_STDIN
 (0x02) and CHANNEL_CONNECT (0x03) frames are recorded in the analysis log.
+CHANNEL_GEOMETRY (0x05), sent by whoever owns the pty, resizes the session as
+reconfigure does and repaints it with a snapshot.
 
 Config keys accepted in connector_config:
   socket_path       str    required — path of the Unix socket to listen on
@@ -33,10 +35,12 @@ from typing import Any
 
 from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
+    CHANNEL_GEOMETRY,
     CHANNEL_STATS,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
     CaptureSocket,
+    parse_geometry,
 )
 
 _VALID_CONFIG_KEYS = frozenset(
@@ -148,6 +152,7 @@ class CaptureConnector:
         if not self._connected or self._capture is None:
             return []
         changed = False
+        size: tuple[int, int] | None = None
         # Drain all immediately available frames without blocking
         while True:
             frame = self._capture.read_nowait()
@@ -168,10 +173,27 @@ class CaptureConnector:
                 # and out of `changed`: it is the capture path describing itself,
                 # not something the terminal drew.
                 self._shim_stats = frame.data.decode("utf-8", errors="replace")[:200]
+            elif frame.channel == CHANNEL_GEOMETRY:
+                # The terminal's size, from whoever owns the pty. Malformed is
+                # ignored: the frame's own length kept the stream in step.
+                size = parse_geometry(frame.data) or size
+        # Applied once, after the drain: a resize re-emulates everything since
+        # the last clear, and that replay covers output drawn after the frame
+        # too, so a burst of sizes costs one replay rather than one each.
+        resized = False
+        if size is not None and size != (self._cols, self._rows):
+            self._apply_size(*size)
+            resized = True
+        messages: list[dict[str, Any]] = []
         if changed and self._pending:
             data, self._pending = self._pending, ""
-            return [{"type": "term", "data": data}]
-        return []
+            messages.append({"type": "term", "data": data})
+        if resized:
+            # After the output, which the snapshot already contains: a viewer
+            # handed it after the repaint would draw it twice. The snapshot is
+            # how every viewer learns the size -- it carries cols and rows.
+            messages.append(self._snapshot())
+        return messages
 
     def reconfigure(self, config: dict[str, Any]) -> bool:
         """Apply a new configuration to the running connector, if it can be.
@@ -201,16 +223,21 @@ class CaptureConnector:
                 self._stdin_writer.close()
                 self._stdin_writer = None
         if (cols, rows) != (self._cols, self._rows):
-            self._cols, self._rows = cols, rows
-            if self._emulator is not None:
-                # Not resize(): what was drawn for the real size and clipped by
-                # the old one is gone from the old screen. Redraw it from what the
-                # program sent since it last cleared -- PAM creates the session
-                # before anyone knows its size, so the screen starts at a default
-                # the program never drew for.
-                self._emulator = _make_emulator(cols, rows)
-                self._emulator.process(self._since_clear.encode("utf-8"))
+            self._apply_size(cols, rows)
         return True
+
+    def _apply_size(self, cols: int, rows: int) -> None:
+        """Take a new terminal size: from reconfigure, or a geometry frame."""
+
+        self._cols, self._rows = cols, rows
+        if self._emulator is not None:
+            # Not resize(): what was drawn for the real size and clipped by
+            # the old one is gone from the old screen. Redraw it from what the
+            # program sent since it last cleared -- PAM creates the session
+            # before anyone knows its size, so the screen starts at a default
+            # the program never drew for.
+            self._emulator = _make_emulator(cols, rows)
+            self._emulator.process(self._since_clear.encode("utf-8"))
 
     def _ingest_stdout(self, data: bytes) -> str:
         """Take one chunk of captured output into the screen; return it for streaming."""

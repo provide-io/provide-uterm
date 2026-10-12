@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 import asyncio
+import json
 import struct
 import sys
 import tempfile
@@ -14,11 +15,15 @@ import pytest
 from provide.uterm import strip_ansi
 from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
+    CHANNEL_GEOMETRY,
     CHANNEL_STATS,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
+    GEOMETRY,
+    CaptureFrame,
+    parse_geometry,
 )
-from provide.uterm.pty.capture_connector import CaptureConnector
+from provide.uterm.pty.capture_connector import CaptureConnector, _make_emulator
 
 
 def _make_frame(channel: int, data: bytes) -> bytes:
@@ -713,3 +718,154 @@ async def test_only_output_since_the_last_clear_is_replayed() -> None:
         plain = strip_ansi((await conn.get_snapshot())["screen"])
         assert "NEW SCREEN" in plain and "OLD SCREEN" not in plain
         await conn.stop()
+
+
+# ---------------------------------------------------------------------------
+# The geometry channel
+#
+# Whoever owns the pty (a supervisor, never the LD_PRELOAD shim, which cannot
+# see a resize) says what size the terminal is: CHANNEL_GEOMETRY, payload >HH
+# cols, rows. The connector applies it as reconfigure does -- re-emulating what
+# was drawn since the last clear -- and repaints at once with a snapshot, which
+# is how every viewer learns the new size.
+# ---------------------------------------------------------------------------
+
+_BEHAVIOR_VECTORS = Path(__file__).resolve().parent / "testdata" / "behavior_vectors.json"
+
+
+class _FakeCapture:
+    """A capture socket that hands back the frames it was given, then nothing."""
+
+    def __init__(self, frames: list[CaptureFrame]) -> None:
+        self._frames = list(frames)
+
+    def read_nowait(self) -> CaptureFrame | None:
+        return self._frames.pop(0) if self._frames else None
+
+
+def _fed(frames: list[CaptureFrame]) -> CaptureConnector:
+    connector = CaptureConnector("s", "s", {"socket_path": "/tmp/unused.sock", "cols": 80, "rows": 24})
+    connector._emulator = _make_emulator(80, 24)
+    connector._connected = True
+    connector._capture = _FakeCapture(frames)  # type: ignore[assignment]  # ty:ignore[invalid-assignment]
+    return connector
+
+
+async def test_a_geometry_frame_resizes_the_session_and_repaints_it() -> None:
+    connector = _fed(
+        [
+            CaptureFrame(CHANNEL_STDOUT, b"\x1b[2J\x1b[H" + b"x" * 90),
+            CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(100, 40)),
+        ]
+    )
+    messages = await connector.poll_messages()
+    # The output first, so a viewer streaming it is not handed it after the
+    # repaint that already contains it.
+    assert [m["type"] for m in messages] == ["term", "snapshot"]
+    snapshot = messages[-1]
+    assert (snapshot["cols"], snapshot["rows"]) == (100, 40)
+    # Ninety columns wrapped at 80; redrawn at 100 they fit on the first row.
+    assert strip_ansi(snapshot["screen"]).split("\n")[0].rstrip() == "x" * 90
+    assert (await connector.get_snapshot())["cols"] == 100
+
+
+async def test_a_geometry_frame_alone_still_repaints() -> None:
+    connector = _fed([CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(132, 50))])
+    messages = await connector.poll_messages()
+    assert [(m["type"], m["cols"], m["rows"]) for m in messages] == [("snapshot", 132, 50)]
+
+
+async def test_the_same_size_again_repaints_nothing() -> None:
+    connector = _fed([CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(80, 24))])
+    assert await connector.poll_messages() == []
+
+
+async def test_only_the_last_of_several_sizes_is_painted() -> None:
+    connector = _fed(
+        [
+            CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(100, 40)),
+            CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(120, 30)),
+        ]
+    )
+    messages = await connector.poll_messages()
+    assert [(m["type"], m["cols"], m["rows"]) for m in messages] == [("snapshot", 120, 30)]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"",
+        b"\x00\x64\x00",
+        b"\x00\x64\x00\x28\x00",
+        GEOMETRY.pack(1001, 40),
+        GEOMETRY.pack(40, 1001),
+        GEOMETRY.pack(0, 40),
+    ],
+)
+async def test_a_malformed_geometry_frame_is_ignored(payload: bytes) -> None:
+    assert parse_geometry(payload) is None
+    connector = _fed([CaptureFrame(CHANNEL_GEOMETRY, payload)])
+    assert await connector.poll_messages() == []
+    assert (connector._cols, connector._rows) == (80, 24)
+
+
+def test_a_geometry_frame_without_the_emulator_still_records_the_size(monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "provide.uterm.emulator", None)
+    connector = CaptureConnector("s", "s", {"socket_path": "/tmp/unused.sock"})
+    connector._connected = True
+    connector._capture = _FakeCapture([CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(100, 40))])  # type: ignore[assignment]  # ty:ignore[invalid-assignment]
+    messages = asyncio.run(connector.poll_messages())
+    assert [(m["type"], m["cols"], m["rows"]) for m in messages] == [("snapshot", 100, 40)]
+
+
+def _geometry_vectors() -> list[dict]:
+    return json.loads(_BEHAVIOR_VECTORS.read_text(encoding="utf-8"))["capture_geometry_frame"]
+
+
+@pytest.mark.parametrize("case", _geometry_vectors(), ids=lambda case: case["name"])
+async def test_the_shared_geometry_vectors(case: dict) -> None:
+    """spec/behavior_vectors.json, which Go and TypeScript replay too."""
+
+    raw = bytes.fromhex(case["frame"])
+    channel, length = struct.unpack(">BI", raw[:5])
+    assert channel == CHANNEL_GEOMETRY and length == len(raw) - 5
+    connector = _fed([CaptureFrame(channel, raw[5:])])
+    messages = await connector.poll_messages()
+    if case["size"] is None:
+        assert messages == []
+        assert (connector._cols, connector._rows) == (80, 24)
+    else:
+        expected = (case["size"]["cols"], case["size"]["rows"])
+        assert [(m["type"], m["cols"], m["rows"]) for m in messages] == [("snapshot", *expected)]
+
+
+async def test_output_after_a_geometry_frame_lands_at_the_new_size() -> None:
+    connector = _fed(
+        [
+            CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(100, 40)),
+            CaptureFrame(CHANNEL_STDOUT, b"\x1b[2J\x1b[H" + b"y" * 95),
+        ]
+    )
+    messages = await connector.poll_messages()
+    assert [m["type"] for m in messages] == ["term", "snapshot"]
+    assert strip_ansi(messages[-1]["screen"]).split("\n")[0].rstrip() == "y" * 95
+
+
+async def test_a_burst_of_sizes_replays_the_screen_once(monkeypatch) -> None:
+    connector = _fed([CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(cols, 40)) for cols in range(81, 181)])
+    applied: list[tuple[int, int]] = []
+    original = connector._apply_size
+    monkeypatch.setattr(connector, "_apply_size", lambda c, r: (applied.append((c, r)), original(c, r)))
+    messages = await connector.poll_messages()
+    assert applied == [(180, 40)]
+    assert [(m["cols"], m["rows"]) for m in messages] == [(180, 40)]
+
+
+async def test_a_size_there_and_back_in_one_poll_repaints_nothing() -> None:
+    connector = _fed(
+        [
+            CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(100, 40)),
+            CaptureFrame(CHANNEL_GEOMETRY, GEOMETRY.pack(80, 24)),
+        ]
+    )
+    assert await connector.poll_messages() == []

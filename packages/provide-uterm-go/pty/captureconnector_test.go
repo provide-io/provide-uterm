@@ -7,6 +7,13 @@ package pty
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -173,5 +180,170 @@ func TestCaptureConnectorStdinForwardingNoPath(t *testing.T) {
 	c := newCaptureConn(t, nil)
 	if got := c.HandleInput(context.Background(), "hi"); got != nil {
 		t.Fatalf("no stdin path → nil, got %+v", got)
+	}
+}
+
+// The geometry channel: whoever owns the pty (a supervisor; never the shim,
+// which cannot see a resize) says what size the terminal is, as >HH cols, rows.
+// The connector takes the size and repaints at once with a snapshot, which is
+// how every viewer learns it.
+
+func startedCaptureConn(t *testing.T) *CaptureConnector {
+	t.Helper()
+	c := newCaptureConn(t, map[string]any{"cols": 80, "rows": 24})
+	if err := c.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Stop(context.Background()) })
+	return c
+}
+
+func geometryPayload(cols, rows uint16) []byte {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint16(b, cols)
+	binary.BigEndian.PutUint16(b[2:], rows)
+	return b
+}
+
+func frameKinds(frames []Frame) []string {
+	out := make([]string, 0, len(frames))
+	for _, f := range frames {
+		if f["type"] == "snapshot" {
+			out = append(out, fmt.Sprintf("snapshot %vx%v", f["cols"], f["rows"]))
+		} else {
+			out = append(out, fmt.Sprint(f["type"]))
+		}
+	}
+	return out
+}
+
+func TestCaptureConnectorGeometryFrameResizesAndRepaints(t *testing.T) {
+	c := startedCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelStdout, Data: []byte("\x1b[2J\x1b[H" + strings.Repeat("x", 90))})
+	c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: geometryPayload(100, 40)})
+	frames := c.PollMessages()
+	// The output first, so a viewer streaming it is not handed it after the
+	// repaint that already contains it.
+	if got := frameKinds(frames); !reflect.DeepEqual(got, []string{"term", "snapshot 100x40"}) {
+		t.Fatalf("frames = %v", got)
+	}
+	if snap := c.GetSnapshot(); snap["cols"] != 100 || snap["rows"] != 40 {
+		t.Fatalf("snapshot dims = %vx%v", snap["cols"], snap["rows"])
+	}
+}
+
+func TestCaptureConnectorGeometryFrameAloneRepaints(t *testing.T) {
+	c := startedCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: geometryPayload(132, 50)})
+	if got := frameKinds(c.PollMessages()); !reflect.DeepEqual(got, []string{"snapshot 132x50"}) {
+		t.Fatalf("frames = %v", got)
+	}
+}
+
+func TestCaptureConnectorSameGeometryRepaintsNothing(t *testing.T) {
+	c := startedCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: geometryPayload(80, 24)})
+	if frames := c.PollMessages(); len(frames) != 0 {
+		t.Fatalf("frames = %v", frameKinds(frames))
+	}
+}
+
+func TestCaptureConnectorOnlyTheLastGeometryIsPainted(t *testing.T) {
+	c := startedCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: geometryPayload(100, 40)})
+	c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: geometryPayload(120, 30)})
+	if got := frameKinds(c.PollMessages()); !reflect.DeepEqual(got, []string{"snapshot 120x30"}) {
+		t.Fatalf("frames = %v", got)
+	}
+}
+
+func TestCaptureConnectorMalformedGeometryIsIgnored(t *testing.T) {
+	for name, payload := range map[string][]byte{
+		"empty":           {},
+		"three bytes":     {0x00, 0x64, 0x00},
+		"five bytes":      {0x00, 0x64, 0x00, 0x28, 0x00},
+		"cols over limit": geometryPayload(1001, 40),
+		"rows over limit": geometryPayload(40, 1001),
+		"zero cols":       geometryPayload(0, 40),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, _, ok := ParseGeometry(payload); ok {
+				t.Fatal("ParseGeometry accepted it")
+			}
+			c := startedCaptureConn(t)
+			c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: payload})
+			if frames := c.PollMessages(); len(frames) != 0 {
+				t.Fatalf("frames = %v", frameKinds(frames))
+			}
+			if c.cols != 80 || c.rows != 24 {
+				t.Fatalf("size changed to %dx%d", c.cols, c.rows)
+			}
+		})
+	}
+}
+
+func TestCaptureConnectorStatsFrameIsIgnored(t *testing.T) {
+	c := startedCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelStats, Data: []byte("attempts=1")})
+	if frames := c.PollMessages(); len(frames) != 0 {
+		t.Fatalf("frames = %v", frameKinds(frames))
+	}
+}
+
+// capture_geometry_frame in spec/behavior_vectors.json, generated from the
+// Python reference by scripts/generate_behavior_vectors.py; testdata/ holds a
+// byte-identical copy that scripts/check_protocol_drift.py keeps in step.
+func TestCaptureConnectorSharedGeometryVectors(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "behavior_vectors.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vectors struct {
+		Geometry []struct {
+			Name  string `json:"name"`
+			Frame string `json:"frame"`
+			Size  *struct {
+				Cols int `json:"cols"`
+				Rows int `json:"rows"`
+			} `json:"size"`
+		} `json:"capture_geometry_frame"`
+	}
+	if err := json.Unmarshal(raw, &vectors); err != nil {
+		t.Fatal(err)
+	}
+	if len(vectors.Geometry) == 0 {
+		t.Fatal("no capture_geometry_frame vectors")
+	}
+	for _, tc := range vectors.Geometry {
+		t.Run(tc.Name, func(t *testing.T) {
+			frame, err := hex.DecodeString(tc.Frame)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Through the socket's own reader, header and all.
+			c := startedCaptureConn(t)
+			sendFrames(t, c.socketPath, frame)
+			deadline := time.Now().Add(2 * time.Second)
+			for c.capture.QueueLen() == 0 && time.Now().Before(deadline) {
+				time.Sleep(5 * time.Millisecond)
+			}
+			got := frameKinds(c.PollMessages())
+			want := []string{}
+			if tc.Size != nil {
+				want = []string{fmt.Sprintf("snapshot %dx%d", tc.Size.Cols, tc.Size.Rows)}
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("frames = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestCaptureConnectorGeometryThereAndBackRepaintsNothing(t *testing.T) {
+	c := startedCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: geometryPayload(100, 40)})
+	c.capture.enqueue(CaptureFrame{Channel: ChannelGeometry, Data: geometryPayload(80, 24)})
+	if frames := c.PollMessages(); len(frames) != 0 {
+		t.Fatalf("frames = %v", frameKinds(frames))
 	}
 }

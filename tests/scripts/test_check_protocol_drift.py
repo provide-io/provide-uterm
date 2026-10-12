@@ -34,6 +34,7 @@ def test_repository_is_currently_consistent() -> None:
     """The committed tree must pass, or every other test here is untrustworthy."""
     assert check_protocol_drift.check_versions() == []
     assert check_protocol_drift.check_twinned_fixtures() == []
+    assert check_protocol_drift.check_capture_channels() == []
 
 
 def test_every_declaration_site_is_real() -> None:
@@ -210,3 +211,77 @@ def test_undiffable_ref_is_an_error_not_a_pass(monkeypatch) -> None:
 
     assert len(errors) == 1
     assert "could not diff" in errors[0]
+
+
+# ---------------------------------------------------------------------------
+# The capture wire's channel bytes
+#
+# Python, Go, TypeScript and the C shim each declare the capture channels. Go
+# had only three of Python's four for as long as stats existed, and nothing
+# noticed: an unknown channel is ignored, so nothing fails, the port just
+# quietly does less.
+# ---------------------------------------------------------------------------
+
+_PY_CHANNELS = "CHANNEL_STDOUT = 0x01\nCHANNEL_GEOMETRY = 0x05\n"
+_GO_CHANNELS = "const (\n\tChannelStdout   = 0x01\n\tChannelGeometry = 0x05\n)\n"
+_C_CHANNELS = "#define CHANNEL_STDOUT   0x01\n#define CHANNEL_GEOMETRY 0x05\n"
+
+
+def _channel_sites(monkeypatch, tmp_path: Path, python: str, go: str, c: str) -> None:
+    (tmp_path / "capture.py").write_text(python, encoding="utf-8")
+    (tmp_path / "capture.go").write_text(go, encoding="utf-8")
+    (tmp_path / "capture.c").write_text(c, encoding="utf-8")
+    sites = {label: pattern for label, _, pattern in check_protocol_drift.CAPTURE_CHANNEL_SITES}
+    monkeypatch.setattr(check_protocol_drift, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        check_protocol_drift,
+        "CAPTURE_CHANNEL_SITES",
+        (
+            ("python", "capture.py", sites["python/pty.capture"]),
+            ("go", "capture.go", sites["go/pty.capture"]),
+            ("c", "capture.c", sites["c/native.capture"]),
+        ),
+    )
+
+
+def test_every_capture_channel_site_is_real() -> None:
+    for label, relative, pattern in check_protocol_drift.CAPTURE_CHANNEL_SITES:
+        path = check_protocol_drift.ROOT / relative
+        assert path.is_file(), f"{label}: {relative} does not exist"
+        names = dict(re.findall(pattern, path.read_text(encoding="utf-8"), re.MULTILINE))
+        assert {"STDOUT", "STDIN", "CONNECT", "STATS", "GEOMETRY"} <= {n.upper() for n in names}, label
+
+
+def test_agreeing_capture_channels_pass(monkeypatch, tmp_path: Path) -> None:
+    _channel_sites(monkeypatch, tmp_path, _PY_CHANNELS, _GO_CHANNELS, _C_CHANNELS)
+
+    assert check_protocol_drift.check_capture_channels() == []
+
+
+def test_a_port_missing_a_capture_channel_is_reported(monkeypatch, tmp_path: Path) -> None:
+    go_without_geometry = "const (\n\tChannelStdout = 0x01\n)\n"
+    _channel_sites(monkeypatch, tmp_path, _PY_CHANNELS, go_without_geometry, _C_CHANNELS)
+
+    errors = check_protocol_drift.check_capture_channels()
+
+    assert len(errors) == 1
+    assert "capture-channel drift" in errors[0]
+    assert "go" in errors[0] and "GEOMETRY" in errors[0]
+
+
+def test_a_capture_channel_with_another_value_is_reported(monkeypatch, tmp_path: Path) -> None:
+    c_disagreeing = "#define CHANNEL_STDOUT   0x01\n#define CHANNEL_GEOMETRY 0x06\n"
+    _channel_sites(monkeypatch, tmp_path, _PY_CHANNELS, _GO_CHANNELS, c_disagreeing)
+
+    errors = check_protocol_drift.check_capture_channels()
+
+    assert len(errors) == 1
+    assert "c" in errors[0] and "GEOMETRY" in errors[0] and "0x06" in errors[0]
+
+
+def test_a_site_declaring_no_capture_channels_is_an_error(monkeypatch, tmp_path: Path) -> None:
+    _channel_sites(monkeypatch, tmp_path, _PY_CHANNELS, "package pty\n", _C_CHANNELS)
+
+    errors = check_protocol_drift.check_capture_channels()
+
+    assert any("no capture channel declarations" in error for error in errors)
