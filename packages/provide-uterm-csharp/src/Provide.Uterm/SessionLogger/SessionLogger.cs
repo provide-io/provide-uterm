@@ -129,12 +129,7 @@ public sealed class SessionLogger : IAsyncDisposable
             return;
         }
 
-        if (QuotaReached())
-        {
-            return;
-        }
-
-        await WriteAsync(eventName, RedactPayload(data));
+        await LogEventAsync(eventName, data);
     }
 
     /// <summary>
@@ -183,18 +178,17 @@ public sealed class SessionLogger : IAsyncDisposable
     /// <summary>
     /// The recordable copy of a caller payload. With a redactor every string is redacted,
     /// sensitive-key values masked and anything nested past the depth cap replaced
-    /// (<see cref="RedactionStructure.Redact"/>). Without one the payload is recorded verbatim
-    /// but still copied, so a caller mutating it afterwards cannot rewrite the buffered record.
+    /// (<see cref="RedactionStructure.Redact"/>). Without one, strings and keys are recorded
+    /// verbatim but the containers are still rebuilt by the same walker (a deep copy, same depth
+    /// cap), so a caller mutating any nested container afterwards cannot rewrite the buffered record.
     /// </summary>
     private Dictionary<string, object?> RedactPayload(IReadOnlyDictionary<string, object?> data)
     {
-        if (_redactor is null)
-        {
-            return new Dictionary<string, object?>(data);
-        }
-
-        return (Dictionary<string, object?>)RedactionStructure.Redact(data, _redactor, keyAware: true)!;
+        var redacted = RedactionStructure.Redact(data, _redactor ?? Verbatim, keyAware: _redactor is not null);
+        return redacted as Dictionary<string, object?> ?? new Dictionary<string, object?>();
     }
+
+    private static string Verbatim(string text) => text;
 
     private async Task WriteAsync(string eventName, Dictionary<string, object?> payload)
     {

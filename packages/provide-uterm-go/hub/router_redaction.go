@@ -5,16 +5,12 @@
 
 package hub
 
+import "github.com/provide-io/provide-uterm/packages/provide-uterm-go/redaction"
+
 // Frame-field redaction helpers for the message router. Port of
 // provide.uterm.server.bridge.hub.router_redaction. These are pure, stateless
 // helpers: they take a [StreamRedactor] and return redacted COPIES of wire
 // frames / nested payloads; they never mutate their inputs.
-
-// redactMaxDepth is the defensive recursion bound for redactValue. Wire frames
-// are JSON-decoded (acyclic) and shallow in practice; a value below the cap is
-// returned as-is rather than redacted — failing closed on depth (returning raw)
-// is the conservative choice on a hot broadcast path. Port of _REDACT_MAX_DEPTH.
-const redactMaxDepth = 32
 
 // RedactFrameFields is the concrete [Redactor] that wires the real
 // [StreamRedactor] into the hub's output-policy seam. It builds a redactor from
@@ -28,33 +24,17 @@ func RedactFrameFields(msg map[string]any, rules []RedactionRule) map[string]any
 	return redactFrameFields(msg, NewStreamRedactor(rules))
 }
 
-// redactValue recursively redacts string values inside nested map/slice
-// structures. Strings are redacted; maps and slices are walked (values/elements
-// only, not map keys); all other scalars are returned unchanged. Recursion is
-// capped at redactMaxDepth. The input is never mutated. Port of _redact_value.
-func redactValue(value any, r *StreamRedactor, depth int) any {
-	if s, ok := value.(string); ok {
-		return r.Redact(s)
-	}
-	if depth >= redactMaxDepth {
-		return value
-	}
-	switch v := value.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(v))
-		for k, vv := range v {
-			out[k] = redactValue(vv, r, depth+1)
-		}
-		return out
-	case []any:
-		out := make([]any, len(v))
-		for i, vv := range v {
-			out[i] = redactValue(vv, r, depth+1)
-		}
-		return out
-	default:
-		return value
-	}
+// redactValue returns a redacted copy of a nested map/slice structure via the
+// shared walker, redaction.RedactStructure: strings are redacted at any depth,
+// containers are rebuilt (map keys kept), other scalars pass through, and the
+// input is never mutated. A container redaction.RedactMaxDepth levels down is
+// replaced whole by redaction.DepthLimitMarker -- it is never returned
+// unwalked, which would ship any secret nested below the cap. With keyAware,
+// values under credential field names are masked too (annotation events);
+// broadcast frames keep key-aware off. Port of _redact_value (and, with
+// keyAware, of the annotation branch of _redact_event_payload).
+func redactValue(value any, r *StreamRedactor, keyAware bool) any {
+	return redaction.RedactStructure(value, r.Redact, redaction.StructureOptions{KeyAware: keyAware})
 }
 
 // redactFrameFields returns a copy of msg with its terminal-content string fields
@@ -75,7 +55,7 @@ func redactFrameFields(msg map[string]any, r *StreamRedactor) map[string]any {
 		// prompt_detected can carry the matched prompt text (which may include
 		// secrets); redact its nested string values. Absent/scalar stays as-is.
 		if pd, ok := out["prompt_detected"]; ok {
-			out["prompt_detected"] = redactValue(pd, r, 0)
+			out["prompt_detected"] = redactValue(pd, r, false)
 		}
 		return out
 	case "analysis":
@@ -85,9 +65,9 @@ func redactFrameFields(msg map[string]any, r *StreamRedactor) map[string]any {
 		case string:
 			out["raw"] = r.Redact(raw)
 		case map[string]any:
-			out["raw"] = redactValue(raw, r, 0)
+			out["raw"] = redactValue(raw, r, false)
 		case []any:
-			out["raw"] = redactValue(raw, r, 0)
+			out["raw"] = redactValue(raw, r, false)
 		}
 		return out
 	default:

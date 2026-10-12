@@ -73,27 +73,97 @@ export const DEPTH_LIMIT_MARKER = "[NESTED_REDACTED]";
 /** What the value of a sensitive key becomes under key-aware redaction. */
 export const SENSITIVE_KEY_MARKER = "[SECRET_REDACTED]";
 
-/** Field names whose value is a credential regardless of what it looks like. */
-export const SENSITIVE_KEY_NAMES: ReadonlySet<string> = new Set([
+/**
+ * Key-aware redaction rule, ported from `provide.uterm.redaction`.
+ *
+ * A key is split into lower-case segments (camelCase split, so `accessToken`
+ * is `access`, `token`; `-`, `.` and spaces act like `_`). It is sensitive when
+ * any segment is in {@link SENSITIVE_KEY_SEGMENTS} or two adjacent segments form
+ * a pair in {@link SENSITIVE_KEY_PAIRS} -- unless its last segment is in
+ * {@link NON_SECRET_KEY_SUFFIXES} (`token_count`, `token_type` describe a
+ * credential rather than hold one).
+ */
+export const SENSITIVE_KEY_SEGMENTS: ReadonlySet<string> = new Set([
   "token",
+  "secret",
   "password",
   "passwd",
   "passphrase",
-  "secret",
-  "api_key",
-  "apikey",
-  "authorization",
+  "credential",
+  "credentials",
   "cookie",
-  "private_key",
+  "authorization",
+  "apikey",
 ]);
 
-/** Any key ending in one of these is sensitive too (resume_token, client_secret, ...). */
-export const SENSITIVE_KEY_SUFFIXES: readonly string[] = ["_token", "_password", "_passphrase", "_secret", "_api_key"];
+/** Adjacent segment pairs that name a credential (`api_key`, `privateKey`, `access_key`). */
+export const SENSITIVE_KEY_PAIRS: readonly (readonly [string, string])[] = [
+  ["api", "key"],
+  ["private", "key"],
+  ["access", "key"],
+];
 
-/** Whether `key` names a credential field: lower-cased, `-` folded to `_`. */
+/** A key whose last segment is one of these describes a credential and stays visible. */
+export const NON_SECRET_KEY_SUFFIXES: ReadonlySet<string> = new Set([
+  "count",
+  "len",
+  "length",
+  "size",
+  "type",
+  "kind",
+  "ttl",
+  "expiry",
+  "expires",
+  "hash",
+  "required",
+  "enabled",
+]);
+
+function isUpper(ch: string): boolean {
+  return ch >= "A" && ch <= "Z";
+}
+
+function isLowerOrDigit(ch: string): boolean {
+  return (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9");
+}
+
+/** Split a key into lower-case segments, exactly as the reference `key_segments` does. */
+export function keySegments(key: string): string[] {
+  let out = "";
+  const last = key.length - 1;
+  for (let i = 0; i < key.length; i++) {
+    const ch = key.charAt(i);
+    if (i > 0 && isUpper(ch)) {
+      const prev = key.charAt(i - 1);
+      const next = i < last ? key.charAt(i + 1) : "";
+      if (isLowerOrDigit(prev) || (isUpper(prev) && next >= "a" && next <= "z")) {
+        out += "_";
+      }
+    }
+    out += ch;
+  }
+  return out
+    .toLowerCase()
+    .replaceAll("-", "_")
+    .replaceAll(".", "_")
+    .replaceAll(" ", "_")
+    .split("_")
+    .filter((segment) => segment.length > 0);
+}
+
+/** Whether `key` names a credential field (see {@link SENSITIVE_KEY_SEGMENTS}). */
 export function isSensitiveKey(key: string): boolean {
-  const folded = key.toLowerCase().replaceAll("-", "_");
-  return SENSITIVE_KEY_NAMES.has(folded) || SENSITIVE_KEY_SUFFIXES.some((suffix) => folded.endsWith(suffix));
+  const segments = keySegments(key);
+  const lastSegment = segments.at(-1);
+  if (lastSegment === undefined || NON_SECRET_KEY_SUFFIXES.has(lastSegment)) {
+    return false;
+  }
+  if (segments.some((segment) => SENSITIVE_KEY_SEGMENTS.has(segment))) {
+    return true;
+  }
+  return segments.some((segment, i) =>
+    SENSITIVE_KEY_PAIRS.some(([first, second]) => segment === first && segments[i + 1] === second),
+  );
 }
 
 /** Options for {@link redactStructure}. */
@@ -118,11 +188,21 @@ export function redactStructure(value: unknown, redactor: Redactor, options: Red
   return walk(value, redactor, options.keyAware ?? false, options.maxDepth ?? REDACT_MAX_DEPTH, 0);
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 function walk(value: unknown, redactor: Redactor, keyAware: boolean, maxDepth: number, depth: number): unknown {
   if (typeof value === "string") {
     return redactor(value);
   }
-  if (typeof value !== "object" || value === null) {
+  if (!Array.isArray(value) && !isPlainObject(value)) {
+    // Scalars, and objects that are not JSON-shaped records (Date, Map, Set,
+    // class instances): passed through unchanged rather than flattened to {}.
     return value;
   }
   if (depth >= maxDepth) {

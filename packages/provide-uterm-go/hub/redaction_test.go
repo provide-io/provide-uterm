@@ -8,8 +8,9 @@ package hub
 import (
 	"encoding/json"
 	"os"
-	"reflect"
 	"testing"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/redaction"
 )
 
 // --- StreamRedactor engine ------------------------------------------------
@@ -139,7 +140,7 @@ func TestRedactValueNestedAndScalars(t *testing.T) {
 		"none": nil,
 		"list": []any{"sec", 7, map[string]any{"k": "sec"}},
 	}
-	out := redactValue(in, r, 0).(map[string]any)
+	out := redactValue(in, r, false).(map[string]any)
 	mustEqual(t, out["s"].(string), "a [R] b", "string redacted")
 	mustEqual(t, out["n"].(int), 42, "int unchanged")
 	mustEqual(t, out["f"].(float64), 1.5, "float unchanged")
@@ -157,15 +158,39 @@ func TestRedactValueNestedAndScalars(t *testing.T) {
 
 func TestRedactValueDepthCap(t *testing.T) {
 	r := NewStreamRedactor([]RedactionRule{{Pattern: `sec`, Replacement: "[R]"}})
-	// A container AT the depth cap is returned verbatim (not walked), but a
-	// string is always redacted regardless of depth.
-	deep := map[string]any{"k": "sec"}
-	returned := redactValue(deep, r, redactMaxDepth)
-	// Same reference returned (not walked) because depth >= cap.
-	if !reflect.DeepEqual(returned, deep) || returned.(map[string]any)["k"] != "sec" {
-		t.Fatal("container at depth cap should be returned verbatim")
+	nest := func(n int) any {
+		var v any = "sec"
+		for i := 0; i < n; i++ {
+			v = map[string]any{"k": v}
+		}
+		return v
 	}
-	mustEqual(t, redactValue("sec", r, redactMaxDepth+5).(string), "[R]", "string redacted past cap")
+	innermost := func(v any) any {
+		for {
+			m, ok := v.(map[string]any)
+			if !ok {
+				return v
+			}
+			v = m["k"]
+		}
+	}
+	// The last level inside the cap is walked and redacted...
+	mustEqual(t, innermost(redactValue(nest(redaction.RedactMaxDepth), r, false)).(string), "[R]", "inside cap")
+	// ...and a container AT the cap is replaced whole, never returned verbatim
+	// (it used to be, which shipped any secret nested below the cap).
+	mustEqual(t, innermost(redactValue(nest(redaction.RedactMaxDepth+1), r, false)).(string),
+		redaction.DepthLimitMarker, "container at cap replaced")
+	mustEqual(t, redactValue("sec", r, false).(string), "[R]", "bare string redacted")
+}
+
+func TestRedactValueKeyAware(t *testing.T) {
+	r := NewStreamRedactor([]RedactionRule{{Pattern: `sec`, Replacement: "[R]"}})
+	in := map[string]any{"accessToken": "opaque", "note": "sec"}
+	off := redactValue(in, r, false).(map[string]any)
+	mustEqual(t, off["accessToken"].(string), "opaque", "key-aware off keeps value")
+	on := redactValue(in, r, true).(map[string]any)
+	mustEqual(t, on["accessToken"].(string), redaction.SensitiveKeyMarker, "key-aware on masks value")
+	mustEqual(t, on["note"].(string), "[R]", "text still redacted")
 }
 
 // --- redactFrameFields ----------------------------------------------------

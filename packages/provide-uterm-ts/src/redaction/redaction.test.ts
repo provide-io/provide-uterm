@@ -13,8 +13,10 @@ import {
   redactStructure,
   redactText,
   SENSITIVE_KEY_MARKER,
-  SENSITIVE_KEY_NAMES,
-  SENSITIVE_KEY_SUFFIXES,
+  keySegments,
+  NON_SECRET_KEY_SUFFIXES,
+  SENSITIVE_KEY_PAIRS,
+  SENSITIVE_KEY_SEGMENTS,
 } from "./index.ts";
 
 interface RedactionGolden {
@@ -143,19 +145,37 @@ describe("redactStructure", () => {
     expect(REDACT_MAX_DEPTH).toBe(32);
     expect(DEPTH_LIMIT_MARKER).toBe("[NESTED_REDACTED]");
     expect(SENSITIVE_KEY_MARKER).toBe("[SECRET_REDACTED]");
-    expect([...SENSITIVE_KEY_NAMES].sort()).toStrictEqual([
-      "api_key",
+    expect([...SENSITIVE_KEY_SEGMENTS].sort()).toStrictEqual([
       "apikey",
       "authorization",
       "cookie",
+      "credential",
+      "credentials",
       "passphrase",
       "passwd",
       "password",
-      "private_key",
       "secret",
       "token",
     ]);
-    expect(SENSITIVE_KEY_SUFFIXES).toStrictEqual(["_token", "_password", "_passphrase", "_secret", "_api_key"]);
+    expect(SENSITIVE_KEY_PAIRS).toStrictEqual([
+      ["api", "key"],
+      ["private", "key"],
+      ["access", "key"],
+    ]);
+    expect([...NON_SECRET_KEY_SUFFIXES].sort()).toStrictEqual([
+      "count",
+      "enabled",
+      "expires",
+      "expiry",
+      "hash",
+      "kind",
+      "len",
+      "length",
+      "required",
+      "size",
+      "ttl",
+      "type",
+    ]);
   });
 
   it("redacts strings at every level and keeps other scalars", () => {
@@ -226,14 +246,75 @@ describe("redactStructure", () => {
     "cookie",
     "private_key",
     "db_password",
+    "accessToken",
+    "clientSecret",
+    "privateKey",
+    "Set-Cookie",
+    "Proxy-Authorization",
+    "credentials",
+    "aws_secret_access_key",
+    "APIKey",
+    "x-api-key",
+    "access_key_id",
+    "HTTPCookie",
+    "refresh.token",
+    "Session Token",
   ])("treats %s as sensitive", (key) => {
     expect(isSensitiveKey(key)).toBe(true);
   });
 
-  it.each(["", "tokens", "token_count", "max_tokens", "secretary", "type", "tokenizer"])(
-    "treats %s as ordinary",
-    (key) => {
-      expect(isSensitiveKey(key)).toBe(false);
-    },
-  );
+  it.each([
+    "",
+    "_",
+    "tokens",
+    "token_count",
+    "max_tokens",
+    "secretary",
+    "type",
+    "tokenizer",
+    "token_type",
+    "password_required",
+    "secret_hash",
+    "session_id",
+    "api",
+    "keyApi",
+    "TOKEN_TTL",
+    "token2",
+  ])("treats %s as ordinary", (key) => {
+    expect(isSensitiveKey(key)).toBe(false);
+  });
+
+  it.each([
+    ["accessToken", ["access", "token"]],
+    ["APIKey", ["api", "key"]],
+    ["HTTPCookie", ["http", "cookie"]],
+    ["RESUME_TOKEN", ["resume", "token"]],
+    ["a.b c-d__e", ["a", "b", "c", "d", "e"]],
+    ["token2Fa", ["token2", "fa"]],
+    ["aB", ["a", "b"]],
+    ["AB", ["ab"]],
+    ["ABc", ["a", "bc"]],
+    ["", []],
+  ])("splits %s into segments", (key, segments) => {
+    expect(keySegments(key as string)).toStrictEqual(segments);
+  });
+
+  it("passes non-plain objects through unchanged instead of flattening them", () => {
+    class Point {
+      constructor(readonly x: string) {}
+    }
+    const date = new Date(0);
+    const map = new Map([["k", "S3cret"]]);
+    const set = new Set(["S3cret"]);
+    const point = new Point("S3cret");
+    const out = redactStructure(
+      { date, map, set, point, bare: Object.assign(Object.create(null), { s: "S3cret" }) },
+      r,
+    ) as Record<string, unknown>;
+    expect(out.date).toBe(date);
+    expect(out.map).toBe(map);
+    expect(out.set).toBe(set);
+    expect(out.point).toBe(point);
+    expect(out.bare).toStrictEqual({ s: "[REDACTED]" });
+  });
 });

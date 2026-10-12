@@ -60,9 +60,12 @@ public class RedactionStructureTests
         Assert.Equal("[NESTED_REDACTED]", S.DepthLimitMarker);
         Assert.Equal("[SECRET_REDACTED]", S.SensitiveKeyMarker);
         Assert.Equal(
-            new[] { "api_key", "apikey", "authorization", "cookie", "passphrase", "passwd", "password", "private_key", "secret", "token" },
-            S.SensitiveKeyNames.OrderBy(k => k, StringComparer.Ordinal));
-        Assert.Equal(new[] { "_token", "_password", "_passphrase", "_secret", "_api_key" }, S.SensitiveKeySuffixes);
+            new[] { "apikey", "authorization", "cookie", "credential", "credentials", "passphrase", "passwd", "password", "secret", "token" },
+            S.SensitiveKeySegments.OrderBy(k => k, StringComparer.Ordinal));
+        Assert.Equal(new[] { ("api", "key"), ("private", "key"), ("access", "key") }, S.SensitiveKeyPairs);
+        Assert.Equal(
+            new[] { "count", "enabled", "expires", "expiry", "hash", "kind", "len", "length", "required", "size", "ttl", "type" },
+            S.NonSecretKeySuffixes.OrderBy(k => k, StringComparer.Ordinal));
     }
 
     [Fact]
@@ -143,6 +146,27 @@ public class RedactionStructureTests
     [InlineData("cookie", true)]
     [InlineData("private_key", true)]
     [InlineData("db_password", true)]
+    [InlineData("accessToken", true)]
+    [InlineData("clientSecret", true)]
+    [InlineData("privateKey", true)]
+    [InlineData("Set-Cookie", true)]
+    [InlineData("Proxy-Authorization", true)]
+    [InlineData("credentials", true)]
+    [InlineData("aws_secret_access_key", true)]
+    [InlineData("APIKey", true)]
+    [InlineData("x-api-key", true)]
+    [InlineData("access_key_id", true)]
+    [InlineData("HTTPCookie", true)]
+    [InlineData("refresh.token", true)]
+    [InlineData("Session Token", true)]
+    [InlineData("_", false)]
+    [InlineData("token_type", false)]
+    [InlineData("password_required", false)]
+    [InlineData("secret_hash", false)]
+    [InlineData("session_id", false)]
+    [InlineData("keyApi", false)]
+    [InlineData("TOKEN_TTL", false)]
+    [InlineData("token2", false)]
     [InlineData("", false)]
     [InlineData("tokens", false)]
     [InlineData("token_count", false)]
@@ -280,5 +304,106 @@ public class RedactionStructureTests
         await logger.StopAsync();
         var entry = (await store.GetEntriesAsync("s1", new Query { Limit = 500 })).Single(e => (string)e["event"]! == "custom");
         Assert.Equal("{\"nested\":{\"x\":\"[REDACTED]\"},\"password\":\"[SECRET_REDACTED]\"}", JsonSerializer.Serialize(entry["data"]));
+    }
+
+    [Theory]
+    [InlineData("accessToken", "access,token")]
+    [InlineData("APIKey", "api,key")]
+    [InlineData("HTTPCookie", "http,cookie")]
+    [InlineData("RESUME_TOKEN", "resume,token")]
+    [InlineData("a.b c-d__e", "a,b,c,d,e")]
+    [InlineData("token2Fa", "token2,fa")]
+    [InlineData("aB", "a,b")]
+    [InlineData("AB", "ab")]
+    [InlineData("ABc", "a,bc")]
+    [InlineData("", "")]
+    public void KeySegments_Match_The_Reference(string key, string expected)
+    {
+        Assert.Equal(expected, string.Join(",", S.KeySegments(key)));
+    }
+
+    [Fact]
+    public void Generic_And_ReadOnly_Dictionaries_Are_Walked_Not_Flattened()
+    {
+        var input = new Dictionary<string, object?>
+        {
+            ["generic"] = new Dictionary<string, string> { ["note"] = "S3cretA", ["accessToken"] = "x" },
+            ["readonly"] = new System.Collections.ObjectModel.ReadOnlyDictionary<string, object?>(
+                new Dictionary<string, object?> { ["n"] = 1, ["s"] = "S3cretB" }),
+            ["sorted"] = new SortedList<int, string> { [2] = "S3cretC" },
+            ["custom"] = new PairsOnly(new Dictionary<string, object?> { ["password"] = "p", ["k"] = "S3cretD" }),
+        };
+        var got = JsonSerializer.Serialize(S.Redact(input, Secret, keyAware: true));
+        Assert.Equal(
+            "{\"generic\":{\"note\":\"[REDACTED]\",\"accessToken\":\"[SECRET_REDACTED]\"},\"readonly\":{\"n\":1,\"s\":\"[REDACTED]\"},\"sorted\":{\"2\":\"[REDACTED]\"},\"custom\":{\"password\":\"[SECRET_REDACTED]\",\"k\":\"[REDACTED]\"}}",
+            got);
+    }
+
+    /// <summary>An IReadOnlyDictionary that is not a non-generic IDictionary.</summary>
+    private sealed class PairsOnly(Dictionary<string, object?> inner) : IReadOnlyDictionary<string, object?>
+    {
+        public object? this[string key] => inner[key];
+        public IEnumerable<string> Keys => inner.Keys;
+        public IEnumerable<object?> Values => inner.Values;
+        public int Count => inner.Count;
+        public bool ContainsKey(string key) => inner.ContainsKey(key);
+        public bool TryGetValue(string key, out object? value) => inner.TryGetValue(key, out value);
+        public IEnumerator<KeyValuePair<string, object?>> GetEnumerator() => inner.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    [Fact]
+    public async Task ReadOnly_Root_Payload_Is_Recorded()
+    {
+        var store = new InMemoryStore();
+        var logger = new SessionLog(store, new SessionLogOpts { Redactor = Secret });
+        await logger.StartAsync("s1");
+        await logger.LogEventAsync("custom", new PairsOnly(new Dictionary<string, object?> { ["x"] = "S3cret", ["token"] = "t" }));
+        await logger.StopAsync();
+        var entry = (await store.GetEntriesAsync("s1", new Query { Limit = 500 })).Single(e => (string)e["event"]! == "custom");
+        Assert.Equal("{\"x\":\"[REDACTED]\",\"token\":\"[SECRET_REDACTED]\"}", JsonSerializer.Serialize(entry["data"]));
+    }
+
+    [Fact]
+    public void JsonNode_Trees_Keep_Their_Shape_And_Types()
+    {
+        var node = JsonNode.Parse("{\"s\":\"a S3cret\",\"n\":1.5,\"b\":true,\"z\":null,\"arr\":[\"S3cretX\",2,{\"apiKey\":\"k\",\"token\":null}],\"o\":{\"k\":\"v\"}}");
+        var got = S.Redact(node, Secret, keyAware: true);
+        Assert.IsType<JsonObject>(got);
+        Assert.Equal(
+            "{\"s\":\"a [REDACTED]\",\"n\":1.5,\"b\":true,\"z\":null,\"arr\":[\"[REDACTED]\",2,{\"apiKey\":\"[SECRET_REDACTED]\",\"token\":null}],\"o\":{\"k\":\"v\"}}",
+            ((JsonNode)got!).ToJsonString());
+        Assert.Equal("a S3cret", node!["s"]!.GetValue<string>());
+        Assert.Equal("[REDACTED]", ((JsonNode)S.Redact(JsonValue.Create("S3cret"), Secret)!).GetValue<string>());
+        Assert.Equal("[NESTED_REDACTED]", ((JsonNode)S.Redact(JsonNode.Parse("[[1]]"), Secret, maxDepth: 1)!)[0]!.GetValue<string>());
+        Assert.Equal("[NESTED_REDACTED]", ((JsonNode)S.Redact(JsonNode.Parse("{\"a\":{}}"), Secret, maxDepth: 1)!)["a"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void JsonElement_Is_Redacted_Into_Plain_Containers()
+    {
+        using var doc = JsonDocument.Parse("{\"s\":\"a S3cret\",\"n\":7,\"b\":false,\"z\":null,\"arr\":[\"S3cretX\",{\"clientSecret\":\"c\",\"password\":null}],\"deep\":[[1]]}");
+        var got = S.Redact(doc.RootElement, Secret, keyAware: true, maxDepth: 2);
+        Assert.Equal(
+            "{\"s\":\"a [REDACTED]\",\"n\":7,\"b\":false,\"z\":null,\"arr\":[\"[REDACTED]\",\"[NESTED_REDACTED]\"],\"deep\":[\"[NESTED_REDACTED]\"]}",
+            JsonSerializer.Serialize(got));
+        var flat = S.Redact(doc.RootElement.GetProperty("arr")[1], Secret, keyAware: true);
+        Assert.Equal("{\"clientSecret\":\"[SECRET_REDACTED]\",\"password\":null}", JsonSerializer.Serialize(flat));
+    }
+
+    [Fact]
+    public async Task No_Redactor_Deep_Copies_And_LogAsync_Delegates()
+    {
+        var store = new InMemoryStore();
+        var logger = new SessionLog(store, new SessionLogOpts { ControlChannelMode = ControlChannelMode.Wire });
+        await logger.StartAsync("s1");
+        var cursor = new Dictionary<string, object?> { ["x"] = 1 };
+        var rows = new List<object?> { "a" };
+        await logger.LogAsync("read", new Dictionary<string, object?> { ["cursor"] = cursor, ["rows"] = rows, ["token"] = "t" });
+        cursor["x"] = 99;
+        rows.Add("b");
+        await logger.StopAsync();
+        var entry = (await store.GetEntriesAsync("s1", new Query { Limit = 500 })).Single(e => (string)e["event"]! == "read");
+        Assert.Equal("{\"cursor\":{\"x\":1},\"rows\":[\"a\"],\"token\":\"t\"}", JsonSerializer.Serialize(entry["data"]));
     }
 }

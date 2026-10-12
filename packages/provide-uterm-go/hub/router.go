@@ -18,9 +18,17 @@ import (
 // router_impl._BROADCAST_SEND_TIMEOUT_S.
 const broadcastSendTimeoutS = 5.0
 
-// contentEventTypes are the event types whose payloads carry terminal output
-// and would be redacted at write time. Port of _REDACTED_EVENT_TYPES.
+// contentEventTypes are the frame types whose broadcast is role-redacted when
+// an output-policy gate is active. Port of the {"term", "snapshot",
+// "analysis"} literal in router_broadcast.broadcast.
 var contentEventTypes = map[string]bool{"term": true, "snapshot": true, "analysis": true}
+
+// redactedEventTypes are the event types whose payloads are redacted with the
+// server-default ruleset BEFORE they enter the event ring, so the ring (read
+// by the events API, watch and MCP tools) never holds what the broadcast
+// scrubs. annotation is free text an operator or a detector wrote. Port of
+// MessageRouter._REDACTED_EVENT_TYPES.
+var redactedEventTypes = map[string]bool{"term": true, "snapshot": true, "analysis": true, "annotation": true}
 
 // MessageRouter owns the outbound-frame plumbing: broadcasts, worker sends,
 // hijack-state notifications, the event ring buffer, and the behavioral
@@ -36,6 +44,11 @@ type MessageRouter struct {
 
 	keystrokeMu sync.Mutex
 	keystrokes  map[BrowserConn][]float64
+
+	// eventRedactor is the server-default redactor for write-time event-ring
+	// redaction, built lazily on the first content event.
+	eventRedactorOnce sync.Once
+	eventRedactor     *StreamRedactor
 }
 
 // newMessageRouter builds a router bound to hub.
@@ -65,6 +78,9 @@ func (r *MessageRouter) AppendEvent(
 	payload := data
 	if payload == nil {
 		payload = map[string]any{}
+	}
+	if redactedEventTypes[eventType] {
+		payload = r.redactEventPayload(eventType, payload)
 	}
 	if eventType == "term" {
 		if raw, ok := payload["data"].(string); ok {
@@ -368,4 +384,26 @@ func runeSlice(s string, n int) string {
 		return s
 	}
 	return string(r[:n])
+}
+
+// redactEventPayload redacts a content event's payload at write time with the
+// server-default ruleset (built once). term/snapshot/analysis payloads are
+// treated as frames and go through redactFrameFields, minus the synthetic
+// "type" key; a term event whose data is not a string is stored verbatim (the
+// term branch would coerce it). An annotation has no fixed content field, so
+// every string is redacted, key-aware -- the same policy the session recorder
+// applies. Never mutates the input. Port of _redact_event_payload.
+func (r *MessageRouter) redactEventPayload(eventType string, payload map[string]any) map[string]any {
+	if _, isString := payload["data"].(string); eventType == "term" && !isString {
+		return payload
+	}
+	r.eventRedactorOnce.Do(func() { r.eventRedactor = NewStreamRedactor(DefaultRules()) })
+	if eventType == "annotation" {
+		return redactValue(payload, r.eventRedactor, true).(map[string]any)
+	}
+	frame := copyMap(payload)
+	frame["type"] = eventType
+	redacted := redactFrameFields(frame, r.eventRedactor)
+	delete(redacted, "type")
+	return redacted
 }

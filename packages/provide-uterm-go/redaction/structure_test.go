@@ -115,7 +115,7 @@ func TestStructureKeepsNilContainersNil(t *testing.T) {
 		t.Fatalf("nil map became %#v", got)
 	}
 	// Even past the cap a nil container stays what it was: it holds nothing.
-	if got := RedactStructure(nilSlice, r, StructureOptions{MaxDepth: -1}); !reflect.DeepEqual(got, nilSlice) {
+	if got := RedactStructure(nilSlice, r, StructureOptions{MaxDepth: depth(-1)}); !reflect.DeepEqual(got, nilSlice) {
 		t.Fatalf("nil slice became %#v", got)
 	}
 }
@@ -136,26 +136,55 @@ func TestStructureDepthCapBoundary(t *testing.T) {
 	if got := innermost(RedactStructure(nest(RedactMaxDepth, 5, "list"), r, StructureOptions{})); got != 5 {
 		t.Fatalf("scalar at cap = %v", got)
 	}
-	arr := RedactStructure([1]any{[1]any{"x"}}, r, StructureOptions{MaxDepth: 1})
+	arr := RedactStructure([1]any{[1]any{"x"}}, r, StructureOptions{MaxDepth: depth(1)})
 	if !reflect.DeepEqual(arr, []any{DepthLimitMarker}) {
 		t.Fatalf("array at cap = %#v", arr)
 	}
 }
 
+func depth(n int) *int { return &n }
+
 func TestStructureMaxDepthOption(t *testing.T) {
 	r := testRedactor(t)
-	if got := RedactStructure(map[string]any{"a": map[string]any{"b": "x"}}, r, StructureOptions{MaxDepth: 1}); !reflect.DeepEqual(got, map[string]any{"a": DepthLimitMarker}) {
+	if got := RedactStructure(map[string]any{"a": map[string]any{"b": "x"}}, r, StructureOptions{MaxDepth: depth(1)}); !reflect.DeepEqual(got, map[string]any{"a": DepthLimitMarker}) {
 		t.Fatalf("MaxDepth 1 = %#v", got)
 	}
-	if got := RedactStructure(map[string]any{"a": map[string]any{"b": "S3cret"}}, r, StructureOptions{MaxDepth: 2}); !reflect.DeepEqual(got, map[string]any{"a": map[string]any{"b": "[REDACTED]"}}) {
+	if got := RedactStructure(map[string]any{"a": map[string]any{"b": "S3cret"}}, r, StructureOptions{MaxDepth: depth(2)}); !reflect.DeepEqual(got, map[string]any{"a": map[string]any{"b": "[REDACTED]"}}) {
 		t.Fatalf("MaxDepth 2 = %#v", got)
 	}
-	// Zero and negative select the default cap rather than capping at the root.
-	for _, md := range []int{0, -3} {
-		got := RedactStructure(nest(RedactMaxDepth, "S3cretLeaf", "map"), r, StructureOptions{MaxDepth: md})
-		if innermost(got) != "[REDACTED]" {
-			t.Fatalf("MaxDepth %d did not select the default", md)
+	// 0 caps at the root, like the reference's max_depth=0; a string is still redacted.
+	if got := RedactStructure([]any{"x"}, r, StructureOptions{MaxDepth: depth(0)}); got != DepthLimitMarker {
+		t.Fatalf("MaxDepth 0 = %#v", got)
+	}
+	if got := RedactStructure("S3cret", r, StructureOptions{MaxDepth: depth(0)}); got != "[REDACTED]" {
+		t.Fatalf("MaxDepth 0 string = %#v", got)
+	}
+	// nil selects the default cap.
+	if got := RedactStructure(nest(RedactMaxDepth, "S3cretLeaf", "map"), r, StructureOptions{}); innermost(got) != "[REDACTED]" {
+		t.Fatal("nil MaxDepth did not select the default")
+	}
+}
+
+func TestStructureKeyAwareKeepsTypedNilsNull(t *testing.T) {
+	r := testRedactor(t)
+	var nilPtr *string
+	var nilMap map[string]any
+	var nilSlice []string
+	var nilIface error
+	got := RedactStructure(map[string]any{
+		"token": nilPtr, "secret": nilMap, "password": nilSlice, "cookie": nilIface,
+		"apiKey": "live", "accessToken": new(string),
+	}, r, StructureOptions{KeyAware: true}).(map[string]any)
+	for _, k := range []string{"token", "secret", "password", "cookie"} {
+		if !isNil(got[k]) {
+			t.Fatalf("%s: typed nil was masked: %#v", k, got[k])
 		}
+	}
+	if got["apiKey"] != SensitiveKeyMarker || got["accessToken"] != SensitiveKeyMarker {
+		t.Fatalf("non-nil values not masked: %#v", got)
+	}
+	if isNil(0) || isNil("") || isNil(struct{}{}) {
+		t.Fatal("non-nilable kinds reported nil")
 	}
 }
 
@@ -202,15 +231,44 @@ func TestIsSensitiveKey(t *testing.T) {
 	for _, key := range []string{
 		"token", "TOKEN", "Resume-Token", "session_token", "password", "passwd", "passphrase",
 		"ssh_passphrase", "secret", "client_secret", "api_key", "api-key", "apikey", "openai_api_key",
-		"Authorization", "cookie", "private_key", "db_password",
+		"Authorization", "cookie", "private_key", "db_password", "accessToken", "clientSecret",
+		"privateKey", "Set-Cookie", "Proxy-Authorization", "credentials", "credential",
+		"aws_secret_access_key", "APIKey", "x-api-key", "access_key_id", "HTTPCookie", "refresh.token",
+		"Session Token",
 	} {
 		if !IsSensitiveKey(key) {
 			t.Errorf("%q should be sensitive", key)
 		}
 	}
-	for _, key := range []string{"", "tokens", "token_count", "max_tokens", "secretary", "type", "tokenizer"} {
+	for _, key := range []string{
+		"", "_", "tokens", "token_count", "max_tokens", "secretary", "type", "tokenizer", "token_type",
+		"password_required", "secret_hash", "session_id", "api", "key", "keyApi", "privately_key",
+		"TOKEN_TTL", "token2",
+	} {
 		if IsSensitiveKey(key) {
 			t.Errorf("%q should be ordinary", key)
+		}
+	}
+}
+
+func TestKeySegments(t *testing.T) {
+	cases := map[string][]string{
+		"accessToken":  {"access", "token"},
+		"APIKey":       {"api", "key"},
+		"HTTPCookie":   {"http", "cookie"},
+		"RESUME_TOKEN": {"resume", "token"},
+		"a.b c-d__e":   {"a", "b", "c", "d", "e"},
+		"token2Fa":     {"token2", "fa"},
+		"X":            {"x"},
+		"aB":           {"a", "b"},
+		"AB":           {"ab"},
+		"ABc":          {"a", "bc"},
+		"ABC":          {"abc"},
+		"":             {},
+	}
+	for key, want := range cases {
+		if got := KeySegments(key); !reflect.DeepEqual(got, want) {
+			t.Errorf("KeySegments(%q) = %#v, want %#v", key, got, want)
 		}
 	}
 }
