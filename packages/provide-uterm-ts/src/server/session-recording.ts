@@ -19,6 +19,7 @@
  * failing test rather than a recording a reader cannot parse.
  */
 
+import { randomBytes } from "node:crypto";
 import { type Annotation, annotationToWire, type PatternDetector, StreamingDetector } from "../annotation/index.ts";
 import type { WorkerMessage } from "../connectors/index.ts";
 import { encodeControlFrame, encodeTerminalData } from "../control-channel/index.ts";
@@ -174,6 +175,14 @@ export interface SessionRecordingOptions {
  */
 export class SessionRecording {
   readonly #sessionId: string;
+  /**
+   * Names this session's recordings to the store. A session id outlives the
+   * session it names -- a PAM capture id is a pid, and pids are reused -- so a
+   * new connection continues the recording only under the same instance, and
+   * a later session reusing the id starts its own. Port of the reference's
+   * `HostedSessionRuntime._recording_instance`.
+   */
+  readonly #instance = randomBytes(16).toString("hex");
   readonly #store: RecordingStore;
   readonly #settings: RecordingSettings;
   #logger: SessionLogger | undefined;
@@ -276,6 +285,7 @@ export class SessionRecording {
       // dropped these and recorded every session at the logger's defaults.
       flushIntervalS: this.#settings.flushIntervalS,
       batchSize: this.#settings.flushBatchSize,
+      instance: this.#instance,
     });
     await logger.start(this.#sessionId);
     this.#logger = logger;
