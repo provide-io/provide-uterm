@@ -30,13 +30,14 @@ from provide.uterm.server.registry import SessionRegistry, SessionValidationErro
 SID = "pam-suokki-capture-4242-777"
 
 
-def _registry(store: RecordingStore, directory: Path) -> SessionRegistry:
+def _registry(store: RecordingStore, directory: Path, max_sessions: int | None = None) -> SessionRegistry:
     return SessionRegistry(
         [],
         hub=TermHub(),
         public_base_url="http://127.0.0.1:9",
         recording=RecordingConfig(directory=directory),
         recording_store=store,
+        max_sessions=max_sessions,
     )
 
 
@@ -283,3 +284,76 @@ async def test_a_delete_cancelled_mid_retire_releases_its_reservation(tmp_path: 
     with pytest.raises(asyncio.CancelledError):
         await deleting
     assert SID not in registry._retiring
+
+
+async def test_a_create_past_its_deadline_is_refused_without_waiting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(registry_module, "_RESERVED_ID_WAIT_S", 0.0)
+    registry = _registry(InMemoryRecordingStore(), tmp_path)
+    await registry.create_session(_payload())
+    runtime = registry.get_runtime(SID)
+    assert runtime is not None
+    release = asyncio.Event()
+
+    async def slow_stop() -> None:
+        await release.wait()
+
+    runtime.stop = slow_stop  # type: ignore[method-assign]
+    deleting = asyncio.create_task(registry.delete_session(SID))
+    await asyncio.sleep(0)
+    with pytest.raises(ValueError, match="being deleted"):
+        await registry.create_session(_payload())
+    release.set()
+    await deleting
+
+
+async def test_a_second_delete_during_the_teardown_leaves_it_to_the_first(tmp_path: Path) -> None:
+    registry = _registry(InMemoryRecordingStore(), tmp_path)
+    await registry.create_session(_payload())
+    runtime = registry.get_runtime(SID)
+    assert runtime is not None
+    release = asyncio.Event()
+    stops = 0
+
+    async def slow_stop() -> None:
+        nonlocal stops
+        stops += 1
+        await release.wait()
+
+    runtime.stop = slow_stop  # type: ignore[method-assign]
+    deleting = asyncio.create_task(registry.delete_session(SID))
+    await asyncio.sleep(0)
+    await asyncio.wait_for(registry.delete_session(SID), 1.0)  # returns at once
+    assert SID in registry._retiring
+    release.set()
+    await deleting
+    assert stops == 1
+    assert SID not in registry._retiring
+
+
+async def test_a_removal_whose_reservation_is_gone_still_retires(tmp_path: Path) -> None:
+    store = InMemoryRecordingStore()
+    registry = _registry(store, tmp_path)
+    await _record(store, "secretA")
+    await registry._finish_removal(SID, None)  # nothing reserved the id
+    assert SID not in registry._retiring
+    assert (await store.recording_meta(SID))["exists"] is False
+
+
+async def test_the_session_limit_is_checked_again_at_the_insert(tmp_path: Path) -> None:
+    """Two creates of different ids both pass the early limit check; only one fits."""
+
+    class SlowRetire(InMemoryRecordingStore):
+        async def retire_session(self, session_id: str) -> None:
+            await asyncio.sleep(0.02)
+            await super().retire_session(session_id)
+
+    registry = _registry(SlowRetire(), tmp_path, max_sessions=1)
+    results = await asyncio.gather(
+        registry.create_session(_payload("one")), registry.create_session(_payload("two")), return_exceptions=True
+    )
+    errors = [r for r in results if isinstance(r, BaseException)]
+    assert len(errors) == 1
+    assert isinstance(errors[0], ValueError) and "session limit reached" in str(errors[0])
+    assert not registry._retiring
