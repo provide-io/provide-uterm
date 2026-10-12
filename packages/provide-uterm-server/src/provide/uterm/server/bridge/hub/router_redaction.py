@@ -18,16 +18,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from provide.uterm.redaction import REDACT_MAX_DEPTH, redact_structure
+from provide.uterm.redaction import redact_structure
 
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub.redaction import StreamRedactor
-
-
-# The depth cap now lives with the shared walker in ``provide.uterm.redaction``
-# (the session recorder uses the same one). Re-exported under its old name so
-# the tests that pin the boundary keep importing it from here.
-_REDACT_MAX_DEPTH = REDACT_MAX_DEPTH
 
 
 def _redact_value(value: Any, redactor: StreamRedactor) -> Any:
@@ -36,7 +30,7 @@ def _redact_value(value: Any, redactor: StreamRedactor) -> Any:
     Delegates to :func:`provide.uterm.redaction.redact_structure`: strings are
     redacted, containers are rebuilt (dict keys kept, tuples become lists),
     other scalars pass through, and the input is never mutated. A container
-    ``_REDACT_MAX_DEPTH`` levels down is replaced by
+    ``provide.uterm.redaction.REDACT_MAX_DEPTH`` levels down is replaced by
     :data:`provide.uterm.redaction.DEPTH_LIMIT_MARKER` -- it used to be
     returned verbatim, which shipped any secret nested below the cap
     unredacted. Key-aware masking is off here: broadcast frames keep their
@@ -80,4 +74,4 @@ def _redact_frame_fields(msg: dict[str, Any], redactor: StreamRedactor) -> dict[
     return msg
 
 
-__all__ = ["_REDACT_MAX_DEPTH", "_redact_frame_fields", "_redact_value"]
+__all__ = ["_redact_frame_fields", "_redact_value"]

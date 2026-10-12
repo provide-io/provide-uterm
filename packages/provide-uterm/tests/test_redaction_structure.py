@@ -24,11 +24,13 @@ import pytest
 
 from provide.uterm.redaction import (
     DEPTH_LIMIT_MARKER,
+    NON_SECRET_KEY_SUFFIXES,
     REDACT_MAX_DEPTH,
     SENSITIVE_KEY_MARKER,
-    SENSITIVE_KEY_NAMES,
-    SENSITIVE_KEY_SUFFIXES,
+    SENSITIVE_KEY_PAIRS,
+    SENSITIVE_KEY_SEGMENTS,
     is_sensitive_key,
+    key_segments,
     make_redactor,
     redact_structure,
 )
@@ -63,20 +65,39 @@ def test_the_constants_are_the_values_the_ports_mirror() -> None:
         frozenset(
             {
                 "token",
+                "secret",
                 "password",
                 "passwd",
                 "passphrase",
-                "secret",
-                "api_key",
-                "apikey",
-                "authorization",
+                "credential",
+                "credentials",
                 "cookie",
-                "private_key",
+                "authorization",
+                "apikey",
             }
         )
-        == SENSITIVE_KEY_NAMES
+        == SENSITIVE_KEY_SEGMENTS
     )
-    assert SENSITIVE_KEY_SUFFIXES == ("_token", "_password", "_passphrase", "_secret", "_api_key")
+    assert frozenset({("api", "key"), ("private", "key"), ("access", "key")}) == SENSITIVE_KEY_PAIRS
+    assert (
+        frozenset(
+            {
+                "count",
+                "len",
+                "length",
+                "size",
+                "type",
+                "kind",
+                "ttl",
+                "expiry",
+                "expires",
+                "hash",
+                "required",
+                "enabled",
+            }
+        )
+        == NON_SECRET_KEY_SUFFIXES
+    )
 
 
 def test_strings_are_redacted_at_any_level() -> None:
@@ -178,6 +199,21 @@ def test_a_frame_far_deeper_than_the_recursion_limit_does_not_raise() -> None:
         "cookie",
         "private_key",
         "db_password",
+        "accessToken",
+        "clientSecret",
+        "privateKey",
+        "Set-Cookie",
+        "Proxy-Authorization",
+        "credentials",
+        "credential",
+        "aws_secret_access_key",
+        "APIKey",
+        "apiKey",
+        "x-api-key",
+        "access_key_id",
+        "HTTPCookie",
+        "refresh.token",
+        "Session Token",
     ],
 )
 def test_sensitive_keys(key: str) -> None:
@@ -186,7 +222,30 @@ def test_sensitive_keys(key: str) -> None:
 
 @pytest.mark.parametrize(
     "key",
-    ["", "tokens", "token_count", "max_tokens", "screen", "keys", "passwords_seen", "secretary", "type", "tokenizer"],
+    [
+        "",
+        "_",
+        "tokens",
+        "token_count",
+        "max_tokens",
+        "screen",
+        "keys",
+        "passwords_seen",
+        "secretary",
+        "type",
+        "tokenizer",
+        "token_type",
+        "password_required",
+        "secret_hash",
+        "cookie_len",
+        "session_id",
+        "api",
+        "key",
+        "keyApi",
+        "privately_key",
+        "TOKEN_TTL",
+        "token2",
+    ],
 )
 def test_ordinary_keys(key: str) -> None:
     assert is_sensitive_key(key) is False
@@ -220,3 +279,25 @@ def test_key_aware_is_off_by_default_and_propagates_when_on() -> None:
 
 def test_non_string_keys_are_kept_and_never_matched() -> None:
     assert redact_structure({1: "S3cret", None: "v"}, _R, key_aware=True) == {1: "[REDACTED]", None: "v"}
+
+
+@pytest.mark.parametrize(
+    ("key", "segments"),
+    [
+        ("accessToken", ["access", "token"]),
+        ("APIKey", ["api", "key"]),
+        ("HTTPCookie", ["http", "cookie"]),
+        ("RESUME_TOKEN", ["resume", "token"]),
+        ("Resume-Token", ["resume", "token"]),
+        ("a.b c-d__e", ["a", "b", "c", "d", "e"]),
+        ("token2Fa", ["token2", "fa"]),
+        ("X", ["x"]),
+        ("aB", ["a", "b"]),
+        ("AB", ["ab"]),
+        ("ABc", ["a", "bc"]),
+        ("ABC", ["abc"]),
+        ("", []),
+    ],
+)
+def test_key_segments(key: str, segments: list[str]) -> None:
+    assert key_segments(key) == segments

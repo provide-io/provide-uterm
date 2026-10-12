@@ -34,6 +34,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING, Any, overload
 
 from provide.telemetry import get_logger
+from provide.uterm.redaction import redact_structure
 from provide.uterm.server.bridge.frames import make_hijack_state_frame
 from provide.uterm.server.bridge.hub import snapshot_metrics
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
@@ -155,7 +156,9 @@ class MessageRouter:
         preserve the legacy ring contract. snapshot/analysis content fields are
         strings in every real producer, so they always go through the redactor.
         An ``annotation`` has no fixed content field, so every string in it is
-        redacted. Never mutates the input payload.
+        redacted, and it is key-aware -- a value under a credential field name
+        is masked whatever it looks like -- the same policy the session recorder
+        applies to the copy it records. Never mutates the input payload.
         """
         if event_type == "term" and not isinstance(payload.get("data"), str):
             return payload
@@ -164,7 +167,7 @@ class MessageRouter:
 
             self._event_redactor = StreamRedactor(default_rules())
         if event_type == "annotation":
-            annotation: dict[str, Any] = _redact_value(payload, self._event_redactor)
+            annotation: dict[str, Any] = redact_structure(payload, self._event_redactor.redact, key_aware=True)
             return annotation
         redacted = _redact_frame_fields({"type": event_type, **payload}, self._event_redactor)
         return {k: v for k, v in redacted.items() if k != "type"}
@@ -173,7 +176,8 @@ class MessageRouter:
         """Append a timestamped event to the worker's event ring buffer and return it.
 
         Content events (term / snapshot / analysis) have their terminal-output
-        fields redacted with the server-default ruleset BEFORE being stored, so
+        fields, and ``annotation`` events every string (key-aware), redacted
+        with the server-default ruleset BEFORE being stored, so
         the ring buffer — read by the events API, ``/events/watch`` and the MCP
         events tools — is never an unredacted egress for what the live broadcast
         scrubs. Redaction runs before the term-data char cap below.

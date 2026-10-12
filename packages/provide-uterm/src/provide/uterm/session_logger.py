@@ -28,6 +28,11 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+def _verbatim(text: str) -> str:
+    """Identity redactor: the no-redactor path still deep-copies through redact_structure."""
+    return text
+
+
 class SessionLogger:
     """Async session recorder using a pluggable RecordingStore.
 
@@ -342,11 +347,12 @@ class SessionLogger:
         With a redactor, :func:`provide.uterm.redaction.redact_structure`
         rebuilds it with every string redacted, sensitive-key values masked,
         and anything nested past the depth cap replaced by a marker. Without
-        one the payload is recorded verbatim but still copied (shallowly), so
-        a caller that mutates its dict after logging cannot rewrite the
-        buffered record.
+        one the strings and keys are recorded verbatim, but the containers are
+        still rebuilt by the same walker (deep copy, same depth cap): the
+        record is buffered until the next flush, and a caller that mutates any
+        nested dict or list after logging must not rewrite it.
         """
-        if self._redactor is None:
-            return dict(data)
-        redacted: dict[str, Any] = redact_structure(data, self._redactor, key_aware=True)
+        redacted: dict[str, Any] = redact_structure(
+            data, self._redactor or _verbatim, key_aware=self._redactor is not None
+        )
         return redacted
