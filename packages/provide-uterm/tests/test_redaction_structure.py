@@ -296,6 +296,16 @@ def test_non_string_keys_are_kept_and_never_matched() -> None:
         ("AB", ["ab"]),
         ("ABc", ["a", "bc"]),
         ("ABC", ["abc"]),
+        # Character-class boundaries, each pinned by a key that splits on it.
+        ("aZ", ["a", "z"]),
+        ("zA", ["z", "a"]),
+        ("0A", ["0", "a"]),
+        ("9A", ["9", "a"]),
+        ("YZ", ["yz"]),
+        ("ABa", ["a", "ba"]),
+        ("ABz", ["a", "bz"]),
+        ("AB{", ["ab{"]),
+        ("Ab", ["ab"]),
         ("", []),
     ],
 )

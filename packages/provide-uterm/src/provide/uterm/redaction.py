@@ -111,11 +111,11 @@ def key_segments(key: str) -> list[str]:
     letter or digit (``accessToken``) or ends an acronym (the ``K`` in
     ``APIKey``). ``-``, ``.`` and spaces are separators like ``_``.
     """
-    chars: list[str] = []
+    chars = list(key[:1])
     last = len(key) - 1
-    for i, ch in enumerate(key):
-        if i > 0 and _is_upper(ch):
-            prev = key[i - 1]
+    for i in range(1, len(key)):
+        ch, prev = key[i], key[i - 1]
+        if _is_upper(ch):
             ends_acronym = _is_upper(prev) and i < last and "a" <= key[i + 1] <= "z"
             if _is_lower_or_digit(prev) or ends_acronym:
                 chars.append("_")
