@@ -273,13 +273,13 @@ owner adds. Owner-only socket (`0600`, bound under umask `0177`).
 `[1 byte channel][4 bytes length, big-endian][N bytes payload]`, `N` at most
 16 MiB; a larger claim drops the connection before the body is read.
 
-| Channel | Name | Payload | Sent by | Python connector | Go connector |
-|---------|------|---------|---------|------------------|--------------|
-| `0x01` | stdout | Raw bytes the program wrote | shim | Screen (emulated), streamed as `term` | Screen (raw tail), streamed as `term` |
+| Channel | Name | Payload | Sent by | Python server | Go server |
+|---------|------|---------|---------|---------------|-----------|
+| `0x01` | stdout | Raw bytes the program wrote | shim | Screen (emulated), streamed as `term` | Screen (emulated by the hosted `TransportSession`), streamed as `term` |
 | `0x02` | stdin | Raw bytes the program read | shim | Counted for analysis | Counted for analysis |
 | `0x03` | connect | Peer address, UTF-8 | shim | Logged for analysis (last 100) | Logged for analysis (last 100) |
 | `0x04` | stats | Shim writer counters, ASCII `key=value` | shim | Reported in analysis | Ignored |
-| `0x05` | geometry | `>HH` cols, rows; each 1-1000 | pty owner (supervisor); never the shim, which cannot see a resize | Resizes as `reconfigure` does (re-emulates output since the last clear), then emits a `snapshot` | Records the size, then emits a `snapshot` |
+| `0x05` | geometry | `>HH` cols, rows; each 1-1000 | pty owner (supervisor); never the shim, which cannot see a resize | `CaptureConnector` resizes as `reconfigure` does (re-emulates output since the last clear), and `poll_messages` returns a `snapshot`, which the runtime sends to the hub | `pty.CaptureConnector` takes the size and returns a `snapshot`; `CaptureTransport` turns it into `TransportSession.Resize` (the session's emulator rebuilt at the new size from output since the last clear), and the worker bridge sends the hub a `snapshot` unasked |
 
 - A reader ignores a channel it does not know, so a producer can send a newer
   channel to an older connector unconditionally.
@@ -287,11 +287,21 @@ owner adds. Owner-only socket (`0600`, bound under umask `0177`).
   1-1000, is ignored and the stream continues (its length kept the framing
   intact). A geometry naming the current size emits nothing; of several
   read in one poll, the last valid one is applied, once, and painted once.
+- Either way the hub broadcasts the worker's `snapshot` to every viewer and
+  watcher; that is how they learn the size. A restarted Go session comes back
+  at the last geometry, not the configured size.
+- An admin `PATCH` that carries the size the config already named (a stored
+  definition replaced for another reason) leaves a geometry-set size alone in
+  Python; one naming a new size applies. The Go capture connector has no live
+  reconfigure. The stored definition keeps the configured size either way.
+- Geometry is state, but it shares the capture queue (4096 frames, oldest
+  dropped first): under backpressure a geometry frame can be lost, so a
+  producer resends it on its next resize, or periodically.
 - After a geometry frame the connector's snapshots report the new `cols` and
   `rows`. `uterm-session` dispatches `uterm:geometry` (`detail: {cols, rows}`)
-  when a snapshot's size differs from the last it saw, after its terminal exists
-  and before it paints that snapshot, so a page that sizes its own terminal can
-  follow.
+  when a snapshot's size (positive whole numbers only) differs from the last it
+  saw since its terminal was made, after that terminal exists and before it
+  paints the snapshot, so a page that sizes its own terminal can follow.
 - Declared in `provide.uterm.pty.capture` (Python), `pty/capture.go` (Go),
   `src/pty/capture.ts` (TypeScript, framing only: no connector) and
   `native/capture/capture.c` (the shim). `scripts/check_protocol_drift.py`
