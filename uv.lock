@@ -2032,7 +2032,7 @@ dev = [
     { name = "reuse", specifier = ">=6.2.0" },
     { name = "ruff", specifier = ">=0.15" },
     { name = "ty", specifier = ">=0.0.17" },
-    { name = "uv", specifier = ">=0.10.7" },
+    { name = "uv", specifier = ">=0.12.18" },
     { name = "uvicorn", specifier = ">=0.24" },
     { name = "vulture", specifier = ">=2.14" },
     { name = "websockets", specifier = ">=16.0" },
