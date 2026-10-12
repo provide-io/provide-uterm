@@ -12,7 +12,17 @@
  * test_recording_instances.py.
  */
 
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -123,6 +133,39 @@ describe("file store retirement", () => {
     const store = new LocalFileRecordingStore(dir);
     await recordOne(store, "s", { instance: "i1" }, "mine");
     expect(readFileSync(join(dir, "s.jsonl"), "utf-8")).not.toContain("not json");
+  });
+
+  it.each([
+    ["not a log_start", '{"event": "read", "data": {}}\n'],
+    ["not an object", "[1, 2]\n"],
+    ["a log_start without object data", '{"event": "log_start", "data": "i1"}\n'],
+    ["another instance's, unterminated", '{"event": "log_start", "data": {"instance": "other"}}'],
+  ])("retires a recording whose first line is %s", async (_name, firstLine) => {
+    writeFileSync(join(dir, "s.jsonl"), firstLine, { mode: 0o600 });
+    const store = new LocalFileRecordingStore(dir);
+    await recordOne(store, "s", { instance: "i1" }, "mine");
+    expect(await texts(store, "s")).toEqual(["mine"]);
+    const retired = readdirSync(dir).filter((name) => name.startsWith("s.") && name !== "s.jsonl");
+    expect(retired.map((name) => readFileSync(join(dir, name), "utf-8"))).toEqual([firstLine]);
+  });
+
+  it("retires a symlink planted at the path without reading through it", async () => {
+    const target = join(dir, "elsewhere.txt");
+    writeFileSync(target, `${JSON.stringify({ ts: 0, event: "log_start", data: { instance: "i1" } })}\n`);
+    symlinkSync(target, join(dir, "s.jsonl"));
+    const store = new LocalFileRecordingStore(dir);
+    await recordOne(store, "s", { instance: "i1" }, "mine");
+    expect(lstatSync(join(dir, "s.jsonl")).isSymbolicLink()).toBe(false);
+    expect(await texts(store, "s")).toEqual(["mine"]);
+    expect(readFileSync(target, "utf-8").split("\n")).toHaveLength(2);
+  });
+
+  it("retires whatever cannot be read as a recording, such as a directory", async () => {
+    mkdirSync(join(dir, "s.jsonl"));
+    const store = new LocalFileRecordingStore(dir);
+    await recordOne(store, "s", { instance: "i1" }, "mine");
+    expect(statSync(join(dir, "s.jsonl")).isFile()).toBe(true);
+    expect(await texts(store, "s")).toEqual(["mine"]);
   });
 
   it("does not reuse a handle an unended instance left open", async () => {
