@@ -7,6 +7,7 @@ package cli
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 )
@@ -57,6 +58,12 @@ type batchWriter struct {
 	queue   []pendingBatch
 	running bool
 	err     error
+	// retired, when set, means the session this writes for was deleted and
+	// its recording retired without waiting for this writer (its stop timed
+	// out). Everything still queued, and every later write, is dropped: the
+	// store would otherwise reopen <id>.jsonl and write into the id's next
+	// holder's recording. Shared with the sessionRecorder that owns it.
+	retired *atomic.Bool
 }
 
 // pendingBatch is one batch SessionLogger flushed, waiting for the store.
@@ -66,7 +73,13 @@ type pendingBatch struct {
 }
 
 func newBatchWriter(store recording.Store) *batchWriter {
-	w := &batchWriter{Store: store}
+	return newRetirableBatchWriter(store, new(atomic.Bool))
+}
+
+// newRetirableBatchWriter is newBatchWriter sharing a retired flag with its
+// owner (see batchWriter.retired).
+func newRetirableBatchWriter(store recording.Store, retired *atomic.Bool) *batchWriter {
+	w := &batchWriter{Store: store, retired: retired}
 	w.settled = sync.NewCond(&w.mu)
 	return w
 }
@@ -97,6 +110,10 @@ func (w *batchWriter) run() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for len(w.queue) > 0 {
+		if w.retired.Load() {
+			w.queue, w.err = nil, nil // the recording is retired: drop, never reopen it
+			break
+		}
 		head := w.queue[0]
 		w.mu.Unlock()
 		err := w.Store.AppendEvents(head.sessionID, head.events)
@@ -153,5 +170,16 @@ func (w *batchWriter) EndSession(sessionID string) error {
 	if err := w.drain(); err != nil {
 		return err
 	}
+	if w.retired.Load() {
+		return nil
+	}
 	return w.Store.EndSession(sessionID)
+}
+
+// StartSession starts the recording unless the session has been retired.
+func (w *batchWriter) StartSession(sessionID string, metadata map[string]any) error {
+	if w.retired.Load() {
+		return nil
+	}
+	return w.Store.StartSession(sessionID, metadata)
 }
