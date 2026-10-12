@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Provide.Uterm.FileIo;
@@ -36,7 +37,16 @@ public sealed class Query
     public string Event { get; set; } = "";
 }
 
-/// <summary>Interface for persisting and retrieving session recordings.</summary>
+/// <summary>
+/// Interface for persisting and retrieving session recordings.
+/// A session id can be reused by a later, unrelated session, so a store must
+/// never let one session instance read another's entries: StartSessionAsync
+/// continues the recording held for the id only when metadata["instance"]
+/// (<see cref="RecordingInstance.Key"/>) names the instance that started it (a
+/// reconnect), and otherwise — a different instance, or none named — begins
+/// afresh, keeping or dropping the old recording but never serving it under
+/// the id again.
+/// </summary>
 public interface IRecordingStore
 {
     Task StartSessionAsync(string sessionId, IReadOnlyDictionary<string, object?> metadata);
@@ -45,6 +55,101 @@ public interface IRecordingStore
     Task<Meta> RecordingMetaAsync(string sessionId);
     Task<IReadOnlyList<Event>> GetEntriesAsync(string sessionId, Query query);
     Task<string> GetPathAsync(string sessionId);
+}
+
+/// <summary>
+/// Names the session instance a recording belongs to. Port of the reference's
+/// RECORDING_INSTANCE_KEY.
+/// </summary>
+public static class RecordingInstance
+{
+    /// <summary>The StartSessionAsync metadata key naming the instance.</summary>
+    public const string Key = "instance";
+
+    // How much of a recording's first line is read to find its instance.
+    private const int FirstLineLimit = 64 * 1024;
+
+    /// <summary>The instance StartSessionAsync metadata names, or null for none.</summary>
+    public static string? Of(IReadOnlyDictionary<string, object?>? metadata)
+    {
+        if (metadata is null || !metadata.TryGetValue(Key, out var value))
+        {
+            return null;
+        }
+
+        var text = value switch
+        {
+            string str => str,
+            JsonElement { ValueKind: JsonValueKind.String } el => el.GetString(),
+            _ => null,
+        };
+        return string.IsNullOrEmpty(text) ? null : text;
+    }
+
+    /// <summary>
+    /// A unique name to move a superseded recording aside to. It keeps the
+    /// .jsonl suffix, so the retention sweep still ages it out, and puts a "."
+    /// before it that no session id may contain, so no session's recording
+    /// path can ever name it. Port of retired_recording_name.
+    /// </summary>
+    public static string RetiredName(string sessionId)
+    {
+        var ns = (DateTimeOffset.UtcNow.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks) * 100;
+        return $"{sessionId}.{ns}-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4))}.jsonl";
+    }
+
+    // The instance that started the recording at path, or null when it cannot
+    // say. A symlink planted at the path is not a recording this store wrote.
+    private static string? OnFile(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (info.LinkTarget is not null || (info.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                return null;
+            }
+
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var buffer = new byte[FirstLineLimit];
+            var length = fs.Read(buffer, 0, buffer.Length);
+            var end = Array.IndexOf(buffer, (byte)'\n', 0, length);
+            using var doc = JsonDocument.Parse(buffer.AsMemory(0, end < 0 ? length : end));
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("event", out var ev) || ev.ValueKind != JsonValueKind.String
+                || ev.GetString() != "log_start"
+                || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object
+                || !data.TryGetProperty(Key, out var inst) || inst.ValueKind != JsonValueKind.String)
+            {
+                return null;
+            }
+
+            var text = inst.GetString();
+            return string.IsNullOrEmpty(text) ? null : text;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Move the recording at path aside unless instance started it.</summary>
+    internal static void RetireForeign(string path, string sessionId, string? instance)
+    {
+        var info = new FileInfo(path);
+        if (!info.Exists && info.LinkTarget is null)
+        {
+            return;
+        }
+
+        if (instance is not null && OnFile(path) == instance)
+        {
+            return;
+        }
+
+        File.Move(path, System.IO.Path.Combine(System.IO.Path.GetDirectoryName(path) ?? ".", RetiredName(sessionId)));
+    }
 }
 
 internal static class RecordingHelpers
@@ -77,12 +182,30 @@ public sealed class InMemoryStore : IRecordingStore
 {
     private readonly object _lock = new();
     private readonly Dictionary<string, List<Event>> _sessions = new();
+    private readonly Dictionary<string, string?> _instances = new();
 
+    /// <summary>
+    /// Record log_start. A recording another instance started is dropped first
+    /// (see <see cref="IRecordingStore"/>); the same instance continues it.
+    /// </summary>
     public Task StartSessionAsync(string sessionId, IReadOnlyDictionary<string, object?> metadata)
     {
         lock (_lock)
         {
-            _sessions[sessionId] = [RecordingHelpers.LifecycleEvent("log_start", sessionId, metadata)];
+            var instance = RecordingInstance.Of(metadata);
+            var start = RecordingHelpers.LifecycleEvent("log_start", sessionId, metadata);
+            if (instance is not null
+                && _instances.TryGetValue(sessionId, out var previous) && previous == instance
+                && _sessions.TryGetValue(sessionId, out var list))
+            {
+                list.Add(start);
+            }
+            else
+            {
+                _sessions[sessionId] = [start];
+            }
+
+            _instances[sessionId] = instance;
         }
 
         return Task.CompletedTask;
@@ -213,12 +336,25 @@ public sealed class LocalFileStore : IRecordingStore, IDisposable
         await fs.FlushAsync();
     }
 
+    /// <summary>
+    /// Open the session file and write log_start. A handle an earlier start
+    /// left open is closed first, and a recording on file that another instance
+    /// started is moved aside (see <see cref="IRecordingStore"/>): whether this
+    /// start continues it is decided from the file alone.
+    /// </summary>
     public async Task StartSessionAsync(string sessionId, IReadOnlyDictionary<string, object?> metadata)
     {
         FileStream fs;
         lock (_lock)
         {
-            fs = FileIo.FileIo.SecureOpenAppend(PathFor(sessionId));
+            if (_files.Remove(sessionId, out var stale))
+            {
+                stale.Dispose();
+            }
+
+            var path = PathFor(sessionId);
+            RecordingInstance.RetireForeign(path, sessionId, RecordingInstance.Of(metadata));
+            fs = FileIo.FileIo.SecureOpenAppend(path);
             _files[sessionId] = fs;
         }
 
