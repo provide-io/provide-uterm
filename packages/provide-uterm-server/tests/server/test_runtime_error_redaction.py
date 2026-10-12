@@ -2,13 +2,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""Runtime error text goes through the recording redactor.
+"""Runtime error text is redacted once per sink, under that sink's policy.
 
 ``str(exc)`` can quote what a connector was handed — a URL with credentials, a
-rejected command line. With ``recording.redact_sensitive`` on, the same
-redactor that scrubs the recording is applied before the text is kept for
-``status().last_error``, written to the server log, or recorded as a
-``runtime_error`` event. With it off, the text is kept verbatim as before.
+rejected command line. ``status().last_error`` and the server log are not
+recording sinks, so they always get the server-default ruleset, whatever
+``recording.redact_sensitive`` says. The ``runtime_error`` event carries the
+raw text to ``SessionLogger.log_event``, which redacts it per the recording
+setting -- one redaction on that path, not two.
 """
 
 from __future__ import annotations
@@ -69,23 +70,51 @@ async def _value_error_run(*, redact_sensitive: bool) -> tuple[HostedSessionRunt
     return rt, rec, log
 
 
-async def test_permanent_value_error_text_is_redacted_everywhere() -> None:
-    rt, rec, log = await _value_error_run(redact_sensitive=True)
+@pytest.mark.parametrize("redact_sensitive", [True, False])
+async def test_status_and_log_are_redacted_whatever_the_recording_setting(redact_sensitive: bool) -> None:
+    rt, rec, log = await _value_error_run(redact_sensitive=redact_sensitive)
 
     assert rt._last_error == "connect failed: [PASSWORD_REDACTED]"
     assert rt.status().last_error == rt._last_error
-    rec.log_event.assert_awaited_with("runtime_error", {"error": rt._last_error, "permanent": True})
     logged = _logged_errors(log)
     assert rt._last_error in logged
     assert all(_SECRET not in text for text in logged)
-
-
-async def test_permanent_value_error_text_is_verbatim_with_redaction_off() -> None:
-    rt, rec, log = await _value_error_run(redact_sensitive=False)
-
-    assert rt._last_error == _MESSAGE
+    # The recorder gets the raw text and applies the recording policy itself.
     rec.log_event.assert_awaited_with("runtime_error", {"error": _MESSAGE, "permanent": True})
-    assert _MESSAGE in _logged_errors(log)
+
+
+@pytest.mark.parametrize(
+    ("redact_sensitive", "expected"), [(True, "connect failed: [PASSWORD_REDACTED]"), (False, _MESSAGE)]
+)
+async def test_recorded_runtime_error_follows_the_recording_setting(redact_sensitive: bool, expected: str) -> None:
+    """End to end through a real SessionLogger: redacted exactly once, per recording.redact_sensitive."""
+    from provide.uterm.recording import InMemoryRecordingStore
+    from provide.uterm.session_logger import SessionLogger
+
+    rt = _runtime(redact_sensitive=redact_sensitive)
+    store = InMemoryRecordingStore()
+    calls: list[str] = []
+    base = rt._redactor
+
+    def counting(text: str) -> str:
+        calls.append(text)
+        return base(text) if base is not None else text
+
+    rt._logger = SessionLogger(store, redactor=counting if base is not None else None, flush_interval_s=3600)
+    await rt._logger.start("err-red")
+
+    async def _bad_start() -> None:
+        raise ValueError(_MESSAGE)
+
+    with patch.object(rt, "_start_connector", _bad_start), patch.object(rt, "_stop_recording", AsyncMock()):
+        await _run_until_done(rt)
+    await rt._logger.stop()
+
+    recorded = [e["data"] for e in await store.get_entries("err-red", limit=50) if e["event"] == "runtime_error"]
+    assert recorded == [{"error": expected, "permanent": True}]
+    if base is not None:
+        assert calls.count(_MESSAGE) == 1  # the raw text reached the recorder once, unredacted
+        assert all("[PASSWORD_REDACTED]" not in c for c in calls)  # nothing was redacted twice
 
 
 async def test_permanent_http_error_text_is_redacted() -> None:
@@ -126,7 +155,7 @@ async def test_permanent_http_error_text_is_redacted() -> None:
             sys.modules.pop("websockets", None)
 
     assert rt._last_error == "connect failed: [PASSWORD_REDACTED]"
-    assert events == [("runtime_error", {"error": rt._last_error})]
+    assert events == [("runtime_error", {"error": _MESSAGE})]
     logged = _logged_errors(log)
     assert rt._last_error in logged
     assert all(_SECRET not in text for text in logged)
@@ -154,7 +183,7 @@ async def test_transient_error_text_is_redacted() -> None:
         await asyncio.wait_for(rt._task, timeout=5)
 
     assert rt._last_error == "connect failed: [PASSWORD_REDACTED]"
-    assert events == [("runtime_error", {"error": rt._last_error})]
+    assert events == [("runtime_error", {"error": _MESSAGE})]
     logged = _logged_errors(log)
     assert rt._last_error in logged
     assert all(_SECRET not in text for text in logged)
@@ -165,3 +194,5 @@ def test_the_recording_logger_gets_the_runtime_redactor() -> None:
     assert rt._redactor is not None
     assert rt._redactor(f"password={_SECRET}") == "[PASSWORD_REDACTED]"
     assert _runtime(redact_sensitive=False)._redactor is None
+    # The status/log redactor exists either way.
+    assert _runtime(redact_sensitive=False)._error_redactor(f"password={_SECRET}") == "[PASSWORD_REDACTED]"

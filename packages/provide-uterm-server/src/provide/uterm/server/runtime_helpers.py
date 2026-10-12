@@ -65,11 +65,15 @@ def _read_annotation_key(annotation: Annotation) -> str:
     return annotation.match_key
 
 
+def _build_server_redactor() -> Callable[[str], str]:
+    """The server-default ruleset, as the hub's event ring applies it."""
+    return StreamRedactor(default_rules()).redact
+
+
 def _build_recording_redactor(enabled: bool) -> Callable[[str], str] | None:
     if not enabled:
         return None
-    redactor = StreamRedactor(default_rules())
-    return redactor.redact
+    return _build_server_redactor()
 
 
 # Outcome of one ``_run_one_attempt`` failure — drives whether the outer
