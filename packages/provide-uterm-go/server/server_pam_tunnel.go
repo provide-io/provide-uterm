@@ -319,7 +319,7 @@ func (p *PamIntegration) createRelayTunnel(ctx context.Context, sessionID, displ
 // starts a bridge (stored for onClose). Best-effort — every failure is logged
 // and swallowed. Port of the relay-tunnel tail of _on_open.
 func (p *PamIntegration) provisionTunnel(ctx context.Context, ev pty.PamEvent) {
-	sessionID := pamSessionID(ev)
+	sessionID := p.loginID(ev)
 	displayName := ev.Username + " (" + ttyOrPam(ev.TTY) + ")"
 
 	workerToken, wsEndpoint, err := p.createRelayTunnel(ctx, sessionID, displayName)
