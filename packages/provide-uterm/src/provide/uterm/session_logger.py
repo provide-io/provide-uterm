@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from provide.telemetry import get_logger
-from provide.uterm.redaction import redact_text
+from provide.uterm.redaction import redact_structure, redact_text
 
 from provide.uterm.file_io import secure_open_append
 
@@ -174,6 +174,8 @@ class SessionLogger:
 
     async def log_send(self, keys: str) -> None:
         """Log sent keystrokes."""
+        if self._quota_reached():
+            return
         keys = self._redact_text(keys)
         payload = keys.encode("cp437", errors="replace")
         await self._write_event("send", {"keys": keys, "bytes_b64": base64.b64encode(payload).decode("ascii")})
@@ -192,7 +194,9 @@ class SessionLogger:
 
     async def log_screen(self, snapshot: dict[str, Any], raw: bytes) -> None:
         """Log a screen snapshot with raw bytes."""
-        redacted_snapshot = self._redact_snapshot(snapshot)
+        if self._quota_reached():
+            return
+        redacted_snapshot = self._redact_payload(snapshot)
         raw_text = self._redact_text(raw.decode("cp437", errors="replace"))
         raw_bytes = raw_text.encode("cp437", errors="replace")
         data = {
@@ -205,18 +209,20 @@ class SessionLogger:
     async def log_event(self, event: str, data: dict[str, Any]) -> None:
         """Log an arbitrary named event.
 
-        Every string inside *data* (recursively) goes through the configured
-        redactor, exactly like keys, screens and wire text. Callers put
-        terminal-derived text here — detector annotations quote the matched
-        command line, operator annotations carry free-form descriptions, and
-        ``runtime_error`` events carry ``str(exc)`` — so recording it verbatim
-        would store the very secret the screen beside it had redacted.
+        *data* goes through :meth:`_redact_payload`, exactly like screens:
+        callers put terminal-derived text here — detector annotations quote the
+        matched command line, operator annotations carry free-form
+        descriptions, and ``runtime_error`` events carry ``str(exc)`` — so
+        recording it verbatim would store the very secret the screen beside it
+        had redacted.
         """
+        if self._quota_reached():
+            return
         await self._write_event(event, self._redact_payload(data))
 
     async def log_wire(self, direction: Literal["send", "recv"], text: str) -> None:
         """Log a raw wire chunk when wire-mode recording is enabled."""
-        if self._control_channel_mode != "wire":
+        if self._control_channel_mode != "wire" or self._quota_reached():
             return
         text = self._redact_text(text)
         payload = text.encode("utf-8")
@@ -229,11 +235,18 @@ class SessionLogger:
         )
 
     async def log_control(self, direction: Literal["send", "recv"], control: dict[str, Any]) -> None:
-        """Log a decoded control frame when wire-mode recording is enabled."""
-        if self._control_channel_mode != "wire":
+        """Log a decoded control frame when wire-mode recording is enabled.
+
+        The same frame is also recorded as (redacted) wire text, so the decoded
+        copy must not be the one place it survives in clear. Text rules alone
+        are not enough here: they need context such as ``token=`` to fire, and
+        a ``resume`` / ``session_token`` frame is a bare ``{"token": "..."}``.
+        :meth:`_redact_payload` is key-aware, so such values are masked by
+        field name. Inbound frames are attacker-shaped, which is why the walk
+        is depth-capped rather than recursive without bound.
+        """
+        if self._control_channel_mode != "wire" or self._quota_reached():
             return
-        # The same frame is usually also recorded as (redacted) wire text, so
-        # the decoded copy must not be the one place it survives in clear.
         await self._write_event(f"control_{direction}", {"control": self._redact_payload(control)})
 
     def set_context(self, context: dict[str, str]) -> None:
@@ -250,10 +263,7 @@ class SessionLogger:
 
     async def _write_event(self, event: str, data: dict[str, Any]) -> None:
         async with self._lock:
-            if self._max_bytes > 0 and self._bytes_written >= self._max_bytes:
-                if not self._quota_warned:
-                    self._quota_warned = True
-                    logger.warning("session_logger_quota_reached — further writes suppressed")
+            if self._quota_reached():
                 return
 
             record: dict[str, Any] = {"ts": time.time(), "event": event, "data": data}
@@ -310,25 +320,33 @@ class SessionLogger:
     def _redact_text(self, value: str) -> str:
         return redact_text(value, self._redactor)
 
-    def _redact_snapshot(self, snapshot: dict[str, Any]) -> dict[str, Any]:
-        return {k: self._redact_value(v) for k, v in snapshot.items()}
+    def _quota_reached(self) -> bool:
+        """Return True (warning once) when the byte quota is exhausted.
+
+        Checked by every ``log_*`` entry point before any redaction, so a
+        session past its quota stops paying to redact records that
+        ``_write_event`` would only drop. ``_write_event`` re-checks under the
+        lock, since another task may cross the quota in between.
+        """
+        if self._max_bytes > 0 and self._bytes_written >= self._max_bytes:
+            if not self._quota_warned:
+                self._quota_warned = True
+                logger.warning("session_logger_quota_reached — further writes suppressed")
+            return True
+        return False
 
     def _redact_payload(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Redact every string in a caller-supplied payload.
+        """Return the recordable copy of a caller-supplied payload.
 
-        Without a redactor the payload is passed through untouched (same
-        object), so recordings made with redaction off are byte-identical to
-        before. Dict keys are field names chosen by the caller and are kept.
+        The one payload path for screens, named events and control frames.
+        With a redactor, :func:`provide.uterm.redaction.redact_structure`
+        rebuilds it with every string redacted, sensitive-key values masked,
+        and anything nested past the depth cap replaced by a marker. Without
+        one the payload is recorded verbatim but still copied (shallowly), so
+        a caller that mutates its dict after logging cannot rewrite the
+        buffered record.
         """
         if self._redactor is None:
-            return data
-        return self._redact_snapshot(data)
-
-    def _redact_value(self, value: Any) -> Any:
-        if isinstance(value, str):
-            return self._redact_text(value)
-        if isinstance(value, (list, tuple)):
-            return [self._redact_value(item) for item in value]
-        if isinstance(value, dict):
-            return {k: self._redact_value(v) for k, v in value.items()}
-        return value
+            return dict(data)
+        redacted: dict[str, Any] = redact_structure(data, self._redactor, key_aware=True)
+        return redacted

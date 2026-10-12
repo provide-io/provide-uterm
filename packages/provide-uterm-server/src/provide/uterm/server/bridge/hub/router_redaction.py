@@ -18,36 +18,31 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from provide.uterm.redaction import REDACT_MAX_DEPTH, redact_structure
+
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 
 
-# Defensive recursion bound for _redact_value. Wire frames are JSON-decoded
-# (acyclic) and shallow in practice; this cap only guards against a
-# pathologically deep structure causing a RecursionError. A value below the cap
-# is returned as-is rather than redacted — secrets that deep don't occur in real
-# snapshot/analysis payloads, and failing closed on depth (returning raw) is the
-# conservative choice vs. raising on a hot broadcast path.
-_REDACT_MAX_DEPTH = 32
+# The depth cap now lives with the shared walker in ``provide.uterm.redaction``
+# (the session recorder uses the same one). Re-exported under its old name so
+# the tests that pin the boundary keep importing it from here.
+_REDACT_MAX_DEPTH = REDACT_MAX_DEPTH
 
 
-def _redact_value(value: Any, redactor: StreamRedactor, _depth: int = 0) -> Any:
-    """Recursively redact string values inside nested dict/list structures.
+def _redact_value(value: Any, redactor: StreamRedactor) -> Any:
+    """Redact string values inside nested dict/list/tuple structures.
 
-    Strings are redacted; dicts and lists are walked (values/elements only,
-    not dict keys); all other scalars (int/float/bool/None) are returned
-    unchanged. Recursion is capped at ``_REDACT_MAX_DEPTH`` — values deeper than
-    that are returned verbatim. Input is never mutated; new containers are built.
+    Delegates to :func:`provide.uterm.redaction.redact_structure`: strings are
+    redacted, containers are rebuilt (dict keys kept, tuples become lists),
+    other scalars pass through, and the input is never mutated. A container
+    ``_REDACT_MAX_DEPTH`` levels down is replaced by
+    :data:`provide.uterm.redaction.DEPTH_LIMIT_MARKER` -- it used to be
+    returned verbatim, which shipped any secret nested below the cap
+    unredacted. Key-aware masking is off here: broadcast frames keep their
+    field values for the viewers they are scoped to.
     """
-    if isinstance(value, str):
-        return redactor.redact(value)
-    if _depth >= _REDACT_MAX_DEPTH:
-        return value
-    if isinstance(value, dict):
-        return {k: _redact_value(v, redactor, _depth + 1) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_redact_value(v, redactor, _depth + 1) for v in value]
-    return value
+    return redact_structure(value, redactor.redact)
 
 
 def _redact_frame_fields(msg: dict[str, Any], redactor: StreamRedactor) -> dict[str, Any]:

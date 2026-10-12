@@ -219,21 +219,21 @@ def test_redact_frame_fields_analysis_raw_none_or_absent_untouched() -> None:
 
 
 def test_redact_value_caps_recursion_depth() -> None:
-    """M4: _redact_value stops recursing past the depth cap (defensive; returns the deep value as-is)."""
+    """M4: _redact_value stops recursing at the depth cap and masks what lies below it."""
     from provide.uterm.server.bridge.hub.router_impl import _redact_value
 
     redactor = StreamRedactor(_STRIPE_RULES)
-    # Build a structure deeper than the cap; the secret below the cap is NOT redacted
-    # (the cap is a defensive stop, not a correctness requirement — real frames are shallow).
+    # Build a structure deeper than the cap; the subtree below the cap is replaced
+    # whole by the depth marker rather than shipped unwalked.
     deep: Any = "sk_live_DEEP"
     for _ in range(40):
         deep = [deep]
     result = _redact_value(deep, redactor)
-    # Walk back down to confirm the too-deep secret survived (depth cap kicked in).
     cur = result
     while isinstance(cur, list):
         cur = cur[0]
-    assert cur == "sk_live_DEEP"
+    assert cur == "[NESTED_REDACTED]"
+    assert "sk_live_DEEP" not in repr(result)
 
 
 def test_redact_value_redacts_within_depth() -> None:
