@@ -51,16 +51,17 @@ describe("what a session entry accepts", () => {
     expect(validateSection("SessionDefinition", record.kwargs)).toEqual(record.errors ?? []);
   });
 
-  it.each(
-    golden.cases.filter((record) => record.accepted !== undefined),
-  )("$name — as the reference held it", (record) => {
-    const coerced = accept(record.kwargs);
-    for (const field of ["session_id", "display_name", "connector_type", "connector_config"]) {
-      if (coerced[field] !== undefined) {
-        expect({ [field]: coerced[field] }).toEqual({ [field]: record.accepted?.[field] });
+  it.each(golden.cases.filter((record) => record.accepted !== undefined))(
+    "$name — as the reference held it",
+    (record) => {
+      const coerced = accept(record.kwargs);
+      for (const field of ["session_id", "display_name", "connector_type", "connector_config"]) {
+        if (coerced[field] !== undefined) {
+          expect({ [field]: coerced[field] }).toEqual({ [field]: record.accepted?.[field] });
+        }
       }
-    }
-  });
+    },
+  );
 
   it("has the built-in connector types the server has", () => {
     expect([...BUILTIN_CONNECTOR_TYPES].sort()).toEqual(golden.builtin_connector_types);
@@ -104,6 +105,16 @@ describe("the identifier", () => {
     for (const sessionId of ["my shell", "my.shell", "a/b"]) {
       const errors = validateSection("SessionDefinition", { session_id: sessionId });
       expect(errors[0]?.msg).toBe(`Value error, session_id must match ^[\\w\\-]+$, got: '${sessionId}'`);
+    }
+  });
+});
+
+describe("a session id's length", () => {
+  it("is capped at 200 UTF-8 bytes, so every recording can be retired", () => {
+    expect(validateSection("SessionDefinition", { session_id: "a".repeat(200) })).toEqual([]);
+    for (const sessionId of ["a".repeat(201), "端".repeat(67)]) {
+      const errors = validateSection("SessionDefinition", { session_id: sessionId });
+      expect(errors[0]?.msg).toBe(`Value error, session_id must be at most 200 bytes (UTF-8), got: '${sessionId}'`);
     }
   });
 });

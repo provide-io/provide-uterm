@@ -73,6 +73,19 @@ export interface RecordingStore {
   recordingMeta(sessionId: string): Promise<RecordingMeta>;
   getEntries(sessionId: string, options?: GetEntriesOptions): Promise<RecordingEvent[]>;
   getPath(sessionId: string): Promise<string | null>;
+  /**
+   * Retire the session's recording: afterwards nothing is served for the id
+   * until a new recording starts. Called when a session goes away (and before
+   * one is created), so the id's next holder is never served this one's
+   * entries. Optional, so a store written before it existed still satisfies
+   * the contract and keeps only the `startSession` instance rule.
+   */
+  retireSession?(sessionId: string): Promise<void>;
+}
+
+/** Retire `sessionId`'s recording in `store` when the store can. Port of `retire_recording`. */
+export async function retireRecording(store: RecordingStore, sessionId: string): Promise<void> {
+  await store.retireSession?.(sessionId);
 }
 
 /**
@@ -259,6 +272,20 @@ export class LocalFileRecordingStore implements RecordingStore {
     return Promise.resolve();
   }
 
+  /**
+   * Move the session's recording aside: kept for retention, served to nobody.
+   * A handle still open for it is closed first, without a `log_stop`.
+   */
+  retireSession(sessionId: string): Promise<void> {
+    const stale = this.#files.get(sessionId);
+    if (stale !== undefined) {
+      this.#files.delete(sessionId);
+      stale.close();
+    }
+    retireForeignRecording(this.#path(sessionId), sessionId, null);
+    return Promise.resolve();
+  }
+
   appendEvents(sessionId: string, events: readonly RecordingEvent[]): Promise<void> {
     const handle = this.#handle(sessionId);
     for (const event of events) {
@@ -348,6 +375,13 @@ export class InMemoryRecordingStore implements RecordingStore {
     }
     this.#sessions.set(sessionId, { metadata, active: true });
     this.#list(sessionId).push(startEvent(sessionId, metadata));
+    return Promise.resolve();
+  }
+
+  /** Drop the session's recording: no later holder of the id is served it. */
+  retireSession(sessionId: string): Promise<void> {
+    this.#sessions.delete(sessionId);
+    this.#events.delete(sessionId);
     return Promise.resolve();
   }
 

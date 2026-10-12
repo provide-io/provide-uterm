@@ -339,12 +339,22 @@ const BEFORE_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
       // CPython's `\w` is Unicode-aware, so `café` and `端末` are identifiers
       // and a JavaScript `\w` — ASCII-only — would refuse them. A combining
       // accent is not a letter, so `cafe\u0301` is refused by both.
-      return SESSION_ID_PATTERN.test(sessionId)
-        ? undefined
-        : `session_id must match ^[\\w\\-]+$, got: ${pyRepr(sessionId)}`;
+      if (!SESSION_ID_PATTERN.test(sessionId)) {
+        return `session_id must match ^[\\w\\-]+$, got: ${pyRepr(sessionId)}`;
+      }
+      return Buffer.byteLength(sessionId, "utf8") > MAX_SESSION_ID_BYTES
+        ? `session_id must be at most ${MAX_SESSION_ID_BYTES} bytes (UTF-8), got: ${pyRepr(sessionId)}`
+        : undefined;
     },
   },
 };
+
+/**
+ * The longest session id, in UTF-8 bytes. A recording is `<id>.jsonl` and a
+ * retired one 35 bytes longer; 200 keeps both inside the 255-byte filename
+ * limit, so every id can be retired. Port of `MAX_SESSION_ID_BYTES`.
+ */
+export const MAX_SESSION_ID_BYTES = 200;
 
 /** What the reference's `\w` matches: a letter, a number, or an underscore. */
 const SESSION_ID_PATTERN = /^[\p{L}\p{N}_-]+$/u;

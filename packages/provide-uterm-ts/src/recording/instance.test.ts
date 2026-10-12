@@ -17,7 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type RecordingSettings, SessionRecording } from "../server/session-recording.ts";
-import { InMemoryRecordingStore, LocalFileRecordingStore, type RecordingStore } from "./index.ts";
+import { InMemoryRecordingStore, LocalFileRecordingStore, type RecordingStore, retireRecording } from "./index.ts";
 
 let dir: string;
 
@@ -71,6 +71,39 @@ describe.each(kinds)("%s store", (_name, make) => {
     await recordOne(store, "s", { instance: "i1" }, "second-connection");
     expect(await texts(store, "s")).toEqual(["first-connection", "second-connection"]);
   });
+});
+
+describe.each(kinds)("retiring on a %s store", (_name, make) => {
+  it("leaves nothing to serve, even with a handle still open", async () => {
+    const store = make();
+    await store.startSession("s", { instance: "a" });
+    await store.appendEvents("s", [{ ts: 1, event: "read", data: { text: "old" } }]);
+    await retireRecording(store, "s");
+    expect(await store.getEntries("s", { limit: 500 })).toEqual([]);
+    expect((await store.recordingMeta("s")).exists).toBe(false);
+    await recordOne(store, "s", { instance: "a" }, "new");
+    expect(await texts(store, "s")).toEqual(["new"]);
+  });
+});
+
+it("skips a store that cannot retire", async () => {
+  const legacy: RecordingStore = {
+    startSession: () => Promise.resolve(),
+    appendEvents: () => Promise.resolve(),
+    endSession: () => Promise.resolve(),
+    recordingMeta: (sessionId) => Promise.resolve({ session_id: sessionId, exists: false, size_bytes: 0 }),
+    getEntries: () => Promise.resolve([]),
+    getPath: () => Promise.resolve(null),
+  };
+  await expect(retireRecording(legacy, "s")).resolves.toBeUndefined();
+});
+
+it("retires the longest session id on disk", async () => {
+  const store = new LocalFileRecordingStore(dir);
+  const id = "a".repeat(200);
+  await recordOne(store, id, { instance: "a" }, "x");
+  await retireRecording(store, id);
+  expect(readdirSync(dir).filter((name) => name.startsWith(`${id}.`))).toHaveLength(1);
 });
 
 describe("file store retirement", () => {
