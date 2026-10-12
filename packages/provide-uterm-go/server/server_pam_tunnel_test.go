@@ -560,7 +560,7 @@ func TestPamProvisionTunnelNoConnector(t *testing.T) {
 		Mode: "notify", RelayURL: strptr(srv.URL), RelayToken: strptr("t"),
 	}, reg, nil, quietLogger())
 	pi.newTunnel = func(string, string) tunnelConn { return newFakeTunnel() }
-	pi.provisionTunnel(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"})
+	pi.provisionTunnel(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"}, "pam-a-1")
 	pi.bridgesMu.Lock()
 	n := len(pi.bridges)
 	pi.bridgesMu.Unlock()
@@ -576,7 +576,7 @@ func TestPamProvisionTunnelRegistryWithoutLookup(t *testing.T) {
 		Mode: "notify", RelayURL: strptr(srv.URL), RelayToken: strptr("t"),
 	}, newFakeRegistry(), nil, quietLogger())
 	pi.newTunnel = func(string, string) tunnelConn { return newFakeTunnel() }
-	pi.provisionTunnel(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"})
+	pi.provisionTunnel(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"}, "pam-a-1")
 	pi.bridgesMu.Lock()
 	n := len(pi.bridges)
 	pi.bridgesMu.Unlock()
@@ -601,7 +601,7 @@ func TestPamProvisionTunnelRelayFails(t *testing.T) {
 		Mode: "notify", RelayURL: strptr(srv.URL), RelayToken: strptr("t"),
 	}, reg, nil, quietLogger())
 	pi.newTunnel = func(string, string) tunnelConn { return newFakeTunnel() }
-	pi.provisionTunnel(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"})
+	pi.provisionTunnel(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"}, "pam-a-1")
 	pi.bridgesMu.Lock()
 	n := len(pi.bridges)
 	pi.bridgesMu.Unlock()
@@ -619,7 +619,7 @@ func TestPamProvisionTunnelStartFailure(t *testing.T) {
 		Mode: "notify", RelayURL: strptr(srv.URL), RelayToken: strptr("t"),
 	}, reg, nil, quietLogger())
 	pi.newTunnel = func(string, string) tunnelConn { return ft }
-	pi.provisionTunnel(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"})
+	pi.provisionTunnel(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"}, "pam-a-1")
 	pi.bridgesMu.Lock()
 	n := len(pi.bridges)
 	pi.bridgesMu.Unlock()

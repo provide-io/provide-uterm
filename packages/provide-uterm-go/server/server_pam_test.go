@@ -317,7 +317,7 @@ func TestPamSafeCreateError(t *testing.T) {
 func TestPamCreateNotifyDefaultCommand(t *testing.T) {
 	reg := newFakeRegistry()
 	pi := newPamIntegration(serverconfig.PamConfig{Mode: "notify", AutoSession: true}, reg) // no AutoSessionCommand
-	pi.createNotifySession(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"})
+	pi.createNotifySession(context.Background(), pty.PamEvent{Username: "a", TTY: "/dev/pts/1"}, "pam-a-1")
 	cc := reg.created[0]["connector_config"].(map[string]any)
 	if cc["command"] != "/bin/bash" {
 		t.Fatalf("default command = %v, want /bin/bash", cc["command"])
@@ -414,7 +414,7 @@ func TestPamOnCloseLogsTheDelete(t *testing.T) {
 func TestPamCaptureEmptySocket(t *testing.T) {
 	reg := newFakeRegistry()
 	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, reg)
-	pi.createCaptureSession(context.Background(), pty.PamEvent{Username: "a", Mode: "capture"})
+	pi.createCaptureSession(context.Background(), pty.PamEvent{Username: "a", Mode: "capture"}, "pam-a-capture-0-1")
 	if len(reg.created) != 0 {
 		t.Fatalf("empty capture socket must not create, got %d", len(reg.created))
 	}
@@ -429,7 +429,7 @@ func TestPamCaptureConfinedByNotifyParent(t *testing.T) {
 	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture", NotifySocket: &notify}, reg)
 	pi.createCaptureSession(context.Background(), pty.PamEvent{
 		Username: "a", TTY: "/dev/pts/1", Mode: "capture", CaptureSocket: dir + "/cap.sock",
-	})
+	}, "pam-a-capture-0-1")
 	if len(reg.created) != 1 {
 		t.Fatalf("socket under notify parent should be allowed, got %d", len(reg.created))
 	}

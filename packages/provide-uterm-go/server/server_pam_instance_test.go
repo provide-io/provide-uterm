@@ -113,3 +113,51 @@ func TestPamOpenNeverReusesAStaleID(t *testing.T) {
 		t.Fatalf("created %v: want two distinct ids", reg.created)
 	}
 }
+
+// The open's id is handed down, not looked up again: a close that lands while
+// the open is still in flight (say, in a slow relay call) must not make the
+// rest of the open mint another id.
+func TestPamOpenPassesItsIDDownInsteadOfLookingItUpAgain(t *testing.T) {
+	pinStartTicks(t, map[int]int64{}) // random tags: a second computation differs
+	reg := newFakeRegistry()
+	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, reg)
+	ev := captureEvent("open", 5)
+	id := pi.beginLogin(ev)
+	pi.endLogin(captureEvent("close", 5)) // the close races ahead
+	pi.createCaptureSession(context.Background(), ev, id)
+	if len(reg.created) != 1 || reg.created[0]["session_id"] != id {
+		t.Fatalf("created %v, want the open's id %q", reg.created, id)
+	}
+}
+
+// A login whose close never came is forgotten once its pid reports another
+// start time; one that cannot be proven gone stays until the cap.
+func TestPamOpenLoginMapIsBounded(t *testing.T) {
+	ticks := map[int]int64{10: 1, 11: 2, 12: 3}
+	pinStartTicks(t, ticks)
+	pi := newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, newFakeRegistry())
+	pi.beginLogin(captureEvent("open", 10))
+	pi.beginLogin(captureEvent("open", 11))
+	ticks[10] = 5 // pid 10's sshd exited without a close; the pid is someone else's now
+	pi.beginLogin(captureEvent("open", 12))
+	if _, ok := pi.instances[pamLoginKey{"suokki", 10}]; ok || len(pi.instances) != 2 {
+		t.Fatalf("instances = %v, want pid 10 forgotten", pi.instances)
+	}
+
+	saved := maxRememberedLogins
+	t.Cleanup(func() { maxRememberedLogins = saved })
+	maxRememberedLogins = 3
+	pinStartTicks(t, map[int]int64{}) // random tags: nothing provably gone
+	pi = newPamIntegration(serverconfig.PamConfig{Mode: "capture"}, newFakeRegistry())
+	for pid := 20; pid < 25; pid++ {
+		pi.beginLogin(captureEvent("open", pid))
+	}
+	if len(pi.instances) != 3 {
+		t.Fatalf("instances = %v, want the 3 newest", pi.instances)
+	}
+	for pid := 22; pid < 25; pid++ {
+		if _, ok := pi.instances[pamLoginKey{"suokki", pid}]; !ok {
+			t.Fatalf("instances = %v, want pids 22-24 kept", pi.instances)
+		}
+	}
+}
