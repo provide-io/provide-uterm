@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from provide.telemetry import get_logger
 
 from provide.uterm.file_io import secure_open_append
+from provide.uterm.recording import RECORDING_INSTANCE_KEY
 from provide.uterm.redaction import redact_structure, redact_text
 
 if TYPE_CHECKING:
@@ -49,7 +50,16 @@ class SessionLogger:
         redactor: Callable[[str], str] | None = None,
         flush_interval_s: float = 5.0,
         batch_size: int = 100,
+        instance: str | None = None,
     ) -> None:
+        """Create a logger writing to *store*.
+
+        *instance* names the session instance this logger records for. Every
+        ``start`` passes it to the store, which continues the recording on file
+        only when the same instance started it (a reconnect) and otherwise
+        begins afresh, so a later session reusing the id never inherits this
+        one's entries. ``None`` asks for a fresh recording on every start.
+        """
 
         self._log_path: Path | None
         if isinstance(store, (str, Path)):
@@ -129,6 +139,7 @@ class SessionLogger:
 
         self._lock = asyncio.Lock()
         self._session_id: str | None = None
+        self._instance = instance
         self._context: dict[str, str] = {}
         self._max_bytes = max_bytes  # 0 = unlimited
         self._control_channel_mode = control_channel_mode
@@ -155,6 +166,8 @@ class SessionLogger:
         metadata: dict[str, Any] = {"started_at": time.time()}
         if self._log_path:
             metadata["path"] = str(self._log_path)
+        if self._instance is not None:
+            metadata[RECORDING_INSTANCE_KEY] = self._instance
         await self._store.start_session(session_id, metadata)
 
         # Initialize bytes_written from store metadata
