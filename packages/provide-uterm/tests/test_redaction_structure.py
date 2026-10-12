@@ -141,6 +141,8 @@ def test_max_depth_is_honoured_and_propagated() -> None:
     assert redact_structure({"a": {"b": "x"}}, _R, max_depth=1) == {"a": DEPTH_LIMIT_MARKER}
     assert redact_structure({"a": {"b": "S3cret"}}, _R, max_depth=2) == {"a": {"b": "[REDACTED]"}}
     assert redact_structure(["x"], _R, max_depth=0) == DEPTH_LIMIT_MARKER
+    # ...and carried into list elements, not only dict values.
+    assert redact_structure([["x"], "S3cret"], _R, max_depth=1) == [DEPTH_LIMIT_MARKER, "[REDACTED]"]
     assert redact_structure("S3cret", _R, max_depth=0) == "[REDACTED]"
 
 
