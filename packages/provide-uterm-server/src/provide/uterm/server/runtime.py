@@ -19,6 +19,7 @@ from provide.uterm.control_channel import (
     ControlFrameProtocolError,
     DataChunk,
 )
+from provide.uterm.redaction import redact_text
 from provide.uterm.server.connectors import SessionConnector, build_connector
 from provide.uterm.server.models import RecordingConfig, SessionDefinition, SessionLifecycle, SessionRuntimeStatus
 
@@ -65,6 +66,10 @@ class HostedSessionRuntime:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
         self._recording_cfg = recording
+        # One recording redactor per runtime: the SessionLogger of every
+        # connection gets it, and so does error text (see _run) — the error
+        # surfaces in status() and the server log as well as the recording.
+        self._redactor = _build_recording_redactor(recording.redact_sensitive)
         if recording_store is None:
             from provide.uterm.recording import LocalFileRecordingStore
 
@@ -367,7 +372,7 @@ class HostedSessionRuntime:
                 self._recording_store,
                 max_bytes=self._recording_cfg.max_bytes,
                 control_channel_mode=self._recording_cfg.control_channel_mode,
-                redactor=_build_recording_redactor(self._recording_cfg.redact_sensitive),
+                redactor=self._redactor,
                 # Both flush knobs were previously omitted, so every hosted
                 # session recorded at the SessionLogger defaults no matter what
                 # the operator configured. It went unnoticed because the
@@ -550,7 +555,11 @@ class HostedSessionRuntime:
         if self._logger is None:
             return
         await self._logger.log_wire("send", payload)
-        if str(msg.get("type") or "") != "term":
+        # term frames are already the wire text itself, and snapshot frames are
+        # recorded in full as a "read" event by _log_snapshot right after this
+        # (_send_outbound_frame) — a decoded control_send copy of a snapshot
+        # would be a third redaction pass over the same screen for no new data.
+        if str(msg.get("type") or "") not in ("term", "snapshot"):
             await self._logger.log_control("send", msg)
 
     async def _log_wire_recv(self, payload: str) -> None:
@@ -713,15 +722,20 @@ class HostedSessionRuntime:
                     break
                 self._state = "error"
                 self._connected = False
-                self._last_error = connection_error = str(exc)
+                # str(exc) can quote what the connector was handed (a URL with
+                # credentials, a rejected command line). With redact_sensitive
+                # on it gets the same redactor as the recording before it is
+                # kept for status(), logged, or recorded.
+                error = redact_text(str(exc), self._redactor)
+                self._last_error = connection_error = error
                 if outcome == "permanent":
                     if isinstance(exc, ValueError):
                         logger.error(
                             "hosted_session_runtime_permanent_failure session_id=%s error=%s",
                             self.definition.session_id,
-                            exc,
+                            error,
                         )
-                        await self._log_runtime_error({"error": str(exc), "permanent": True})
+                        await self._log_runtime_error({"error": error, "permanent": True})
                     else:
                         # Permanent HTTP failure (401/403/404). Log the warning
                         # event first so observers see what failed, then the
@@ -729,9 +743,9 @@ class HostedSessionRuntime:
                         logger.warning(
                             "hosted_session_runtime_failed session_id=%s error=%s",
                             self.definition.session_id,
-                            exc,
+                            error,
                         )
-                        await self._log_runtime_error({"error": str(exc)})
+                        await self._log_runtime_error({"error": error})
                         _status = getattr(exc, "status_code", None) or getattr(
                             getattr(exc, "response", None), "status_code", None
                         )
@@ -741,8 +755,10 @@ class HostedSessionRuntime:
                             _status,
                         )
                     break
-                logger.warning("hosted_session_runtime_failed session_id=%s error=%s", self.definition.session_id, exc)
-                await self._log_runtime_error({"error": str(exc)})
+                logger.warning(
+                    "hosted_session_runtime_failed session_id=%s error=%s", self.definition.session_id, error
+                )
+                await self._log_runtime_error({"error": error})
                 delay = backoff_s[min(attempt, len(backoff_s) - 1)]
                 attempt += 1
                 await asyncio.sleep(delay)
