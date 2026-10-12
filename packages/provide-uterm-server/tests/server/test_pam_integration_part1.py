@@ -92,7 +92,7 @@ async def test_on_open_capture_mode_with_socket_creates_capture_session() -> Non
     assert payload["connector_type"] == "pty_capture"
     assert payload["connector_config"]["socket_path"] == "/run/uterm-cap-1234.sock"
     assert payload["session_id"] == "pam-alice-capture-1234"
-    assert payload["ephemeral"] is True
+    assert payload["ephemeral"] is False
 
 
 async def test_on_open_notify_mode_auto_session_creates_pty_session() -> None:
@@ -113,7 +113,7 @@ async def test_on_open_notify_mode_auto_session_creates_pty_session() -> None:
     assert payload["connector_type"] == "pty"
     assert payload["connector_config"]["username"] == "bob"
     assert payload["session_id"] == "pam-bob-7"
-    assert payload["ephemeral"] is True
+    assert payload["ephemeral"] is False
 
 
 async def test_on_open_notify_mode_no_auto_session_skips_creation() -> None:
