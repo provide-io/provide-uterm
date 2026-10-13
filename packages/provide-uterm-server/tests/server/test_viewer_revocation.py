@@ -452,6 +452,13 @@ def test_a_socket_is_judged_by_its_own_app_and_principal() -> None:
     bare_hub = SimpleNamespace(scope={"app": SimpleNamespace(state=SimpleNamespace())}, state=revoked.state)
     # A hub mounted with no app in its scope (the quota tests' harness).
     no_app = SimpleNamespace(scope={}, state=revoked.state)
+    # Stand-in sockets (the hub's own unit tests use MagicMock) are never revoked.
+    from unittest.mock import MagicMock
+
+    stand_in = MagicMock()
+    stand_in.scope = {"app": MagicMock()}
+    assert socket_share_viewer_revoked(MagicMock(), "s1") is False
+    assert socket_share_viewer_revoked(stand_in, "s1") is False
     assert socket_share_viewer_revoked(revoked, "s1") is True
     assert socket_share_viewer_revoked(fresh, "s1") is False
     assert socket_share_viewer_revoked(bare_hub, "s1") is False

@@ -19,12 +19,11 @@ import contextlib
 import json
 from typing import TYPE_CHECKING, Any
 
-from provide.uterm.server.authorization import is_share_viewer
+from provide.uterm.server.authorization import AuthorizationService, is_share_viewer
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from provide.uterm.server.authorization import AuthorizationService
 
 # An application close code (4000-4999), so a client can tell "your access was
 # taken away" from a network drop or a policy refusal (1008) and stop
@@ -72,9 +71,14 @@ def socket_share_viewer_revoked(websocket: Any, session_id: str) -> bool:
     """
     # Through the ASGI scope rather than ``websocket.app``: that property is a
     # bare ``scope["app"]`` and raises KeyError for a hub mounted without one.
-    app = getattr(websocket, "scope", {}).get("app")
+    # Only a real scope and a real authorization service count, so a hub driven
+    # with stand-in sockets is never told a socket was revoked.
+    scope = getattr(websocket, "scope", None)
+    app = scope.get("app") if isinstance(scope, dict) else None
     authz = getattr(getattr(app, "state", None), "uterm_authz", None)
-    return authz is not None and _revoked(authz, getattr(websocket.state, "uterm_principal", None), session_id)
+    return isinstance(authz, AuthorizationService) and _revoked(
+        authz, getattr(websocket.state, "uterm_principal", None), session_id
+    )
 
 
 async def refuse_revoked_registration(hub: Any, worker_id: str, websocket: Any, role: str) -> None:

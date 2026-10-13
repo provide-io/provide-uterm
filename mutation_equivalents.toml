@@ -744,16 +744,16 @@ reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg 
 mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_24"
 reason = "typing.cast type-string mutation -- cast is a runtime no-op (type arg ignored, value returned unchanged; VERIFIED cast(None, o) is o and cast('XXPrincipalXX', o) is o). Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_72"
+mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_84"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_73"
+mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_85"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_77"
+mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_89"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
 [[equivalent]]
-mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_78"
+mutant = "provide.uterm.server.routes.sse.x_sse_capability_handlers__mutmut_90"
 reason = "StreamingResponse header-NAME case mutation -- Starlette lowercases header names when building raw_headers, so 'Cache-Control'/'cache-control'/'CACHE-CONTROL' (and the X-Accel-Buffering trio) emit byte-identical raw_headers (VERIFIED by comparing raw_headers for both spellings). The header VALUES are case-sensitive and ARE killed by test_stream_sets_the_proxy_buffering_headers. Equivalent."
 
 # ---------------------------------------------------------------------------
