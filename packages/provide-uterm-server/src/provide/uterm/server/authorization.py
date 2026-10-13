@@ -57,6 +57,37 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
     ),
 }
 
+# Revocation cutoffs held at once. One float per session that has ever had its
+# viewers revoked; an embedder that revokes on every "go private" and deletes
+# sessions afterwards would otherwise grow this without end. Past the bound the
+# oldest cutoff is forgotten, which can only matter for a share token that
+# outlived thousands of later revocations.
+SHARE_VIEWER_REVOCATIONS_MAX = 10_000
+
+
+def is_share_viewer(principal: Principal, session_id: str) -> bool:
+    """True when ``principal`` is a read-only share grant for ``session_id``.
+
+    That is a ``share:{session_id}:...`` subject holding nothing beyond the
+    ``viewer`` role and no session-scoped admin grant -- the token an embedder
+    mints so someone can watch one session. A tunnel share *operator* uses the
+    same subject prefix but holds a session-scoped ``admin`` grant, so it is
+    not one, and neither is an owner, an operator or a global admin.
+    """
+    return (
+        principal.subject_id.startswith(f"share:{session_id}:")
+        and principal.roles <= frozenset({"viewer"})
+        and principal.admin_session_scope is None
+    )
+
+
+def _issued_at(principal: Principal) -> float | None:
+    """The token's numeric ``iat`` claim, or ``None`` when it has none."""
+    raw = principal.claims.get("iat")
+    if isinstance(raw, bool) or not isinstance(raw, int | float):
+        return None
+    return float(raw)
+
 
 @runtime_checkable
 class AuthorizationProvider(Protocol):
@@ -349,6 +380,42 @@ class AuthorizationService:
     """Pluggable gateway for authorization decisions."""
 
     _provider: AuthorizationProvider = field(default_factory=LocalAuthorizationProvider)
+    # session_id -> wall-clock cutoff. A share viewer of that session whose token
+    # was issued at or before the cutoff is refused (see ``share_viewer_revoked``).
+    # Process-local, like the tunnel token store.
+    _share_viewer_revocations: dict[str, float] = field(default_factory=dict)
+
+    def revoke_share_viewers(self, session_id: str, *, now: float | None = None) -> float:
+        """Refuse every share-viewer token for ``session_id`` issued up to now.
+
+        Returns the cutoff. Wall clock, because that is the clock a token's
+        ``iat`` is written in. A token issued in the same second as the cutoff
+        is refused too: ``iat`` has one-second resolution, so it cannot say
+        which side of the cutoff it fell on.
+        """
+        cutoff = time.time() if now is None else now
+        revocations = self._share_viewer_revocations
+        revocations.pop(session_id, None)
+        revocations[session_id] = cutoff
+        while len(revocations) > SHARE_VIEWER_REVOCATIONS_MAX:
+            del revocations[next(iter(revocations))]
+        return cutoff
+
+    def share_viewer_revocation(self, session_id: str) -> float | None:
+        """The cutoff recorded for ``session_id``, if its viewers were revoked."""
+        return self._share_viewer_revocations.get(session_id)
+
+    def share_viewer_revoked(self, principal: Principal, session_id: str) -> bool:
+        """True when ``principal`` is a share viewer whose token predates the cutoff.
+
+        A token without a numeric ``iat`` cannot show it postdates the cutoff,
+        so it is refused.
+        """
+        cutoff = self._share_viewer_revocations.get(session_id)
+        if cutoff is None or not is_share_viewer(principal, session_id):
+            return False
+        issued = _issued_at(principal)
+        return issued is None or issued <= cutoff
 
     async def capabilities_for(self, principal: Principal) -> frozenset[Capability]:
         provider: Any = self._provider
@@ -382,6 +449,10 @@ class AuthorizationService:
         return await LocalAuthorizationProvider().is_owner(principal, session)
 
     async def can_read_session(self, principal: Principal, session: SessionDefinition) -> bool:
+        # Checked here, ahead of the provider, so no provider -- local RBAC, a
+        # webhook, a visibility of "public" -- can readmit a revoked viewer.
+        if self.share_viewer_revoked(principal, session.session_id):
+            return False
         provider: Any = self._provider
         method = getattr(provider, "can_read_session", None)
         if callable(method):
@@ -389,6 +460,8 @@ class AuthorizationService:
         return await LocalAuthorizationProvider().can_read_session(principal, session)
 
     async def can_read_recording(self, principal: Principal, session: SessionDefinition) -> bool:
+        if self.share_viewer_revoked(principal, session.session_id):
+            return False
         provider: Any = self._provider
         method = getattr(provider, "can_read_recording", None)
         if callable(method):

@@ -743,6 +743,11 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/server/test_route_defs_mutation_killing.py",
     "packages/provide-uterm-server/tests/server/test_routes_profiles_mutation_killing.py",
     "packages/provide-uterm-server/tests/server/test_routes_webhooks_mutation_killing.py",
+    # routes/viewers.py — POST /api/sessions/{id}/viewers/revoke. The mocked suite
+    # pins the capability, authorize-before-revoke ordering and the audit record;
+    # the end-to-end suite drives live share-viewer sockets through the real app.
+    "packages/provide-uterm-server/tests/server/test_routes_viewers_mutation_killing.py",
+    "packages/provide-uterm-server/tests/server/test_viewer_revocation.py",
     # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the

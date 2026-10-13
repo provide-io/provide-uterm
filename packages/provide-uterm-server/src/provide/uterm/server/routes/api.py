@@ -20,6 +20,7 @@ from provide.uterm.server.routes.profiles import register_profile_routes
 from provide.uterm.server.routes.sessions import register_session_routes
 from provide.uterm.server.routes.sse import register_sse_routes
 from provide.uterm.server.routes.tunnels import register_tunnel_routes
+from provide.uterm.server.routes.viewers import register_viewer_routes
 from provide.uterm.server.routes.webhooks import register_webhook_routes
 
 
@@ -42,6 +43,7 @@ def create_api_router() -> APIRouter:
     router = APIRouter(prefix="/api")
     router.include_router(create_api_keys_router())
     register_session_routes(router)
+    register_viewer_routes(router)
     register_profile_routes(router)
     register_tunnel_routes(router)
     register_sse_routes(router)
