@@ -24,6 +24,7 @@ import { SessionRegistry } from "./session-registry.ts";
 import { sessionDefinitionFrom } from "./session-status.ts";
 import {
   isShareViewer,
+  SHARE_VIEWER_REVOCATION_TTL_S,
   SHARE_VIEWER_REVOCATIONS_MAX,
   ShareViewerRevocations,
   VIEWER_REVOKED_CLOSE_CODE,
@@ -81,15 +82,27 @@ describe("the revocation cutoff", () => {
 
   it("is bounded and forgets the oldest cutoff first", () => {
     const revocations = new ShareViewerRevocations();
+    const base = 1e9;
     for (let index = 0; index < SHARE_VIEWER_REVOCATIONS_MAX; index += 1) {
-      revocations.revoke(`s${index}`, index);
+      revocations.revoke(`s${index}`, base + index);
     }
-    revocations.revoke("s0", 1e6); // now the newest, so s1 falls out next
-    revocations.revoke("overflow", 2e6);
+    revocations.revoke("s0", base + 1e4); // now the newest, so s1 falls out next
+    revocations.revoke("overflow", base + 2e4);
     expect(revocations.cutoff("s1")).toBeUndefined();
-    expect(revocations.cutoff("s0")).toBe(1e6);
-    expect(revocations.cutoff("s2")).toBe(2);
-    expect(revocations.cutoff("overflow")).toBe(2e6);
+    expect(revocations.cutoff("s0")).toBe(base + 1e4);
+    expect(revocations.cutoff("s2")).toBe(base + 2);
+    expect(revocations.cutoff("overflow")).toBe(base + 2e4);
+  });
+
+  it("ages out cutoffs older than a day", () => {
+    expect(SHARE_VIEWER_REVOCATION_TTL_S).toBe(86400);
+    const revocations = new ShareViewerRevocations();
+    revocations.revoke("old", 1000);
+    revocations.revoke("edge", 2000);
+    revocations.revoke("new", 2000 + SHARE_VIEWER_REVOCATION_TTL_S);
+    expect(revocations.cutoff("old")).toBeUndefined();
+    expect(revocations.cutoff("edge")).toBe(2000);
+    expect(revocations.cutoff("new")).toBe(2000 + SHARE_VIEWER_REVOCATION_TTL_S);
   });
 
   it("closes with an application code and a generic reason", () => {

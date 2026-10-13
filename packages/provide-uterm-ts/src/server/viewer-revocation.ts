@@ -38,6 +38,13 @@ export const VIEWER_REVOKED_REASON = "viewer access revoked";
  */
 export const SHARE_VIEWER_REVOCATIONS_MAX = 10000;
 
+/**
+ * How long a cutoff is kept, in seconds. A cutoff only matters while a token
+ * issued before it can still be valid; ageing out rather than only evicting by
+ * count means nobody can push another session's fresh cutoff out of the table.
+ */
+export const SHARE_VIEWER_REVOCATION_TTL_S = 86400;
+
 /** A principal as a revocation reads it: who, what roles, and its token's claims. */
 export interface RevocablePrincipal extends AuthorizablePrincipal {
   claims?: Readonly<Record<string, unknown>> | undefined;
@@ -66,8 +73,10 @@ export class ShareViewerRevocations {
   revoke(sessionId: string, now: number): number {
     this.#cutoffs.delete(sessionId);
     this.#cutoffs.set(sessionId, now);
-    for (const oldest of this.#cutoffs.keys()) {
-      if (this.#cutoffs.size <= SHARE_VIEWER_REVOCATIONS_MAX) {
+    // Insertion order is revocation order: stale cutoffs, then the overflow, are
+    // at the front.
+    for (const [oldest, cutoff] of this.#cutoffs) {
+      if (cutoff >= now - SHARE_VIEWER_REVOCATION_TTL_S && this.#cutoffs.size <= SHARE_VIEWER_REVOCATIONS_MAX) {
         break;
       }
       this.#cutoffs.delete(oldest);
