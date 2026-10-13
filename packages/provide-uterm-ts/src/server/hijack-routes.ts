@@ -83,6 +83,7 @@ import { extractPromptId, type HijackSession, type InputMode } from "../hub/inde
 import { canMutateSession, canReadSession } from "./authorization.ts";
 import type { SessionHub } from "./session-hub.ts";
 import type { SessionRegistry } from "./session-registry.ts";
+import type { ShareViewerRevocations } from "./viewer-revocation.ts";
 
 /** The refusal every unauthenticated request gets, whatever it asked for. */
 export const HIJACK_UNAUTHENTICATED_DETAIL = "authentication required";
@@ -154,6 +155,8 @@ export interface HijackPrincipal {
   roles: ReadonlySet<string>;
   scopes: ReadonlySet<string>;
   admin_session_scope?: string | null | undefined;
+  /** The token's claims, which a share-viewer revocation reads `iat` from. */
+  claims?: Readonly<Record<string, unknown>> | undefined;
 }
 
 /** What the lease routes are served from. */
@@ -173,6 +176,8 @@ export interface HijackRouteOptions {
    * reference says the same thing in the same place, and for the same reason.
    */
   clientAddress?: string | undefined;
+  /** Share-viewer cutoffs, when the app keeps them: a revoked viewer reads nothing. */
+  revocations?: ShareViewerRevocations | undefined;
 }
 
 /** One refusal, in the shape the framework — and so the gate — emits. */
@@ -459,7 +464,8 @@ async function answer(request: Request, parsed: HijackPath, options: HijackRoute
     return detail(404, `unknown session: ${parsed.workerId}`);
   }
   const allowed = READ_VERBS.has(parsed.verb)
-    ? canReadSession(options.principal, session)
+    ? canReadSession(options.principal, session) &&
+      options.revocations?.revoked(options.principal, session.session_id) !== true
     : canMutateSession(options.principal, session, "session.control.hijack");
   if (!allowed) {
     return detail(403, "insufficient privileges");

@@ -36,13 +36,14 @@ import {
   resolveJwtPrincipal,
   type ServerPrincipal,
 } from "../serverauth/index.ts";
-import { canMutateSession, canReadSession } from "./authorization.ts";
+import { type AuthorizableSession, canMutateSession, canReadSession } from "./authorization.ts";
 import { healthReport, livenessReport, readinessReport } from "./health.ts";
 import { handleHijackRequest, INPUT_MODES, readJsonBody as readBody } from "./hijack-routes.ts";
 import { type RecordingAccess, recordingHandlers } from "./recording-routes.ts";
 import { bindApiRoutes, matchesShape, type RouteHandler } from "./route-binding.ts";
 import type { SessionHub } from "./session-hub.ts";
 import { filterSessions, type SessionListQuery, type SessionRegistry } from "./session-registry.ts";
+import { ShareViewerRevocations, VIEWER_REVOKED_CLOSE_CODE, VIEWER_REVOKED_REASON } from "./viewer-revocation.ts";
 
 /** The refusal every unauthenticated request gets, whatever it asked for. */
 export const UNAUTHENTICATED_DETAIL = "authentication required";
@@ -156,6 +157,17 @@ const OPERATIONAL: readonly OperationalRoute[] = [
   { method: "GET", path: "/readyz", answer: (app) => readinessReport(app.ready) },
 ];
 
+/**
+ * The viewer-revocation route, `POST /api/sessions/{session_id}/viewers/revoke`.
+ *
+ * Runtime-native like the lease routes, not part of the shared contract: the
+ * Worker has no share-viewer grant to revoke.
+ */
+const VIEWERS_REVOKE_PATH = /^\/api\/sessions\/([^/]+)\/viewers\/revoke$/;
+
+/** A session id the reference's route grammar accepts. */
+const SESSION_ID = /^[\w-]+$/;
+
 /** One refusal, in the shape the reference's framework emits. */
 function refusal(status: number, detail: string, headers: Record<string, string> = {}): Response {
   return Response.json({ detail }, { status, headers });
@@ -267,6 +279,12 @@ export const SERVED_ROUTES: readonly RouteDef[] = API_ROUTES.filter((route) =>
 export function createServerApp(options: ServerAppOptions): ServerApp {
   const app: BuiltApp = { options, ready: true };
   const recordings = options.recordings;
+  const revocations = new ShareViewerRevocations();
+
+  /** The read decision, refusing a share viewer whose access was revoked. */
+  function canRead(principal: ServerPrincipal, session: AuthorizableSession): boolean {
+    return canReadSession(principal, session) && !revocations.revoked(principal, session.session_id);
+  }
 
   /**
    * The handler map for one request.
@@ -290,7 +308,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       }
       // Filtered by what this caller may read *before* anything is narrowed,
       // so a paged list never spends its page on sessions it then hides.
-      const visible = registry.statuses().filter((status) => canReadSession(principal, status));
+      const visible = registry.statuses().filter((status) => canRead(principal, status));
       return Response.json(filterSessions(visible, query));
     });
 
@@ -300,7 +318,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       if (definition === undefined) {
         return refusal(404, `unknown session: ${sessionId}`);
       }
-      if (!canReadSession(principal, definition)) {
+      if (!canRead(principal, definition)) {
         return refusal(403, "insufficient privileges");
       }
       // Present, because its definition is.
@@ -313,7 +331,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       if (definition === undefined) {
         return refusal(404, `unknown session: ${sessionId}`);
       }
-      if (!canReadSession(principal, definition)) {
+      if (!canRead(principal, definition)) {
         return refusal(403, "insufficient privileges");
       }
       // A session whose worker has never sent a screen answers `null` with a
@@ -343,7 +361,14 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       // Present, because its definition is.
       return Response.json(registry.status(sessionId) as object);
     });
-    for (const [capability, handler] of recordingHandlers({ registry, recordings, principal, request, url })) {
+    for (const [capability, handler] of recordingHandlers({
+      registry,
+      recordings,
+      principal,
+      request,
+      url,
+      revocations,
+    })) {
       map.set(capability, handler);
     }
     return map;
@@ -382,6 +407,41 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
     return resolveJwtPrincipal(request.headers, options.auth, options.now);
   }
 
+  /**
+   * Revoke a session's share viewers: record the cutoff and report it.
+   *
+   * The same gate as everything else here — method, credential, grammar,
+   * existence, privilege — and the privilege is `session.control.update`, so
+   * the owner, a session-scoped admin or a global admin. No socket can be
+   * open to close, so `closed` is always zero.
+   */
+  function revokeViewers(method: string, sessionId: string, principal: ServerPrincipal, authenticated: boolean) {
+    if (method !== "POST") {
+      return refusal(405, "Method Not Allowed", { Allow: "POST" });
+    }
+    if (!authenticated) {
+      return unauthenticated();
+    }
+    if (!SESSION_ID.test(sessionId)) {
+      return refusal(422, "invalid route path parameters");
+    }
+    const definition = options.registry.definition(sessionId);
+    if (definition === undefined) {
+      return refusal(404, `unknown session: ${sessionId}`);
+    }
+    if (!canMutateSession(principal, definition, "session.control.update")) {
+      return refusal(403, "insufficient privileges");
+    }
+    const revokedAt = revocations.revoke(sessionId, (options.now ?? (() => Date.now() / 1000))());
+    return Response.json({
+      session_id: sessionId,
+      revoked_at: revokedAt,
+      closed: 0,
+      close_code: VIEWER_REVOKED_CLOSE_CODE,
+      close_reason: VIEWER_REVOKED_REASON,
+    });
+  }
+
   async function handle(request: Request, clientAddress?: string): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -410,9 +470,15 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       principal,
       authenticated,
       clientAddress,
+      revocations,
     });
     if (lease !== undefined) {
       return lease;
+    }
+
+    const revoke = VIEWERS_REVOKE_PATH.exec(path);
+    if (revoke !== null) {
+      return revokeViewers(method, revoke[1] as string, principal, authenticated);
     }
 
     // A request for a served route is one whose caller has to have

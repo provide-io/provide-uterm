@@ -34,6 +34,7 @@ import { checkInt, checkString, lastQueryValue, type QueryError, validationFailu
 import type { RouteHandler } from "./route-binding.ts";
 import type { SessionRegistry } from "./session-registry.ts";
 import type { SessionDefinition, SessionRuntimeStatus } from "./session-status.ts";
+import type { ShareViewerRevocations } from "./viewer-revocation.ts";
 
 /** Where recordings are, and how to make what is buffered readable. */
 export interface RecordingAccess {
@@ -52,6 +53,8 @@ export interface RecordingRouteDeps {
   principal: ServerPrincipal;
   request: Request;
   url: URL;
+  /** Share-viewer cutoffs, when the app keeps them: a revoked viewer reads nothing. */
+  revocations?: ShareViewerRevocations | undefined;
 }
 
 /** The capability that reading a recording needs beyond reading its session. */
@@ -149,7 +152,7 @@ export function recordingHandlers(deps: RecordingRouteDeps): ReadonlyMap<string,
     if (definition === undefined) {
       return refusal(404, `unknown session: ${sessionId}`);
     }
-    if (!canReadRecording(principal, definition)) {
+    if (!canReadRecording(principal, definition) || deps.revocations?.revoked(principal, sessionId) === true) {
       return refusal(403, "insufficient privileges");
     }
     return definition;
