@@ -189,6 +189,18 @@ async def stream_until_revoked(
 _WATCH_PATH = re.compile(r"^/api/sessions/(?P<session_id>[\w\-]+)/events/watch$")
 
 
+def _route_path(scope: Any) -> str:
+    """The path below any mount or root path: what the app's routes match on.
+
+    Under a mount (or a server root path) ``scope["path"]`` carries the prefix
+    and ``scope["root_path"]`` names it. Starlette's ``get_route_path`` does
+    the same, but is not exported.
+    """
+    path: str = scope["path"]
+    root: str = scope.get("root_path", "")
+    return path[len(root) :] if root and path.startswith(root + "/") else path
+
+
 class ShareViewerWatchGuard:
     """Refuse a long-poll answer that lands after its viewer was revoked.
 
@@ -204,7 +216,9 @@ class ShareViewerWatchGuard:
         self.app = app
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        match = _WATCH_PATH.match(scope.get("path", "")) if scope["type"] == "http" else None
+        # The route path, not the raw path: under a mount or a root path the
+        # raw path carries the prefix and would never match.
+        match = _WATCH_PATH.match(_route_path(scope)) if scope["type"] == "http" else None
         if match is None or scope.get("method") != "GET":
             await self.app(scope, receive, send)
             return

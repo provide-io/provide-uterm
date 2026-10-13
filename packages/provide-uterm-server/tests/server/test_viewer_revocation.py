@@ -820,3 +820,47 @@ async def test_the_watch_guard_passes_other_traffic_through_untouched() -> None:
         sent.clear()
         await guard(scope, None, collect)
         assert [m.get("status", m.get("body")) for m in sent] == [200, b"ok"], scope
+
+
+@pytest.mark.parametrize(
+    ("path", "root_path", "route_path"),
+    [
+        ("/uterm/api/sessions/s1/events/watch", "/uterm", "/api/sessions/s1/events/watch"),
+        ("/api/sessions/s1/events/watch", "/uterm", "/api/sessions/s1/events/watch"),
+        ("/utermx/api/sessions/s1/events/watch", "/uterm", "/utermx/api/sessions/s1/events/watch"),
+        ("/api/sessions/s1/events/watch", "", "/api/sessions/s1/events/watch"),
+    ],
+)
+def test_the_route_path_drops_only_a_root_path_prefix(path: str, root_path: str, route_path: str) -> None:
+    from provide.uterm.server.viewer_revocation import _route_path
+
+    assert _route_path({"path": path, "root_path": root_path}) == route_path
+    if not root_path:
+        assert _route_path({"path": path}) == route_path
+
+
+async def test_the_watch_guard_matches_the_route_under_a_mount_prefix() -> None:
+    """Mounted at ``/uterm``, the path carries the prefix; the route path does not."""
+    from provide.uterm.server.viewer_revocation import ShareViewerWatchGuard
+
+    sent: list[dict[str, Any]] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    async def collect(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    service = AuthorizationService()
+    service.revoke_share_viewers("s1", now=500.0)
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/uterm/api/sessions/s1/events/watch",
+        "root_path": "/uterm",
+        "app": SimpleNamespace(state=SimpleNamespace(uterm_authz=service)),
+        "state": {"uterm_principal": _viewer("s1", iat=100)},
+    }
+    await ShareViewerWatchGuard(inner)(scope, None, collect)
+    assert [m.get("status", m.get("body")) for m in sent] == [403, b'{"detail": "insufficient privileges"}']
