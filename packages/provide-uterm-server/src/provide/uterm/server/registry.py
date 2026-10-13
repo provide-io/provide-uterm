@@ -302,6 +302,11 @@ class SessionRegistry:
         async with self._lock:
             return self._sessions.get(session_id)
 
+    async def unknown_sessions(self, session_ids: Iterable[str]) -> list[str]:
+        """The ids in ``session_ids`` with no definition, in one lock acquisition."""
+        async with self._lock:
+            return [session_id for session_id in session_ids if session_id not in self._sessions]
+
     def _validate_create_payload(self, payload: dict[str, Any]) -> tuple[str, str, InputMode, Visibility]:
         """Validate and extract core fields from a session creation payload.
 

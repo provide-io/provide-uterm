@@ -230,6 +230,11 @@ class TestListGet:
         assert await reg.get_definition("a") is s
         assert await reg.get_definition("nope") is None
 
+    async def test_unknown_sessions_lists_the_ids_with_no_definition_in_order(self) -> None:
+        reg = _make_registry([_session("a"), _session("b")])
+        assert await reg.unknown_sessions(["gone", "a", "also-gone", "b"]) == ["gone", "also-gone"]
+        assert await reg.unknown_sessions([]) == []
+
 
 # ===========================================================================
 # _validate_create_payload

@@ -60,10 +60,9 @@ async def revoke_viewers(request: Request, session_id: SessionId) -> dict[str, A
         raise HTTPException(status_code=403, detail="insufficient privileges")
     # Cutoffs of sessions that have since been deleted go first: nothing is left
     # for them to refuse, and keeping them is what would fill the table.
-    reg = registry(request)
-    for stale in az.share_viewer_revoked_sessions():
-        if await reg.get_definition(stale) is None:
-            az.forget_share_viewers(stale)
+    # One pass under the registry lock rather than a lookup per held cutoff.
+    for stale in await registry(request).unknown_sessions(az.share_viewer_revoked_sessions()):
+        az.forget_share_viewers(stale)
     # The embedder's service token is a global admin and revokes for everyone,
     # so only other callers are held to a per-principal share of the table.
     revoker = None if await az.is_admin(p) else p.subject_id

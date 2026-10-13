@@ -34,6 +34,7 @@ def _request(*, can_mutate: bool = True, definition: Any = "present", admin: boo
     registry = MagicMock(name="registry")
     resolved = SimpleNamespace(session_id=_SID) if definition == "present" else definition
     registry.get_definition = AsyncMock(return_value=resolved)
+    registry.unknown_sessions = AsyncMock(return_value=[])
     hub = object()
     state = SimpleNamespace(uterm_authz=az, uterm_registry=registry, uterm_hub=hub)
     return SimpleNamespace(
@@ -156,11 +157,12 @@ async def test_cutoffs_of_deleted_sessions_are_forgotten_before_the_revoke(close
     az.forget_share_viewers = order.forget
     az.revoke_share_viewers = order.revoke
     order.revoke.return_value = 123.5
-    present = SimpleNamespace(session_id=_SID)
-    request.app.state.uterm_registry.get_definition = AsyncMock(
-        side_effect=lambda sid: None if sid == "gone" else present
-    )
+    registry = request.app.state.uterm_registry
+    registry.unknown_sessions = AsyncMock(return_value=["gone"])
     await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    # One pass over the held cutoffs, not a registry lookup per cutoff.
+    registry.unknown_sessions.assert_awaited_once_with(["gone", "alive"])
+    registry.get_definition.assert_awaited_once_with(_SID)
     assert order.mock_calls[0] == call.forget("gone")
     assert order.mock_calls[1] == call.revoke(_SID, revoker="owner-1")
     assert len(order.mock_calls) == 2
