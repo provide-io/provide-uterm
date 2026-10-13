@@ -4,6 +4,7 @@
 //
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { encodeControlFrame } from "./hijack-codec.js";
 import { type TerminalElement, registerTerminalElement } from "./terminal-element.js";
 
 registerTerminalElement();
@@ -183,5 +184,36 @@ describe("TerminalElement", () => {
     // write is a no-op on mock unless we track it — just ensure no throw and loading hidden.
     const loading = el.querySelector(`[id^="loadingScreen-"]`) as HTMLElement | null;
     expect(loading?.style.display).toBe("none");
+  });
+
+  it("paints a plain-text snapshot and leaves the cursor where the frame says", async () => {
+    const el = document.createElement("uterm-terminal") as TerminalElement;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    const writes = vi.spyOn(el, "writeData");
+
+    el.connect();
+    const ws = mockSockets[0]!;
+    ws.open();
+    ws.receive(encodeControlFrame({ type: "snapshot", screen: "ab\ncd", cursor: { x: 1, y: 0 } }));
+
+    expect(writes.mock.calls.map((call) => call[0])).toEqual(["\x1b[!p\x1b[2J\x1b[H", "ab\r\ncd", "\x1b[1;2H"]);
+  });
+
+  it("leaves an ANSI snapshot's own cursor state alone", async () => {
+    const el = document.createElement("uterm-terminal") as TerminalElement;
+    document.body.appendChild(el);
+    await el.updateComplete;
+    const writes = vi.spyOn(el, "writeData");
+
+    el.connect();
+    const ws = mockSockets[0]!;
+    ws.open();
+    ws.receive(encodeControlFrame({ type: "snapshot", screen: "\x1b[0mab\x1b[0m\x1b[1;2H", cursor: { x: 0, y: 0 } }));
+
+    expect(writes.mock.calls.map((call) => call[0])).toEqual([
+      "\x1b[!p\x1b[2J\x1b[H",
+      "\x1b[0mab\x1b[0m\x1b[1;2H",
+    ]);
   });
 });

@@ -1067,6 +1067,17 @@ describe("ProvideHijack snapshot reset emits real ESC sequence (Finding #5 guard
     // The very first frame after the snapshot handler runs is the reset sequence.
     expect(term.written[0]).toBe("\x1b[!p\x1b[2J\x1b[H");
     expect(term.written[1]).toBe("hello");
+    // No cursor in the frame: nothing to place it from.
+    expect(term.written).toHaveLength(2);
+  });
+
+  it("places a plain-text snapshot's cursor where the live stream resumes", () => {
+    const { widget } = makeWidget();
+    getWs().open();
+    const term = new MockTerminal();
+    (widget as any)._hijackState.term = term;
+    sendMessage({ type: "snapshot", screen: "hello\nworld", cursor: { x: 2, y: 1 } });
+    expect(term.written).toEqual(["\x1b[!p\x1b[2J\x1b[H", "hello\r\nworld", "\x1b[2;3H"]);
   });
 });
 

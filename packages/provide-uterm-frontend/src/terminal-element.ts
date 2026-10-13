@@ -8,6 +8,7 @@ import { property } from "lit/decorators.js";
 import { buildSettingsPanelHtml, DEFAULTS, loadSettings, saveSettings, type TerminalConfig, type TerminalSettings } from "./terminal-settings.js";
 import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, type ThemeName } from "./terminal-themes.js";
 import { ControlChannelDecoder, encodeWsFrame, utf8ByteLength } from "./hijack-codec.js";
+import { SNAPSHOT_PREAMBLE, snapshotCursorRestore, snapshotRows } from "./snapshot-paint.js";
 import { safeLinkHandler } from "./terminal-links.js";
 
 const ACK_THROTTLE_MS = 100;
@@ -504,9 +505,12 @@ export class TerminalElement extends LitElement {
           if (data) this.writeData(data);
         } else if (mtype === "snapshot") {
           const screen = typeof msg.screen === "string" ? msg.screen : "";
-          // Soft reset + home, then paint screen (same as session-element).
-          this.writeData("\x1b[!p\x1b[2J\x1b[H");
-          this.writeData(screen.replace(/\n/g, "\r\n"));
+          // Soft reset + home, then paint screen (same as session-element),
+          // then put the cursor where the live stream resumes from.
+          this.writeData(SNAPSHOT_PREAMBLE);
+          this.writeData(snapshotRows(screen));
+          const restore = snapshotCursorRestore(screen, msg.cursor);
+          if (restore) this.writeData(restore);
         }
         // hello / hijack_state / presence / etc. — intentionally ignored here;
         // this widget is terminal-only (no chrome).

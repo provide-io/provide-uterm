@@ -19,6 +19,7 @@ import {
 } from "./hijack-codec.js";
 import { type HijackHandlers, HijackState } from "./hijack-state.js";
 import { MOBILE_KEYS } from "./hijack-ui.js";
+import { SNAPSHOT_PREAMBLE, snapshotCursorRestore, snapshotRows } from "./snapshot-paint.js";
 import { safeLinkHandler } from "./terminal-links.js";
 import {
   clearHeartbeat,
@@ -648,8 +649,13 @@ export class UtermSessionElement extends LitElement {
             this._lastRows = rows;
             this.dispatchEvent(new CustomEvent("uterm:geometry", { detail: { cols, rows } }));
           }
-          t.write("\x1b[!p\x1b[2J\x1b[H");
-          t.write((msg.screen ?? "").replace(/\n/g, "\r\n"));
+          const screen = msg.screen ?? "";
+          t.write(SNAPSHOT_PREAMBLE);
+          t.write(snapshotRows(screen));
+          // The live stream resumes from the snapshot's cursor, not from
+          // wherever the painted rows ended; see snapshot-paint.ts.
+          const restore = snapshotCursorRestore(screen, msg.cursor);
+          if (restore) t.write(restore);
         } catch (err) {
           console.warn("ProvideHijack: snapshot write failed", err);
         }
