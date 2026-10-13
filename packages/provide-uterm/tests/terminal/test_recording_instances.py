@@ -123,6 +123,15 @@ async def test_a_symlink_planted_at_the_path_is_retired_unread(tmp_path: Path) -
     assert target.read_text().count("\n") == 1  # never written through
 
 
+async def test_a_directory_planted_at_the_path_is_retired(tmp_path: Path) -> None:
+    (tmp_path / "s.jsonl").mkdir()  # opens fine; reading it raises OSError
+    store = LocalFileRecordingStore(tmp_path)
+    await _record(store, "s", {"instance": "i1"}, "mine")
+    assert (tmp_path / "s.jsonl").is_file()
+    assert _texts(await store.get_entries("s", limit=500)) == ["mine"]
+    assert len([p for p in tmp_path.glob("s.*.jsonl") if p.is_dir()]) == 1
+
+
 async def test_retire_session_after_the_session_ended(tmp_path: Path) -> None:
     store = LocalFileRecordingStore(tmp_path)
     await _record(store, "s", {"instance": "a"}, "old")

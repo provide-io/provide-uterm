@@ -99,13 +99,17 @@ def _instance_on_file(path: Path) -> str | None:
 
     Read without following a symlink: a link planted at the path is not a
     recording this store wrote, and None retires it like any other stranger.
+    So does anything that opens but cannot be read, such as a directory.
     """
     try:
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
     except OSError:
         return None
-    with os.fdopen(fd, "rb") as f:
-        first = f.readline(_FIRST_LINE_LIMIT)
+    try:
+        with os.fdopen(fd, "rb") as f:
+            first = f.readline(_FIRST_LINE_LIMIT)
+    except OSError:  # a directory, or a file that cannot be read: not a recording we wrote
+        return None
     try:
         start = json.loads(first)
     except ValueError:
