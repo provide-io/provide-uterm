@@ -307,6 +307,8 @@ public sealed partial class UtermServer : IAsyncDisposable
 
         // Session lifecycle control plane (Go routes_sessions_control)
         MapSessionControlRoutes(app);
+        // Share-viewer revocation (Go routes_viewers)
+        MapViewerRoutes(app);
         // Session webhooks (Go routes_webhooks)
         MapWebhookRoutes(app);
         // Fan-out groups (Go routes_fanout)

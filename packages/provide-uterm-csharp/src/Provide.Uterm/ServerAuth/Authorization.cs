@@ -98,7 +98,7 @@ public sealed class LocalAuthorizationProvider : IAuthorizationProvider
 /// Authorization gateway. Default constructor uses local RBAC;
 /// <see cref="FromConfig"/> selects webhook authz when governance.authz_webhook_url is set.
 /// </summary>
-public sealed class AuthorizationService
+public sealed partial class AuthorizationService
 {
     public static readonly IReadOnlyDictionary<string, StringSet> RoleCapabilities = new Dictionary<string, StringSet>
     {
@@ -166,10 +166,13 @@ public sealed class AuthorizationService
 
     public bool IsOwner(Principal p, SessionDefinition session) => _provider.IsOwner(p, session);
 
-    public bool CanReadSession(Principal p, SessionDefinition session) => _provider.CanReadSession(p, session);
+    /// <summary>Session read, refusing a revoked share viewer ahead of the provider.</summary>
+    public bool CanReadSession(Principal p, SessionDefinition session) =>
+        !ShareViewerRevoked(p, session.SessionId) && _provider.CanReadSession(p, session);
 
     /// <summary>Read session recording meta/entries/download (capability + session read).</summary>
-    public bool CanReadRecording(Principal p, SessionDefinition session) => _provider.CanReadRecording(p, session);
+    public bool CanReadRecording(Principal p, SessionDefinition session) =>
+        !ShareViewerRevoked(p, session.SessionId) && _provider.CanReadRecording(p, session);
 
     public bool CanCreateSession(Principal p) => _provider.CanCreateSession(p);
 

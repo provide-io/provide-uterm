@@ -81,7 +81,7 @@ public sealed partial class UtermServer
         }
 
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync().ConfigureAwait(false);
-        var conn = new BrowserWsConn(ws);
+        var conn = new BrowserWsConn(ws, p);
         // Match Python/Go: register, then hello from registry state + immediate hijack_state.
         Dictionary<string, object?> state;
         try
@@ -646,7 +646,42 @@ public sealed partial class UtermServer
         private readonly WebSocket _ws;
         private readonly SemaphoreSlim _sendGate = new(1, 1);
 
-        public BrowserWsConn(WebSocket ws) => _ws = ws;
+        public BrowserWsConn(WebSocket ws, Principal? principal = null)
+        {
+            _ws = ws;
+            Principal = principal ?? Principal.Anonymous();
+        }
+
+        /// <summary>
+        /// Who opened this socket, judged again when viewer access is revoked. A
+        /// worker socket (which reuses this adapter) carries the anonymous principal,
+        /// which is never a share viewer.
+        /// </summary>
+        public Principal Principal { get; }
+
+        /// <summary>
+        /// Send a close frame without waiting for the peer's: the receive loop owns
+        /// the receive side and finishes the handshake. Under the send gate, since a
+        /// close frame is a send. Never throws: a socket already going away has
+        /// nothing left to tell.
+        /// </summary>
+        public async Task CloseOutputAsync(WebSocketCloseStatus status, string reason)
+        {
+            await _sendGate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (_ws.State == WebSocketState.Open)
+                {
+                    await _ws.CloseOutputAsync(status, reason, CancellationToken.None)
+                        .ContinueWith(static t => _ = t.Exception, TaskScheduler.Default)
+                        .ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                _sendGate.Release();
+            }
+        }
 
         public bool IsActive => _ws.State == WebSocketState.Open;
 

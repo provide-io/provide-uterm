@@ -490,6 +490,19 @@ public sealed partial class ConnectionManager
         }
     }
 
+    /// <summary>
+    /// A snapshot of <paramref name="workerId"/>'s browsers and their roles, taken
+    /// under the hub lock (used to find live share viewers to close on revoke).
+    /// </summary>
+    public List<(object Ws, string Role)> BrowsersOf(string workerId)
+    {
+        lock (_hub.SharedLock)
+        {
+            var st = _hub.Registry.Get(workerId);
+            return st is null ? new() : st.Browsers.Select(kv => (kv.Key, kv.Value)).ToList();
+        }
+    }
+
     public async Task BroadcastHijackStateAsync(string workerId, CancellationToken ct = default)
     {
         List<(object Ws, Dictionary<string, object?> Msg)> fanout = new();

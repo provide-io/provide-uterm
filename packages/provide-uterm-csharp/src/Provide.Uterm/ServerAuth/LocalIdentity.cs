@@ -237,12 +237,21 @@ public sealed class LocalIdentityProvider : IAuthenticator
             }
         }
 
+        // iat travels with the principal so a share viewer's token can be judged
+        // against a revocation cutoff (AuthorizationService.ShareViewerRevoked).
+        var claims = new Dictionary<string, object?>();
+        if (validatedToken is JwtSecurityToken issued && issued.IssuedAt != DateTime.MinValue)
+        {
+            claims["iat"] = (double)new DateTimeOffset(DateTime.SpecifyKind(issued.IssuedAt, DateTimeKind.Utc)).ToUnixTimeSeconds();
+        }
+
         return new Principal
         {
             SubjectId = subject,
             Roles = RolesFromClaimList(roles),
             Scopes = scopes,
             TenantId = tenant,
+            Claims = claims,
         };
     }
 
