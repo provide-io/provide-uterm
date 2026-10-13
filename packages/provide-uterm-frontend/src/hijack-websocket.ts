@@ -10,6 +10,7 @@
  * out of the main class keeps hijack.ts focused on DOM/event wiring.
  */
 
+import { closeInfo, isFinalCloseCode } from "./connection-events.js";
 import { _RECONNECT_ANIM_FRAMES, encodeWsFrame, utf8ByteLength } from "./hijack-codec.js";
 import type { HijackHandlers, HijackState } from "./hijack-state.js";
 
@@ -157,12 +158,16 @@ export function stopReconnectAnim(state: HijackState): void {
 
 export function connectWs(state: HijackState, handlers: HijackHandlers): void {
   if (state.ws) {
+    // Detach before closing, so the old socket's close handler sees itself as
+    // stale even where close() reports synchronously.
+    const old = state.ws;
+    state.ws = null;
     try {
-      state.ws.close();
+      old.close();
     } catch (err) {
       console.debug("ProvideHijack: ws.close() failed replacing stale socket (best-effort cleanup)", err);
     }
-    state.ws = null;
+    handlers.onSocketReplaced?.();
   }
   // Do NOT reset _hijacked/_hijackedByMe here: the server confirms actual state
   // via 'hello'/'hijack_state' once the socket opens. Eager reset would briefly
@@ -204,6 +209,7 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
     }
     wsSend(state, { type: "snapshot_req" });
     startHeartbeat(state);
+    handlers.onSocketOpen?.();
   };
 
   ws.onmessage = (e: MessageEvent) => {
@@ -231,7 +237,7 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
     }
   };
 
-  ws.onclose = () => {
+  ws.onclose = (event?: CloseEvent) => {
     if (ws !== state.ws) return; // stale handler from a replaced socket
     clearHeartbeat(state);
     clearAckTimer(state);
@@ -252,7 +258,16 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
     handlers.updateStatus();
     handlers.updateButtons();
     state.ws = null;
-    scheduleReconnect(state, handlers);
+    // Tell the owner before any reconnect is scheduled; it (or a page listening
+    // to it) may decide there is to be none. Without an owner hook, final close
+    // codes still end the stream.
+    const info = closeInfo(event);
+    const reconnect = handlers.onSocketClose ? handlers.onSocketClose(info) : !isFinalCloseCode(info.code);
+    if (reconnect) {
+      scheduleReconnect(state, handlers);
+    } else {
+      handlers.setStatus("bad", isFinalCloseCode(info.code) ? "Access revoked" : "Disconnected");
+    }
   };
 
   ws.onerror = () => {

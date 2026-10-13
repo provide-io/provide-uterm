@@ -10,6 +10,7 @@ import {
   type ApprovalPromptElement,
   registerApprovalPromptElement,
 } from "./approval-prompt-element.js";
+import { ConnectionEvents } from "./connection-events.js";
 import {
   ControlChannelDecoder,
   type FitAddonInstance,
@@ -377,6 +378,8 @@ export class UtermSessionElement extends LitElement {
   @query("#terminal") terminalElement!: HTMLElement;
   @query("#inputfield") inputField!: HTMLInputElement;
 
+  /** Public `uterm:connection` / `uterm:close` events; see connection-events.ts. */
+  private readonly _events = new ConnectionEvents(this);
   private _resolvedConfig!: ResolvedConfig;
   private _hijackState!: HijackState;
   private _handlers!: HijackHandlers;
@@ -395,6 +398,14 @@ export class UtermSessionElement extends LitElement {
   // Provide public API mirroring original ProvideHijack
   get terminal(): XTerminal | null {
     return this._hijackState?.term ?? null;
+  }
+
+  /**
+   * Whether the element's socket is open right now. Changes are announced by
+   * the `uterm:connection` event; closes, with their code, by `uterm:close`.
+   */
+  get connected(): boolean {
+    return this._events.connected;
   }
 
   override connectedCallback() {
@@ -442,6 +453,9 @@ export class UtermSessionElement extends LitElement {
       updateStatus: () => this._updateStatus(),
       updateButtons: () => this.requestUpdate(),
       handleMessage: (msg) => this._handleMessage(msg),
+      onSocketOpen: () => this._events.opened(),
+      onSocketReplaced: () => this._events.dropped(),
+      onSocketClose: (info) => this._events.closed(info),
     };
   }
 
@@ -471,13 +485,16 @@ export class UtermSessionElement extends LitElement {
       this._hijackState.reconnectTimer = null;
     }
     if (this._hijackState.ws) {
+      // Detach first: a close this side asked for is not a drop to recover from.
+      const ws = this._hijackState.ws;
+      this._hijackState.ws = null;
       try {
-        this._hijackState.ws.close();
+        ws.close();
       } catch (err) {
         console.debug("ProvideHijack: ws.close() failed during disconnect (best-effort cleanup)", err);
       }
-      this._hijackState.ws = null;
     }
+    this._events.dropped();
   }
 
   dispose(): void {

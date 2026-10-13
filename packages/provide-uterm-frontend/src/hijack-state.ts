@@ -9,6 +9,7 @@
  * DOM references and approval-UI state stay on the ProvideHijack class.
  */
 
+import type { SocketCloseInfo } from "./connection-events.js";
 import type { ControlChannelDecoder, ResolvedConfig, XTerminal } from "./hijack-codec.js";
 
 export class HijackState {
@@ -67,4 +68,13 @@ export interface HijackHandlers {
   updateStatus(): void;
   updateButtons(): void;
   handleMessage(msg: Record<string, unknown>): void;
+  /** A socket opened (every socket: first connect, reconnects, manual reconnects). */
+  onSocketOpen?(): void;
+  /** connectWs() let the current socket go to open a new one. */
+  onSocketReplaced?(): void;
+  /**
+   * A socket closed by the server or dropped. Called before any reconnect is
+   * scheduled; returns whether to schedule one.
+   */
+  onSocketClose?(info: SocketCloseInfo): boolean;
 }

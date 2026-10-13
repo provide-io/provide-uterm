@@ -24,6 +24,46 @@ Browser UI for the [provide-uterm](../../README.md) platform. Vanilla TypeScript
 | `app/widgets/hijack-widget-host.ts` | Hosts the hijack widget and wires control-transfer events |
 | `app/deckmux/` | DeckMux overlay — avatar bar, edge indicators, control transfer |
 
+## Embedding the terminal elements
+
+`public.ts` (the package entry) exports `<uterm-session>` (`UtermSessionElement`,
+terminal plus hijack chrome) and `<uterm-terminal>` (`TerminalElement`,
+terminal only). Register them with `registerUtermElements()`, set `config`, and
+call `connect()` / `disconnect()`.
+
+Both elements reconnect by themselves, with backoff, when their socket closes.
+They report the stream through public DOM events, so a page never needs their
+private fields:
+
+| Event | `detail` | Cancelable | When |
+|-------|----------|------------|------|
+| `uterm:connection` | `{ connected: boolean }` | no | The socket opened (`true`), or an open socket went away (`false`): a close, `disconnect()`, or a `connect()` that replaced it. Changes only. |
+| `uterm:close` | `{ code: number, reason: string, wasClean: boolean, willReconnect: boolean }` | yes | The server closed a socket, or it dropped (`code` 1006), whether it had opened or not. Fires before the reconnect is scheduled; `preventDefault()` cancels that reconnect. Not fired for `disconnect()`. |
+
+Both bubble and are `composed`, and both fire for every socket the element
+opens: the first `connect()`, its own reconnects, and manual reconnects. The
+element's `connected` getter (read-only) gives the current state.
+
+Close codes in `FINAL_CLOSE_CODES` end the stream with no reconnect, listener or
+not (`willReconnect` is `false`). Today that is only `4410` (`VIEWER_REVOKED_CLOSE_CODE`:
+the server revoked this viewer's access, so a reconnect could only be refused).
+A page may still call `connect()` again itself.
+
+```ts
+import { UTERM_CLOSE_EVENT, UTERM_CONNECTION_EVENT, VIEWER_REVOKED_CLOSE_CODE } from "provide-uterm-frontend";
+
+element.addEventListener(UTERM_CONNECTION_EVENT, (e) => showLive(e.detail.connected));
+element.addEventListener(UTERM_CLOSE_EVENT, (e) => {
+  if (e.detail.code === VIEWER_REVOKED_CLOSE_CODE) showRevoked();
+  else if (sessionIsOver()) e.preventDefault(); // do not reconnect
+});
+```
+
+`UtermConnectionEventDetail` and `UtermCloseEventDetail` are exported as types,
+and both events are declared on `HTMLElementEventMap`, so `addEventListener`
+types `e.detail` without a cast. `<uterm-session>` also dispatches
+`uterm:geometry` (`detail: {cols, rows}`) when the session's size changes.
+
 ## Build
 
 ```bash

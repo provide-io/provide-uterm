@@ -7,6 +7,7 @@ import { LitElement, type PropertyValues, html } from "lit";
 import { property } from "lit/decorators.js";
 import { buildSettingsPanelHtml, DEFAULTS, loadSettings, saveSettings, type TerminalConfig, type TerminalSettings } from "./terminal-settings.js";
 import { applyColors, applyThemeClasses, asThemeName, THEME_DEFAULTS, type ThemeName } from "./terminal-themes.js";
+import { ConnectionEvents, closeInfo } from "./connection-events.js";
 import { ControlChannelDecoder, encodeWsFrame, utf8ByteLength } from "./hijack-codec.js";
 import { SNAPSHOT_PREAMBLE, snapshotCursorRestore, snapshotRows } from "./snapshot-paint.js";
 import { safeLinkHandler } from "./terminal-links.js";
@@ -80,6 +81,8 @@ export class TerminalElement extends LitElement {
   private _pendingWrites: string[] = [];
 
   private ws: WebSocket | null = null;
+  /** Public `uterm:connection` / `uterm:close` events; see connection-events.ts. */
+  private readonly events = new ConnectionEvents(this);
   private reconnectEnabled = false;
   private reconnectTimer: number | null = null;
   private readonly wsDecoder = new ControlChannelDecoder();
@@ -457,7 +460,14 @@ export class TerminalElement extends LitElement {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.ws?.close();
+    if (this.ws) {
+      // Detach before closing, so the old socket's close handler is stale.
+      const old = this.ws;
+      this.ws = null;
+      old.close();
+      this.connected = false;
+      this.events.dropped();
+    }
     const ws = new WebSocket(this.resolveWsUrl());
     this.ws = ws;
     this.wsDecoder.reset();
@@ -467,6 +477,7 @@ export class TerminalElement extends LitElement {
       if (this.ws !== ws) return;
       this.connected = true;
       this.updateStatus(true);
+      this.events.opened();
       // Parity with uterm-session / browser role: hub may deliver the current
       // screen only as a control ``snapshot`` (and on connect often already
       // has one). Request one so a quiet shell still paints and clears the
@@ -516,12 +527,13 @@ export class TerminalElement extends LitElement {
         // this widget is terminal-only (no chrome).
       }
     };
-    ws.onclose = () => {
+    ws.onclose = (event?: CloseEvent) => {
       if (this.ws !== ws) return;
       this.ws = null;
       this.connected = false;
       this.updateStatus(false);
-      if (this.reconnectEnabled) this.scheduleReconnect();
+      // Before any reconnect is scheduled: a listener (or a final close code) may stop it.
+      if (this.events.closed(closeInfo(event), this.reconnectEnabled)) this.scheduleReconnect();
     };
     ws.onerror = () => ws.close();
   }
@@ -538,9 +550,16 @@ export class TerminalElement extends LitElement {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.ws?.close();
+    // Detach first: a close this side asked for is not a drop to recover from.
+    const ws = this.ws;
     this.ws = null;
+    ws?.close();
     this.clearAckTimer();
+    if (this.connected) {
+      this.connected = false;
+      this.updateStatus(false);
+    }
+    this.events.dropped();
   }
 
   public writeData(data: string): void {
