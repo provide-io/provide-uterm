@@ -104,7 +104,7 @@ public sealed partial class UtermServer
             // between it and this registration, after its own scan of the sockets.
             // The revoke records its cutoff before scanning under the hub lock, so
             // either the scan saw this socket or this check sees the cutoff.
-            if (role is "viewer" && _deps.Authz.ShareViewerRevoked(p, workerId))
+            if (_deps.Authz.ShareViewerRevoked(p, workerId))
             {
                 await conn.CloseOutputAsync((WebSocketCloseStatus)ViewerRevokedCloseCode, ViewerRevokedReason)
                     .ConfigureAwait(false);
@@ -687,6 +687,13 @@ public sealed partial class UtermServer
                     await _ws.CloseOutputAsync(status, reason, CancellationToken.None)
                         .ContinueWith(static t => _ = t.Exception, TaskScheduler.Default)
                         .ConfigureAwait(false);
+                    // A peer that ignores the close never completes the handshake;
+                    // abort it after the grace so its receive loop ends and it is
+                    // unregistered.
+                    var ws = _ws;
+                    _ = Task.Delay(ViewerCloseGrace).ContinueWith(
+                        _ => { if (ws.State != WebSocketState.Closed) ws.Abort(); },
+                        TaskScheduler.Default);
                 }
             }
             finally

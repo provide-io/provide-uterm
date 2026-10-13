@@ -82,7 +82,7 @@ public sealed class ShareViewerRevocationTests
     }
 
     [Fact]
-    public void The_cutoff_table_is_bounded_and_forgets_the_oldest()
+    public void A_full_cutoff_table_refuses_new_sessions_instead_of_evicting_one()
     {
         var authz = new AuthorizationService();
         const double Base = 1e9;
@@ -90,12 +90,17 @@ public sealed class ShareViewerRevocationTests
         {
             authz.RevokeShareViewers("s" + i, Base + i);
         }
-        authz.RevokeShareViewers("s0", Base + 1e4);
-        authz.RevokeShareViewers("overflow", Base + 2e4);
+        // A session already holding a cutoff can always move it forward.
+        Assert.Equal(Base + 1e4, authz.RevokeShareViewers("s0", Base + 1e4));
+        // A new one is refused rather than pushing a live cutoff out.
+        Assert.Throws<ShareViewerRevocationsFullException>(() => authz.RevokeShareViewers("overflow", Base + 2e4));
+        Assert.Null(authz.ShareViewerRevocation("overflow"));
+        Assert.Equal(Base + 1, authz.ShareViewerRevocation("s1"));
+        // Once the oldest cutoffs have aged out there is room again.
+        var later = Base + 1 + AuthorizationService.ShareViewerRevocationTtlSeconds + 0.5;
+        Assert.Equal(later, authz.RevokeShareViewers("overflow", later));
         Assert.Null(authz.ShareViewerRevocation("s1"));
         Assert.Equal(Base + 1e4, authz.ShareViewerRevocation("s0"));
-        Assert.Equal(Base + 2, authz.ShareViewerRevocation("s2"));
-        Assert.Equal(Base + 2e4, authz.ShareViewerRevocation("overflow"));
     }
 
     private sealed class AllowAllReads : IAuthorizationProvider

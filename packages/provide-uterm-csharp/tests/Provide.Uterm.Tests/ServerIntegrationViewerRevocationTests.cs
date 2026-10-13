@@ -377,4 +377,74 @@ public sealed class ServerIntegrationViewerRevocationTests
             await server.StopAsync();
         }
     }
+
+    [Fact]
+    public async Task A_full_cutoff_table_answers_429()
+    {
+        var authz = new AuthorizationService();
+        var (server, port) = await BootAsync(authz);
+        try
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            for (var i = 0; i < AuthorizationService.ShareViewerRevocationsMax; i++)
+            {
+                authz.RevokeShareViewers("other-" + i, now);
+            }
+            var response = await PostRevokeAsync(port, "admin1", "admin");
+            Assert.Equal((HttpStatusCode)429, response.StatusCode);
+            Assert.Contains("too many sessions with revoked viewers", await response.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task A_long_poll_in_flight_when_its_viewer_is_revoked_answers_403()
+    {
+        var (server, port) = await BootAsync();
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            using var req = new HttpRequestMessage(
+                HttpMethod.Get, $"http://127.0.0.1:{port}/api/sessions/bb/events/watch?timeout_ms=1500");
+            Identify((k, v) => req.Headers.TryAddWithoutValidation(k, v), "share:bb:blackbetty:7", "viewer", 100);
+            var poll = http.SendAsync(req);
+            await Task.Delay(300);
+            Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "admin1", "admin")).StatusCode);
+            var answered = await poll;
+            Assert.Equal(HttpStatusCode.Forbidden, answered.StatusCode);
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task A_revoked_socket_that_ignores_the_close_is_aborted_after_the_grace()
+    {
+        var (server, port) = await BootAsync();
+        var previous = UtermServer.ViewerCloseGrace;
+        UtermServer.ViewerCloseGrace = TimeSpan.FromMilliseconds(200);
+        try
+        {
+            // Never read: the client cannot answer the close handshake.
+            using var silent = await ConnectAsync(port, "share:bb:blackbetty:7", "viewer", 100);
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (server.HubBrowserCount("bb") != 1 && DateTime.UtcNow < deadline) await Task.Delay(20);
+            Assert.Equal(1, server.HubBrowserCount("bb"));
+
+            Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "admin1", "admin")).StatusCode);
+            deadline = DateTime.UtcNow.AddSeconds(5);
+            while (server.HubBrowserCount("bb") != 0 && DateTime.UtcNow < deadline) await Task.Delay(20);
+            Assert.Equal(0, server.HubBrowserCount("bb"));
+        }
+        finally
+        {
+            UtermServer.ViewerCloseGrace = previous;
+            await server.StopAsync();
+        }
+    }
 }

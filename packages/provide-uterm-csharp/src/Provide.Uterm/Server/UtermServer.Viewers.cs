@@ -6,6 +6,7 @@
 using System.Net.WebSockets;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Provide.Uterm.ServerAuth;
 
 namespace Provide.Uterm.Server;
 
@@ -41,6 +42,16 @@ public sealed partial class UtermServer
     /// </summary>
     internal static Action<string> SseOpenHook { get; set; } = static _ => { };
 
+    /// <summary>
+    /// How long a revoked socket gets to complete the close handshake before it
+    /// is aborted, so a client that ignores the close neither stays registered
+    /// nor holds a quota slot.
+    /// </summary>
+    internal static TimeSpan ViewerCloseGrace { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>How many browsers the hub holds for a session (tests).</summary>
+    internal int HubBrowserCount(string sessionId) => _deps.Hub.Conn.BrowsersOf(sessionId).Count;
+
     /// <summary>The open share-viewer streams on a session (tests).</summary>
     internal int ViewerStreamCount(string sessionId) => _viewerStreams.Count(sessionId);
 
@@ -51,11 +62,20 @@ public sealed partial class UtermServer
     {
         var (_, _, err) = await TryGatedSession(ctx, sessionId, "session.control.update").ConfigureAwait(false);
         if (err is not null) return err;
-        var revokedAt = _deps.Authz.RevokeShareViewers(sessionId, _clock.Wall());
+        double revokedAt;
+        try
+        {
+            revokedAt = _deps.Authz.RevokeShareViewers(sessionId, _clock.Wall());
+        }
+        catch (ShareViewerRevocationsFullException)
+        {
+            return DetailError(429, "too many sessions with revoked viewers; try again later");
+        }
+
+        // By principal alone: a provider can resolve a share viewer to a role
+        // other than viewer, and what is revoked is the token, not the role.
         var targets = _deps.Hub.Conn.BrowsersOf(sessionId)
-            .Where(b => b.Role == "viewer"
-                && b.Ws is BrowserWsConn conn
-                && _deps.Authz.ShareViewerRevoked(conn.Principal, sessionId))
+            .Where(b => b.Ws is BrowserWsConn conn && _deps.Authz.ShareViewerRevoked(conn.Principal, sessionId))
             .Select(b => (BrowserWsConn)b.Ws)
             .ToList();
         await Task.WhenAll(targets.Select(conn =>

@@ -615,7 +615,6 @@ public sealed partial class UtermServer
     {
         var (p, err) = await TryReadableSession(ctx, sessionId).ConfigureAwait(false);
         if (err is not null) return err;
-        _ = p;
         var timeoutMs = 5000;
         if (int.TryParse(ctx.Request.Query["timeout_ms"], out var tms))
         {
@@ -645,6 +644,13 @@ public sealed partial class UtermServer
             eventTypes,
             pattern,
             ctx.RequestAborted).ConfigureAwait(false);
+
+        // The cutoff was checked when the poll started; a revoke during the wait
+        // must not still get one batch of events out.
+        if (_deps.Authz.ShareViewerRevoked(p!, sessionId))
+        {
+            return DetailError(403, "insufficient privileges");
+        }
 
         return Results.Json(new
         {

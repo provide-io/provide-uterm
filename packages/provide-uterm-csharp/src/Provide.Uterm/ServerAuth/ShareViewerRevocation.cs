@@ -16,16 +16,15 @@ namespace Provide.Uterm.ServerAuth;
 public sealed partial class AuthorizationService
 {
     /// <summary>
-    /// How many per-session cutoffs are held at once. Past it the oldest is
-    /// forgotten, which can only matter for a share token that outlived
-    /// thousands of later revocations.
+    /// How many per-session cutoffs are held at once. When the table is full a
+    /// revoke for a session not already in it is refused (the route answers 429)
+    /// rather than evicting a cutoff that may still protect another session.
     /// </summary>
     public const int ShareViewerRevocationsMax = 10000;
 
     /// <summary>
-    /// How long a cutoff is kept. A cutoff only matters while a token issued
-    /// before it can still be valid; ageing out rather than only evicting by
-    /// count means nobody can push another session's fresh cutoff out of the table.
+    /// How long a cutoff is kept. Share tokens must live well under this: a token
+    /// that outlives its cutoff is admitted again.
     /// </summary>
     public const double ShareViewerRevocationTtlSeconds = 86400;
 
@@ -49,20 +48,20 @@ public sealed partial class AuthorizationService
     {
         lock (_revocationLock)
         {
-            if (_revocations.ContainsKey(sessionId)) _revocationOrder.Remove(sessionId);
+            // Order is revocation order, so the stale cutoffs are at the front.
+            while (_revocationOrder.First is { } oldest && _revocations[oldest.Value] < now - ShareViewerRevocationTtlSeconds)
+            {
+                _revocations.Remove(oldest.Value);
+                _revocationOrder.RemoveFirst();
+            }
+            var seen = _revocations.ContainsKey(sessionId);
+            if (!seen && _revocations.Count >= ShareViewerRevocationsMax)
+            {
+                throw new ShareViewerRevocationsFullException();
+            }
+            if (seen) _revocationOrder.Remove(sessionId);
             _revocations[sessionId] = now;
             _revocationOrder.AddLast(sessionId);
-            // Order is revocation order, so the stale cutoffs are at the front.
-            while (_revocations[_revocationOrder.First!.Value] < now - ShareViewerRevocationTtlSeconds)
-            {
-                _revocations.Remove(_revocationOrder.First.Value);
-                _revocationOrder.RemoveFirst();
-            }
-            while (_revocationOrder.Count > ShareViewerRevocationsMax)
-            {
-                _revocations.Remove(_revocationOrder.First!.Value);
-                _revocationOrder.RemoveFirst();
-            }
             return now;
         }
     }
@@ -101,5 +100,14 @@ public sealed partial class AuthorizationService
             _ => null,
         };
         return issued is not { } iat || iat <= cutoff;
+    }
+}
+
+/// <summary>The cutoff table is full of live cutoffs; a new session cannot be added.</summary>
+public sealed class ShareViewerRevocationsFullException : InvalidOperationException
+{
+    public ShareViewerRevocationsFullException()
+        : base("share-viewer revocation table is full")
+    {
     }
 }
