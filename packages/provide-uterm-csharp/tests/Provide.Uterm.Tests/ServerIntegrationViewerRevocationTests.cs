@@ -30,11 +30,13 @@ public sealed class ServerIntegrationViewerRevocationTests
         {
             var subject = request.Header("X-Test-Subject");
             if (subject.Length == 0) return Task.FromResult(Principal.Anonymous());
+            var scope = request.Header("X-Test-Admin-Scope");
             var p = new Principal
             {
                 SubjectId = subject,
                 Roles = StringSet.Of(request.Header("X-Test-Role")),
                 Scopes = StringSet.Of("*"),
+                AdminSessionScope = scope.Length == 0 ? null : scope,
             };
             p.Claims["iat"] = double.Parse(request.Header("X-Test-Iat"), System.Globalization.CultureInfo.InvariantCulture);
             return Task.FromResult(p);
@@ -50,7 +52,10 @@ public sealed class ServerIntegrationViewerRevocationTests
         return port;
     }
 
-    private static async Task<(UtermServer Server, int Port)> BootAsync()
+    private static async Task<(UtermServer Server, int Port)> BootAsync() =>
+        await BootAsync(new AuthorizationService());
+
+    private static async Task<(UtermServer Server, int Port)> BootAsync(AuthorizationService authz)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
@@ -72,7 +77,7 @@ public sealed class ServerIntegrationViewerRevocationTests
         {
             Hub = hub,
             Auth = new HeaderAuthenticator(),
-            Authz = new AuthorizationService(),
+            Authz = authz,
             Config = cfg,
             Registry = new InMemorySessionRegistry(cfg.Sessions),
             Clock = clock,
@@ -118,11 +123,13 @@ public sealed class ServerIntegrationViewerRevocationTests
         }
     }
 
-    private static async Task<HttpResponseMessage> PostRevokeAsync(int port, string subject, string role, string session = "bb")
+    private static async Task<HttpResponseMessage> PostRevokeAsync(
+        int port, string subject, string role, string session = "bb", string? scope = null)
     {
         using var http = new HttpClient();
         using var req = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{port}/api/sessions/{session}/viewers/revoke");
         Identify((k, v) => req.Headers.TryAddWithoutValidation(k, v), subject, role, 100);
+        if (scope is not null) req.Headers.TryAddWithoutValidation("X-Test-Admin-Scope", scope);
         return await http.SendAsync(req);
     }
 
@@ -191,6 +198,179 @@ public sealed class ServerIntegrationViewerRevocationTests
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             Assert.Equal(0, body.RootElement.GetProperty("closed").GetInt32());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task A_socket_registered_after_the_revoke_scan_is_closed_on_registration()
+    {
+        var authz = new AuthorizationService();
+        var (server, port) = await BootAsync(authz);
+        UtermServer.BrowserPreRegisterHook = id => authz.RevokeShareViewers(id, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0);
+        try
+        {
+            using var watcher = await ConnectAsync(port, "share:bb:blackbetty:7", "viewer", 100);
+            Assert.Null(await ReadUntilAsync(watcher, "never-sent"));
+            Assert.Equal((WebSocketCloseStatus)4410, watcher.CloseStatus);
+            Assert.Equal("viewer access revoked", watcher.CloseStatusDescription);
+
+            // An admin registering after a revoke is untouched.
+            using var admin = await ConnectAsync(port, "admin1", "admin", 100);
+            Assert.NotNull(await ReadUntilAsync(admin, "\"hello\""));
+        }
+        finally
+        {
+            UtermServer.BrowserPreRegisterHook = static _ => { };
+            await server.StopAsync();
+        }
+    }
+
+    private static async Task<(HttpResponseMessage Response, Stream Body)> OpenStreamAsync(
+        HttpClient http, int port, string subject, string role)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{port}/api/sessions/bb/events/stream");
+        Identify((k, v) => req.Headers.TryAddWithoutValidation(k, v), subject, role, 100);
+        var response = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        return (response, await response.Content.ReadAsStreamAsync());
+    }
+
+    [Fact]
+    public async Task Revoking_ends_a_live_share_viewer_event_stream()
+    {
+        var (server, port) = await BootAsync();
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var (watcherResponse, watcherBody) = await OpenStreamAsync(http, port, "share:bb:blackbetty:7", "viewer");
+            using var _w = watcherResponse;
+            var (plainResponse, _) = await OpenStreamAsync(http, port, "alice", "viewer");
+            using var _p = plainResponse;
+            Assert.Equal(HttpStatusCode.OK, watcherResponse.StatusCode);
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (server.ViewerStreamCount("bb") != 1 && DateTime.UtcNow < deadline) await Task.Delay(20);
+            Assert.Equal(1, server.ViewerStreamCount("bb"));
+
+            var response = await PostRevokeAsync(port, "admin1", "admin");
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(1, body.RootElement.GetProperty("closed").GetInt32());
+
+            using var reader = new StreamReader(watcherBody);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var all = await reader.ReadToEndAsync(cts.Token);
+            Assert.EndsWith("data: {\"type\":\"viewer_access_revoked\",\"reason\":\"viewer access revoked\"}\n\n", all);
+            Assert.Equal(0, server.ViewerStreamCount("bb"));
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task A_share_viewer_stream_opened_after_the_cutoff_ends_at_once()
+    {
+        var authz = new AuthorizationService();
+        var (server, port) = await BootAsync(authz);
+        UtermServer.SseOpenHook = id => authz.RevokeShareViewers(id, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0);
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var (response, stream) = await OpenStreamAsync(http, port, "share:bb:blackbetty:7", "viewer");
+            using var _r = response;
+            using var reader = new StreamReader(stream);
+            Assert.Equal(
+                "data: {\"type\":\"viewer_access_revoked\",\"reason\":\"viewer access revoked\"}\n\n",
+                await reader.ReadToEndAsync());
+        }
+        finally
+        {
+            UtermServer.SseOpenHook = static _ => { };
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Other_owners_and_admins_scoped_elsewhere_cannot_revoke()
+    {
+        var (server, port) = await BootAsync();
+        try
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await PostRevokeAsync(port, "owner2", "operator")).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await PostRevokeAsync(port, "scoped", "admin", scope: "elsewhere")).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "scoped", "admin", scope: "bb")).StatusCode);
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task The_owner_and_the_hijack_holder_keep_their_sockets_through_a_revoke()
+    {
+        var (server, port) = await BootAsync();
+        try
+        {
+            using var worker = new ClientWebSocket();
+            await worker.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws/worker/bb/term"), CancellationToken.None);
+            _ = Task.Run(async () =>
+            {
+                var sink = new byte[65536];
+                try
+                {
+                    while (worker.State == WebSocketState.Open) await worker.ReceiveAsync(sink, CancellationToken.None);
+                }
+                catch (WebSocketException)
+                {
+                }
+            });
+            using var holder = await ConnectAsync(port, "admin1", "admin", 100);
+            using var owner = await ConnectAsync(port, "owner1", "operator", 100);
+            Assert.NotNull(await ReadUntilAsync(holder, "\"hello\""));
+            Assert.Contains("\"role\":\"operator\"", await ReadUntilAsync(owner, "\"hello\""));
+
+            async Task SendAsync(ClientWebSocket ws, string type) =>
+                await ws.SendAsync(
+                    Encoding.UTF8.GetBytes(ControlChannelCodec.EncodeControlFrame(
+                        new Dictionary<string, object?> { ["type"] = type })),
+                    WebSocketMessageType.Text, true, CancellationToken.None);
+
+            await SendAsync(holder, "hijack_request");
+            Assert.NotNull(await ReadUntilAsync(holder, "\"owner\":\"me\""));
+
+            var response = await PostRevokeAsync(port, "owner1", "operator");
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(0, body.RootElement.GetProperty("closed").GetInt32());
+            foreach (var keeper in new[] { holder, owner })
+            {
+                await SendAsync(keeper, "ping");
+                Assert.NotNull(await ReadUntilAsync(keeper, "\"pong\""));
+            }
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Deleting_a_session_forgets_its_cutoff()
+    {
+        var authz = new AuthorizationService();
+        var (server, port) = await BootAsync(authz);
+        try
+        {
+            Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "admin1", "admin")).StatusCode);
+            Assert.NotNull(authz.ShareViewerRevocation("bb"));
+            using var http = new HttpClient();
+            using var req = new HttpRequestMessage(HttpMethod.Delete, $"http://127.0.0.1:{port}/api/sessions/bb");
+            Identify((k, v) => req.Headers.TryAddWithoutValidation(k, v), "admin1", "admin", 100);
+            Assert.Equal(HttpStatusCode.OK, (await http.SendAsync(req)).StatusCode);
+            Assert.Null(authz.ShareViewerRevocation("bb"));
         }
         finally
         {

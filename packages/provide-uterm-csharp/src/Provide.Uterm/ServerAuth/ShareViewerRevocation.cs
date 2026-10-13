@@ -22,6 +22,13 @@ public sealed partial class AuthorizationService
     /// </summary>
     public const int ShareViewerRevocationsMax = 10000;
 
+    /// <summary>
+    /// How long a cutoff is kept. A cutoff only matters while a token issued
+    /// before it can still be valid; ageing out rather than only evicting by
+    /// count means nobody can push another session's fresh cutoff out of the table.
+    /// </summary>
+    public const double ShareViewerRevocationTtlSeconds = 86400;
+
     private readonly object _revocationLock = new();
     private readonly Dictionary<string, double> _revocations = new(StringComparer.Ordinal);
     private readonly LinkedList<string> _revocationOrder = new();
@@ -45,12 +52,27 @@ public sealed partial class AuthorizationService
             if (_revocations.ContainsKey(sessionId)) _revocationOrder.Remove(sessionId);
             _revocations[sessionId] = now;
             _revocationOrder.AddLast(sessionId);
+            // Order is revocation order, so the stale cutoffs are at the front.
+            while (_revocations[_revocationOrder.First!.Value] < now - ShareViewerRevocationTtlSeconds)
+            {
+                _revocations.Remove(_revocationOrder.First.Value);
+                _revocationOrder.RemoveFirst();
+            }
             while (_revocationOrder.Count > ShareViewerRevocationsMax)
             {
                 _revocations.Remove(_revocationOrder.First!.Value);
                 _revocationOrder.RemoveFirst();
             }
             return now;
+        }
+    }
+
+    /// <summary>Drop <paramref name="sessionId"/>'s cutoff: the session was deleted.</summary>
+    public void ForgetShareViewers(string sessionId)
+    {
+        lock (_revocationLock)
+        {
+            if (_revocations.Remove(sessionId)) _revocationOrder.Remove(sessionId);
         }
     }
 

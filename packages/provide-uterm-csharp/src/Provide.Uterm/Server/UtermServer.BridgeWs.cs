@@ -84,6 +84,7 @@ public sealed partial class UtermServer
         var conn = new BrowserWsConn(ws, p);
         // Match Python/Go: register, then hello from registry state + immediate hijack_state.
         Dictionary<string, object?> state;
+        BrowserPreRegisterHook(workerId);
         try
         {
             state = _deps.Hub.Conn.RegisterBrowser(
@@ -99,6 +100,17 @@ public sealed partial class UtermServer
 
         try
         {
+            // The read decision was made before the upgrade, so a revoke can land
+            // between it and this registration, after its own scan of the sockets.
+            // The revoke records its cutoff before scanning under the hub lock, so
+            // either the scan saw this socket or this check sees the cutoff.
+            if (role is "viewer" && _deps.Authz.ShareViewerRevoked(p, workerId))
+            {
+                await conn.CloseOutputAsync((WebSocketCloseStatus)ViewerRevokedCloseCode, ViewerRevokedReason)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             if (_deps.BrowserSetupHook is not null)
             {
                 await _deps.BrowserSetupHook().ConfigureAwait(false);

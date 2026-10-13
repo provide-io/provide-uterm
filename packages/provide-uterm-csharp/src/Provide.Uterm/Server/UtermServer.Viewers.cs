@@ -26,6 +26,24 @@ public sealed partial class UtermServer
     /// <summary>Deliberately generic: the embedder knows why, and says so in its own words.</summary>
     internal const string ViewerRevokedReason = "viewer access revoked";
 
+    /// <summary>Open share-viewer event streams, ended by a revoke.</summary>
+    private readonly ShareViewerStreams _viewerStreams = new();
+
+    /// <summary>
+    /// Runs just before a browser registers with the hub: a test seam for a
+    /// revoke landing between the read decision and registration.
+    /// </summary>
+    internal static Action<string> BrowserPreRegisterHook { get; set; } = static _ => { };
+
+    /// <summary>
+    /// Runs after a share viewer's event stream registers and before its cutoff
+    /// is checked: a test seam for the same race on the stream.
+    /// </summary>
+    internal static Action<string> SseOpenHook { get; set; } = static _ => { };
+
+    /// <summary>The open share-viewer streams on a session (tests).</summary>
+    internal int ViewerStreamCount(string sessionId) => _viewerStreams.Count(sessionId);
+
     private void MapViewerRoutes(WebApplication app) =>
         app.MapPost("/api/sessions/{sessionId}/viewers/revoke", (Delegate)HandleRevokeViewers);
 
@@ -42,11 +60,13 @@ public sealed partial class UtermServer
             .ToList();
         await Task.WhenAll(targets.Select(conn =>
             conn.CloseOutputAsync((WebSocketCloseStatus)ViewerRevokedCloseCode, ViewerRevokedReason))).ConfigureAwait(false);
+        // Live event streams opened with a revoked token end too, and count.
+        var streams = _viewerStreams.Revoke(_deps.Authz, sessionId);
         return Results.Json(new Dictionary<string, object?>
         {
             ["session_id"] = sessionId,
             ["revoked_at"] = revokedAt,
-            ["closed"] = targets.Count,
+            ["closed"] = targets.Count + streams,
             ["close_code"] = ViewerRevokedCloseCode,
             ["close_reason"] = ViewerRevokedReason,
         }, JsonOpts);

@@ -85,16 +85,17 @@ public sealed class ShareViewerRevocationTests
     public void The_cutoff_table_is_bounded_and_forgets_the_oldest()
     {
         var authz = new AuthorizationService();
+        const double Base = 1e9;
         for (var i = 0; i < AuthorizationService.ShareViewerRevocationsMax; i++)
         {
-            authz.RevokeShareViewers("s" + i, i);
+            authz.RevokeShareViewers("s" + i, Base + i);
         }
-        authz.RevokeShareViewers("s0", 1e6);
-        authz.RevokeShareViewers("overflow", 2e6);
+        authz.RevokeShareViewers("s0", Base + 1e4);
+        authz.RevokeShareViewers("overflow", Base + 2e4);
         Assert.Null(authz.ShareViewerRevocation("s1"));
-        Assert.Equal(1e6, authz.ShareViewerRevocation("s0"));
-        Assert.Equal(2.0, authz.ShareViewerRevocation("s2"));
-        Assert.Equal(2e6, authz.ShareViewerRevocation("overflow"));
+        Assert.Equal(Base + 1e4, authz.ShareViewerRevocation("s0"));
+        Assert.Equal(Base + 2, authz.ShareViewerRevocation("s2"));
+        Assert.Equal(Base + 2e4, authz.ShareViewerRevocation("overflow"));
     }
 
     private sealed class AllowAllReads : IAuthorizationProvider
@@ -172,5 +173,36 @@ public sealed class ShareViewerRevocationTests
         var withoutIat = idp.PrincipalFromJwtToken(Mint(null));
         Assert.False(withoutIat.Claims.ContainsKey("iat"));
         Assert.True(authz.ShareViewerRevoked(withoutIat, "s1"));
+    }
+
+    [Fact]
+    public void Cutoffs_age_out_after_a_day_and_are_forgotten_with_their_session()
+    {
+        Assert.Equal(86400, AuthorizationService.ShareViewerRevocationTtlSeconds);
+        var authz = new AuthorizationService();
+        authz.RevokeShareViewers("old", 1000);
+        authz.RevokeShareViewers("edge", 2000);
+        authz.RevokeShareViewers("new", 2000 + AuthorizationService.ShareViewerRevocationTtlSeconds);
+        Assert.Null(authz.ShareViewerRevocation("old"));
+        Assert.Equal(2000, authz.ShareViewerRevocation("edge"));
+
+        authz.ForgetShareViewers("edge");
+        authz.ForgetShareViewers("never-revoked");
+        Assert.Null(authz.ShareViewerRevocation("edge"));
+        Assert.NotNull(authz.ShareViewerRevocation("new"));
+    }
+
+    [Fact]
+    public void A_jwt_issued_in_the_future_is_refused()
+    {
+        var idp = new LocalIdentityProvider(new AuthConfig
+        {
+            Mode = "jwt",
+            JwtPublicKeyPem = Secret,
+            JwtAlgorithms = new List<string> { "HS256" },
+            ClockSkewSeconds = 15,
+        });
+        Assert.Throws<SecurityTokenException>(() => idp.PrincipalFromJwtToken(Mint(DateTime.UtcNow.AddHours(1))));
+        Assert.True(idp.PrincipalFromJwtToken(Mint(DateTime.UtcNow.AddSeconds(5))).Claims.ContainsKey("iat"));
     }
 }

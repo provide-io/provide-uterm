@@ -511,6 +511,17 @@ public sealed partial class UtermServer
         ctx.Response.Headers["X-Accel-Buffering"] = "no";
         await ctx.Response.StartAsync().ConfigureAwait(false);
 
+        // A share viewer's stream is registered so a revoke can end it, then
+        // checked once registered: a revoke between the read check and here
+        // would otherwise miss it.
+        using var viewerStream = _viewerStreams.Register(sessionId, p!);
+        SseOpenHook(sessionId);
+        if (_deps.Authz.ShareViewerRevoked(p!, sessionId))
+        {
+            await WriteViewerRevokedAsync(ctx).ConfigureAwait(false);
+            return;
+        }
+
         IReadOnlyCollection<string>? eventTypes = null;
         var et = ctx.Request.Query["event_types"].ToString();
         if (!string.IsNullOrWhiteSpace(et))
@@ -544,7 +555,8 @@ public sealed partial class UtermServer
             // which surfaces as the OperationCanceledException caught below.
             while (true)
             {
-                using var beatCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+                using var beatCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    ctx.RequestAborted, viewerStream.Token);
                 beatCts.CancelAfter(beat);
                 try
                 {
@@ -570,6 +582,12 @@ public sealed partial class UtermServer
                 }
                 catch (OperationCanceledException) when (!ctx.RequestAborted.IsCancellationRequested)
                 {
+                    if (viewerStream.Token.IsCancellationRequested)
+                    {
+                        await WriteViewerRevokedAsync(ctx).ConfigureAwait(false);
+                        return;
+                    }
+
                     await ctx.Response.WriteAsync("data: {\"type\":\"heartbeat\"}\n\n", ctx.RequestAborted)
                         .ConfigureAwait(false);
                     await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
@@ -584,6 +602,13 @@ public sealed partial class UtermServer
         {
             unsub();
         }
+    }
+
+    private static async Task WriteViewerRevokedAsync(HttpContext ctx)
+    {
+        await ctx.Response.WriteAsync("data: " + ShareViewerStreams.RevokedEvent + "\n\n", ctx.RequestAborted)
+            .ConfigureAwait(false);
+        await ctx.Response.Body.FlushAsync(ctx.RequestAborted).ConfigureAwait(false);
     }
 
     private async Task<IResult> HandleWatchSessionEvents(HttpContext ctx, string sessionId)

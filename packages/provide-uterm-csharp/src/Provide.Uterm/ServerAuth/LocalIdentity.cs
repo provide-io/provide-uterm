@@ -242,6 +242,13 @@ public sealed class LocalIdentityProvider : IAuthenticator
         var claims = new Dictionary<string, object?>();
         if (validatedToken is JwtSecurityToken issued && issued.IssuedAt != DateTime.MinValue)
         {
+            // An iat in the future (beyond the skew) would make a share token
+            // immune to every viewer-revocation cutoff; PyJWT refuses it, so does this.
+            if (issued.IssuedAt > DateTime.UtcNow + parameters.ClockSkew)
+            {
+                throw new SecurityTokenException("iat claim is in the future");
+            }
+
             claims["iat"] = (double)new DateTimeOffset(DateTime.SpecifyKind(issued.IssuedAt, DateTimeKind.Utc)).ToUnixTimeSeconds();
         }
 

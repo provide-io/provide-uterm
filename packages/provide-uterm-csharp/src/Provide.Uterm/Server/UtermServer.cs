@@ -296,6 +296,8 @@ public sealed partial class UtermServer : IAsyncDisposable
             }
 
             await DeleteSessionAsync(sessionId).ConfigureAwait(false);
+            // The session is gone, so is its share-viewer cutoff.
+            _deps.Authz.ForgetShareViewers(sessionId);
             return Results.Json(new { ok = true }, JsonOpts);
         });
 
