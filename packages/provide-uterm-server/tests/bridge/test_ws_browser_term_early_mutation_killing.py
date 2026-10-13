@@ -38,7 +38,6 @@ used to run the coroutine under test.
 from __future__ import annotations
 
 import asyncio
-from asyncio import wait_for as _real_wait_for
 from types import SimpleNamespace
 from typing import Any
 
@@ -53,6 +52,9 @@ from provide.uterm.bridge.contracts import (
 from provide.uterm.server.bridge.hub import BrowserRoleResolutionError
 from provide.uterm.server.bridge.routes import websockets_impl
 from provide.uterm.server.bridge.routes.websockets_impl import _ws_browser_term
+
+# Saved before any test fakes asyncio.wait_for.
+_real_wait_for = asyncio.wait_for
 
 WORKER_ID = "worker-early-1"
 _MISSING = object()
