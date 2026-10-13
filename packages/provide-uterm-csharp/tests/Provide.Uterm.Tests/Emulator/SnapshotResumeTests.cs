@@ -124,6 +124,29 @@ public class SnapshotResumeTests
     }
 
     [Fact]
+    public void DrawsItalicAndStruckCells()
+    {
+        // The pen carried them, but a drawn cell lost them: a viewer that
+        // joined saw plain text where everyone else saw italic or struck text.
+        Assert.StartsWith(
+            "\x1b[0;3mI\x1b[0;9mS\x1b[0;1;3;4;5;7;9mA\x1b[0m ",
+            Fed(10, 2, "\x1b[3mI\x1b[0;9mS\x1b[0;1;3;4;5;7;9mA\x1b[m").AnsiScreen(),
+            StringComparison.Ordinal);
+        const string before = "\x1b[3mit\x1b[23;9mst\x1b[m plain";
+        AssertResumes(Bytes(before + "\x1b[3m!"), before.Length, 20, 5);
+        Assert.Equal(
+            "\x1b[0;1;3;4;5;7;9;31m",
+            RenderBuffer.StyleToSgr(new RenderBuffer.Style
+            {
+                FG = "red", BG = "default", Bold = true, Italics = true, Underscore = true,
+                Blink = true, Reverse = true, Strikethrough = true,
+            }));
+        var italic = new RenderBuffer.Style { FG = "default", BG = "default", Italics = true };
+        Assert.NotEqual(italic, RenderBuffer.DefaultStyle);
+        Assert.NotEqual(new RenderBuffer.Style { FG = "default", BG = "default", Strikethrough = true }, italic);
+    }
+
+    [Fact]
     public void RestoresTheScrollRegionAndOriginMode()
     {
         Assert.Contains(

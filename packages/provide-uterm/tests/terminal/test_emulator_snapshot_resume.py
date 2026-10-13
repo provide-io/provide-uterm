@@ -174,6 +174,17 @@ class TestCells:
         live.process(b"\x1b[7;31;42m0")
         assert live.ansi_screen().startswith("\x1b[0;7;31;42m0")
 
+    def test_italic_and_strikethrough_cells_are_drawn_italic_and_struck(self) -> None:
+        # The pen carried them, but a drawn cell lost them: a viewer that
+        # joined saw plain text where everyone else saw italic or struck text.
+        live = _emulator("utf-8", 10, 2)
+        live.process(b"\x1b[3mI\x1b[0;9mS\x1b[0;1;3;4;5;7;9mA\x1b[m")
+        assert live.ansi_screen().startswith("\x1b[0;3mI\x1b[0;9mS\x1b[0;1;3;4;5;7;9mA\x1b[0m ")
+
+    def test_italic_and_strikethrough_cells_survive_a_resume(self) -> None:
+        before = b"\x1b[3mit\x1b[23;9mst\x1b[m plain"
+        _assert_resumes(before + b"\x1b[3m!", len(before), cols=20, rows=5)
+
 
 class TestScrollRegion:
     def test_margins_and_origin_mode_are_restored(self) -> None:

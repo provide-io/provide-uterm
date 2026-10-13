@@ -117,10 +117,13 @@ export function colorSgr(color: string, isForeground: boolean): number[] {
 }
 
 /** SGR codes for the boolean attributes the renderer emits. */
-function attrCodes(bold: boolean, underscore: boolean, blink: boolean): number[] {
+function attrCodes(bold: boolean, underscore: boolean, blink: boolean, italics: boolean): number[] {
   const codes: number[] = [];
   if (bold) {
     codes.push(1);
+  }
+  if (italics) {
+    codes.push(3);
   }
   if (underscore) {
     codes.push(4);
@@ -139,6 +142,8 @@ export interface CellStyle {
   underscore: boolean;
   reverse: boolean;
   blink: boolean;
+  italics: boolean;
+  strikethrough: boolean;
 }
 
 /**
@@ -149,13 +154,15 @@ export interface CellStyle {
  * cell that dropped an attribute kept it -- a background bleeding along the
  * row. Reverse video is SGR 7: swapping the colours instead is no change at
  * all when both are the default, and the reversed cell vanished. A style with
- * nothing to say emits a plain reset.
+ * nothing to say emits a plain reset. The attributes go in the order the pen's
+ * do (1, 3, 4, 5, 7, 9).
  */
 export function styleToSgr(style: CellStyle): string {
   const codes = [
     0,
-    ...attrCodes(style.bold, style.underscore, style.blink),
+    ...attrCodes(style.bold, style.underscore, style.blink, style.italics),
     ...(style.reverse ? [7] : []),
+    ...(style.strikethrough ? [9] : []),
     ...colorSgr(style.fg, true),
     ...colorSgr(style.bg, false),
   ];
@@ -173,6 +180,8 @@ const DEFAULT_STYLE: CellStyle = {
   underscore: false,
   reverse: false,
   blink: false,
+  italics: false,
+  strikethrough: false,
 };
 
 /** The style the renderer reads from a cell. */
@@ -184,6 +193,8 @@ export function cellStyle(cell: Char): CellStyle {
     underscore: cell.underscore,
     reverse: cell.reverse,
     blink: cell.blink,
+    italics: cell.italics,
+    strikethrough: cell.strikethrough,
   };
 }
 
@@ -195,7 +206,9 @@ function sameStyle(a: CellStyle, b: CellStyle): boolean {
     a.bold === b.bold &&
     a.underscore === b.underscore &&
     a.reverse === b.reverse &&
-    a.blink === b.blink
+    a.blink === b.blink &&
+    a.italics === b.italics &&
+    a.strikethrough === b.strikethrough
   );
 }
 

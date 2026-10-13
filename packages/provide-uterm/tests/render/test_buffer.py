@@ -167,6 +167,15 @@ class TestStyleToSgr:
         result = style_to_sgr("default", "default", False, False, False, True)
         assert result == "\x1b[0;5m"
 
+    def test_italics_and_strikethrough(self) -> None:
+        assert style_to_sgr("default", "default", False, False, False, False, True, False) == "\x1b[0;3m"
+        assert style_to_sgr("default", "default", False, False, False, False, False, True) == "\x1b[0;9m"
+        # Every attribute, in the pen's order: 1, 3, 4, 5, 7, 9.
+        assert style_to_sgr("red", "default", True, True, True, True, True, True) == "\x1b[0;1;3;4;5;7;9;31m"
+
+    def test_italics_and_strikethrough_default_off(self) -> None:
+        assert style_to_sgr("default", "default", True, False, False, False) == "\x1b[0;1m"
+
     def test_hex_fg_truecolor(self) -> None:
         result = style_to_sgr("ff8000", "default", False, False, False, False)
         assert result == "\x1b[0;38;2;255;128;0m"

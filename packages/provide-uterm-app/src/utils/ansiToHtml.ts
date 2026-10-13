@@ -10,7 +10,8 @@
  *   - Bright foreground/background colors (90-97, 100-107)
  *   - 256-color mode (38;5;n / 48;5;n)
  *   - 24-bit true-color mode (38;2;r;g;b / 48;2;r;g;b)
- *   - Bold (1), dim (2), italic (3), underline (4), inverse (7)
+ *   - Bold (1), dim (2), italic (3), underline (4), inverse (7),
+ *     strikethrough (9)
  *   - Reset (0)
  */
 
@@ -47,6 +48,7 @@ export function ansiToSegments(input: string): Segment[] {
   let dim = false;
   let italic = false;
   let underline = false;
+  let strike = false;
   let inverse = false;
 
   // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI CSI parsing
@@ -65,7 +67,8 @@ export function ansiToSegments(input: string): Segment[] {
       if (bold) styleParts.push("font-weight:bold");
       if (dim) styleParts.push("opacity:0.6");
       if (italic) styleParts.push("font-style:italic");
-      if (underline) styleParts.push("text-decoration:underline");
+      const lines = [underline ? "underline" : "", strike ? "line-through" : ""].filter(Boolean);
+      if (lines.length > 0) styleParts.push(`text-decoration:${lines.join(" ")}`);
       segments.push({ text, style: styleParts.join(";") });
     } else {
       // SGR parameter string
@@ -73,16 +76,18 @@ export function ansiToSegments(input: string): Segment[] {
       const params = raw.split(";").map(Number);
       for (let j = 0; j < params.length; j++) {
         const p = params[j] ?? 0;
-        if (p === 0) { fg = ""; bg = ""; bold = false; dim = false; italic = false; underline = false; inverse = false; }
+        if (p === 0) { fg = ""; bg = ""; bold = false; dim = false; italic = false; underline = false; strike = false; inverse = false; }
         else if (p === 1) bold = true;
         else if (p === 2) dim = true;
         else if (p === 3) italic = true;
         else if (p === 4) underline = true;
         else if (p === 7) inverse = true;
+        else if (p === 9) strike = true;
         else if (p === 22) { bold = false; dim = false; }
         else if (p === 23) italic = false;
         else if (p === 24) underline = false;
         else if (p === 27) inverse = false;
+        else if (p === 29) strike = false;
         else if (p === 39) fg = "";
         else if (p === 49) bg = "";
         else if (p >= 30 && p <= 37) fg = COLORS_16[p - 30] ?? "";

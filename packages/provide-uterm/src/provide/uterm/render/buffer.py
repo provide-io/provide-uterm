@@ -94,10 +94,11 @@ BG_CODES: dict[str, int] = {
 # Shared per-cell SGR render loop
 # ---------------------------------------------------------------------------
 
-#: A cell's rendered style: ``(fg, bg, bold, underscore, reverse, blink)``.
-CellStyle = tuple[str, str, bool, bool, bool, bool]
+#: A cell's rendered style:
+#: ``(fg, bg, bold, underscore, reverse, blink, italics, strikethrough)``.
+CellStyle = tuple[str, str, bool, bool, bool, bool, bool, bool]
 
-_DEFAULT_STYLE: CellStyle = ("default", "default", False, False, False, False)
+_DEFAULT_STYLE: CellStyle = ("default", "default", False, False, False, False, False, False)
 
 
 def cell_style(cell: Any) -> CellStyle:
@@ -109,6 +110,8 @@ def cell_style(cell: Any) -> CellStyle:
         bool(getattr(cell, "underscore", False)),
         bool(getattr(cell, "reverse", False)),
         bool(getattr(cell, "blink", False)),
+        bool(getattr(cell, "italics", False)),
+        bool(getattr(cell, "strikethrough", False)),
     )
 
 
@@ -215,10 +218,12 @@ def _color_sgr(color: str, *, is_fg: bool) -> list[int]:
     return []
 
 
-def _attr_codes(bold: bool, underscore: bool, blink: bool) -> list[int]:
+def _attr_codes(bold: bool, underscore: bool, blink: bool, italics: bool = False) -> list[int]:
     codes: list[int] = []
     if bold:
         codes.append(1)
+    if italics:
+        codes.append(3)
     if underscore:
         codes.append(4)
     if blink:
@@ -233,6 +238,8 @@ def style_to_sgr(
     underscore: bool,
     reverse: bool,
     blink: bool,
+    italics: bool = False,
+    strikethrough: bool = False,
 ) -> str:
     """Convert pyte cell style attributes to an SGR escape sequence.
 
@@ -242,13 +249,18 @@ def style_to_sgr(
     style whatever the previous cell's was. Emitted relative to the previous
     style, a cell that dropped an attribute kept it -- bold, or a background,
     bleeding along the row from the cell before.
+
+    The attributes go in the order the pen's do (1, 3, 4, 5, 7, 9), so a cell
+    and the pen that drew it are written the same way.
     """
-    codes = [0, *_attr_codes(bold, underscore, blink)]
+    codes = [0, *_attr_codes(bold, underscore, blink, italics)]
     # Reverse is sent as reverse. Swapping the colours instead looks the same
     # until both are the default, when the swap is no change at all -- which is
     # how a reversed cell on a default pen (vitetris's selected level) vanished.
     if reverse:
         codes.append(7)
+    if strikethrough:
+        codes.append(9)
     codes.extend(_color_sgr(fg, is_fg=True))
     codes.extend(_color_sgr(bg, is_fg=False))
     if codes == [0]:

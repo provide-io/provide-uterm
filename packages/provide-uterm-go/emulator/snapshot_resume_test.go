@@ -133,6 +133,17 @@ func TestSnapshotRestoresCursorAndPen(t *testing.T) {
 	assertResumes(t, []byte(before+"\x1b[1Bboard"), len(before), 20, 5)
 }
 
+// A drawn cell keeps its italics and strikethrough: the pen carried them, but
+// a viewer that joined saw plain text where everyone else saw them.
+func TestSnapshotDrawsItalicAndStruckCells(t *testing.T) {
+	ansi := fed(10, 2, "\x1b[3mI\x1b[0;9mS\x1b[0;1;3;4;5;7;9mA\x1b[m").ANSIScreen()
+	if want := "\x1b[0;3mI\x1b[0;9mS\x1b[0;1;3;4;5;7;9mA\x1b[0m "; !strings.HasPrefix(ansi, want) {
+		t.Fatalf("ansi %q, want prefix %q", ansi, want)
+	}
+	before := "\x1b[3mit\x1b[23;9mst\x1b[m plain"
+	assertResumes(t, []byte(before+"\x1b[3m!"), len(before), 20, 5)
+}
+
 func TestSnapshotRestoresTheScrollRegionAndOriginMode(t *testing.T) {
 	if got := suffixOf(fed(20, 10, "\x1b[3;7r\x1b[?6h\x1b[2;4H")); !strings.Contains(got, "\x1b[3;7r\x1b[?6h\x1b[?7h\x1b[4l\x1b[2;4H") {
 		t.Fatalf("suffix %q", got)

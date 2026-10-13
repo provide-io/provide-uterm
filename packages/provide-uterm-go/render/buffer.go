@@ -96,11 +96,13 @@ func colorSGR(color string, isFG bool) []int {
 
 // Style is a pyte cell's render-relevant attributes.
 type Style struct {
-	FG, BG     string
-	Bold       bool
-	Underscore bool
-	Reverse    bool
-	Blink      bool
+	FG, BG        string
+	Bold          bool
+	Underscore    bool
+	Reverse       bool
+	Blink         bool
+	Italics       bool
+	Strikethrough bool
 }
 
 // DefaultStyle is the style of an absent cell.
@@ -113,11 +115,15 @@ var DefaultStyle = Style{FG: "default", BG: "default"}
 // style whatever the previous cell's was (relative to it, a cell that dropped
 // an attribute kept it, and a background bled along the row). Reverse video
 // is SGR 7: swapping the colours instead is no change at all when both are the
-// default, and the reversed cell vanished.
+// default, and the reversed cell vanished. The attributes go in the order the
+// pen's do (1, 3, 4, 5, 7, 9).
 func StyleToSGR(s Style) string {
 	codes := []int{0}
 	if s.Bold {
 		codes = append(codes, 1)
+	}
+	if s.Italics {
+		codes = append(codes, 3)
 	}
 	if s.Underscore {
 		codes = append(codes, 4)
@@ -127,6 +133,9 @@ func StyleToSGR(s Style) string {
 	}
 	if s.Reverse {
 		codes = append(codes, 7)
+	}
+	if s.Strikethrough {
+		codes = append(codes, 9)
 	}
 	codes = append(codes, colorSGR(s.FG, true)...)
 	codes = append(codes, colorSGR(s.BG, false)...)
@@ -154,7 +163,10 @@ func CellStyle(cell vt.Char) Style {
 	if bg == "" {
 		bg = "default"
 	}
-	return Style{FG: fg, BG: bg, Bold: cell.Bold, Underscore: cell.Underscore, Reverse: cell.Reverse, Blink: cell.Blink}
+	return Style{
+		FG: fg, BG: bg, Bold: cell.Bold, Underscore: cell.Underscore, Reverse: cell.Reverse, Blink: cell.Blink,
+		Italics: cell.Italics, Strikethrough: cell.Strikethrough,
+	}
 }
 
 // AnsiBuffer is a virtual terminal backed by a vt.Screen: feed raw bytes with

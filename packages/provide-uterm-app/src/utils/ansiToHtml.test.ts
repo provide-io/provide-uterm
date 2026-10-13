@@ -81,6 +81,29 @@ describe("ansiToSegments", () => {
       const result = ansiToSegments("\x1b[4mU\x1b[24mN");
       expect(result[1]?.style).not.toContain("text-decoration:underline");
     });
+
+    it("applies strikethrough", () => {
+      const result = ansiToSegments("\x1b[9mstruck\x1b[0m");
+      expect(result[0]?.style).toContain("text-decoration:line-through");
+    });
+
+    it("draws underline and strikethrough together", () => {
+      const result = ansiToSegments("\x1b[0;4;9mboth");
+      expect(result[0]?.style).toContain("text-decoration:underline line-through");
+    });
+
+    it("resets strikethrough with SGR 29 and SGR 0", () => {
+      const result = ansiToSegments("\x1b[4;9mS\x1b[29mU\x1b[9mS\x1b[0mN");
+      expect(result[1]?.style).toContain("text-decoration:underline");
+      expect(result[1]?.style).not.toContain("line-through");
+      expect(result[3]?.style).toBe("");
+    });
+
+    it("renders a join snapshot's italic and struck cells", () => {
+      // The absolute per-cell SGR every port writes into a snapshot.
+      const result = ansiToSegments("\x1b[0;3mI\x1b[0;9mS\x1b[0m ");
+      expect(result.map((segment) => segment.style)).toEqual(["font-style:italic", "text-decoration:line-through", ""]);
+    });
   });
 
   describe("inverse", () => {

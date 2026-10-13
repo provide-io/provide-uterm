@@ -40,13 +40,16 @@ public static class RenderBuffer
         public bool Underscore { get; set; }
         public bool Reverse { get; set; }
         public bool Blink { get; set; }
+        public bool Italics { get; set; }
+        public bool Strikethrough { get; set; }
 
         public readonly bool Equals(Style other) =>
             FG == other.FG && BG == other.BG && Bold == other.Bold &&
-            Underscore == other.Underscore && Reverse == other.Reverse && Blink == other.Blink;
+            Underscore == other.Underscore && Reverse == other.Reverse && Blink == other.Blink &&
+            Italics == other.Italics && Strikethrough == other.Strikethrough;
 
         public override readonly bool Equals(object? obj) => obj is Style s && Equals(s);
-        public override readonly int GetHashCode() => HashCode.Combine(FG, BG, Bold, Underscore, Reverse, Blink);
+        public override readonly int GetHashCode() => HashCode.Combine(FG, BG, Bold, Underscore, Reverse, Blink, Italics, Strikethrough);
         public static bool operator ==(Style a, Style b) => a.Equals(b);
         public static bool operator !=(Style a, Style b) => !a.Equals(b);
     }
@@ -104,7 +107,8 @@ public static class RenderBuffer
     /// style whatever the previous cell's was (relative to it, a cell that
     /// dropped an attribute kept it, and a background bled along the row).
     /// Reverse video is SGR 7: swapping the colours instead is no change at all
-    /// when both are the default, and the reversed cell vanished.
+    /// when both are the default, and the reversed cell vanished. The attributes
+    /// go in the order the pen's do (1, 3, 4, 5, 7, 9).
     /// </remarks>
     public static string StyleToSgr(Style s)
     {
@@ -112,6 +116,11 @@ public static class RenderBuffer
         if (s.Bold)
         {
             codes.Add(1);
+        }
+
+        if (s.Italics)
+        {
+            codes.Add(3);
         }
 
         if (s.Underscore)
@@ -127,6 +136,11 @@ public static class RenderBuffer
         if (s.Reverse)
         {
             codes.Add(7);
+        }
+
+        if (s.Strikethrough)
+        {
+            codes.Add(9);
         }
 
         codes.AddRange(ColorSgr(s.FG, true));
@@ -153,6 +167,8 @@ public static class RenderBuffer
             Underscore = cell.Underscore,
             Reverse = cell.Reverse,
             Blink = cell.Blink,
+            Italics = cell.Italics,
+            Strikethrough = cell.Strikethrough,
         };
     }
 

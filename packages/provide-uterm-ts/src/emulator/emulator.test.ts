@@ -32,7 +32,7 @@ interface EmulatorGolden {
   after_resize: { snapshot: Record<string, unknown>; raw_tail: string };
   resize_order_divergence: { read_first: string; never_read: string };
   after_reset: { snapshot: Record<string, unknown>; raw_tail: string };
-  styles: Array<{ style: [string, string, boolean, boolean, boolean, boolean]; sgr: string }>;
+  styles: Array<{ style: StyleTuple; sgr: string }>;
   empty_rows: string[];
 }
 
@@ -52,6 +52,9 @@ function drive(cols: number, rows: number, chunks: readonly string[]): TerminalE
   return emulator;
 }
 
+/** The corpus form of a style: (fg, bg, bold, underscore, reverse, blink, italics, strikethrough). */
+type StyleTuple = [string, string, boolean, boolean, boolean, boolean, boolean, boolean];
+
 /** A snapshot with the always-fresh timestamp removed. */
 function stableSnapshot(emulator: TerminalEmulator): Record<string, unknown> {
   const { captured_at: _ignored, ...rest } = emulator.getSnapshot();
@@ -59,7 +62,7 @@ function stableSnapshot(emulator: TerminalEmulator): Record<string, unknown> {
 }
 
 /** Turn the corpus tuple form into the style object the port takes. */
-function toStyle(tuple: [string, string, boolean, boolean, boolean, boolean]): CellStyle {
+function toStyle(tuple: StyleTuple): CellStyle {
   return {
     fg: tuple[0],
     bg: tuple[1],
@@ -67,6 +70,8 @@ function toStyle(tuple: [string, string, boolean, boolean, boolean, boolean]): C
     underscore: tuple[3],
     reverse: tuple[4],
     blink: tuple[5],
+    italics: tuple[6],
+    strikethrough: tuple[7],
   };
 }
 
@@ -212,17 +217,27 @@ describe("TerminalEmulator.reset and resize", () => {
   });
 });
 
+/** A style with nothing set. */
+const PLAIN: CellStyle = {
+  fg: "default",
+  bg: "default",
+  bold: false,
+  underscore: false,
+  reverse: false,
+  blink: false,
+  italics: false,
+  strikethrough: false,
+};
+
 describe("styleToSgr", () => {
   it("emits a plain reset for a style with nothing to say", () => {
-    expect(
-      styleToSgr({ fg: "default", bg: "default", bold: false, underscore: false, reverse: false, blink: false }),
-    ).toBe("\x1b[0m");
+    expect(styleToSgr({ ...PLAIN })).toBe("\x1b[0m");
   });
 
   it("emits SGR 7 for reverse video and leaves the colours in place", () => {
     // Swapping them instead is no change at all on a default pen, which is
     // how a reversed cell vanished from snapshots.
-    const style: CellStyle = { fg: "red", bg: "green", bold: false, underscore: false, reverse: true, blink: false };
+    const style: CellStyle = { ...PLAIN, fg: "red", bg: "green", reverse: true };
     expect(styleToSgr(style)).toBe("\x1b[0;7;31;42m");
     expect(styleToSgr({ ...style, fg: "default", bg: "default" })).toBe("\x1b[0;7m");
   });
@@ -235,6 +250,8 @@ describe("styleToSgr", () => {
       underscore: false,
       reverse: false,
       blink: false,
+      italics: false,
+      strikethrough: false,
     };
     expect(styleToSgr(style)).toBe("\x1b[0;38;2;255;128;0m");
   });
@@ -247,8 +264,17 @@ describe("styleToSgr", () => {
       underscore: false,
       reverse: false,
       blink: false,
+      italics: false,
+      strikethrough: false,
     };
     expect(styleToSgr(style)).toBe("\x1b[0;33;103m");
+  });
+
+  it("emits SGR 3 and 9 for italics and strikethrough, in the pen's order", () => {
+    expect(styleToSgr({ ...PLAIN, italics: true })).toBe("\x1b[0;3m");
+    expect(styleToSgr({ ...PLAIN, strikethrough: true })).toBe("\x1b[0;9m");
+    const every = { fg: "red", bg: "default", bold: true, underscore: true, reverse: true, blink: true };
+    expect(styleToSgr({ ...every, italics: true, strikethrough: true })).toBe("\x1b[0;1;3;4;5;7;9;31m");
   });
 
   it("emits no colour for a name the table does not carry", () => {
@@ -259,6 +285,8 @@ describe("styleToSgr", () => {
       underscore: false,
       reverse: false,
       blink: false,
+      italics: false,
+      strikethrough: false,
     };
     expect(styleToSgr(style)).toBe("\x1b[0m");
   });

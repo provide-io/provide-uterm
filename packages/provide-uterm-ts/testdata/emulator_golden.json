@@ -463,6 +463,30 @@
    "raw_tail": "\u001b[5mblink"
   },
   {
+   "name": "italic and strikethrough cells",
+   "cols": 20,
+   "rows": 5,
+   "chunks": [
+    "\u001b[3mit\u001b[0;9mst\u001b[0;3;9mboth\u001b[0m"
+   ],
+   "snapshot": {
+    "screen": "itstboth            \n                    \n                    \n                    \n                    ",
+    "screen_hash": "6ce3df31824655aa341b93d0d019ad6b4758a057941fec130b3e03165f89cf4f",
+    "cursor": {
+     "x": 8,
+     "y": 0
+    },
+    "cols": 20,
+    "rows": 5,
+    "term": "ANSI",
+    "cursor_at_end": true,
+    "has_trailing_space": true,
+    "raw_tail": "\u001b[3mit\u001b[0;9mst\u001b[0;3;9mboth\u001b[0m"
+   },
+   "ansi_screen": "\u001b[0;3mit\u001b[0;9mst\u001b[0;3;9mboth\u001b[0m            \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;9H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h",
+   "raw_tail": "\u001b[3mit\u001b[0;9mst\u001b[0;3;9mboth\u001b[0m"
+  },
+  {
    "name": "deferred wrap at the last column",
    "cols": 20,
    "rows": 5,
@@ -603,7 +627,7 @@
     "has_trailing_space": true,
     "raw_tail": "\u001b[?25l\u001b[1;3;4;5;7;9;33;104mpen"
    },
-   "ansi_screen": "\u001b[0;1;4;5;7;33;104mpen\u001b[0m                 \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;4H\u001b[20l\u001b[?1l\u001b[0;1;3;4;5;7;9;33;104m\u001b[?25l",
+   "ansi_screen": "\u001b[0;1;3;4;5;7;9;33;104mpen\u001b[0m                 \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;4H\u001b[20l\u001b[?1l\u001b[0;1;3;4;5;7;9;33;104m\u001b[?25l",
    "raw_tail": "\u001b[?25l\u001b[1;3;4;5;7;9;33;104mpen"
   },
   {
@@ -677,6 +701,8 @@
     false,
     false,
     false,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0m"
@@ -685,6 +711,8 @@
    "style": [
     "red",
     "default",
+    false,
+    false,
     false,
     false,
     false,
@@ -699,6 +727,8 @@
     false,
     false,
     false,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0;42m"
@@ -707,6 +737,8 @@
    "style": [
     "red",
     "green",
+    false,
+    false,
     false,
     false,
     false,
@@ -721,6 +753,8 @@
     false,
     false,
     false,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0;96;100m"
@@ -730,6 +764,8 @@
     "default",
     "default",
     true,
+    false,
+    false,
     false,
     false,
     false
@@ -743,6 +779,8 @@
     false,
     true,
     false,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0;4m"
@@ -754,7 +792,9 @@
     false,
     false,
     false,
-    true
+    true,
+    false,
+    false
    ],
    "sgr": "\u001b[0;5m"
   },
@@ -765,9 +805,50 @@
     true,
     true,
     false,
-    true
+    true,
+    false,
+    false
    ],
    "sgr": "\u001b[0;1;4;5m"
+  },
+  {
+   "style": [
+    "default",
+    "default",
+    false,
+    false,
+    false,
+    false,
+    true,
+    false
+   ],
+   "sgr": "\u001b[0;3m"
+  },
+  {
+   "style": [
+    "default",
+    "default",
+    false,
+    false,
+    false,
+    false,
+    false,
+    true
+   ],
+   "sgr": "\u001b[0;9m"
+  },
+  {
+   "style": [
+    "red",
+    "green",
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ],
+   "sgr": "\u001b[0;1;3;4;5;7;9;31;42m"
   },
   {
    "style": [
@@ -776,6 +857,8 @@
     false,
     false,
     true,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0;7;31;42m"
@@ -787,6 +870,8 @@
     false,
     false,
     true,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0;7m"
@@ -795,6 +880,8 @@
    "style": [
     "ff8000",
     "default",
+    false,
+    false,
     false,
     false,
     false,
@@ -809,6 +896,8 @@
     false,
     false,
     false,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0;48;2;0;0;255m"
@@ -820,6 +909,8 @@
     true,
     false,
     false,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0;1;38;2;255;128;0;48;2;0;0;255m"
@@ -828,6 +919,8 @@
    "style": [
     "brown",
     "default",
+    false,
+    false,
     false,
     false,
     false,
@@ -842,6 +935,8 @@
     false,
     false,
     false,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0;93m"
@@ -850,6 +945,8 @@
    "style": [
     "nonsense",
     "default",
+    false,
+    false,
     false,
     false,
     false,
@@ -864,6 +961,8 @@
     false,
     false,
     false,
+    false,
+    false,
     false
    ],
    "sgr": "\u001b[0m"
@@ -872,6 +971,8 @@
    "style": [
     "FF8000",
     "default",
+    false,
+    false,
     false,
     false,
     false,

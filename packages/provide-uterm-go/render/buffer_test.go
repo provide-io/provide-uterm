@@ -35,6 +35,10 @@ func TestStyleToSGR(t *testing.T) {
 		// defaults is no change, and the reversed cell vanished.
 		{Style{FG: "red", BG: "blue", Reverse: true}, "\x1b[0;7;31;44m"},
 		{Style{FG: "default", BG: "default", Reverse: true}, "\x1b[0;7m"},
+		// Italics and strikethrough, in the pen's order (1, 3, 4, 5, 7, 9).
+		{Style{FG: "default", BG: "default", Italics: true}, "\x1b[0;3m"},
+		{Style{FG: "default", BG: "default", Strikethrough: true}, "\x1b[0;9m"},
+		{Style{FG: "red", BG: "default", Bold: true, Italics: true, Underscore: true, Blink: true, Reverse: true, Strikethrough: true}, "\x1b[0;1;3;4;5;7;9;31m"},
 		// The vt (pyte) names for yellow, and pyte's spelling of SGR 105.
 		{Style{FG: "brown", BG: "brightbrown"}, "\x1b[0;33;103m"},
 		{Style{FG: "brightbrown", BG: "brown"}, "\x1b[0;93;43m"},

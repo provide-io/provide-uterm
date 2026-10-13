@@ -61,6 +61,7 @@ CASES: list[tuple[str, int, int, list[str]]] = [
     ("256-colour", COLS, ROWS, ["\x1b[38;5;196mx"]),
     ("brown, pyte's name for yellow", COLS, ROWS, ["\x1b[33mbrown"]),
     ("blink", COLS, ROWS, ["\x1b[5mblink"]),
+    ("italic and strikethrough cells", COLS, ROWS, ["\x1b[3mit\x1b[0;9mst\x1b[0;3;9mboth\x1b[0m"]),
     # The state a resuming viewer needs after the rows: every port must append
     # the same bytes for it.
     ("deferred wrap at the last column", COLS, ROWS, ["\x1b[2;1H" + "w" * (COLS - 1) + "\x1b[32mW"]),
@@ -72,31 +73,36 @@ CASES: list[tuple[str, int, int, list[str]]] = [
     ("a truecolor pen", COLS, ROWS, ["\x1b[38;2;1;2;3;48;5;208m"]),
 ]
 
-# (fg, bg, bold, underscore, reverse, blink) styles for style_to_sgr.
-STYLE_CASES: list[tuple[str, str, bool, bool, bool, bool]] = [
-    ("default", "default", False, False, False, False),
-    ("red", "default", False, False, False, False),
-    ("default", "green", False, False, False, False),
-    ("red", "green", False, False, False, False),
-    ("brightcyan", "brightblack", False, False, False, False),
-    ("default", "default", True, False, False, False),
-    ("default", "default", False, True, False, False),
-    ("default", "default", False, False, False, True),
-    ("default", "default", True, True, False, True),
+# (fg, bg, bold, underscore, reverse, blink, italics, strikethrough) styles
+# for style_to_sgr.
+STYLE_CASES: list[tuple[str, str, bool, bool, bool, bool, bool, bool]] = [
+    ("default", "default", False, False, False, False, False, False),
+    ("red", "default", False, False, False, False, False, False),
+    ("default", "green", False, False, False, False, False, False),
+    ("red", "green", False, False, False, False, False, False),
+    ("brightcyan", "brightblack", False, False, False, False, False, False),
+    ("default", "default", True, False, False, False, False, False),
+    ("default", "default", False, True, False, False, False, False),
+    ("default", "default", False, False, False, True, False, False),
+    ("default", "default", True, True, False, True, False, False),
+    ("default", "default", False, False, False, False, True, False),
+    ("default", "default", False, False, False, False, False, True),
+    # Every attribute, in the order the pen writes them: 1, 3, 4, 5, 7, 9.
+    ("red", "green", True, True, True, True, True, True),
     # Reverse is sent as SGR 7, the colours left where they are.
-    ("red", "green", False, False, True, False),
-    ("default", "default", False, False, True, False),
+    ("red", "green", False, False, True, False, False, False),
+    ("default", "default", False, False, True, False, False, False),
     # pyte hex colours become truecolor.
-    ("ff8000", "default", False, False, False, False),
-    ("default", "0000ff", False, False, False, False),
-    ("ff8000", "0000ff", True, False, False, False),
+    ("ff8000", "default", False, False, False, False, False, False),
+    ("default", "0000ff", False, False, False, False, False, False),
+    ("ff8000", "0000ff", True, False, False, False, False, False),
     # A name the renderer's table does not carry emits no colour code.
-    ("brown", "default", False, False, False, False),
-    ("brightbrown", "default", False, False, False, False),
+    ("brown", "default", False, False, False, False, False, False),
+    ("brightbrown", "default", False, False, False, False, False, False),
     # Not a colour name and not hex.
-    ("nonsense", "default", False, False, False, False),
-    ("ff800", "default", False, False, False, False),
-    ("FF8000", "default", False, False, False, False),
+    ("nonsense", "default", False, False, False, False, False, False),
+    ("ff800", "default", False, False, False, False, False, False),
+    ("FF8000", "default", False, False, False, False, False, False),
 ]
 
 
