@@ -304,13 +304,19 @@ def _wait_for(browser: Any, frame_type: str) -> dict[str, Any]:
             return frame
 
 
+def _read_until_closed(browser: Any) -> None:
+    """Read frames until the socket closes; a pong means it was left open."""
+    while True:
+        frame = browser.receive_json()
+        assert frame.get("type") != "pong", "socket was not closed"
+
+
 def _close_of(browser: Any) -> WebSocketDisconnect:
     # A ping first, so a socket that was wrongly left open answers it and the
     # test fails on the pong instead of waiting forever for a close.
     browser.send_json({"type": "ping"})
     with pytest.raises(WebSocketDisconnect) as caught:
-        while True:
-            assert browser.receive_json().get("type") != "pong", "socket was not closed"
+        _read_until_closed(browser)
     return caught.value
 
 
@@ -578,7 +584,8 @@ def test_other_owners_and_admins_scoped_elsewhere_cannot_revoke() -> None:
     path = f"/api/sessions/{_SESSION}/viewers/revoke"
     with TestClient(app) as client:
         admin = _bearer(_token("ops", ["admin"]))
-        assert client.patch(f"/api/sessions/{_SESSION}", json={"owner": "owner1"}, headers=admin).status_code == 200
+        patched = client.patch(f"/api/sessions/{_SESSION}", json={"owner": "owner1"}, headers=admin)
+        assert patched.status_code == 200
         assert client.post(path, headers=_bearer(_token("owner2", ["operator"]))).status_code == 403
         scoped_elsewhere = jwt.encode(
             {
@@ -611,12 +618,8 @@ def test_the_owner_and_the_hijack_holder_keep_their_sockets_through_a_revoke() -
         ) as worker,
     ):
         assert worker.receive_json()["type"] == "snapshot_req"
-        assert (
-            client.patch(
-                f"/api/sessions/{_SESSION}", json={"owner": "owner1"}, headers=_bearer(admin_token)
-            ).status_code
-            == 200
-        )
+        patched = client.patch(f"/api/sessions/{_SESSION}", json={"owner": "owner1"}, headers=_bearer(admin_token))
+        assert patched.status_code == 200
         with (
             connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(admin_token)) as holder,
             connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(owner_token)) as owner,
@@ -636,9 +639,11 @@ def test_deleting_a_session_forgets_its_cutoff() -> None:
     app = _app()
     admin = _bearer(_token("ops", ["admin"]))
     with TestClient(app) as client:
-        assert client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin).status_code == 200
+        revoked = client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin)
+        assert revoked.status_code == 200
         assert app.state.uterm_authz.share_viewer_revocation(_SESSION) is not None
-        assert client.delete(f"/api/sessions/{_SESSION}", headers=admin).status_code == 200
+        deleted = client.delete(f"/api/sessions/{_SESSION}", headers=admin)
+        assert deleted.status_code == 200
         assert app.state.uterm_authz.share_viewer_revocation(_SESSION) is None
 
 
