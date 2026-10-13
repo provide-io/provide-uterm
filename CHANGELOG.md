@@ -4,21 +4,6 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
-### Added
-
-- **A session's share viewers can be revoked, including the ones already
-  watching.** A share-viewer token (`share:{session_id}:...` subject, viewer
-  role only) used to be judged once, when its socket opened, so turning a
-  session private left everyone already watching in place.
-  `POST /api/sessions/{id}/viewers/revoke` (owner, session-scoped admin or
-  global admin) records a cutoff, closes every live share-viewer socket on the
-  session with close code `4410` and reason `viewer access revoked`, and from
-  then on refuses any share-viewer token for that session issued at or before
-  the cutoff -- on reconnect and on every REST read. Owners, operators, admins,
-  tunnel share operators and the hijack holder are untouched, and tokens minted
-  after the cutoff work as before. Python, Go and C# servers; the TypeScript
-  server refuses revoked tokens on its reads but binds no browser socket.
-
 ## [0.5.6] — 2026-09-10
 
 The fan-out response budget means the same thing in all four ports, the Go

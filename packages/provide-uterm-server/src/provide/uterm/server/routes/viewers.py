@@ -21,6 +21,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 
+from provide.uterm.api_routes import HttpMethod
 from provide.uterm.server.audit import audit_event
 from provide.uterm.server.routes._helpers import SessionId, authz, principal, session_definition, source_ip
 from provide.uterm.server.viewer_revocation import (
@@ -65,4 +66,8 @@ async def revoke_viewers(request: Request, session_id: SessionId) -> dict[str, A
 
 def register_viewer_routes(router: APIRouter) -> None:
     """Bind the viewer-revocation route."""
-    router.add_api_route(VIEWERS_REVOKE_PATH, revoke_viewers, methods=["POST"], name="sessions.viewers.revoke")
+    # The method comes from HttpMethod rather than a literal: FastAPI upper-cases
+    # whatever it is given, so a "post" mutant of a literal would be equivalent.
+    router.add_api_route(
+        VIEWERS_REVOKE_PATH, revoke_viewers, methods=[HttpMethod.POST.value], name="sessions.viewers.revoke"
+    )
