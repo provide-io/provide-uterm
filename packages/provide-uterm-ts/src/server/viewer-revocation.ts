@@ -32,18 +32,25 @@ export const VIEWER_REVOKED_CLOSE_CODE = 4410;
 export const VIEWER_REVOKED_REASON = "viewer access revoked";
 
 /**
- * How many per-session cutoffs are held at once. Past it the oldest is
- * forgotten, which can only matter for a share token that outlived thousands
- * of later revocations.
+ * How many per-session cutoffs are held at once. When the table is full a
+ * revoke for a session not already in it is refused (the route answers 429)
+ * rather than evicting a cutoff that may still protect another session.
  */
 export const SHARE_VIEWER_REVOCATIONS_MAX = 10000;
 
 /**
- * How long a cutoff is kept, in seconds. A cutoff only matters while a token
- * issued before it can still be valid; ageing out rather than only evicting by
- * count means nobody can push another session's fresh cutoff out of the table.
+ * How long a cutoff is kept, in seconds. Share tokens must live well under
+ * this: a token that outlives its cutoff is admitted again.
  */
 export const SHARE_VIEWER_REVOCATION_TTL_S = 86400;
+
+/** The cutoff table is full of live cutoffs; a new session cannot be added. */
+export class ShareViewerRevocationsFullError extends Error {
+  constructor() {
+    super("share-viewer revocation table is full");
+    this.name = "ShareViewerRevocationsFullError";
+  }
+}
 
 /** A principal as a revocation reads it: who, what roles, and its token's claims. */
 export interface RevocablePrincipal extends AuthorizablePrincipal {
@@ -68,19 +75,23 @@ export class ShareViewerRevocations {
    * Refuse every share-viewer token for a session issued at or before `now`
    * (wall-clock seconds, the clock a token's `iat` is written in) and return
    * the cutoff. A token issued in the same second is refused too: `iat` has
-   * one-second resolution, so it cannot say which side it fell on.
+   * one-second resolution, so it cannot say which side it fell on. Throws
+   * {@link ShareViewerRevocationsFullError} when the table is full and this
+   * session holds no cutoff yet.
    */
   revoke(sessionId: string, now: number): number {
-    this.#cutoffs.delete(sessionId);
-    this.#cutoffs.set(sessionId, now);
-    // Insertion order is revocation order: stale cutoffs, then the overflow, are
-    // at the front.
+    // Insertion order is revocation order, so the stale cutoffs are in front.
     for (const [oldest, cutoff] of this.#cutoffs) {
-      if (cutoff >= now - SHARE_VIEWER_REVOCATION_TTL_S && this.#cutoffs.size <= SHARE_VIEWER_REVOCATIONS_MAX) {
+      if (cutoff >= now - SHARE_VIEWER_REVOCATION_TTL_S) {
         break;
       }
       this.#cutoffs.delete(oldest);
     }
+    if (!this.#cutoffs.has(sessionId) && this.#cutoffs.size >= SHARE_VIEWER_REVOCATIONS_MAX) {
+      throw new ShareViewerRevocationsFullError();
+    }
+    this.#cutoffs.delete(sessionId);
+    this.#cutoffs.set(sessionId, now);
     return now;
   }
 

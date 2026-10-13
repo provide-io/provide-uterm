@@ -432,7 +432,13 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
     if (!canMutateSession(principal, definition, "session.control.update")) {
       return refusal(403, "insufficient privileges");
     }
-    const revokedAt = revocations.revoke(sessionId, (options.now ?? (() => Date.now() / 1000))());
+    let revokedAt: number;
+    try {
+      revokedAt = revocations.revoke(sessionId, (options.now ?? (() => Date.now() / 1000))());
+    } catch {
+      // The one thing revoke throws: ShareViewerRevocationsFullError.
+      return refusal(429, "too many sessions with revoked viewers; try again later");
+    }
     return Response.json({
       session_id: sessionId,
       revoked_at: revokedAt,

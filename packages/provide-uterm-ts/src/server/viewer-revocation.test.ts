@@ -27,6 +27,7 @@ import {
   SHARE_VIEWER_REVOCATION_TTL_S,
   SHARE_VIEWER_REVOCATIONS_MAX,
   ShareViewerRevocations,
+  ShareViewerRevocationsFullError,
   VIEWER_REVOKED_CLOSE_CODE,
   VIEWER_REVOKED_REASON,
 } from "./viewer-revocation.ts";
@@ -80,18 +81,23 @@ describe("the revocation cutoff", () => {
     expect(revocations.revoked(viewer("s1", 600), "s1")).toBe(true);
   });
 
-  it("is bounded and forgets the oldest cutoff first", () => {
+  it("refuses a new session when the table is full instead of evicting a live cutoff", () => {
     const revocations = new ShareViewerRevocations();
     const base = 1e9;
     for (let index = 0; index < SHARE_VIEWER_REVOCATIONS_MAX; index += 1) {
       revocations.revoke(`s${index}`, base + index);
     }
-    revocations.revoke("s0", base + 1e4); // now the newest, so s1 falls out next
-    revocations.revoke("overflow", base + 2e4);
+    // A session already holding a cutoff can always move it forward.
+    expect(revocations.revoke("s0", base + 1e4)).toBe(base + 1e4);
+    // A new one is refused rather than pushing a live cutoff out.
+    expect(() => revocations.revoke("overflow", base + 2e4)).toThrow(ShareViewerRevocationsFullError);
+    expect(revocations.cutoff("overflow")).toBeUndefined();
+    expect(revocations.cutoff("s1")).toBe(base + 1);
+    // Once the oldest cutoffs have aged out there is room again.
+    const later = base + 1 + SHARE_VIEWER_REVOCATION_TTL_S + 0.5;
+    expect(revocations.revoke("overflow", later)).toBe(later);
     expect(revocations.cutoff("s1")).toBeUndefined();
     expect(revocations.cutoff("s0")).toBe(base + 1e4);
-    expect(revocations.cutoff("s2")).toBe(base + 2);
-    expect(revocations.cutoff("overflow")).toBe(base + 2e4);
   });
 
   it("ages out cutoffs older than a day", () => {
@@ -212,6 +218,22 @@ describe("POST /api/sessions/{id}/viewers/revoke", () => {
       new Request(`${BASE}/api/sessions/nope/viewers/revoke`, { method: "POST", headers: bearer(admin) }),
     );
     expect(missing.status).toBe(404);
+  });
+
+  it("answers 429 when the cutoff table is full", async () => {
+    const app = buildApp(() => 1_700_000_100);
+    const admin = token("ops", ["admin"], 1_700_000_000);
+    const original = ShareViewerRevocations.prototype.revoke;
+    ShareViewerRevocations.prototype.revoke = () => {
+      throw new ShareViewerRevocationsFullError();
+    };
+    try {
+      const response = await app.handle(new Request(`${BASE}${PATH}`, { method: "POST", headers: bearer(admin) }));
+      expect(response.status).toBe(429);
+      expect(await response.json()).toEqual({ detail: "too many sessions with revoked viewers; try again later" });
+    } finally {
+      ShareViewerRevocations.prototype.revoke = original;
+    }
   });
 
   it("stamps the cutoff with the wall clock when no clock was given", async () => {
