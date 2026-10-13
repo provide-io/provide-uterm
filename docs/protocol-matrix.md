@@ -221,6 +221,7 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | `POST /api/tunnels` | served | served |
 | `DELETE /api/tunnels/{id}/tokens` | served (revocation) | served (revocation) |
 | `POST /api/tunnels/{id}/tokens/rotate` | served (rotation) | served (rotation) |
+| `POST /api/sessions/{id}/viewers/revoke` | served: refuses every `share:{id}:...` viewer token issued up to now and closes live share-viewer sockets with `4410 viewer access revoked` (also Go, C#; TS refuses reads, binds no socket) | not served (no share-viewer grants) |
 | Share URL (`?invite=...`) | `/s/{id}` → set HttpOnly cookie, 302 clean redirect | `/s/{id}` → set HttpOnly cookie, 302 clean redirect |
 | Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
 
