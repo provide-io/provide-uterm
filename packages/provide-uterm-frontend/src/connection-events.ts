@@ -21,6 +21,14 @@
  * All events bubble and are composed, so a listener on the element (or any
  * ancestor, across shadow roots) hears them. Every socket the element opens
  * fires them, its own reconnects included.
+ *
+ * Removing a connected element from the page disconnects it, and the
+ * `uterm:connection` {connected: false} for that is dispatched after the element
+ * has left the document: only a listener on the element itself hears it, not
+ * one on `document` or a former ancestor.
+ *
+ * A `uterm:close` listener may disconnect, remove or reconnect the element; the
+ * element then schedules no reconnect of its own for that close.
  */
 
 export const UTERM_CONNECTION_EVENT = "uterm:connection";

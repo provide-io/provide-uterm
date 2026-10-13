@@ -475,6 +475,8 @@ export class UtermSessionElement extends LitElement {
 
   disconnect(): void {
     if (!this._hijackState) return;
+    // Overrides any close handler mid-dispatch or backoff timer still pending.
+    this._hijackState.epoch++;
     clearHeartbeat(this._hijackState);
     if (this._ro) {
       this._ro.disconnect();

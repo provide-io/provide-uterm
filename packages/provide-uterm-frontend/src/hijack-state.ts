@@ -24,6 +24,12 @@ export class HijackState {
   reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   reconnectAnimTimer: ReturnType<typeof setInterval> | null = null;
   reconnectAttempt = 0;
+  /**
+   * Bumped whenever the owner takes the connection over: a new socket
+   * (connectWs) or a disconnect. A close handler or backoff timer that finds it
+   * changed has been overtaken and must not reconnect.
+   */
+  epoch = 0;
 
   // Tier-A backpressure: cumulative bytes received on this connection, ACKed to
   // the DO on a throttle so it can pause the producer when this browser lags.

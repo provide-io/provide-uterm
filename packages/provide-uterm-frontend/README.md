@@ -44,6 +44,12 @@ Both bubble and are `composed`, and both fire for every socket the element
 opens: the first `connect()`, its own reconnects, and manual reconnects. The
 element's `connected` getter (read-only) gives the current state.
 
+A `uterm:close` listener may call `disconnect()` or `connect()`, or remove the
+element; the element then schedules no reconnect of its own for that close.
+Removing a connected element disconnects it, and its `uterm:connection`
+`{connected: false}` is dispatched after it has left the document, so only a
+listener on the element itself hears that one.
+
 Close codes in `FINAL_CLOSE_CODES` end the stream with no reconnect, listener or
 not (`willReconnect` is `false`). Today that is only `4410` (`VIEWER_REVOKED_CLOSE_CODE`:
 the server revoked this viewer's access, so a reconnect could only be refused).

@@ -157,6 +157,12 @@ export function stopReconnectAnim(state: HijackState): void {
 }
 
 export function connectWs(state: HijackState, handlers: HijackHandlers): void {
+  state.epoch++;
+  // This connect supersedes any pending backoff reconnect.
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
   if (state.ws) {
     // Detach before closing, so the old socket's close handler sees itself as
     // stale even where close() reports synchronously.
@@ -262,7 +268,11 @@ export function connectWs(state: HijackState, handlers: HijackHandlers): void {
     // to it) may decide there is to be none. Without an owner hook, final close
     // codes still end the stream.
     const info = closeInfo(event);
+    const epoch = state.epoch;
     const reconnect = handlers.onSocketClose ? handlers.onSocketClose(info) : !isFinalCloseCode(info.code);
+    // A listener may have disconnected, removed or reconnected the element
+    // meanwhile; then this close no longer decides anything.
+    if (state.epoch !== epoch) return;
     if (reconnect) {
       scheduleReconnect(state, handlers);
     } else {
@@ -286,8 +296,11 @@ export function scheduleReconnect(state: HijackState, handlers: HijackHandlers):
   state.reconnectAttempt = attempt + 1;
   handlers.setStatus("bad", `Reconnecting in ${delaySec}s…`);
   startReconnectAnim(state);
+  const epoch = state.epoch;
   state.reconnectTimer = setTimeout(() => {
     state.reconnectTimer = null;
+    // Overtaken by a disconnect or a newer connect: leave it to them.
+    if (state.epoch !== epoch || state.ws) return;
     connectWs(state, handlers);
   }, delaySec * 1000);
 }

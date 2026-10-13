@@ -299,6 +299,57 @@ describe("<uterm-session> connection events", () => {
   });
 });
 
+describe("<uterm-session> close listeners that act on the element", () => {
+  it("removing the element inside uterm:close leaves no reconnect behind", () => {
+    const el = mountSession();
+    el.addEventListener(UTERM_CLOSE_EVENT, () => el.remove());
+    el.connect();
+    latest().open();
+    latest().serverClose(1011, "boom");
+    vi.advanceTimersByTime(120_000);
+    expect(sockets()).toHaveLength(1);
+    expect(el.connected).toBe(false);
+  });
+
+  it("disconnect() inside uterm:close leaves no reconnect behind", () => {
+    const el = mountSession();
+    el.addEventListener(UTERM_CLOSE_EVENT, () => el.disconnect());
+    el.connect();
+    latest().open();
+    latest().serverClose(1011, "boom");
+    vi.advanceTimersByTime(120_000);
+    expect(sockets()).toHaveLength(1);
+    expect(rec.connection).toEqual([{ connected: true }, { connected: false }]);
+  });
+
+  it("connect() inside uterm:close opens exactly one socket, with no churn", () => {
+    const el = mountSession();
+    el.addEventListener(UTERM_CLOSE_EVENT, () => el.connect(), { once: true });
+    el.connect();
+    latest().open();
+    latest().serverClose(1011, "boom");
+    expect(sockets()).toHaveLength(2);
+    latest().open();
+    vi.advanceTimersByTime(120_000);
+    expect(sockets()).toHaveLength(2);
+    expect(el.connected).toBe(true);
+    expect(rec.connection).toEqual([{ connected: true }, { connected: false }, { connected: true }]);
+  });
+
+  it("a backoff timer that outlives its socket does not open another", () => {
+    const el = mountSession();
+    el.connect();
+    latest().open();
+    latest().serverClose(1011, "boom");
+    // A reconnect is pending; a manual connect() takes over before it fires.
+    el.connect();
+    latest().open();
+    vi.advanceTimersByTime(120_000);
+    expect(sockets()).toHaveLength(2);
+    expect(el.connected).toBe(true);
+  });
+});
+
 describe("<uterm-terminal> connection events", () => {
   beforeEach(() => {
     // The element builds xterm on first render; give it inert stand-ins.
