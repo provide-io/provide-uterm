@@ -185,6 +185,12 @@ func (s *Server) handleWatchSessionEvents(w http.ResponseWriter, r *http.Request
 		detailError(w, http.StatusNotFound, "unknown session: "+id)
 		return
 	}
+	// The cutoff was checked when the poll started; a revoke during the wait
+	// must not still get one batch of events out.
+	if s.deps.Authz.ShareViewerRevoked(principalOf(r), id) {
+		detailError(w, http.StatusForbidden, "insufficient privileges")
+		return
+	}
 	writeJSON(w, http.StatusOK, result)
 }
 

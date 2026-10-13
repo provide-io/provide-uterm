@@ -72,10 +72,12 @@ type fakeRegistry struct {
 	analysisErr error
 	eventsErr   error
 	watchErr    error
-	analysis    map[string]any
-	snapshot    map[string]any
-	events      []map[string]any
-	watch       map[string]any
+	// watchHook runs while a long-poll waits (a revoke landing mid-poll).
+	watchHook func()
+	analysis  map[string]any
+	snapshot  map[string]any
+	events    []map[string]any
+	watch     map[string]any
 	// created / stopped / deleted capture create/stop/delete calls for the PAM
 	// integration tests.
 	created []map[string]any
@@ -226,6 +228,9 @@ func (f *fakeRegistry) Events(context.Context, string, int) ([]map[string]any, e
 }
 
 func (f *fakeRegistry) WatchSessionEvents(context.Context, string, WatchParams) (map[string]any, error) {
+	if f.watchHook != nil {
+		f.watchHook()
+	}
 	if f.watchErr != nil {
 		return nil, f.watchErr
 	}

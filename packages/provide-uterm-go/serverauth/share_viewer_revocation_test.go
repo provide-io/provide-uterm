@@ -7,6 +7,7 @@ package serverauth
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -65,8 +66,8 @@ func TestShareViewerRevocationCutoff(t *testing.T) {
 	if _, ok := s.ShareViewerRevocation("s1"); ok {
 		t.Fatal("cutoff recorded before any revocation")
 	}
-	if got := s.RevokeShareViewers("s1", 500.5); got != 500.5 {
-		t.Fatalf("RevokeShareViewers returned %v", got)
+	if got, err := s.RevokeShareViewers("s1", 500.5); err != nil || got != 500.5 {
+		t.Fatalf("RevokeShareViewers returned %v %v", got, err)
 	}
 	if got, ok := s.ShareViewerRevocation("s1"); !ok || got != 500.5 {
 		t.Fatalf("ShareViewerRevocation = %v, %v", got, ok)
@@ -90,31 +91,58 @@ func TestShareViewerRevocationCutoff(t *testing.T) {
 	if s.ShareViewerRevoked(shareViewer("s1", 1.0, "admin"), "s1") {
 		t.Error("revocation touched a non-viewer share principal")
 	}
-	s.RevokeShareViewers("s1", 900)
+	_, _ = s.RevokeShareViewers("s1", 900)
 	if !s.ShareViewerRevoked(shareViewer("s1", 600.0), "s1") {
 		t.Error("a later revocation did not move the cutoff forward")
 	}
 }
 
-func TestShareViewerRevocationsAreBounded(t *testing.T) {
+func TestAFullCutoffTableRefusesNewSessionsInsteadOfEvicting(t *testing.T) {
 	s := NewAuthorizationServiceWith(LocalAuthorizationProvider{})
 	const base = 1e9
 	for i := 0; i < ShareViewerRevocationsMax; i++ {
-		s.RevokeShareViewers(fmt.Sprintf("s%d", i), base+float64(i))
+		if _, err := s.RevokeShareViewers(fmt.Sprintf("s%d", i), base+float64(i)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	s.RevokeShareViewers("s0", base+1e4) // now the newest, so s1 falls out next
-	s.RevokeShareViewers("overflow", base+2e4)
+	// A session already holding a cutoff can always move it forward.
+	if got, err := s.RevokeShareViewers("s0", base+1e4); err != nil || got != base+1e4 {
+		t.Fatalf("re-revoke: %v %v", got, err)
+	}
+	// A new one is refused rather than pushing a live cutoff out.
+	if _, err := s.RevokeShareViewers("overflow", base+2e4); !errors.Is(err, ErrShareViewerRevocationsFull) {
+		t.Fatalf("full table: %v", err)
+	}
+	if _, ok := s.ShareViewerRevocation("overflow"); ok {
+		t.Error("refused revoke recorded a cutoff")
+	}
+	if got, _ := s.ShareViewerRevocation("s1"); got != base+1 {
+		t.Errorf("s1 evicted: %v", got)
+	}
+	// Once the oldest cutoffs have aged out there is room again.
+	later := base + 1 + ShareViewerRevocationTTLSeconds + 0.5
+	if got, err := s.RevokeShareViewers("overflow", later); err != nil || got != later {
+		t.Fatalf("after age-out: %v %v", got, err)
+	}
 	if _, ok := s.ShareViewerRevocation("s1"); ok {
-		t.Error("oldest cutoff was not forgotten")
+		t.Error("stale s1 kept")
 	}
 	if got, _ := s.ShareViewerRevocation("s0"); got != base+1e4 {
-		t.Errorf("s0 cutoff = %v", got)
+		t.Errorf("live s0 lost: %v", got)
 	}
-	if got, _ := s.ShareViewerRevocation("s2"); got != base+2 {
-		t.Errorf("s2 cutoff = %v", got)
+}
+
+func TestTunnelSharePrincipalsAreNotShareViewers(t *testing.T) {
+	tunnelViewer := shareViewer("s1", nil)
+	tunnelViewer.SubjectID = "share:s1:viewer"
+	tunnelViewer.TunnelShare = true
+	if IsShareViewer(tunnelViewer, "s1") {
+		t.Fatal("a tunnel share viewer counted as a share viewer")
 	}
-	if got, _ := s.ShareViewerRevocation("overflow"); got != base+2e4 {
-		t.Errorf("overflow cutoff = %v", got)
+	s := NewAuthorizationService()
+	_, _ = s.RevokeShareViewers("s1", 500)
+	if s.ShareViewerRevoked(tunnelViewer, "s1") || !s.CanReadSession(tunnelViewer, publicSession("s1")) {
+		t.Fatal("the viewer cutoff refused a tunnel share viewer")
 	}
 }
 
@@ -129,7 +157,7 @@ func TestRevokedShareViewerCannotRead(t *testing.T) {
 		if !s.CanReadSession(viewer, publicSession("s1")) || !s.CanReadRecording(viewer, publicSession("s1")) {
 			t.Fatal("share viewer could not read before revocation")
 		}
-		s.RevokeShareViewers("s1", 200)
+		_, _ = s.RevokeShareViewers("s1", 200)
 		if s.CanReadSession(viewer, publicSession("s1")) {
 			t.Error("revoked share viewer can still read the session")
 		}
@@ -148,9 +176,9 @@ func TestShareViewerCutoffsAgeOutAndCanBeForgotten(t *testing.T) {
 		t.Fatalf("ttl %v", ShareViewerRevocationTTLSeconds)
 	}
 	s := NewAuthorizationService()
-	s.RevokeShareViewers("old", 1000)
-	s.RevokeShareViewers("edge", 2000)
-	s.RevokeShareViewers("new", 2000+ShareViewerRevocationTTLSeconds)
+	_, _ = s.RevokeShareViewers("old", 1000)
+	_, _ = s.RevokeShareViewers("edge", 2000)
+	_, _ = s.RevokeShareViewers("new", 2000+ShareViewerRevocationTTLSeconds)
 	if _, ok := s.ShareViewerRevocation("old"); ok {
 		t.Error("a cutoff older than the ttl was kept")
 	}
@@ -166,7 +194,7 @@ func TestShareViewerCutoffsAgeOutAndCanBeForgotten(t *testing.T) {
 		t.Error("forget dropped another session's cutoff")
 	}
 	// A re-revoke after a forget is ordered as the newest again.
-	s.RevokeShareViewers("edge", 3000+ShareViewerRevocationTTLSeconds)
+	_, _ = s.RevokeShareViewers("edge", 3000+ShareViewerRevocationTTLSeconds)
 	if _, ok := s.ShareViewerRevocation("edge"); !ok {
 		t.Error("re-revoke after forget lost")
 	}

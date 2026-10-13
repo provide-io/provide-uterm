@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -20,6 +21,8 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/tunnel"
 )
 
 // closeWatcher is a browser that records its frames and, when the server
@@ -211,7 +214,7 @@ func TestRevokeRaceSocketRegisteredAfterTheScanIsClosed(t *testing.T) {
 	defer closeFn()
 	prev := browserPreRegisterHook
 	browserPreRegisterHook = func(workerID string) {
-		ts.srv.deps.Authz.RevokeShareViewers(workerID, ts.srv.deps.Clock.Wall())
+		_, _ = ts.srv.deps.Authz.RevokeShareViewers(workerID, ts.srv.deps.Clock.Wall())
 	}
 	defer func() { browserPreRegisterHook = prev }()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -281,7 +284,7 @@ func TestShareViewerStreamOpenedAfterTheCutoffEndsAtOnce(t *testing.T) {
 	ts := newTestServer(t, nil)
 	ts.reg.add("bb", "owner1", "public")
 	prev := sseOpenHook
-	sseOpenHook = func(id string) { ts.srv.deps.Authz.RevokeShareViewers(id, ts.srv.deps.Clock.Wall()) }
+	sseOpenHook = func(id string) { _, _ = ts.srv.deps.Authz.RevokeShareViewers(id, ts.srv.deps.Clock.Wall()) }
 	defer func() { sseOpenHook = prev }()
 	rec := ts.do("GET", "/api/sessions/bb/events/stream", "", flat(headers("share:bb:blackbetty:7", "viewer", 100)))
 	if rec.Body.String() != "data: {\"type\":\"viewer_access_revoked\",\"reason\":\"viewer access revoked\"}\n\n" {
@@ -368,4 +371,100 @@ func TestDeletingASessionForgetsItsCutoff(t *testing.T) {
 	if _, ok := ts.srv.deps.Authz.ShareViewerRevocation("bb"); ok {
 		t.Fatal("cutoff kept after delete")
 	}
+}
+
+// TestTunnelViewersAreRevokedByRotationNotByTheViewerCutoff: revoke, rotate,
+// and the new tunnel share link is admitted while the old one is not.
+func TestTunnelViewersAreRevokedByRotationNotByTheViewerCutoff(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("tun", "op1", "private")
+	ts.srv.deps.TunnelStore.PutToken("tun", tunnel.TokenRecord{
+		ShareTokenHash: tunnel.HashToken("old-share"), TunnelType: "terminal", ExpiresAt: farFuture,
+	})
+	read := func(token string) int {
+		return ts.do("GET", "/api/sessions/tun", "", map[string]string{"Cookie": "uterm_tunnel_tun=" + token}).Code
+	}
+	if code := read("old-share"); code != http.StatusOK {
+		t.Fatalf("tunnel viewer before revoke: %d", code)
+	}
+	if rec := ts.do("POST", "/api/sessions/tun/viewers/revoke", "", operatorHeaders()); rec.Code != http.StatusOK {
+		t.Fatalf("revoke: %d %s", rec.Code, rec.Body.String())
+	}
+	if code := read("old-share"); code != http.StatusOK {
+		t.Fatalf("tunnel viewer after a viewer revoke: %d (tunnel shares are out of scope)", code)
+	}
+	rec := ts.do("POST", "/api/tunnels/tun/tokens/rotate", "", operatorHeaders())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rotate: %d %s", rec.Code, rec.Body.String())
+	}
+	shareURL, _ := bodyMap(t, rec.Body.Bytes())["share_url"].(string)
+	landed := ts.do("GET", shareURL[strings.Index(shareURL, "/s/"):], "", nil)
+	cookie := landed.Header().Get("Set-Cookie")
+	if landed.Code != http.StatusFound || !strings.HasPrefix(cookie, "uterm_tunnel_tun=") {
+		t.Fatalf("invite: %d %q", landed.Code, cookie)
+	}
+	newToken := strings.TrimPrefix(strings.SplitN(cookie, ";", 2)[0], "uterm_tunnel_tun=")
+	if code := read(newToken); code != http.StatusOK {
+		t.Fatalf("new tunnel viewer after rotation: %d", code)
+	}
+	if code := read("old-share"); code != http.StatusUnauthorized {
+		t.Fatalf("old tunnel viewer after rotation: %d", code)
+	}
+}
+
+func TestAFullCutoffTableAnswers429(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	now := ts.srv.deps.Clock.Wall()
+	for i := 0; i < serverauth.ShareViewerRevocationsMax; i++ {
+		_, _ = ts.srv.deps.Authz.RevokeShareViewers(fmt.Sprintf("other-%d", i), now)
+	}
+	rec := ts.do("POST", "/api/sessions/bb/viewers/revoke", "", adminHeaders())
+	if rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), "too many sessions with revoked viewers") {
+		t.Fatalf("full table: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestALongPollInFlightWhenItsViewerIsRevokedAnswers403(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	ts.reg.watchHook = func() { _, _ = ts.srv.deps.Authz.RevokeShareViewers("bb", ts.srv.deps.Clock.Wall()) }
+	rec := ts.do("GET", "/api/sessions/bb/events/watch", "", flat(headers("share:bb:blackbetty:7", "viewer", 100)))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("revoked mid-poll: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := ts.do("GET", "/api/sessions/bb/events/watch", "", adminHeaders()); rec.Code != http.StatusOK {
+		t.Fatalf("admin poll: %d", rec.Code)
+	}
+}
+
+// TestARevokedSocketThatIgnoresTheCloseIsDroppedAfterTheGrace: a peer that
+// never reads cannot answer the close handshake; the revoke stops waiting on it
+// after the grace, and the connection is dropped once the handshake times out.
+func TestARevokedSocketThatIgnoresTheCloseIsDroppedAfterTheGrace(t *testing.T) {
+	prev := browserCloseGrace
+	browserCloseGrace = 200 * time.Millisecond
+	defer func() { browserCloseGrace = prev }()
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	base, closeFn := wsServer(t, ts)
+	defer closeFn()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, base+"/ws/browser/bb/term", &websocket.DialOptions{
+		HTTPHeader: headers("share:bb:blackbetty:7", "viewer", 100),
+	})
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+	waitUntil(t, 5*time.Second, func() bool { return ts.hub.BrowserCount(context.Background(), "bb") == 1 })
+	started := time.Now()
+	if rec := ts.do("POST", "/api/sessions/bb/viewers/revoke", "", adminHeaders()); rec.Code != http.StatusOK {
+		t.Fatalf("revoke: %d", rec.Code)
+	}
+	if took := time.Since(started); took > 2*time.Second {
+		t.Fatalf("revoke waited %v on a peer that ignores the close", took)
+	}
+	waitUntil(t, 9*time.Second, func() bool { return ts.hub.BrowserCount(context.Background(), "bb") == 0 })
 }

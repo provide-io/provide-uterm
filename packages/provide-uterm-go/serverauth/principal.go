@@ -76,6 +76,10 @@ type Principal struct {
 	// AdminSessionScope confines an admin role to a single session id (tunnel
 	// share-operator). Nil means a global admin.
 	AdminSessionScope *string
+	// TunnelShare marks the principal a tunnel share cookie resolves to. Tunnel
+	// shares are revoked by token rotation, so the share-viewer cutoff (for
+	// embedder-minted share JWTs) never applies to them.
+	TunnelShare bool
 }
 
 // Name returns DisplayName when set, else SubjectID (Principal.name property).

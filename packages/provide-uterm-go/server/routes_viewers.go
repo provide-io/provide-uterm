@@ -34,10 +34,16 @@ func (s *Server) handleRevokeViewers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	authz := s.deps.Authz
-	revokedAt := authz.RevokeShareViewers(id, s.deps.Clock.Wall())
-	closed := s.deps.Hub.CloseBrowsersWhere(r.Context(), id, func(ws hub.BrowserConn, role string) bool {
+	revokedAt, err := authz.RevokeShareViewers(id, s.deps.Clock.Wall())
+	if err != nil {
+		detailError(w, http.StatusTooManyRequests, "too many sessions with revoked viewers; try again later")
+		return
+	}
+	// By principal alone: a provider can resolve a share viewer to a role other
+	// than viewer, and what is revoked is the token, not the role.
+	closed := s.deps.Hub.CloseBrowsersWhere(r.Context(), id, func(ws hub.BrowserConn, _ string) bool {
 		bc, isBrowser := ws.(*browserConn)
-		return isBrowser && role == "viewer" && authz.ShareViewerRevoked(bc.principal, id)
+		return isBrowser && authz.ShareViewerRevoked(bc.principal, id)
 	}, viewerRevokedCloseCode, viewerRevokedReason)
 	// Live event streams opened with a revoked token end too, and count.
 	closed += s.viewerStreams.revoke(authz, id)

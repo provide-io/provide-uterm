@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 
@@ -67,9 +68,24 @@ type browserConn struct {
 	principal *serverauth.Principal
 }
 
-// Close closes the browser socket with a WS close code (hub.BrowserCloser).
+// browserCloseGrace is how long a caller waits on a close before moving on. A
+// var so tests can shorten it.
+var browserCloseGrace = 2 * time.Second
+
+// Close closes the browser socket with a WS close code (hub.BrowserCloser). A
+// peer that does not answer the close handshake is not waited on past
+// browserCloseGrace: the close carries on in the background, where
+// coder/websocket drops the connection once its own handshake timeout passes,
+// so the caller (a viewer revoke waits on its closes) is not held by it.
 func (c *browserConn) Close(_ context.Context, code int, reason string) error {
-	return c.conn.Close(websocket.StatusCode(code), reason)
+	done := make(chan error, 1)
+	go func() { done <- c.conn.Close(websocket.StatusCode(code), reason) }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(browserCloseGrace):
+		return nil
+	}
 }
 
 // UtermPrincipal exposes the resolved principal to the hub identity provider

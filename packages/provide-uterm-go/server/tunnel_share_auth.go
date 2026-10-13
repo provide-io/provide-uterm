@@ -103,6 +103,8 @@ func (s *Server) resolveShareprincipal(r *http.Request) *serverauth.Principal {
 			Roles:     serverauth.NewSet("viewer"),
 			Scopes:    serverauth.NewSet("session.read"),
 			Claims:    map[string]any{},
+			// Revoked by rotating the tunnel's tokens, never by the viewer cutoff.
+			TunnelShare: true,
 		}
 	}
 	s.logger.Info("tunnel_token_validation_failed", "session_id", sessionID, "source_ip", src)

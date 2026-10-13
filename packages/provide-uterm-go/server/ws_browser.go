@@ -121,7 +121,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	// then and this registration, after its own scan of the sockets. The revoke
 	// records its cutoff before scanning under the hub lock, so either the scan
 	// saw this socket or this check sees the cutoff.
-	if role == "viewer" && s.deps.Authz.ShareViewerRevoked(principal, workerID) {
+	if s.deps.Authz.ShareViewerRevoked(principal, workerID) {
 		s.browserCleanup(bg, workerID, bc, false)
 		_ = conn.Close(websocket.StatusCode(viewerRevokedCloseCode), viewerRevokedReason)
 		return
