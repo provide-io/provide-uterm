@@ -9,11 +9,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
 
 // sseHeartbeatInterval matches the Python _HEARTBEAT_S. A var so tests can
 // observe a heartbeat without waiting 15 s.
 var sseHeartbeatInterval = 15 * time.Second
+
+// sseOpenHook runs after a share viewer's stream registers and before its
+// cutoff is checked: a test seam for the revoke-in-between race.
+var sseOpenHook = func(string) {}
 
 // registerSSERoutes wires the SSE event stream. Port of sse.py.
 func (s *Server) registerSSERoutes(mux *http.ServeMux) {
@@ -45,6 +51,21 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 	if pat := r.URL.Query().Get("pattern"); pat != "" {
 		pattern = &pat
 	}
+	// A share viewer's stream is registered so a revoke can end it, then checked
+	// once registered: a revoke between the read check and here would otherwise
+	// miss it.
+	var revoked chan struct{}
+	if p := principalOf(r); serverauth.IsShareViewer(p, id) {
+		var release func()
+		revoked, release = s.viewerStreams.register(id, p)
+		defer release()
+		sseOpenHook(id)
+		if s.deps.Authz.ShareViewerRevoked(p, id) {
+			w.WriteHeader(http.StatusOK)
+			sseWrite(w, flusher, canFlush, []byte(viewerRevokedEvent))
+			return
+		}
+	}
 	sub, cancel, err := bus.Watch(id, eventTypes, pattern)
 	if err != nil {
 		detailError(w, http.StatusInternalServerError, err.Error())
@@ -63,6 +84,9 @@ func (s *Server) handleEventStream(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
+			return
+		case <-revoked:
+			sseWrite(w, flusher, canFlush, []byte(viewerRevokedEvent))
 			return
 		case <-ticker.C:
 			if !sseWrite(w, flusher, canFlush, []byte(`{"type":"heartbeat"}`)) {

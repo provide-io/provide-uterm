@@ -123,6 +123,10 @@ type Server struct {
 	// Vite + vanilla manifests. Built in registerPageRoutes from deps.FrontendDir.
 	ui *uiManifests
 
+	// viewerStreams are the open event streams of share viewers, which a
+	// viewer revoke ends (routes_sse.go, routes_viewers.go).
+	viewerStreams shareViewerStreams
+
 	ready     atomic.Bool
 	startTime float64
 

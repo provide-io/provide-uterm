@@ -39,6 +39,8 @@ func (s *Server) handleRevokeViewers(w http.ResponseWriter, r *http.Request) {
 		bc, isBrowser := ws.(*browserConn)
 		return isBrowser && role == "viewer" && authz.ShareViewerRevoked(bc.principal, id)
 	}, viewerRevokedCloseCode, viewerRevokedReason)
+	// Live event streams opened with a revoked token end too, and count.
+	closed += s.viewerStreams.revoke(authz, id)
 	s.audit(r, "session.viewers.revoke", map[string]any{"session_id": id, "closed": closed, "revoked_at": revokedAt})
 	writeJSON(w, http.StatusOK, map[string]any{
 		"session_id":   id,

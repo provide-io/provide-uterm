@@ -111,9 +111,19 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	bc := &browserConn{wsBase: wsBase{conn: conn}, principal: principal}
 	canHijack := role == "admin"
 
+	browserPreRegisterHook(workerID)
 	state, err := s.deps.Hub.RegisterBrowser(bg, workerID, bc, role, true)
 	if err != nil {
 		_ = conn.Close(websocket.StatusPolicyViolation, "browser registration rejected")
+		return
+	}
+	// The role was decided before the upgrade, so a revoke can land between
+	// then and this registration, after its own scan of the sockets. The revoke
+	// records its cutoff before scanning under the hub lock, so either the scan
+	// saw this socket or this check sees the cutoff.
+	if role == "viewer" && s.deps.Authz.ShareViewerRevoked(principal, workerID) {
+		s.browserCleanup(bg, workerID, bc, false)
+		_ = conn.Close(websocket.StatusCode(viewerRevokedCloseCode), viewerRevokedReason)
 		return
 	}
 	if s.deps.BrowserSetupHook != nil && s.deps.BrowserSetupHook() != nil {
@@ -138,6 +148,10 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	s.deckOnDisconnect(workerID, bc)
 	s.browserCleanup(bg, workerID, bc, owned)
 }
+
+// browserPreRegisterHook runs just before a browser registers with the hub: a
+// test seam for a revoke landing between the role decision and registration.
+var browserPreRegisterHook = func(string) {}
 
 // handshakeSend writes one handshake frame; swappable in tests, because a
 // socket that dies between the hello and the hijack-state frame cannot be

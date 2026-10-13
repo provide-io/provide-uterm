@@ -9,6 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
+
+	jwt "github.com/golang-jwt/jwt/v5"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
@@ -95,21 +98,22 @@ func TestShareViewerRevocationCutoff(t *testing.T) {
 
 func TestShareViewerRevocationsAreBounded(t *testing.T) {
 	s := NewAuthorizationServiceWith(LocalAuthorizationProvider{})
+	const base = 1e9
 	for i := 0; i < ShareViewerRevocationsMax; i++ {
-		s.RevokeShareViewers(fmt.Sprintf("s%d", i), float64(i))
+		s.RevokeShareViewers(fmt.Sprintf("s%d", i), base+float64(i))
 	}
-	s.RevokeShareViewers("s0", 1e6) // now the newest, so s1 falls out next
-	s.RevokeShareViewers("overflow", 2e6)
+	s.RevokeShareViewers("s0", base+1e4) // now the newest, so s1 falls out next
+	s.RevokeShareViewers("overflow", base+2e4)
 	if _, ok := s.ShareViewerRevocation("s1"); ok {
 		t.Error("oldest cutoff was not forgotten")
 	}
-	if got, _ := s.ShareViewerRevocation("s0"); got != 1e6 {
+	if got, _ := s.ShareViewerRevocation("s0"); got != base+1e4 {
 		t.Errorf("s0 cutoff = %v", got)
 	}
-	if got, _ := s.ShareViewerRevocation("s2"); got != 2 {
+	if got, _ := s.ShareViewerRevocation("s2"); got != base+2 {
 		t.Errorf("s2 cutoff = %v", got)
 	}
-	if got, _ := s.ShareViewerRevocation("overflow"); got != 2e6 {
+	if got, _ := s.ShareViewerRevocation("overflow"); got != base+2e4 {
 		t.Errorf("overflow cutoff = %v", got)
 	}
 }
@@ -136,5 +140,57 @@ func TestRevokedShareViewerCannotRead(t *testing.T) {
 		if !s.CanReadSession(fresh, publicSession("s1")) || !s.CanReadRecording(fresh, publicSession("s1")) {
 			t.Error("a token issued after the cutoff was refused")
 		}
+	}
+}
+
+func TestShareViewerCutoffsAgeOutAndCanBeForgotten(t *testing.T) {
+	if ShareViewerRevocationTTLSeconds != 86400 {
+		t.Fatalf("ttl %v", ShareViewerRevocationTTLSeconds)
+	}
+	s := NewAuthorizationService()
+	s.RevokeShareViewers("old", 1000)
+	s.RevokeShareViewers("edge", 2000)
+	s.RevokeShareViewers("new", 2000+ShareViewerRevocationTTLSeconds)
+	if _, ok := s.ShareViewerRevocation("old"); ok {
+		t.Error("a cutoff older than the ttl was kept")
+	}
+	if got, ok := s.ShareViewerRevocation("edge"); !ok || got != 2000 {
+		t.Errorf("a cutoff exactly ttl old was dropped: %v %v", got, ok)
+	}
+	s.ForgetShareViewers("edge")
+	s.ForgetShareViewers("never-revoked")
+	if _, ok := s.ShareViewerRevocation("edge"); ok {
+		t.Error("forget left the cutoff")
+	}
+	if _, ok := s.ShareViewerRevocation("new"); !ok {
+		t.Error("forget dropped another session's cutoff")
+	}
+	// A re-revoke after a forget is ordered as the newest again.
+	s.RevokeShareViewers("edge", 3000+ShareViewerRevocationTTLSeconds)
+	if _, ok := s.ShareViewerRevocation("edge"); !ok {
+		t.Error("re-revoke after forget lost")
+	}
+}
+
+// A token whose iat is in the future (beyond the clock skew) would be immune to
+// every cutoff, so it is refused at authentication, as PyJWT refuses it.
+func TestJWTWithAFutureIatIsRefused(t *testing.T) {
+	idp := NewLocalIdentityProvider(jwtAuthConfig(), nil)
+	mint := func(iatOffset int64) string {
+		now := time.Now().Unix()
+		tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub": "share:s1:blackbetty:7", "roles": []string{"viewer"}, "iss": "provide-uterm",
+			"aud": "provide-uterm-server", "iat": now + iatOffset, "exp": now + 7200,
+		}).SignedString([]byte(testKey))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+	if _, err := idp.PrincipalFromJWTToken(mint(3600)); err == nil {
+		t.Error("a token issued an hour from now was accepted")
+	}
+	if _, err := idp.PrincipalFromJWTToken(mint(10)); err != nil {
+		t.Errorf("a token within the clock skew was refused: %v", err)
 	}
 }

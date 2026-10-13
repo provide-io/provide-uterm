@@ -6,11 +6,14 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -195,5 +198,174 @@ func TestRevokeViewersWithNoLiveSocketsClosesNothing(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
 	if body["closed"] != 0.0 {
 		t.Fatalf("closed %v", body["closed"])
+	}
+}
+
+// TestRevokeRaceSocketRegisteredAfterTheScanIsClosed: the role was resolved
+// before the revoke, the socket registers after the revoke's scan. The check
+// right after registration must close it.
+func TestRevokeRaceSocketRegisteredAfterTheScanIsClosed(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	base, closeFn := wsServer(t, ts)
+	defer closeFn()
+	prev := browserPreRegisterHook
+	browserPreRegisterHook = func(workerID string) {
+		ts.srv.deps.Authz.RevokeShareViewers(workerID, ts.srv.deps.Clock.Wall())
+	}
+	defer func() { browserPreRegisterHook = prev }()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	watcher := dialWatcher(t, ctx, base+"/ws/browser/bb/term", headers("share:bb:blackbetty:7", "viewer", 100))
+	ce := watcher.waitClose(t)
+	if ce.Code != 4410 || ce.Reason != "viewer access revoked" {
+		t.Fatalf("closed with %d %q", ce.Code, ce.Reason)
+	}
+	// An admin registering after a revoke is not touched.
+	admin := dialWatcher(t, ctx, base+"/ws/browser/bb/term", headers("admin1", "admin", 100))
+	defer func() { _ = admin.conn.Close(websocket.StatusNormalClosure, "") }()
+	admin.waitFrame(t, "hello")
+}
+
+func TestRevokeEndsALiveShareViewerEventStream(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	ts.srv.MarkReady()
+	httpSrv := httptest.NewServer(ts.srv.Handler())
+	defer httpSrv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	open := func(subject, role string) *bufio.Reader {
+		req, _ := http.NewRequestWithContext(ctx, "GET", httpSrv.URL+"/api/sessions/bb/events/stream", nil)
+		for k, v := range headers(subject, role, 100) {
+			req.Header[k] = v
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			t.Fatalf("open stream: %v %v", resp, err)
+		}
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		return bufio.NewReader(resp.Body)
+	}
+	watcher := open("share:bb:blackbetty:7", "viewer")
+	plain := open("alice", "viewer")
+	waitUntil(t, 5*time.Second, func() bool { return ts.srv.viewerStreams.count("bb") == 1 })
+
+	rec := ts.do("POST", "/api/sessions/bb/viewers/revoke", "", adminHeaders())
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"closed":1`) {
+		t.Fatalf("revoke: %d %s", rec.Code, rec.Body.String())
+	}
+	line, err := watcher.ReadString('\n')
+	if err != nil || line != "data: {\"type\":\"viewer_access_revoked\",\"reason\":\"viewer access revoked\"}\n" {
+		t.Fatalf("watcher got %q %v", line, err)
+	}
+	if _, err := watcher.ReadString('\n'); err != nil {
+		t.Fatalf("blank separator: %v", err)
+	}
+	if _, err := watcher.ReadString('\n'); err == nil {
+		t.Fatal("the stream was not ended")
+	}
+	if ts.srv.viewerStreams.count("bb") != 0 {
+		t.Fatal("ended stream still registered")
+	}
+	// The plain viewer's stream is still open: the worker going away ends it.
+	ts.hub.EventBus().CloseWorker("bb")
+	if line, _ := plain.ReadString('\n'); !strings.Contains(line, "worker_disconnected") {
+		t.Fatalf("plain viewer got %q", line)
+	}
+}
+
+func TestShareViewerStreamOpenedAfterTheCutoffEndsAtOnce(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	prev := sseOpenHook
+	sseOpenHook = func(id string) { ts.srv.deps.Authz.RevokeShareViewers(id, ts.srv.deps.Clock.Wall()) }
+	defer func() { sseOpenHook = prev }()
+	rec := ts.do("GET", "/api/sessions/bb/events/stream", "", flat(headers("share:bb:blackbetty:7", "viewer", 100)))
+	if rec.Body.String() != "data: {\"type\":\"viewer_access_revoked\",\"reason\":\"viewer access revoked\"}\n\n" {
+		t.Fatalf("body %q", rec.Body.String())
+	}
+}
+
+func TestRevokeRefusesOtherOwnersAndAdminsScopedElsewhere(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	path := "/api/sessions/bb/viewers/revoke"
+	if rec := ts.do("POST", path, "", map[string]string{"X-Subject": "owner2", "X-Role": "operator"}); rec.Code != http.StatusForbidden {
+		t.Fatalf("another session's owner: %d", rec.Code)
+	}
+	scoped := map[string]string{"X-Subject": "scoped", "X-Role": "admin", "X-Admin-Session-Scope": "elsewhere"}
+	if rec := ts.do("POST", path, "", scoped); rec.Code != http.StatusForbidden {
+		t.Fatalf("admin scoped to another session: %d", rec.Code)
+	}
+	scoped["X-Admin-Session-Scope"] = "bb"
+	if rec := ts.do("POST", path, "", scoped); rec.Code != http.StatusOK {
+		t.Fatalf("admin scoped to this session: %d", rec.Code)
+	}
+}
+
+func TestRevokeLeavesTheOwnerAndTheHijackHolderConnected(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	base, closeFn := wsServer(t, ts)
+	defer closeFn()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	worker, _, err := websocket.Dial(ctx, base+"/ws/worker/bb/term", nil)
+	if err != nil {
+		t.Fatalf("worker dial: %v", err)
+	}
+	defer func() { _ = worker.Close(websocket.StatusNormalClosure, "") }()
+	go func() {
+		for {
+			if _, _, err := worker.Read(ctx); err != nil {
+				return
+			}
+		}
+	}()
+	waitUntil(t, 5*time.Second, func() bool { return ts.hub.Registry.Contains("bb") })
+
+	holder := dialWatcher(t, ctx, base+"/ws/browser/bb/term", headers("admin1", "admin", 100))
+	owner := dialWatcher(t, ctx, base+"/ws/browser/bb/term", headers("owner1", "operator", 100))
+	defer func() {
+		_ = holder.conn.Close(websocket.StatusNormalClosure, "")
+		_ = owner.conn.Close(websocket.StatusNormalClosure, "")
+	}()
+	holder.waitFrame(t, "hello")
+	if role := owner.waitFrame(t, "hello")["role"]; role != "operator" {
+		t.Fatalf("owner role %v", role)
+	}
+	send := func(w *closeWatcher, msg map[string]any) {
+		payload, _ := controlchannel.EncodeControlFrame(msg)
+		if err := w.conn.Write(ctx, websocket.MessageText, []byte(payload)); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	send(holder, map[string]any{"type": "hijack_request"})
+	for holder.waitFrame(t, "hijack_state")["owner"] != "me" {
+	}
+	rec := ts.do("POST", "/api/sessions/bb/viewers/revoke", "", flat(headers("owner1", "operator", 100)))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"closed":0`) {
+		t.Fatalf("revoke: %d %s", rec.Code, rec.Body.String())
+	}
+	for _, w := range []*closeWatcher{holder, owner} {
+		send(w, map[string]any{"type": "ping"})
+		w.waitFrame(t, "pong")
+	}
+}
+
+func TestDeletingASessionForgetsItsCutoff(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	if rec := ts.do("POST", "/api/sessions/bb/viewers/revoke", "", adminHeaders()); rec.Code != http.StatusOK {
+		t.Fatalf("revoke %d", rec.Code)
+	}
+	if rec := ts.do("DELETE", "/api/sessions/bb", "", adminHeaders()); rec.Code != http.StatusOK {
+		t.Fatalf("delete %d", rec.Code)
+	}
+	if _, ok := ts.srv.deps.Authz.ShareViewerRevocation("bb"); ok {
+		t.Fatal("cutoff kept after delete")
 	}
 }

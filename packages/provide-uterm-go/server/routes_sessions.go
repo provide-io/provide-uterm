@@ -275,6 +275,8 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.deps.Registry.DeleteSession(r.Context(), id)
+	// The session is gone, so is its share-viewer cutoff.
+	s.deps.Authz.ForgetShareViewers(id)
 	s.audit(r, "session.delete", map[string]any{"session_id": id})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }

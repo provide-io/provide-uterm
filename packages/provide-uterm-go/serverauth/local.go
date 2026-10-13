@@ -195,6 +195,9 @@ func (p *LocalIdentityProvider) PrincipalFromJWTToken(token string) (*Principal,
 		jwt.WithAudience(p.Auth.JWTAudience),
 		jwt.WithLeeway(time.Duration(skew)*time.Second),
 		jwt.WithExpirationRequired(),
+		// An iat in the future (beyond the skew) would make a share token immune
+		// to every viewer-revocation cutoff; PyJWT refuses it, and so does this.
+		jwt.WithIssuedAt(),
 	)
 	claims := jwt.MapClaims{}
 	if _, err := parser.ParseWithClaims(token, claims, p.jwtKeyFunc); err != nil {

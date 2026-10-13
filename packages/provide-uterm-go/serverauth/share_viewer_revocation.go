@@ -18,6 +18,12 @@ import (
 // later revocations.
 const ShareViewerRevocationsMax = 10000
 
+// ShareViewerRevocationTTLSeconds is how long a cutoff is kept (port of
+// SHARE_VIEWER_REVOCATION_TTL_S). A cutoff only matters while a token issued
+// before it can still be valid; ageing out rather than only evicting by count
+// means nobody can push another session's fresh cutoff out of the table.
+const ShareViewerRevocationTTLSeconds = 86400.0
+
 // shareViewerRevocations is the per-session cutoff table behind
 // AuthorizationService. The zero value is ready to use.
 type shareViewerRevocations struct {
@@ -71,11 +77,27 @@ func (s *AuthorizationService) RevokeShareViewers(sessionID string, now float64)
 	}
 	r.cutoffs[sessionID] = now
 	r.order = append(r.order, sessionID)
+	// Order is revocation order, so the stale cutoffs are at the front.
+	for r.cutoffs[r.order[0]] < now-ShareViewerRevocationTTLSeconds {
+		delete(r.cutoffs, r.order[0])
+		r.order = r.order[1:]
+	}
 	for len(r.order) > ShareViewerRevocationsMax {
 		delete(r.cutoffs, r.order[0])
 		r.order = r.order[1:]
 	}
 	return now
+}
+
+// ForgetShareViewers drops sessionID's cutoff: the session was deleted.
+func (s *AuthorizationService) ForgetShareViewers(sessionID string) {
+	r := &s.revocations
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, seen := r.cutoffs[sessionID]; seen {
+		delete(r.cutoffs, sessionID)
+		r.order = slices.DeleteFunc(r.order, func(id string) bool { return id == sessionID })
+	}
 }
 
 // ShareViewerRevocation returns the cutoff recorded for sessionID, if any.
