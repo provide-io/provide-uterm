@@ -48,6 +48,16 @@ def closer(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     return mock
 
 
+@pytest.fixture(autouse=True)
+def streams(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    registry = MagicMock(name="streams")
+    registry.revoke = MagicMock(return_value=3)
+    finder = MagicMock(return_value=registry)
+    monkeypatch.setattr(viewers, "share_viewer_streams", finder)
+    registry.finder = finder
+    return registry
+
+
 @pytest.fixture
 def audit(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     mock = MagicMock()
@@ -67,16 +77,21 @@ async def test_revoke_asks_for_the_update_capability_on_this_session(closer: Asy
     request.app.state.uterm_registry.get_definition.assert_awaited_once_with(_SID)
 
 
-async def test_revoke_records_the_cutoff_then_closes_through_the_hub(closer: AsyncMock, audit: MagicMock) -> None:
+async def test_revoke_records_the_cutoff_then_closes_through_the_hub(
+    closer: AsyncMock, audit: MagicMock, streams: MagicMock
+) -> None:
     request = _request()
     result = await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
     az = request.app.state.uterm_authz
     az.revoke_share_viewers.assert_called_once_with(_SID)
     closer.assert_awaited_once_with(request.app.state.uterm_hub, az, _SID)
+    # Event streams are ended too, and counted with the sockets: 2 + 3.
+    streams.finder.assert_called_once_with(request.app)
+    streams.revoke.assert_called_once_with(az, _SID)
     assert result == {
         "session_id": _SID,
         "revoked_at": 123.5,
-        "closed": 2,
+        "closed": 5,
         "close_code": 4410,
         "close_reason": "viewer access revoked",
     }
@@ -88,7 +103,7 @@ async def test_revoke_leaves_an_audit_record(closer: AsyncMock, audit: MagicMock
         "session.viewers.revoke",
         principal="owner-1",
         session_id=_SID,
-        detail={"closed": 2, "revoked_at": 123.5},
+        detail={"closed": 5, "revoked_at": 123.5},
         source_ip="10.0.0.9",
     )
 

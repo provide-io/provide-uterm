@@ -257,6 +257,9 @@ def session_capability_handlers() -> dict[str, Callable[..., object]]:
         # under the same ID.
         tunnel_tokens = cast("dict[str, dict[str, object]]", request.app.state.uterm_tunnel_tokens)
         tunnel_tokens.pop(session_id, None)
+        # And its share-viewer cutoff: the session is gone, and keeping cutoffs
+        # for deleted sessions is what would let the table fill up.
+        az.forget_share_viewers(session_id)
         audit_event(
             "session.delete",
             principal=p.subject_id,

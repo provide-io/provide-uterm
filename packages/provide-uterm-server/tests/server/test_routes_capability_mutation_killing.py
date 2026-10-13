@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -99,10 +99,22 @@ class TestSseCapabilityHandler:
         az = MagicMock()
         az.can_read_session = AsyncMock(return_value=True)
 
-        resp = await ep(_sse_request(registry=reg, authz_obj=az, principal=principal), "s1")
+        wrapped = _gen()
+        wrap = MagicMock(return_value=wrapped)
+        streams = object()
+        with (
+            patch("provide.uterm.server.routes.sse.stream_until_revoked", wrap),
+            patch("provide.uterm.server.routes.sse.share_viewer_streams", MagicMock(return_value=streams)) as find,
+        ):
+            req = _sse_request(registry=reg, authz_obj=az, principal=principal)
+            resp = await ep(req, "s1")
         reg.get_definition.assert_awaited_once_with("s1")
         az.can_read_session.assert_awaited_once_with(principal, definition)
-        assert resp.body_iterator is gen
+        # The registry's stream is relayed through the revocation wrapper, which
+        # is told whose stream it is and for which session.
+        find.assert_called_once_with(req.app)
+        wrap.assert_called_once_with(gen, streams, az, principal, "s1")
+        assert resp.body_iterator is wrapped
 
     async def test_sets_the_proxy_buffering_headers(self) -> None:
         """These two headers are what stop a proxy buffering the stream shut.

@@ -63,6 +63,12 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
 # oldest cutoff is forgotten, which can only matter for a share token that
 # outlived thousands of later revocations.
 SHARE_VIEWER_REVOCATIONS_MAX = 10_000
+# How long a cutoff is kept. A cutoff only matters while a token issued before
+# it can still be valid, so it outlives any share token an embedder should
+# mint (blackbetty's live 60 s); past this it is dropped. Ageing out rather than
+# only evicting by count means nobody can push another session's fresh cutoff
+# out of the table by revoking many sessions of their own.
+SHARE_VIEWER_REVOCATION_TTL_S = 86_400
 
 
 def is_share_viewer(principal: Principal, session_id: str) -> bool:
@@ -397,9 +403,16 @@ class AuthorizationService:
         revocations = self._share_viewer_revocations
         revocations.pop(session_id, None)
         revocations[session_id] = cutoff
+        # Insertion order is revocation order, so the stale ones are in front.
+        while revocations[oldest := next(iter(revocations))] < cutoff - SHARE_VIEWER_REVOCATION_TTL_S:
+            del revocations[oldest]
         while len(revocations) > SHARE_VIEWER_REVOCATIONS_MAX:
             del revocations[next(iter(revocations))]
         return cutoff
+
+    def forget_share_viewers(self, session_id: str) -> None:
+        """Drop the session's cutoff: it was deleted, so nothing is left to refuse."""
+        self._share_viewer_revocations.pop(session_id, None)
 
     def share_viewer_revocation(self, session_id: str) -> float | None:
         """The cutoff recorded for ``session_id``, if its viewers were revoked."""

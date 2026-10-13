@@ -28,6 +28,7 @@ from provide.uterm.server.viewer_revocation import (
     VIEWER_REVOKED_CLOSE_CODE,
     VIEWER_REVOKED_REASON,
     close_revoked_viewers,
+    share_viewer_streams,
 )
 
 VIEWERS_REVOKE_PATH = "/sessions/{session_id}/viewers/revoke"
@@ -35,6 +36,9 @@ VIEWERS_REVOKE_PATH = "/sessions/{session_id}/viewers/revoke"
 
 async def revoke_viewers(request: Request, session_id: SessionId) -> dict[str, Any]:
     """Refuse the session's existing share-viewer tokens and close their sockets.
+
+    ``closed`` counts both: browser sockets closed with 4410 and event streams
+    ended with a ``viewer_access_revoked`` event.
 
     Allowed to whoever may change the session (``session.control.update``): its
     owner, a session-scoped admin, a global admin. Tokens issued after the
@@ -48,6 +52,7 @@ async def revoke_viewers(request: Request, session_id: SessionId) -> dict[str, A
         raise HTTPException(status_code=403, detail="insufficient privileges")
     revoked_at = az.revoke_share_viewers(session_id)
     closed = await close_revoked_viewers(request.app.state.uterm_hub, az, session_id)
+    closed += share_viewer_streams(request.app).revoke(az, session_id)
     audit_event(
         "session.viewers.revoke",
         principal=p.subject_id,

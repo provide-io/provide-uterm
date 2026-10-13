@@ -156,15 +156,16 @@ def test_a_later_revocation_moves_the_cutoff_forward() -> None:
 
 def test_the_cutoff_table_is_bounded_and_forgets_the_oldest() -> None:
     service = AuthorizationService()
+    base = 1.0e9
     for index in range(SHARE_VIEWER_REVOCATIONS_MAX):
-        service.revoke_share_viewers(f"s{index}", now=float(index))
+        service.revoke_share_viewers(f"s{index}", now=base + index)
     # Re-revoking s0 makes it the newest, so s1 is the one that falls out.
-    service.revoke_share_viewers("s0", now=1.0e6)
-    service.revoke_share_viewers("overflow", now=2.0e6)
+    service.revoke_share_viewers("s0", now=base + 1.0e4)
+    service.revoke_share_viewers("overflow", now=base + 2.0e4)
     assert service.share_viewer_revocation("s1") is None
-    assert service.share_viewer_revocation("s0") == 1.0e6
-    assert service.share_viewer_revocation("s2") == 2.0
-    assert service.share_viewer_revocation("overflow") == 2.0e6
+    assert service.share_viewer_revocation("s0") == base + 1.0e4
+    assert service.share_viewer_revocation("s2") == base + 2
+    assert service.share_viewer_revocation("overflow") == base + 2.0e4
 
 
 async def test_reads_are_refused_to_a_revoked_share_viewer_even_on_a_public_session() -> None:
@@ -304,9 +305,12 @@ def _wait_for(browser: Any, frame_type: str) -> dict[str, Any]:
 
 
 def _close_of(browser: Any) -> WebSocketDisconnect:
+    # A ping first, so a socket that was wrongly left open answers it and the
+    # test fails on the pong instead of waiting forever for a close.
+    browser.send_json({"type": "ping"})
     with pytest.raises(WebSocketDisconnect) as caught:
         while True:
-            browser.receive_json()
+            assert browser.receive_json().get("type") != "pong", "socket was not closed"
     return caught.value
 
 
@@ -400,3 +404,270 @@ def test_revoking_viewers_requires_authentication() -> None:
     app = _app()
     with TestClient(app) as client:
         assert client.post(f"/api/sessions/{_SESSION}/viewers/revoke").status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Review follow-ups: ageing, pruning, the registration race, event streams
+# ---------------------------------------------------------------------------
+
+
+def test_cutoffs_older_than_the_ttl_age_out() -> None:
+    from provide.uterm.server.authorization import SHARE_VIEWER_REVOCATION_TTL_S
+
+    service = AuthorizationService()
+    service.revoke_share_viewers("old", now=1000.0)
+    service.revoke_share_viewers("edge", now=2000.0)
+    service.revoke_share_viewers("new", now=2000.0 + SHARE_VIEWER_REVOCATION_TTL_S)
+    assert service.share_viewer_revocation("old") is None
+    # Exactly TTL old is kept; only strictly older cutoffs go.
+    assert service.share_viewer_revocation("edge") == 2000.0
+    assert service.share_viewer_revocation("new") == 2000.0 + SHARE_VIEWER_REVOCATION_TTL_S
+    assert SHARE_VIEWER_REVOCATION_TTL_S == 86_400
+
+
+def test_forgetting_a_session_drops_only_its_cutoff() -> None:
+    service = AuthorizationService()
+    service.revoke_share_viewers("s1", now=1.0)
+    service.revoke_share_viewers("s2", now=2.0)
+    service.forget_share_viewers("s1")
+    service.forget_share_viewers("never-revoked")
+    assert service.share_viewer_revocation("s1") is None
+    assert service.share_viewer_revocation("s2") == 2.0
+
+
+def test_a_socket_is_judged_by_its_own_app_and_principal() -> None:
+    from provide.uterm.server.viewer_revocation import socket_share_viewer_revoked
+
+    service = AuthorizationService()
+    service.revoke_share_viewers("s1", now=500.0)
+    app = SimpleNamespace(state=SimpleNamespace(uterm_authz=service))
+    revoked = SimpleNamespace(app=app, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=100)))
+    fresh = SimpleNamespace(app=app, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=900)))
+    bare_hub = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()), state=revoked.state)
+    no_app = SimpleNamespace(state=revoked.state)
+    assert socket_share_viewer_revoked(revoked, "s1") is True
+    assert socket_share_viewer_revoked(fresh, "s1") is False
+    assert socket_share_viewer_revoked(bare_hub, "s1") is False
+    assert socket_share_viewer_revoked(no_app, "s1") is False
+
+
+async def _items(n: int, gate: asyncio.Event | None = None) -> Any:
+    for index in range(n):
+        yield f"item-{index}"
+    if gate is not None:
+        await gate.wait()
+
+
+async def test_a_stream_that_is_not_a_share_viewers_passes_straight_through() -> None:
+    from provide.uterm.server.viewer_revocation import ShareViewerStreams, stream_until_revoked
+
+    service = AuthorizationService()
+    streams = ShareViewerStreams()
+    alice = Principal(subject_id="alice", roles=frozenset({"viewer"}))
+    out = [item async for item in stream_until_revoked(_items(2), streams, service, alice, "s1")]
+    assert out == ["item-0", "item-1"]
+    assert streams.revoke(service, "s1") == 0
+
+
+async def test_a_share_viewer_stream_ends_when_its_session_is_revoked() -> None:
+    from provide.uterm.server.viewer_revocation import (
+        STREAM_REVOKED_EVENT,
+        ShareViewerStreams,
+        stream_until_revoked,
+    )
+
+    service = AuthorizationService()
+    streams = ShareViewerStreams()
+    gate = asyncio.Event()
+    watcher = _viewer("s1", iat=100)
+    newcomer = _viewer("s1", iat=10_000)
+    stream = stream_until_revoked(_items(1, gate), streams, service, watcher, "s1")
+    other = stream_until_revoked(_items(1, gate), streams, service, newcomer, "s1")
+    assert await stream.__anext__() == "item-0"
+    assert await other.__anext__() == "item-0"
+    pending = asyncio.ensure_future(stream.__anext__())
+    pending_other = asyncio.ensure_future(other.__anext__())
+    await asyncio.sleep(0)
+
+    service.revoke_share_viewers("s1", now=500.0)
+    assert streams.revoke(service, "s1") == 1
+    assert await pending == STREAM_REVOKED_EVENT
+    with pytest.raises(StopAsyncIteration):
+        await stream.__anext__()
+    # The newcomer's token postdates the cutoff: still streaming.
+    assert not pending_other.done()
+    gate.set()
+    with pytest.raises(StopAsyncIteration):
+        await pending_other
+    assert streams.revoke(service, "s1") == 0  # both unregistered
+
+
+async def test_a_share_viewer_stream_opened_after_the_cutoff_with_an_old_token_ends_at_once() -> None:
+    from provide.uterm.server.viewer_revocation import (
+        STREAM_REVOKED_EVENT,
+        ShareViewerStreams,
+        stream_until_revoked,
+    )
+
+    service = AuthorizationService()
+    service.revoke_share_viewers("s1", now=500.0)
+    out = [
+        item
+        async for item in stream_until_revoked(_items(3), ShareViewerStreams(), service, _viewer("s1", iat=1), "s1")
+    ]
+    assert out == [STREAM_REVOKED_EVENT]
+
+
+async def test_a_share_viewer_stream_that_runs_dry_ends_normally() -> None:
+    from provide.uterm.server.viewer_revocation import ShareViewerStreams, stream_until_revoked
+
+    service = AuthorizationService()
+    streams = ShareViewerStreams()
+    out = [item async for item in stream_until_revoked(_items(2), streams, service, _viewer("s1", iat=1), "s1")]
+    assert out == ["item-0", "item-1"]
+
+
+def test_the_app_keeps_one_stream_registry() -> None:
+    from provide.uterm.server.viewer_revocation import share_viewer_streams
+
+    app = SimpleNamespace(state=SimpleNamespace())
+    first = share_viewer_streams(app)
+    assert share_viewer_streams(app) is first
+
+
+def test_a_socket_registered_after_the_revoke_scan_is_closed_on_registration(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The race: role resolved before the cutoff, registration after the revoke's scan."""
+    app = _app()
+    watcher_token = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"])
+    hub = app.state.uterm_hub
+    real_register = hub.register_browser
+
+    async def register_after_revoke(worker_id: str, ws: Any, role: str, **kwargs: Any) -> Any:
+        app.state.uterm_authz.revoke_share_viewers(worker_id)
+        return await real_register(worker_id, ws, role, **kwargs)
+
+    monkeypatch.setattr(hub, "register_browser", register_after_revoke)
+    with (
+        TestClient(app) as client,
+        connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(watcher_token)) as watcher,
+    ):
+        closed = _close_of(watcher)
+    assert closed.code == VIEWER_REVOKED_CLOSE_CODE
+    assert closed.reason == VIEWER_REVOKED_REASON
+
+
+def test_an_admin_registered_after_a_revoke_is_not_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    app = _app()
+    hub = app.state.uterm_hub
+    real_register = hub.register_browser
+
+    async def register_after_revoke(worker_id: str, ws: Any, role: str, **kwargs: Any) -> Any:
+        app.state.uterm_authz.revoke_share_viewers(worker_id)
+        return await real_register(worker_id, ws, role, **kwargs)
+
+    monkeypatch.setattr(hub, "register_browser", register_after_revoke)
+    with (
+        TestClient(app) as client,
+        connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(_token("ops", ["admin"]))) as admin,
+    ):
+        assert _wait_for(admin, "hello")["role"] == "admin"
+
+
+def test_other_owners_and_admins_scoped_elsewhere_cannot_revoke() -> None:
+    app = _app()
+    path = f"/api/sessions/{_SESSION}/viewers/revoke"
+    with TestClient(app) as client:
+        admin = _bearer(_token("ops", ["admin"]))
+        assert client.patch(f"/api/sessions/{_SESSION}", json={"owner": "owner1"}, headers=admin).status_code == 200
+        assert client.post(path, headers=_bearer(_token("owner2", ["operator"]))).status_code == 403
+        scoped_elsewhere = jwt.encode(
+            {
+                "sub": "scoped",
+                "roles": ["admin"],
+                "admin_session_scope": "some-other-session",
+                "iss": "provide-uterm",
+                "aud": "provide-uterm-server",
+                "iat": int(time.time()),
+                "exp": int(time.time()) + 600,
+            },
+            key=_KEY,
+            algorithm="HS256",
+        )
+        assert client.post(path, headers=_bearer(scoped_elsewhere)).status_code == 403
+        assert client.post(path, headers=_bearer(_token("owner1", ["operator"]))).status_code == 200
+
+
+def test_the_owner_and_the_hijack_holder_keep_their_sockets_through_a_revoke() -> None:
+    app = _app()
+    path = f"/api/sessions/{_SESSION}/viewers/revoke"
+    admin_token = _token("ops", ["admin"])
+    owner_token = _token("owner1", ["operator"])
+    with (
+        TestClient(app) as client,
+        connect_test_ws(
+            client,
+            f"/ws/worker/{_SESSION}/term",
+            headers=_bearer(app.state.uterm_config.auth.worker_bearer_token),
+        ) as worker,
+    ):
+        assert worker.receive_json()["type"] == "snapshot_req"
+        assert (
+            client.patch(
+                f"/api/sessions/{_SESSION}", json={"owner": "owner1"}, headers=_bearer(admin_token)
+            ).status_code
+            == 200
+        )
+        with (
+            connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(admin_token)) as holder,
+            connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(owner_token)) as owner,
+        ):
+            _wait_for(holder, "hello")
+            assert _wait_for(owner, "hello")["role"] == "operator"
+            holder.send_json({"type": "hijack_request"})
+            while _wait_for(holder, "hijack_state").get("owner") != "me":
+                pass
+            assert client.post(path, headers=_bearer(owner_token)).json()["closed"] == 0
+            for keeper in (holder, owner):
+                keeper.send_json({"type": "ping"})
+                assert _wait_for(keeper, "pong")["type"] == "pong"
+
+
+def test_deleting_a_session_forgets_its_cutoff() -> None:
+    app = _app()
+    admin = _bearer(_token("ops", ["admin"]))
+    with TestClient(app) as client:
+        assert client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin).status_code == 200
+        assert app.state.uterm_authz.share_viewer_revocation(_SESSION) is not None
+        assert client.delete(f"/api/sessions/{_SESSION}", headers=admin).status_code == 200
+        assert app.state.uterm_authz.share_viewer_revocation(_SESSION) is None
+
+
+def test_a_live_share_viewer_event_stream_ends_on_revoke() -> None:
+    import threading
+
+    app = _app()
+    watcher_token = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"])
+    admin = _bearer(_token("ops", ["admin"]))
+    with TestClient(app) as client:
+        revoked: list[int] = []
+
+        def revoke_soon() -> None:
+            time.sleep(0.5)
+            revoked.append(client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin).json()["closed"])
+            # A stream the revoke failed to end is ended here instead, so the
+            # test fails on its last line rather than hanging.
+            time.sleep(1.0)
+            client.portal.call(app.state.uterm_hub.event_bus.close_worker, _SESSION)
+
+        # Started first: the test client hands back a streamed body only once the
+        # app has finished it, and only the revoke can finish this one.
+        thread = threading.Thread(target=revoke_soon)
+        thread.start()
+        with client.stream(
+            "GET", f"/api/sessions/{_SESSION}/events/stream", headers=_bearer(watcher_token)
+        ) as response:
+            assert response.status_code == 200
+            lines = [line for line in response.iter_lines() if line]
+        thread.join()
+    assert lines[-1] == 'data: {"type": "viewer_access_revoked", "reason": "viewer access revoked"}'
+    assert revoked == [1]

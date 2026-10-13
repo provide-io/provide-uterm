@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 
 from provide.uterm.api_routes import API_ROUTES, RouteDef
 from provide.uterm.server.routes.route_defs import bind_api_routes
+from provide.uterm.server.viewer_revocation import share_viewer_streams, stream_until_revoked
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -82,8 +83,10 @@ def sse_capability_handlers() -> dict[str, Callable[..., object]]:
             pattern=pattern,
             heartbeat_s=_HEARTBEAT_S,
         )
+        # A share viewer's stream is ended if the session's viewers are revoked.
+        streams = share_viewer_streams(request.app)
         return StreamingResponse(
-            generator,
+            stream_until_revoked(generator, streams, authz, principal, session_id),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
