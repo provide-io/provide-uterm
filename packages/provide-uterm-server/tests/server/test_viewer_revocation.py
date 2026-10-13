@@ -30,6 +30,7 @@ from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.authorization import (
     SHARE_VIEWER_REVOCATION_TTL_S,
     SHARE_VIEWER_REVOCATIONS_MAX,
+    SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX,
     AuthorizationService,
     is_share_viewer,
 )
@@ -174,6 +175,94 @@ def test_a_full_cutoff_table_refuses_new_sessions_instead_of_evicting_one() -> N
     assert service.revoke_share_viewers("overflow", now=later) == later
     assert service.share_viewer_revocation("s0") == base + 1.0e4  # still live, kept
     assert service.share_viewer_revocation("s1") is None
+
+
+def test_one_principal_holds_at_most_its_cap_of_cutoffs_keeping_the_newest() -> None:
+    service = AuthorizationService()
+    cap = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
+    for index in range(cap + 2):
+        service.revoke_share_viewers(f"s{index}", now=100.0 + index, revoker="alice")
+    # Alice's two oldest made room for her two newest.
+    assert service.share_viewer_revocation("s0") is None
+    assert service.share_viewer_revocation("s1") is None
+    assert service.share_viewer_revocation("s2") == 102.0
+    assert service.share_viewer_revocation(f"s{cap + 1}") == 100.0 + cap + 1
+    assert len(service.share_viewer_revoked_sessions()) == cap
+
+
+def test_the_per_principal_cap_leaves_other_principals_alone() -> None:
+    service = AuthorizationService()
+    service.revoke_share_viewers("bobs", now=1.0, revoker="bob")
+    service.revoke_share_viewers("admins", now=1.0)
+    for index in range(SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX + 1):
+        service.revoke_share_viewers(f"s{index}", now=10.0 + index, revoker="alice")
+    assert service.share_viewer_revocation("bobs") == 1.0
+    assert service.share_viewer_revocation("admins") == 1.0
+
+
+def test_moving_your_own_cutoff_forward_evicts_nothing() -> None:
+    service = AuthorizationService()
+    cap = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
+    for index in range(cap):
+        service.revoke_share_viewers(f"s{index}", now=100.0 + index, revoker="alice")
+    service.revoke_share_viewers("s0", now=500.0, revoker="alice")
+    assert len(service.share_viewer_revoked_sessions()) == cap
+    assert service.share_viewer_revocation("s0") == 500.0
+    # s0 is now alice's newest, so her next new session pushes s1 out.
+    service.revoke_share_viewers("extra", now=600.0, revoker="alice")
+    assert service.share_viewer_revocation("s0") == 500.0
+    assert service.share_viewer_revocation("s1") is None
+
+
+def test_a_cutoff_counts_against_whoever_revoked_it_last() -> None:
+    service = AuthorizationService()
+    cap = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
+    service.revoke_share_viewers("shared", now=1.0, revoker="bob")
+    for index in range(cap - 1):
+        service.revoke_share_viewers(f"a{index}", now=10.0 + index, revoker="alice")
+    # Alice takes "shared" over from bob: her cap is now full, nothing evicted.
+    service.revoke_share_viewers("shared", now=500.0, revoker="alice")
+    assert len(service.share_viewer_revoked_sessions()) == cap
+    service.revoke_share_viewers("bob2", now=600.0, revoker="bob")
+    assert service.share_viewer_revocation("shared") == 500.0
+    assert service.share_viewer_revocation("a0") == 10.0
+    service.revoke_share_viewers("a-next", now=700.0, revoker="alice")
+    assert service.share_viewer_revocation("a0") is None
+
+
+def test_an_uncapped_revoke_is_never_evicted_by_the_per_principal_cap() -> None:
+    service = AuthorizationService()
+    for index in range(SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX + 5):
+        service.revoke_share_viewers(f"s{index}", now=100.0 + index)
+    assert service.share_viewer_revocation("s0") == 100.0
+    assert len(service.share_viewer_revoked_sessions()) == SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX + 5
+
+
+def test_a_principal_at_its_cap_makes_its_own_room_in_a_full_table() -> None:
+    service = AuthorizationService()
+    base = 1.0e9
+    cap = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
+    for index in range(cap):
+        service.revoke_share_viewers(f"a{index}", now=base + index, revoker="alice")
+    for index in range(SHARE_VIEWER_REVOCATIONS_MAX - cap):
+        service.revoke_share_viewers(f"s{index}", now=base + cap + index)
+    assert service.revoke_share_viewers("a-new", now=base + 2.0e4, revoker="alice") == base + 2.0e4
+    assert service.share_viewer_revocation("a0") is None
+    assert service.share_viewer_revocation("s0") == base + cap
+
+
+def test_ageing_out_and_forgetting_free_a_principals_slots() -> None:
+    service = AuthorizationService()
+    cap = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
+    service.revoke_share_viewers("old", now=1.0, revoker="alice")
+    service.revoke_share_viewers("gone", now=2.0 + SHARE_VIEWER_REVOCATION_TTL_S, revoker="alice")
+    service.forget_share_viewers("gone")
+    # "old" aged out on the next revoke and "gone" was forgotten: a full cap of
+    # new cutoffs fits without evicting the first of them.
+    for index in range(cap):
+        service.revoke_share_viewers(f"s{index}", now=10.0 + SHARE_VIEWER_REVOCATION_TTL_S + index, revoker="alice")
+    assert service.share_viewer_revocation("s0") == 10.0 + SHARE_VIEWER_REVOCATION_TTL_S
+    assert len(service.share_viewer_revoked_sessions()) == cap
 
 
 def test_tunnel_share_principals_are_not_share_viewers() -> None:

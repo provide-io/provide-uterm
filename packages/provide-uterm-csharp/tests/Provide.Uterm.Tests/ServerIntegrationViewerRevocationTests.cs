@@ -401,6 +401,30 @@ public sealed class ServerIntegrationViewerRevocationTests
     }
 
     [Fact]
+    public async Task An_owners_revokes_are_capped_per_principal_but_a_global_admins_are_not()
+    {
+        var authz = new AuthorizationService();
+        var (server, port) = await BootAsync(authz);
+        try
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            for (var i = 0; i < AuthorizationService.ShareViewerRevocationsPerPrincipalMax; i++)
+            {
+                authz.RevokeShareViewers("mine-" + i, now, "owner1");
+            }
+            Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "admin1", "admin")).StatusCode);
+            Assert.NotNull(authz.ShareViewerRevocation("mine-0"));
+            Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "owner1", "operator")).StatusCode);
+            Assert.Null(authz.ShareViewerRevocation("mine-0"));
+            Assert.NotNull(authz.ShareViewerRevocation("bb"));
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
     public async Task A_long_poll_in_flight_when_its_viewer_is_revoked_answers_403()
     {
         var (server, port) = await BootAsync();

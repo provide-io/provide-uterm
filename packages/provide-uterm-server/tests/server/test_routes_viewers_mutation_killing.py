@@ -25,9 +25,10 @@ from provide.uterm.server.routes import viewers
 _SID = "s-1"
 
 
-def _request(*, can_mutate: bool = True, definition: Any = "present") -> SimpleNamespace:
+def _request(*, can_mutate: bool = True, definition: Any = "present", admin: bool = False) -> SimpleNamespace:
     az = MagicMock(name="authz")
     az.can_mutate_session = AsyncMock(return_value=can_mutate)
+    az.is_admin = AsyncMock(return_value=admin)
     az.revoke_share_viewers = MagicMock(return_value=123.5)
     az.share_viewer_revoked_sessions = MagicMock(return_value=[])
     registry = MagicMock(name="registry")
@@ -84,7 +85,7 @@ async def test_revoke_records_the_cutoff_then_closes_through_the_hub(
     request = _request()
     result = await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
     az = request.app.state.uterm_authz
-    az.revoke_share_viewers.assert_called_once_with(_SID)
+    az.revoke_share_viewers.assert_called_once_with(_SID, revoker="owner-1")
     closer.assert_awaited_once_with(request.app.state.uterm_hub, az, _SID)
     # Event streams are ended too, and counted with the sockets: 2 + 3.
     streams.finder.assert_called_once_with(request.app)
@@ -96,6 +97,14 @@ async def test_revoke_records_the_cutoff_then_closes_through_the_hub(
         "close_code": 4410,
         "close_reason": "viewer access revoked",
     }
+
+
+async def test_a_global_admins_revoke_is_not_counted_against_a_principal(closer: AsyncMock, audit: MagicMock) -> None:
+    request = _request(admin=True)
+    await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    az = request.app.state.uterm_authz
+    az.is_admin.assert_awaited_once_with(request.state.uterm_principal)
+    az.revoke_share_viewers.assert_called_once_with(_SID, revoker=None)
 
 
 async def test_revoke_leaves_an_audit_record(closer: AsyncMock, audit: MagicMock) -> None:
@@ -153,7 +162,7 @@ async def test_cutoffs_of_deleted_sessions_are_forgotten_before_the_revoke(close
     )
     await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
     assert order.mock_calls[0] == call.forget("gone")
-    assert order.mock_calls[1] == call.revoke(_SID)
+    assert order.mock_calls[1] == call.revoke(_SID, revoker="owner-1")
     assert len(order.mock_calls) == 2
 
 

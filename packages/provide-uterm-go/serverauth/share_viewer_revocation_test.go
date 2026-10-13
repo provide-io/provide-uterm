@@ -222,3 +222,133 @@ func TestJWTWithAFutureIatIsRefused(t *testing.T) {
 		t.Errorf("a token within the clock skew was refused: %v", err)
 	}
 }
+
+// held reports how many cutoffs the table holds.
+func held(s *AuthorizationService) int {
+	s.revocations.mu.Lock()
+	defer s.revocations.mu.Unlock()
+	return len(s.revocations.order)
+}
+
+func revokeBy(t *testing.T, s *AuthorizationService, sessionID string, now float64, revoker string) {
+	t.Helper()
+	if _, err := s.RevokeShareViewersBy(sessionID, now, revoker); err != nil {
+		t.Fatalf("revoke %s: %v", sessionID, err)
+	}
+}
+
+func cutoffOf(s *AuthorizationService, sessionID string) any {
+	if got, ok := s.ShareViewerRevocation(sessionID); ok {
+		return got
+	}
+	return nil
+}
+
+func TestOnePrincipalHoldsAtMostItsCapKeepingTheNewest(t *testing.T) {
+	s := NewAuthorizationService()
+	const limit = ShareViewerRevocationsPerPrincipalMax
+	for i := 0; i < limit+2; i++ {
+		revokeBy(t, s, fmt.Sprintf("s%d", i), 100+float64(i), "alice")
+	}
+	if cutoffOf(s, "s0") != nil || cutoffOf(s, "s1") != nil {
+		t.Error("alice's two oldest cutoffs were kept")
+	}
+	if cutoffOf(s, "s2") != 102.0 || cutoffOf(s, fmt.Sprintf("s%d", limit+1)) != 100+float64(limit+1) {
+		t.Error("alice's newest cutoffs were not kept")
+	}
+	if held(s) != limit {
+		t.Errorf("held %d, want %d", held(s), limit)
+	}
+}
+
+func TestThePerPrincipalCapLeavesOtherPrincipalsAlone(t *testing.T) {
+	s := NewAuthorizationService()
+	revokeBy(t, s, "bobs", 1, "bob")
+	revokeBy(t, s, "admins", 1, "")
+	for i := 0; i <= ShareViewerRevocationsPerPrincipalMax; i++ {
+		revokeBy(t, s, fmt.Sprintf("s%d", i), 10+float64(i), "alice")
+	}
+	if cutoffOf(s, "bobs") != 1.0 || cutoffOf(s, "admins") != 1.0 {
+		t.Error("alice's cap evicted someone else's cutoff")
+	}
+}
+
+func TestMovingYourOwnCutoffForwardEvictsNothing(t *testing.T) {
+	s := NewAuthorizationService()
+	const limit = ShareViewerRevocationsPerPrincipalMax
+	for i := 0; i < limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("s%d", i), 100+float64(i), "alice")
+	}
+	revokeBy(t, s, "s0", 500, "alice")
+	if held(s) != limit || cutoffOf(s, "s0") != 500.0 {
+		t.Fatalf("re-revoke: held %d, s0 %v", held(s), cutoffOf(s, "s0"))
+	}
+	// s0 is now alice's newest, so her next new session pushes s1 out.
+	revokeBy(t, s, "extra", 600, "alice")
+	if cutoffOf(s, "s0") != 500.0 || cutoffOf(s, "s1") != nil {
+		t.Errorf("s0 %v s1 %v", cutoffOf(s, "s0"), cutoffOf(s, "s1"))
+	}
+}
+
+func TestACutoffCountsAgainstWhoeverRevokedItLast(t *testing.T) {
+	s := NewAuthorizationService()
+	const limit = ShareViewerRevocationsPerPrincipalMax
+	revokeBy(t, s, "shared", 1, "bob")
+	for i := 0; i < limit-1; i++ {
+		revokeBy(t, s, fmt.Sprintf("a%d", i), 10+float64(i), "alice")
+	}
+	// Alice takes "shared" over from bob: her cap is now full, nothing evicted.
+	revokeBy(t, s, "shared", 500, "alice")
+	if held(s) != limit {
+		t.Fatalf("held %d", held(s))
+	}
+	revokeBy(t, s, "bob2", 600, "bob")
+	if cutoffOf(s, "shared") != 500.0 || cutoffOf(s, "a0") != 10.0 {
+		t.Fatal("bob's revoke evicted alice's cutoffs")
+	}
+	revokeBy(t, s, "a-next", 700, "alice")
+	if cutoffOf(s, "a0") != nil {
+		t.Error("alice's oldest was kept past her cap")
+	}
+}
+
+func TestAnUncappedRevokeIsNeverEvictedByThePerPrincipalCap(t *testing.T) {
+	s := NewAuthorizationService()
+	for i := 0; i < ShareViewerRevocationsPerPrincipalMax+5; i++ {
+		revokeBy(t, s, fmt.Sprintf("s%d", i), 100+float64(i), "")
+	}
+	if cutoffOf(s, "s0") != 100.0 || held(s) != ShareViewerRevocationsPerPrincipalMax+5 {
+		t.Errorf("s0 %v held %d", cutoffOf(s, "s0"), held(s))
+	}
+}
+
+func TestAPrincipalAtItsCapMakesItsOwnRoomInAFullTable(t *testing.T) {
+	s := NewAuthorizationService()
+	const base, limit = 1e9, ShareViewerRevocationsPerPrincipalMax
+	for i := 0; i < limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("a%d", i), base+float64(i), "alice")
+	}
+	for i := 0; i < ShareViewerRevocationsMax-limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("s%d", i), base+float64(limit+i), "")
+	}
+	if got, err := s.RevokeShareViewersBy("a-new", base+2e4, "alice"); err != nil || got != base+2e4 {
+		t.Fatalf("revoke at cap in a full table: %v %v", got, err)
+	}
+	if cutoffOf(s, "a0") != nil || cutoffOf(s, "s0") != base+float64(limit) {
+		t.Errorf("a0 %v s0 %v", cutoffOf(s, "a0"), cutoffOf(s, "s0"))
+	}
+}
+
+func TestAgeingOutAndForgettingFreeAPrincipalsSlots(t *testing.T) {
+	s := NewAuthorizationService()
+	const limit = ShareViewerRevocationsPerPrincipalMax
+	revokeBy(t, s, "old", 1, "alice")
+	revokeBy(t, s, "gone", 2+ShareViewerRevocationTTLSeconds, "alice")
+	s.ForgetShareViewers("gone")
+	for i := 0; i < limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("s%d", i), 10+ShareViewerRevocationTTLSeconds+float64(i), "alice")
+	}
+	if cutoffOf(s, "s0") != 10+ShareViewerRevocationTTLSeconds || held(s) != limit {
+		t.Errorf("s0 %v held %d", cutoffOf(s, "s0"), held(s))
+	}
+}

@@ -60,12 +60,15 @@ public sealed partial class UtermServer
 
     private async Task<IResult> HandleRevokeViewers(HttpContext ctx, string sessionId)
     {
-        var (_, _, err) = await TryGatedSession(ctx, sessionId, "session.control.update").ConfigureAwait(false);
+        var (p, _, err) = await TryGatedSession(ctx, sessionId, "session.control.update").ConfigureAwait(false);
         if (err is not null) return err;
+        // The embedder's service token is a global admin and revokes for
+        // everyone, so only other callers are held to a per-principal share.
+        var revoker = _deps.Authz.IsAdmin(p!) ? null : p!.SubjectId;
         double revokedAt;
         try
         {
-            revokedAt = _deps.Authz.RevokeShareViewers(sessionId, _clock.Wall());
+            revokedAt = _deps.Authz.RevokeShareViewers(sessionId, _clock.Wall(), revoker);
         }
         catch (ShareViewerRevocationsFullException)
         {

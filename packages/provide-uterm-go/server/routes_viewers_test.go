@@ -468,3 +468,29 @@ func TestARevokedSocketThatIgnoresTheCloseIsDroppedAfterTheGrace(t *testing.T) {
 	}
 	waitUntil(t, 9*time.Second, func() bool { return ts.hub.BrowserCount(context.Background(), "bb") == 0 })
 }
+
+func TestAnOwnersRevokesAreCappedPerPrincipalButAGlobalAdminsAreNot(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.reg.add("bb", "owner1", "public")
+	ts.reg.add("bb2", "owner1", "public")
+	now := ts.srv.deps.Clock.Wall()
+	authz := ts.srv.deps.Authz
+	for i := 0; i < serverauth.ShareViewerRevocationsPerPrincipalMax; i++ {
+		_, _ = authz.RevokeShareViewersBy(fmt.Sprintf("mine-%d", i), now, "owner1")
+	}
+	if rec := ts.do("POST", "/api/sessions/bb/viewers/revoke", "", adminHeaders()); rec.Code != http.StatusOK {
+		t.Fatalf("admin revoke: %d", rec.Code)
+	}
+	if _, ok := authz.ShareViewerRevocation("mine-0"); !ok {
+		t.Fatal("a global admin's revoke counted against owner1")
+	}
+	if rec := ts.do("POST", "/api/sessions/bb2/viewers/revoke", "", flat(headers("owner1", "operator", 100))); rec.Code != http.StatusOK {
+		t.Fatalf("owner revoke: %d", rec.Code)
+	}
+	if _, ok := authz.ShareViewerRevocation("mine-0"); ok {
+		t.Error("owner1's revoke past its cap kept its oldest cutoff")
+	}
+	if _, ok := authz.ShareViewerRevocation("bb2"); !ok {
+		t.Error("owner1's newest cutoff was not recorded")
+	}
+}

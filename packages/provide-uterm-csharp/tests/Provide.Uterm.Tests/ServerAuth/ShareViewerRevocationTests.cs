@@ -210,4 +210,97 @@ public sealed class ShareViewerRevocationTests
         Assert.Throws<SecurityTokenException>(() => idp.PrincipalFromJwtToken(Mint(DateTime.UtcNow.AddHours(1))));
         Assert.True(idp.PrincipalFromJwtToken(Mint(DateTime.UtcNow.AddSeconds(5))).Claims.ContainsKey("iat"));
     }
+
+    private const int Cap = AuthorizationService.ShareViewerRevocationsPerPrincipalMax;
+
+    [Fact]
+    public void One_principal_holds_at_most_its_cap_of_cutoffs_keeping_the_newest()
+    {
+        var authz = new AuthorizationService();
+        for (var i = 0; i < Cap + 2; i++) authz.RevokeShareViewers("s" + i, 100 + i, "alice");
+        // Alice's two oldest made room for her two newest.
+        Assert.Null(authz.ShareViewerRevocation("s0"));
+        Assert.Null(authz.ShareViewerRevocation("s1"));
+        Assert.Equal(102, authz.ShareViewerRevocation("s2"));
+        Assert.Equal(100 + Cap + 1, authz.ShareViewerRevocation("s" + (Cap + 1)));
+        Assert.Equal(Cap, authz.ShareViewerRevocationCount);
+    }
+
+    [Fact]
+    public void The_per_principal_cap_leaves_other_principals_alone()
+    {
+        var authz = new AuthorizationService();
+        authz.RevokeShareViewers("bobs", 1, "bob");
+        authz.RevokeShareViewers("admins", 1);
+        for (var i = 0; i <= Cap; i++) authz.RevokeShareViewers("s" + i, 10 + i, "alice");
+        Assert.Equal(1, authz.ShareViewerRevocation("bobs"));
+        Assert.Equal(1, authz.ShareViewerRevocation("admins"));
+    }
+
+    [Fact]
+    public void Moving_your_own_cutoff_forward_evicts_nothing()
+    {
+        var authz = new AuthorizationService();
+        for (var i = 0; i < Cap; i++) authz.RevokeShareViewers("s" + i, 100 + i, "alice");
+        authz.RevokeShareViewers("s0", 500, "alice");
+        Assert.Equal(Cap, authz.ShareViewerRevocationCount);
+        Assert.Equal(500, authz.ShareViewerRevocation("s0"));
+        // s0 is now alice's newest, so her next new session pushes s1 out.
+        authz.RevokeShareViewers("extra", 600, "alice");
+        Assert.Equal(500, authz.ShareViewerRevocation("s0"));
+        Assert.Null(authz.ShareViewerRevocation("s1"));
+    }
+
+    [Fact]
+    public void A_cutoff_counts_against_whoever_revoked_it_last()
+    {
+        var authz = new AuthorizationService();
+        authz.RevokeShareViewers("shared", 1, "bob");
+        for (var i = 0; i < Cap - 1; i++) authz.RevokeShareViewers("a" + i, 10 + i, "alice");
+        // Alice takes "shared" over from bob: her cap is now full, nothing evicted.
+        authz.RevokeShareViewers("shared", 500, "alice");
+        Assert.Equal(Cap, authz.ShareViewerRevocationCount);
+        authz.RevokeShareViewers("bob2", 600, "bob");
+        Assert.Equal(500, authz.ShareViewerRevocation("shared"));
+        Assert.Equal(10, authz.ShareViewerRevocation("a0"));
+        authz.RevokeShareViewers("a-next", 700, "alice");
+        Assert.Null(authz.ShareViewerRevocation("a0"));
+    }
+
+    [Fact]
+    public void An_uncapped_revoke_is_never_evicted_by_the_per_principal_cap()
+    {
+        var authz = new AuthorizationService();
+        for (var i = 0; i < Cap + 5; i++) authz.RevokeShareViewers("s" + i, 100 + i);
+        Assert.Equal(100, authz.ShareViewerRevocation("s0"));
+        Assert.Equal(Cap + 5, authz.ShareViewerRevocationCount);
+    }
+
+    [Fact]
+    public void A_principal_at_its_cap_makes_its_own_room_in_a_full_table()
+    {
+        var authz = new AuthorizationService();
+        const double Base = 1e9;
+        for (var i = 0; i < Cap; i++) authz.RevokeShareViewers("a" + i, Base + i, "alice");
+        for (var i = 0; i < AuthorizationService.ShareViewerRevocationsMax - Cap; i++)
+        {
+            authz.RevokeShareViewers("s" + i, Base + Cap + i);
+        }
+        Assert.Equal(Base + 2e4, authz.RevokeShareViewers("a-new", Base + 2e4, "alice"));
+        Assert.Null(authz.ShareViewerRevocation("a0"));
+        Assert.Equal(Base + Cap, authz.ShareViewerRevocation("s0"));
+    }
+
+    [Fact]
+    public void Ageing_out_and_forgetting_free_a_principals_slots()
+    {
+        var authz = new AuthorizationService();
+        const double Ttl = AuthorizationService.ShareViewerRevocationTtlSeconds;
+        authz.RevokeShareViewers("old", 1, "alice");
+        authz.RevokeShareViewers("gone", 2 + Ttl, "alice");
+        authz.ForgetShareViewers("gone");
+        for (var i = 0; i < Cap; i++) authz.RevokeShareViewers("s" + i, 10 + Ttl + i, "alice");
+        Assert.Equal(10 + Ttl, authz.ShareViewerRevocation("s0"));
+        Assert.Equal(Cap, authz.ShareViewerRevocationCount);
+    }
 }

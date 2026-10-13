@@ -64,8 +64,11 @@ async def revoke_viewers(request: Request, session_id: SessionId) -> dict[str, A
     for stale in az.share_viewer_revoked_sessions():
         if await reg.get_definition(stale) is None:
             az.forget_share_viewers(stale)
+    # The embedder's service token is a global admin and revokes for everyone,
+    # so only other callers are held to a per-principal share of the table.
+    revoker = None if await az.is_admin(p) else p.subject_id
     try:
-        revoked_at = az.revoke_share_viewers(session_id)
+        revoked_at = az.revoke_share_viewers(session_id, revoker=revoker)
     except ShareViewerRevocationsFullError:
         raise HTTPException(status_code=429, detail="too many sessions with revoked viewers; try again later") from None
     closed = await close_revoked_viewers(request.app.state.uterm_hub, az, session_id)

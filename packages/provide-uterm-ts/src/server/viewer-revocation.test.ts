@@ -26,6 +26,7 @@ import {
   isShareViewer,
   SHARE_VIEWER_REVOCATION_TTL_S,
   SHARE_VIEWER_REVOCATIONS_MAX,
+  SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX,
   ShareViewerRevocations,
   ShareViewerRevocationsFullError,
   VIEWER_REVOKED_CLOSE_CODE,
@@ -98,6 +99,95 @@ describe("the revocation cutoff", () => {
     expect(revocations.revoke("overflow", later)).toBe(later);
     expect(revocations.cutoff("s1")).toBeUndefined();
     expect(revocations.cutoff("s0")).toBe(base + 1e4);
+  });
+
+  const CAP = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX;
+
+  it("holds at most a principal's cap of cutoffs, keeping the newest", () => {
+    const revocations = new ShareViewerRevocations();
+    for (let index = 0; index < CAP + 2; index += 1) {
+      revocations.revoke(`s${index}`, 100 + index, "alice");
+    }
+    // Alice's two oldest made room for her two newest.
+    expect(revocations.cutoff("s0")).toBeUndefined();
+    expect(revocations.cutoff("s1")).toBeUndefined();
+    expect(revocations.cutoff("s2")).toBe(102);
+    expect(revocations.cutoff(`s${CAP + 1}`)).toBe(100 + CAP + 1);
+    expect(revocations.size).toBe(CAP);
+  });
+
+  it("leaves other principals' cutoffs alone", () => {
+    const revocations = new ShareViewerRevocations();
+    revocations.revoke("bobs", 1, "bob");
+    revocations.revoke("admins", 1);
+    for (let index = 0; index <= CAP; index += 1) {
+      revocations.revoke(`s${index}`, 10 + index, "alice");
+    }
+    expect(revocations.cutoff("bobs")).toBe(1);
+    expect(revocations.cutoff("admins")).toBe(1);
+  });
+
+  it("evicts nothing when a principal moves its own cutoff forward", () => {
+    const revocations = new ShareViewerRevocations();
+    for (let index = 0; index < CAP; index += 1) {
+      revocations.revoke(`s${index}`, 100 + index, "alice");
+    }
+    revocations.revoke("s0", 500, "alice");
+    expect(revocations.size).toBe(CAP);
+    expect(revocations.cutoff("s0")).toBe(500);
+    // s0 is now alice's newest, so her next new session pushes s1 out.
+    revocations.revoke("extra", 600, "alice");
+    expect(revocations.cutoff("s0")).toBe(500);
+    expect(revocations.cutoff("s1")).toBeUndefined();
+  });
+
+  it("counts a cutoff against whoever revoked it last", () => {
+    const revocations = new ShareViewerRevocations();
+    revocations.revoke("shared", 1, "bob");
+    for (let index = 0; index < CAP - 1; index += 1) {
+      revocations.revoke(`a${index}`, 10 + index, "alice");
+    }
+    // Alice takes "shared" over from bob: her cap is now full, nothing evicted.
+    revocations.revoke("shared", 500, "alice");
+    expect(revocations.size).toBe(CAP);
+    revocations.revoke("bob2", 600, "bob");
+    expect(revocations.cutoff("shared")).toBe(500);
+    expect(revocations.cutoff("a0")).toBe(10);
+    revocations.revoke("a-next", 700, "alice");
+    expect(revocations.cutoff("a0")).toBeUndefined();
+  });
+
+  it("never evicts an uncapped cutoff for the per-principal cap", () => {
+    const revocations = new ShareViewerRevocations();
+    for (let index = 0; index < CAP + 5; index += 1) {
+      revocations.revoke(`s${index}`, 100 + index);
+    }
+    expect(revocations.cutoff("s0")).toBe(100);
+    expect(revocations.size).toBe(CAP + 5);
+  });
+
+  it("lets a principal at its cap make its own room in a full table", () => {
+    const revocations = new ShareViewerRevocations();
+    const base = 1e9;
+    for (let index = 0; index < CAP; index += 1) {
+      revocations.revoke(`a${index}`, base + index, "alice");
+    }
+    for (let index = 0; index < SHARE_VIEWER_REVOCATIONS_MAX - CAP; index += 1) {
+      revocations.revoke(`s${index}`, base + CAP + index);
+    }
+    expect(revocations.revoke("a-new", base + 2e4, "alice")).toBe(base + 2e4);
+    expect(revocations.cutoff("a0")).toBeUndefined();
+    expect(revocations.cutoff("s0")).toBe(base + CAP);
+  });
+
+  it("frees a principal's slots as its cutoffs age out", () => {
+    const revocations = new ShareViewerRevocations();
+    revocations.revoke("old", 1, "alice");
+    for (let index = 0; index < CAP; index += 1) {
+      revocations.revoke(`s${index}`, 10 + SHARE_VIEWER_REVOCATION_TTL_S + index, "alice");
+    }
+    expect(revocations.cutoff("s0")).toBe(10 + SHARE_VIEWER_REVOCATION_TTL_S);
+    expect(revocations.size).toBe(CAP);
   });
 
   it("ages out cutoffs older than a day", () => {
@@ -234,6 +324,27 @@ describe("POST /api/sessions/{id}/viewers/revoke", () => {
     } finally {
       ShareViewerRevocations.prototype.revoke = original;
     }
+  });
+
+  it("counts an owner's revoke against the owner but a global admin's against nobody", async () => {
+    const app = buildApp(() => 1_700_000_100);
+    const original = ShareViewerRevocations.prototype.revoke;
+    const calls: unknown[][] = [];
+    ShareViewerRevocations.prototype.revoke = function (this: ShareViewerRevocations, ...args) {
+      calls.push(args.slice(2));
+      return original.apply(this, args);
+    };
+    try {
+      for (const credential of [token("ops", ["admin"], 1_700_000_000), token("owner1", ["operator"], 1_700_000_000)]) {
+        const response = await app.handle(
+          new Request(`${BASE}${PATH}`, { method: "POST", headers: bearer(credential) }),
+        );
+        expect(response.status).toBe(200);
+      }
+    } finally {
+      ShareViewerRevocations.prototype.revoke = original;
+    }
+    expect(calls).toEqual([[undefined], ["owner1"]]);
   });
 
   it("stamps the cutoff with the wall clock when no clock was given", async () => {

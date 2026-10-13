@@ -62,6 +62,10 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
 # a revoke for a session not already in it is refused (the route answers 429)
 # rather than evicting a cutoff that may still be protecting another session.
 SHARE_VIEWER_REVOCATIONS_MAX = 10_000
+# Cutoffs one revoking principal holds at once, so no single owner can fill the
+# table above. Past it, that principal's own oldest cutoff makes room for its
+# newest. A global admin (the embedder's service token) is not capped.
+SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX = 100
 # How long a cutoff is kept. A cutoff only matters while a token issued before
 # it can still be valid, so share tokens must live well under this (blackbetty
 # mints 60 s ones): a share token that outlives its cutoff is admitted again.
@@ -396,8 +400,12 @@ class AuthorizationService:
     # was issued at or before the cutoff is refused (see ``share_viewer_revoked``).
     # Process-local, like the tunnel token store.
     _share_viewer_revocations: dict[str, float] = field(default_factory=dict)
+    # session_id -> the capped principal that last revoked it, and that
+    # principal's sessions oldest first (dicts as ordered sets).
+    _share_viewer_revokers: dict[str, str] = field(default_factory=dict)
+    _share_viewer_revoked_by: dict[str, dict[str, None]] = field(default_factory=dict)
 
-    def revoke_share_viewers(self, session_id: str, *, now: float | None = None) -> float:
+    def revoke_share_viewers(self, session_id: str, *, now: float | None = None, revoker: str | None = None) -> float:
         """Refuse every share-viewer token for ``session_id`` issued up to now.
 
         Returns the cutoff; raises ``ShareViewerRevocationsFullError`` when the
@@ -405,17 +413,40 @@ class AuthorizationService:
         ``iat`` is written in. A token issued in the same second as the cutoff
         is refused too: ``iat`` has one-second resolution, so it cannot say
         which side of the cutoff it fell on.
+
+        ``revoker`` is the subject the cutoff counts against, at most
+        ``SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX`` of them, its oldest
+        evicted first; ``None`` (a global admin) is not capped.
         """
         cutoff = time.time() if now is None else now
         revocations = self._share_viewer_revocations
         # Insertion order is revocation order, so the stale ones are in front.
         while revocations and revocations[oldest := next(iter(revocations))] < cutoff - SHARE_VIEWER_REVOCATION_TTL_S:
-            del revocations[oldest]
-        if session_id not in revocations and len(revocations) >= SHARE_VIEWER_REVOCATIONS_MAX:
+            self._drop_share_viewer_revocation(oldest)
+        seen = session_id in revocations
+        self._drop_share_viewer_revocation(session_id)
+        if revoker is not None:
+            mine = self._share_viewer_revoked_by.get(revoker, {})
+            if len(mine) >= SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX:
+                self._drop_share_viewer_revocation(next(iter(mine)))
+        # Nothing was dropped above unless this session or the revoker's own
+        # oldest made room, so a refusal leaves the table as it was.
+        if not seen and len(revocations) >= SHARE_VIEWER_REVOCATIONS_MAX:
             raise ShareViewerRevocationsFullError
-        revocations.pop(session_id, None)
         revocations[session_id] = cutoff
+        if revoker is not None:
+            self._share_viewer_revokers[session_id] = revoker
+            self._share_viewer_revoked_by.setdefault(revoker, {})[session_id] = None
         return cutoff
+
+    def _drop_share_viewer_revocation(self, session_id: str) -> None:
+        self._share_viewer_revocations.pop(session_id, None)
+        revoker = self._share_viewer_revokers.pop(session_id, None)
+        if revoker is not None:
+            mine = self._share_viewer_revoked_by[revoker]
+            del mine[session_id]
+            if not mine:
+                del self._share_viewer_revoked_by[revoker]
 
     def share_viewer_revoked_sessions(self) -> list[str]:
         """The sessions holding a cutoff, oldest first."""
@@ -423,7 +454,7 @@ class AuthorizationService:
 
     def forget_share_viewers(self, session_id: str) -> None:
         """Drop the session's cutoff (it was deleted, so nothing is left to refuse)."""
-        self._share_viewer_revocations.pop(session_id, None)
+        self._drop_share_viewer_revocation(session_id)
 
     def share_viewer_revocation(self, session_id: str) -> float | None:
         """The cutoff recorded for ``session_id``, if its viewers were revoked."""

@@ -39,6 +39,13 @@ export const VIEWER_REVOKED_REASON = "viewer access revoked";
 export const SHARE_VIEWER_REVOCATIONS_MAX = 10000;
 
 /**
+ * How many cutoffs one revoking principal holds at once, so no single owner
+ * can fill the table. Past it, that principal's own oldest cutoff makes room
+ * for its newest. A global admin is not capped.
+ */
+export const SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX = 100;
+
+/**
  * How long a cutoff is kept, in seconds. Share tokens must live well under
  * this: a token that outlives its cutoff is admitted again.
  */
@@ -70,6 +77,14 @@ export function isShareViewer(principal: AuthorizablePrincipal, sessionId: strin
 export class ShareViewerRevocations {
   // A Map iterates in insertion order, so the first key is the oldest cutoff.
   readonly #cutoffs = new Map<string, number>();
+  // A session's capped revoker, and each such principal's sessions, oldest first.
+  readonly #revokers = new Map<string, string>();
+  readonly #revokedBy = new Map<string, Set<string>>();
+
+  /** How many cutoffs are held. */
+  get size(): number {
+    return this.#cutoffs.size;
+  }
 
   /**
    * Refuse every share-viewer token for a session issued at or before `now`
@@ -77,22 +92,51 @@ export class ShareViewerRevocations {
    * the cutoff. A token issued in the same second is refused too: `iat` has
    * one-second resolution, so it cannot say which side it fell on. Throws
    * {@link ShareViewerRevocationsFullError} when the table is full and this
-   * session holds no cutoff yet.
+   * session holds no cutoff yet. The cutoff counts against `revoker`, who
+   * holds at most {@link SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX} of them,
+   * its oldest evicted first; no revoker (a global admin) is not capped.
    */
-  revoke(sessionId: string, now: number): number {
+  revoke(sessionId: string, now: number, revoker?: string): number {
     // Insertion order is revocation order, so the stale cutoffs are in front.
     for (const [oldest, cutoff] of this.#cutoffs) {
       if (cutoff >= now - SHARE_VIEWER_REVOCATION_TTL_S) {
         break;
       }
-      this.#cutoffs.delete(oldest);
+      this.#drop(oldest);
     }
-    if (!this.#cutoffs.has(sessionId) && this.#cutoffs.size >= SHARE_VIEWER_REVOCATIONS_MAX) {
+    const seen = this.#cutoffs.has(sessionId);
+    this.#drop(sessionId);
+    const mine = revoker === undefined ? undefined : this.#revokedBy.get(revoker);
+    if (mine !== undefined && mine.size >= SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX) {
+      this.#drop(mine.values().next().value as string);
+    }
+    // Nothing was dropped above unless this session or the revoker's own
+    // oldest made room, so a refusal leaves the table as it was.
+    if (!seen && this.#cutoffs.size >= SHARE_VIEWER_REVOCATIONS_MAX) {
       throw new ShareViewerRevocationsFullError();
     }
-    this.#cutoffs.delete(sessionId);
     this.#cutoffs.set(sessionId, now);
+    if (revoker !== undefined) {
+      this.#revokers.set(sessionId, revoker);
+      const sessions = this.#revokedBy.get(revoker) ?? new Set<string>();
+      sessions.add(sessionId);
+      this.#revokedBy.set(revoker, sessions);
+    }
     return now;
+  }
+
+  #drop(sessionId: string): void {
+    this.#cutoffs.delete(sessionId);
+    const revoker = this.#revokers.get(sessionId);
+    if (revoker === undefined) {
+      return;
+    }
+    this.#revokers.delete(sessionId);
+    const mine = this.#revokedBy.get(revoker) as Set<string>;
+    mine.delete(sessionId);
+    if (mine.size === 0) {
+      this.#revokedBy.delete(revoker);
+    }
   }
 
   /** The cutoff recorded for a session, if its viewers were revoked. */

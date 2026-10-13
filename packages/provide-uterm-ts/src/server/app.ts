@@ -36,7 +36,7 @@ import {
   resolveJwtPrincipal,
   type ServerPrincipal,
 } from "../serverauth/index.ts";
-import { type AuthorizableSession, canMutateSession, canReadSession } from "./authorization.ts";
+import { type AuthorizableSession, canMutateSession, canReadSession, isAdmin } from "./authorization.ts";
 import { healthReport, livenessReport, readinessReport } from "./health.ts";
 import { handleHijackRequest, INPUT_MODES, readJsonBody as readBody } from "./hijack-routes.ts";
 import { type RecordingAccess, recordingHandlers } from "./recording-routes.ts";
@@ -434,7 +434,10 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
     }
     let revokedAt: number;
     try {
-      revokedAt = revocations.revoke(sessionId, (options.now ?? (() => Date.now() / 1000))());
+      // The embedder's service token is a global admin and revokes for
+      // everyone, so only other callers are held to a per-principal share.
+      const revoker = isAdmin(principal) ? undefined : principal.subject_id;
+      revokedAt = revocations.revoke(sessionId, (options.now ?? (() => Date.now() / 1000))(), revoker);
     } catch {
       // The one thing revoke throws: ShareViewerRevocationsFullError.
       return refusal(429, "too many sessions with revoked viewers; try again later");
