@@ -23,6 +23,7 @@ func (s *Server) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/sessions/{session_id}", s.authenticated(s.handlePatchSession))
 	mux.HandleFunc("DELETE /api/sessions/{session_id}", s.authenticated(s.handleDeleteSession))
 	s.registerSessionControlRoutes(mux)
+	s.registerViewerRoutes(mux)
 }
 
 // definitionOr404 loads a session definition, writing 404 when unknown.

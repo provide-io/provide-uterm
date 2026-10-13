@@ -172,6 +172,10 @@ func (l LocalAuthorizationProvider) ResolveBrowserRole(p *Principal, session *se
 // pluggable gateway. It delegates to a provider (default: local RBAC).
 type AuthorizationService struct {
 	provider AuthorizationProvider
+	// revocations holds the per-session share-viewer cutoffs; checked ahead of
+	// the provider so no provider (or a public visibility) can readmit a
+	// revoked viewer. Process-local, like the tunnel token store.
+	revocations shareViewerRevocations
 }
 
 // NewAuthorizationService builds a service backed by the local RBAC provider.
@@ -205,13 +209,19 @@ func (s *AuthorizationService) IsOwner(p *Principal, session *serverconfig.Sessi
 	return s.provider.IsOwner(p, session)
 }
 
-// CanReadSession delegates.
+// CanReadSession delegates, after refusing a revoked share viewer.
 func (s *AuthorizationService) CanReadSession(p *Principal, session *serverconfig.SessionDefinition) bool {
+	if s.ShareViewerRevoked(p, session.SessionID) {
+		return false
+	}
 	return s.provider.CanReadSession(p, session)
 }
 
-// CanReadRecording delegates.
+// CanReadRecording delegates, after refusing a revoked share viewer.
 func (s *AuthorizationService) CanReadRecording(p *Principal, session *serverconfig.SessionDefinition) bool {
+	if s.ShareViewerRevoked(p, session.SessionID) {
+		return false
+	}
 	return s.provider.CanReadRecording(p, session)
 }
 

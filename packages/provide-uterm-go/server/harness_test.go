@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -41,11 +42,17 @@ func (fakeAuth) Authenticate(_ context.Context, req *serverauth.Request) (*serve
 	if scope := req.Header("x-admin-session-scope"); scope != "" {
 		adminSessionScope = &scope
 	}
+	// X-Iat stands in for a JWT's iat claim (share-viewer revocation tests).
+	claims := map[string]any{}
+	if iat, err := strconv.ParseFloat(req.Header("x-iat"), 64); err == nil {
+		claims["iat"] = iat
+	}
 	return &serverauth.Principal{
 		SubjectID:         subject,
 		TenantID:          tenant,
 		Roles:             serverauth.NewSet(role),
 		Scopes:            serverauth.NewSet("*"),
+		Claims:            claims,
 		AdminSessionScope: adminSessionScope,
 	}, nil
 }
