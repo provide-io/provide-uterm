@@ -1042,6 +1042,11 @@ also_copy = [
     "packages/provide-uterm-server/tests/conftest_part2.py",
     "packages/provide-uterm-platform/tests/manager",
     "docker",
+    # The emulator's snapshot-resume fixture, read from the repo root by
+    # packages/provide-uterm/tests/terminal/test_emulator_snapshot_resume.py
+    # (in the selection above). Without it the stats run errors on that test
+    # and every mutant reports "not checked".
+    "conformance/snapshot",
     "conftest.py",
 ]
 pytest_add_cli_args = [
