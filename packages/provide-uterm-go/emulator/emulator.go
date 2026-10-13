@@ -149,8 +149,16 @@ func (e *TerminalEmulator) GetSnapshot() session.Snapshot {
 // with a reset, rows join with newlines. Use this when a live renderer needs
 // the visual state including colors — GetSnapshot's Screen field is plain
 // text.
+//
+// It is a snapshot a viewer resumes the live stream from, so it also carries
+// the state that stream assumes and the cells do not show: the alternate
+// screen before the rows, and after them the scroll region, origin mode, the
+// real cursor (deferred wrap included), autowrap/insert/new-line modes, input
+// modes, the pen and cursor visibility. This emulator decodes CP437, where the
+// stream ignores charset designations and SO/SI, so it has none to restore.
 func (e *TerminalEmulator) ANSIScreen() string {
-	return strings.Join(render.RenderScreenLines(e.screen, e.cols, e.rows), "\n")
+	rows := strings.Join(render.RenderScreenLines(e.screen, e.cols, e.rows), "\n")
+	return render.ScreenStatePrefix(e.screen) + rows + render.ScreenStateSuffix(e.screen, !e.stream.UseUTF8)
 }
 
 // Screen exposes the backing vt.Screen.

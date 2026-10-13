@@ -4,6 +4,26 @@ All notable changes to provide-uterm are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A viewer joining a live session drew the program's output in the wrong
+  place.** The ANSI snapshot (`ansi_screen()` / `ansiScreen()` /
+  `ANSIScreen()` / `AnsiScreen()`) ended with the cursor wherever the painted
+  rows ended and the pen reset, so a program that paints with relative
+  movement — vitetris never sends CUP — drew a duplicated board, shifted down,
+  in the default background. The snapshot now ends with the terminal state the
+  live stream assumes: the real cursor (the deferred wrap at the last column
+  included), the pen, cursor visibility, the scroll region, origin, autowrap,
+  insert and new-line modes, application cursor keys and mouse/paste modes,
+  the alternate screen, and in UTF-8 sessions the G0/G1 designations and
+  shift. Rendered cells are fixed with it: each style change is now an
+  absolute SGR (a dropped attribute used to bleed along the row), reverse
+  video is sent as SGR 7 (a reversed cell on the default pen vanished), and
+  pyte's `brown` renders as yellow in Python, Go and TypeScript. The browser
+  elements place the cursor from a plain-text snapshot's `cursor` field, the
+  only source a screen without escape sequences has. All four ports emit the
+  same bytes, held to `conformance/snapshot/relative_paint_80x24.bin`.
+
 ## [0.5.6] — 2026-09-10
 
 The fan-out response budget means the same thing in all four ports, the Go

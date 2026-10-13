@@ -14,4 +14,13 @@ internal static class Charsets
         ["U"] = CharsetTables.IbmpcMap,
         ["V"] = CharsetTables.Vax42Map,
     };
+
+    private static readonly Dictionary<int[], string> Codes =
+        Maps.ToDictionary(pair => pair.Value, pair => pair.Key);
+
+    /// <summary>
+    /// The designator a translation table was selected by. Every table a screen
+    /// holds comes from <see cref="Maps"/>, so it always has one.
+    /// </summary>
+    internal static string CodeOf(int[] table) => Codes[table];
 }

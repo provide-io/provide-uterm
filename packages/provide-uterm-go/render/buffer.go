@@ -34,20 +34,23 @@ func ClearScreen() string {
 	return "\x1b[2J"
 }
 
-// FGCodes maps 16-color names to SGR foreground codes.
+// FGCodes maps 16-color names to SGR foreground codes. "brown" and
+// "brightbrown" are the vt (pyte) names for SGR 33 and 93: without them a
+// yellow cell rendered with no colour at all.
 var FGCodes = map[string]int{
-	"black": 30, "red": 31, "green": 32, "yellow": 33,
+	"black": 30, "red": 31, "green": 32, "yellow": 33, "brown": 33,
 	"blue": 34, "magenta": 35, "cyan": 36, "white": 37,
-	"brightblack": 90, "brightred": 91, "brightgreen": 92, "brightyellow": 93,
+	"brightblack": 90, "brightred": 91, "brightgreen": 92, "brightyellow": 93, "brightbrown": 93,
 	"brightblue": 94, "brightmagenta": 95, "brightcyan": 96, "brightwhite": 97,
 }
 
-// BGCodes maps 16-color names to SGR background codes.
+// BGCodes maps 16-color names to SGR background codes, with the vt names for
+// yellow and pyte's spelling of SGR 105 ("bfightmagenta") as well.
 var BGCodes = map[string]int{
-	"black": 40, "red": 41, "green": 42, "yellow": 43,
+	"black": 40, "red": 41, "green": 42, "yellow": 43, "brown": 43,
 	"blue": 44, "magenta": 45, "cyan": 46, "white": 47,
-	"brightblack": 100, "brightred": 101, "brightgreen": 102, "brightyellow": 103,
-	"brightblue": 104, "brightmagenta": 105, "brightcyan": 106, "brightwhite": 107,
+	"brightblack": 100, "brightred": 101, "brightgreen": 102, "brightyellow": 103, "brightbrown": 103,
+	"brightblue": 104, "brightmagenta": 105, "bfightmagenta": 105, "brightcyan": 106, "brightwhite": 107,
 }
 
 func isHexColor(value string) bool {
@@ -105,12 +108,14 @@ var DefaultStyle = Style{FG: "default", BG: "default"}
 
 // StyleToSGR converts pyte cell style attributes to an SGR escape sequence.
 // Supports named 16-color, and pyte hex values as truecolor.
+//
+// The sequence is absolute: it starts from a reset, so it sets exactly this
+// style whatever the previous cell's was (relative to it, a cell that dropped
+// an attribute kept it, and a background bled along the row). Reverse video
+// is SGR 7: swapping the colours instead is no change at all when both are the
+// default, and the reversed cell vanished.
 func StyleToSGR(s Style) string {
-	fg, bg := s.FG, s.BG
-	if s.Reverse {
-		fg, bg = bg, fg
-	}
-	var codes []int
+	codes := []int{0}
 	if s.Bold {
 		codes = append(codes, 1)
 	}
@@ -120,11 +125,19 @@ func StyleToSGR(s Style) string {
 	if s.Blink {
 		codes = append(codes, 5)
 	}
-	codes = append(codes, colorSGR(fg, true)...)
-	codes = append(codes, colorSGR(bg, false)...)
-	if len(codes) == 0 {
+	if s.Reverse {
+		codes = append(codes, 7)
+	}
+	codes = append(codes, colorSGR(s.FG, true)...)
+	codes = append(codes, colorSGR(s.BG, false)...)
+	if len(codes) == 1 {
 		return ANSIReset
 	}
+	return sgrSequence(codes)
+}
+
+// sgrSequence joins SGR parameters into one escape sequence.
+func sgrSequence(codes []int) string {
 	parts := make([]string, len(codes))
 	for i, c := range codes {
 		parts[i] = strconv.Itoa(c)

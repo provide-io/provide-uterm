@@ -144,10 +144,11 @@ class TestTerminalEmulatorAnsiScreen:
         emu = TerminalEmulator(cols=4, rows=2)
         out = emu.ansi_screen()
         # Two rows, each terminated by ANSI_RESET, joined by a single newline.
+        # The terminal state a viewer resumes from follows the last row.
         rows = out.split("\n")
         assert len(rows) == 2
-        for row in rows:
-            assert row.endswith(ANSI_RESET)
+        assert rows[0] == f"{ANSI_RESET}    {ANSI_RESET}"
+        assert rows[1].startswith(f"{ANSI_RESET}    {ANSI_RESET}\x1b[r")
 
     def test_get_snapshot_reuses_cached_when_not_dirty(self) -> None:
         """Second consecutive ``get_snapshot()`` with no intervening change

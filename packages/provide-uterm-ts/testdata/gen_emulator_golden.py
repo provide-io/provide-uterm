@@ -59,8 +59,17 @@ CASES: list[tuple[str, int, int, list[str]]] = [
     ("reverse video", COLS, ROWS, ["\x1b[7mrev\x1b[0m"]),
     ("background colour", COLS, ROWS, ["\x1b[42mbg\x1b[0m"]),
     ("256-colour", COLS, ROWS, ["\x1b[38;5;196mx"]),
-    ("brown, which the renderer has no code for", COLS, ROWS, ["\x1b[33mbrown"]),
+    ("brown, pyte's name for yellow", COLS, ROWS, ["\x1b[33mbrown"]),
     ("blink", COLS, ROWS, ["\x1b[5mblink"]),
+    # The state a resuming viewer needs after the rows: every port must append
+    # the same bytes for it.
+    ("deferred wrap at the last column", COLS, ROWS, ["\x1b[2;1H" + "w" * (COLS - 1) + "\x1b[32mW"]),
+    ("deferred wrap on a row scrolled away", COLS, ROWS, [f"\x1b[{ROWS};1H" + "y" * COLS + "\x1bD"]),
+    ("scroll region", COLS, ROWS, ["\x1b[2;4r\x1b[3;5Hin"]),
+    ("scroll region set to the whole screen", COLS, ROWS, [f"\x1b[1;{ROWS}r\x1b[2;2H"]),
+    ("insert mode", COLS, ROWS, ["abc\r\x1b[4hX"]),
+    ("hidden cursor and a pen left set", COLS, ROWS, ["\x1b[?25l\x1b[1;3;4;5;7;9;33;104mpen"]),
+    ("a truecolor pen", COLS, ROWS, ["\x1b[38;2;1;2;3;48;5;208m"]),
 ]
 
 # (fg, bg, bold, underscore, reverse, blink) styles for style_to_sgr.
@@ -74,7 +83,7 @@ STYLE_CASES: list[tuple[str, str, bool, bool, bool, bool]] = [
     ("default", "default", False, True, False, False),
     ("default", "default", False, False, False, True),
     ("default", "default", True, True, False, True),
-    # Reverse swaps the two colours before they are encoded.
+    # Reverse is sent as SGR 7, the colours left where they are.
     ("red", "green", False, False, True, False),
     ("default", "default", False, False, True, False),
     # pyte hex colours become truecolor.

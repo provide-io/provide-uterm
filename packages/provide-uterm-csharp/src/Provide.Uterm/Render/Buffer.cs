@@ -71,7 +71,7 @@ public static class RenderBuffer
         return true;
     }
 
-    private static List<int> ColorSgr(string color, bool isFg)
+    internal static List<int> ColorSgr(string color, bool isFg)
     {
         if (color == "default")
         {
@@ -96,16 +96,19 @@ public static class RenderBuffer
         return [];
     }
 
+    /// <summary>
+    /// Convert cell style attributes to an SGR escape sequence.
+    /// </summary>
+    /// <remarks>
+    /// The sequence is absolute: it starts from a reset, so it sets exactly this
+    /// style whatever the previous cell's was (relative to it, a cell that
+    /// dropped an attribute kept it, and a background bled along the row).
+    /// Reverse video is SGR 7: swapping the colours instead is no change at all
+    /// when both are the default, and the reversed cell vanished.
+    /// </remarks>
     public static string StyleToSgr(Style s)
     {
-        var fg = s.FG;
-        var bg = s.BG;
-        if (s.Reverse)
-        {
-            (fg, bg) = (bg, fg);
-        }
-
-        var codes = new List<int>();
+        var codes = new List<int> { 0 };
         if (s.Bold)
         {
             codes.Add(1);
@@ -121,15 +124,22 @@ public static class RenderBuffer
             codes.Add(5);
         }
 
-        codes.AddRange(ColorSgr(fg, true));
-        codes.AddRange(ColorSgr(bg, false));
-        if (codes.Count == 0)
+        if (s.Reverse)
+        {
+            codes.Add(7);
+        }
+
+        codes.AddRange(ColorSgr(s.FG, true));
+        codes.AddRange(ColorSgr(s.BG, false));
+        if (codes.Count == 1)
         {
             return AnsiReset;
         }
 
-        return "\x1b[" + string.Join(";", codes) + "m";
+        return SgrSequence(codes);
     }
+
+    internal static string SgrSequence(List<int> codes) => "\x1b[" + string.Join(";", codes) + "m";
 
     public static Style CellStyle(Vt.Char cell)
     {

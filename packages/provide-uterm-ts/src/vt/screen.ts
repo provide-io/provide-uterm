@@ -40,7 +40,7 @@ export interface Cursor {
 const TAB_WIDTH = 8;
 
 /** A character set a G0 or G1 slot can hold. */
-type Charset = "ascii" | "dec";
+export type Charset = "ascii" | "dec";
 
 /**
  * DEC special graphics: what each redrawn character becomes, keyed by the
@@ -96,7 +96,7 @@ const CHARSET_CODES: ReadonlyMap<string, Charset> = new Map([
 ]);
 
 /** The G0 and G1 sets and which one is shifted in. */
-interface Charsets {
+export interface Charsets {
   g0: Charset;
   g1: Charset;
   shifted: boolean;
@@ -135,6 +135,12 @@ export class Screen {
    */
   #charsets: Charsets = initialCharsets();
   #savedCharsets: Charsets | undefined;
+  /**
+   * Whether the stream has designated a set. G1 powers on as DEC graphics, so
+   * a program that designated it so itself leaves the same sets as one that
+   * never touched G1, and only the first needs a joining viewer told.
+   */
+  #charsetsDesignated = false;
 
   constructor(cols: number, rows: number) {
     this.cols = cols;
@@ -155,6 +161,26 @@ export class Screen {
       lines.push(line);
     }
     return lines;
+  }
+
+  /** The scrolling region, as inclusive row indices. */
+  get margins(): { top: number; bottom: number } {
+    return { top: this.#marginTop, bottom: this.#marginBottom };
+  }
+
+  /** Whether Insert Replacement Mode is on. */
+  get insertMode(): boolean {
+    return this.#insertMode;
+  }
+
+  /** The G0 and G1 sets and whether G1 is shifted in, as a copy. */
+  get charsets(): Charsets {
+    return { ...this.#charsets };
+  }
+
+  /** Whether the stream has designated a character set since the last reset. */
+  get charsetsDesignated(): boolean {
+    return this.#charsetsDesignated;
   }
 
   /** The cell at `(y, x)`, or `undefined` when it was never written. */
@@ -213,6 +239,7 @@ export class Screen {
    * and `0` (DEC special graphics) are known; any other code is ignored.
    */
   defineCharset(code: string, slot: "(" | ")"): void {
+    this.#charsetsDesignated = true;
     const charset = CHARSET_CODES.get(code);
     if (charset === undefined) {
       return;
@@ -516,6 +543,7 @@ export class Screen {
     this.#savedCursor = undefined;
     this.#charsets = initialCharsets();
     this.#savedCharsets = undefined;
+    this.#charsetsDesignated = false;
     this.#marginTop = 0;
     this.#marginBottom = this.rows - 1;
     this.#insertMode = false;

@@ -206,11 +206,24 @@ public sealed class TerminalEmulator
         };
     }
 
+    /// <summary>
+    /// The current screen with ANSI SGR codes, as a snapshot a viewer resumes the
+    /// live stream from.
+    /// </summary>
+    /// <remarks>
+    /// Besides the styled rows it carries the state that stream assumes and the
+    /// cells do not show: the alternate screen before the rows, and after them
+    /// the scroll region, origin mode, the real cursor (deferred wrap included),
+    /// autowrap/insert/new-line modes, input modes, the pen and cursor
+    /// visibility. See <see cref="TerminalState"/>.
+    /// </remarks>
     public string AnsiScreen()
     {
         lock (_gate)
         {
-            return string.Join("\n", RenderBuffer.RenderScreenLines(_screen, _cols, _rows));
+            var rows = string.Join("\n", RenderBuffer.RenderScreenLines(_screen, _cols, _rows));
+            return TerminalState.ScreenStatePrefix(_screen) + rows +
+                   TerminalState.ScreenStateSuffix(_screen, !_stream.UseUtf8);
         }
     }
 

@@ -44,7 +44,7 @@ class TestAnsiBuffer:
         lines = buf.render_lines(40, 5)
         first_line = lines[0]
         # Should contain SGR sequence for bold (1) + red fg (31)
-        assert "\x1b[1;31m" in first_line
+        assert "\x1b[0;1;31m" in first_line
         assert "RED" in first_line
 
     def test_resize(self) -> None:
@@ -75,34 +75,33 @@ class TestStyleToSgr:
 
     def test_bold(self) -> None:
         result = style_to_sgr("default", "default", True, False, False, False)
-        assert result == "\x1b[1m"
+        assert result == "\x1b[0;1m"
 
     def test_fg_color(self) -> None:
         result = style_to_sgr("green", "default", False, False, False, False)
-        assert result == f"\x1b[{FG_CODES['green']}m"
+        assert result == f"\x1b[0;{FG_CODES['green']}m"
 
     def test_bg_color(self) -> None:
         result = style_to_sgr("default", "blue", False, False, False, False)
-        assert result == f"\x1b[{BG_CODES['blue']}m"
+        assert result == f"\x1b[0;{BG_CODES['blue']}m"
 
     def test_bold_and_color(self) -> None:
         result = style_to_sgr("red", "default", True, False, False, False)
-        assert result == f"\x1b[1;{FG_CODES['red']}m"
+        assert result == f"\x1b[0;1;{FG_CODES['red']}m"
 
-    def test_reverse_swaps_fg_bg(self) -> None:
-        # reverse=True should swap fg and bg before lookup
-        result = style_to_sgr("red", "blue", False, False, True, False)
-        # After swap: fg=blue, bg=red
-        assert f"{FG_CODES['blue']}" in result
-        assert f"{BG_CODES['red']}" in result
+    def test_reverse_is_sent_as_reverse(self) -> None:
+        # Not as swapped colours: with both colours default a swap is no
+        # change, and the reversed cell disappeared.
+        assert style_to_sgr("red", "blue", False, False, True, False) == "\x1b[0;7;31;44m"
+        assert style_to_sgr("default", "default", False, False, True, False) == "\x1b[0;7m"
 
     def test_underscore(self) -> None:
         result = style_to_sgr("default", "default", False, True, False, False)
-        assert result == "\x1b[4m"
+        assert result == "\x1b[0;4m"
 
     def test_blink(self) -> None:
         result = style_to_sgr("default", "default", False, False, False, True)
-        assert result == "\x1b[5m"
+        assert result == "\x1b[0;5m"
 
 
 class TestTruecolorSupport:
@@ -111,17 +110,17 @@ class TestTruecolorSupport:
     def test_hex_fg_truecolor(self) -> None:
         """Hex fg like 'ff8000' emits 38;2;R;G;B."""
         result = style_to_sgr("ff8000", "default", False, False, False, False)
-        assert result == "\x1b[38;2;255;128;0m"
+        assert result == "\x1b[0;38;2;255;128;0m"
 
     def test_hex_bg_truecolor(self) -> None:
         """Hex bg like '0000ff' emits 48;2;R;G;B."""
         result = style_to_sgr("default", "0000ff", False, False, False, False)
-        assert result == "\x1b[48;2;0;0;255m"
+        assert result == "\x1b[0;48;2;0;0;255m"
 
     def test_hex_fg_red(self) -> None:
         """256-color red (ff0000) as truecolor."""
         result = style_to_sgr("ff0000", "default", False, False, False, False)
-        assert result == "\x1b[38;2;255;0;0m"
+        assert result == "\x1b[0;38;2;255;0;0m"
 
     def test_hex_fg_and_bg(self) -> None:
         """Both fg and bg as hex."""
@@ -142,11 +141,9 @@ class TestTruecolorSupport:
         assert "48;2;0;0;255" in result
 
     def test_hex_with_reverse(self) -> None:
-        """Reverse swaps hex fg and bg."""
+        """Reverse keeps hex fg and bg where they are and adds SGR 7."""
         result = style_to_sgr("ff0000", "0000ff", False, False, True, False)
-        # After swap: fg=0000ff, bg=ff0000
-        assert "38;2;0;0;255" in result
-        assert "48;2;255;0;0" in result
+        assert result == "\x1b[0;7;38;2;255;0;0;48;2;0;0;255m"
 
     def test_invalid_hex_too_short(self) -> None:
         """Non-6-char string treated as default (no color codes)."""
@@ -164,11 +161,11 @@ class TestTruecolorSupport:
     def test_black_hex(self) -> None:
         """000000 should emit truecolor black, not be confused with 'default'."""
         result = style_to_sgr("000000", "default", False, False, False, False)
-        assert result == "\x1b[38;2;0;0;0m"
+        assert result == "\x1b[0;38;2;0;0;0m"
 
     def test_white_hex(self) -> None:
         result = style_to_sgr("ffffff", "default", False, False, False, False)
-        assert result == "\x1b[38;2;255;255;255m"
+        assert result == "\x1b[0;38;2;255;255;255m"
 
 
 class TestAnsiBufferTruecolor:

@@ -41,17 +41,16 @@ export function clearScreen(): string {
 /**
  * Foreground SGR codes by colour name.
  *
- * Note what is *absent*: the screen model names its yellow `brown`, and this
- * table does not carry that name, so a brown cell emits no colour code at
- * all. That is the reference's behaviour and the corpus pins it rather than
- * quietly correcting it — correcting it here would change the bytes a
- * consumer receives.
+ * The screen model names its yellow `brown` (as pyte does), so both names are
+ * here. Without `brown` a yellow cell emitted no colour code at all, and a
+ * snapshot painted it in the default colour.
  */
 export const FG_CODES: Readonly<Record<string, number>> = {
   black: 30,
   red: 31,
   green: 32,
   yellow: 33,
+  brown: 33,
   blue: 34,
   magenta: 35,
   cyan: 36,
@@ -60,18 +59,20 @@ export const FG_CODES: Readonly<Record<string, number>> = {
   brightred: 91,
   brightgreen: 92,
   brightyellow: 93,
+  brightbrown: 93,
   brightblue: 94,
   brightmagenta: 95,
   brightcyan: 96,
   brightwhite: 97,
 };
 
-/** Background SGR codes by colour name, with the same `brown` gap. */
+/** Background SGR codes by colour name, `brown` included. */
 export const BG_CODES: Readonly<Record<string, number>> = {
   black: 40,
   red: 41,
   green: 42,
   yellow: 43,
+  brown: 43,
   blue: 44,
   magenta: 45,
   cyan: 46,
@@ -80,6 +81,7 @@ export const BG_CODES: Readonly<Record<string, number>> = {
   brightred: 101,
   brightgreen: 102,
   brightyellow: 103,
+  brightbrown: 103,
   brightblue: 104,
   brightmagenta: 105,
   brightcyan: 106,
@@ -92,7 +94,7 @@ function isHexColor(value: string): boolean {
 }
 
 /** SGR codes for one colour value, which may be a name or a hex triple. */
-function colorSgr(color: string, isForeground: boolean): number[] {
+export function colorSgr(color: string, isForeground: boolean): number[] {
   if (color === "default") {
     return [];
   }
@@ -142,20 +144,22 @@ export interface CellStyle {
 /**
  * Convert cell style attributes to an SGR escape sequence.
  *
- * Reverse video is applied by swapping the two colours before they are
- * encoded rather than by emitting SGR 7, so a consumer that only understands
- * colours still sees the inversion. A style with nothing to say emits a plain
- * reset.
+ * The sequence is absolute: it starts from a reset, so it sets exactly this
+ * style whatever the previous cell's was. Relative to the previous style, a
+ * cell that dropped an attribute kept it -- a background bleeding along the
+ * row. Reverse video is SGR 7: swapping the colours instead is no change at
+ * all when both are the default, and the reversed cell vanished. A style with
+ * nothing to say emits a plain reset.
  */
 export function styleToSgr(style: CellStyle): string {
-  const fg = style.reverse ? style.bg : style.fg;
-  const bg = style.reverse ? style.fg : style.bg;
   const codes = [
+    0,
     ...attrCodes(style.bold, style.underscore, style.blink),
-    ...colorSgr(fg, true),
-    ...colorSgr(bg, false),
+    ...(style.reverse ? [7] : []),
+    ...colorSgr(style.fg, true),
+    ...colorSgr(style.bg, false),
   ];
-  if (codes.length === 0) {
+  if (codes.length === 1) {
     return ANSI_RESET;
   }
   return `\x1b[${codes.join(";")}m`;
@@ -170,6 +174,18 @@ const DEFAULT_STYLE: CellStyle = {
   reverse: false,
   blink: false,
 };
+
+/** The style the renderer reads from a cell. */
+export function cellStyle(cell: Char): CellStyle {
+  return {
+    fg: cell.fg === "" ? "default" : cell.fg,
+    bg: cell.bg === "" ? "default" : cell.bg,
+    bold: cell.bold,
+    underscore: cell.underscore,
+    reverse: cell.reverse,
+    blink: cell.blink,
+  };
+}
 
 /** Whether two styles would render identically. */
 function sameStyle(a: CellStyle, b: CellStyle): boolean {
@@ -199,17 +215,7 @@ export function renderCellRows(read: CellReader, cols: number, rows: number): st
     let lastStyle: CellStyle | undefined;
     for (let x = 0; x < cols; x += 1) {
       const cell = read(y, x);
-      const style: CellStyle =
-        cell === undefined
-          ? DEFAULT_STYLE
-          : {
-              fg: cell.fg === "" ? "default" : cell.fg,
-              bg: cell.bg === "" ? "default" : cell.bg,
-              bold: cell.bold,
-              underscore: cell.underscore,
-              reverse: cell.reverse,
-              blink: cell.blink,
-            };
+      const style = cell === undefined ? DEFAULT_STYLE : cellStyle(cell);
       if (lastStyle === undefined || !sameStyle(style, lastStyle)) {
         parts.push(styleToSgr(style));
         lastStyle = style;

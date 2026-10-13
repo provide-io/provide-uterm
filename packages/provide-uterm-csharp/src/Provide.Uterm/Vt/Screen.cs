@@ -25,6 +25,13 @@ public partial class Screen
     private int _charset;
     private int[] _g0Charset = CharsetTables.Lat1Map;
     private int[] _g1Charset = CharsetTables.Vt100Map;
+
+    /// <summary>
+    /// Whether a charset was designated since the last reset: G1 powers on as DEC
+    /// graphics, so a program that designated it so itself leaves the same sets
+    /// as one that never touched G1.
+    /// </summary>
+    private bool _charsetsDesignated;
     private Dictionary<int, bool> _tabstops = new();
     private Cursor _cursor;
     private readonly List<Savepoint> _savepoints = new();
@@ -61,6 +68,16 @@ public partial class Screen
         outList.Sort();
         return outList;
     }
+
+    /// <summary>Whether <paramref name="mode"/> is set (private modes shifted left by 5).</summary>
+    public bool HasMode(int mode) => _mode.ContainsKey(mode);
+
+    /// <summary>The G0 and G1 designators ("B", "0", "U" or "V") and whether G1 is shifted in.</summary>
+    public (string G0, string G1, bool Shifted) CharsetState() =>
+        (Charsets.CodeOf(_g0Charset), Charsets.CodeOf(_g1Charset), _charset == 1);
+
+    /// <summary>Whether the stream has designated a character set since the last reset.</summary>
+    public bool CharsetsDesignated => _charsetsDesignated;
 
     public IReadOnlyList<int> TabStops()
     {
@@ -144,6 +161,7 @@ public partial class Screen
         _charset = 0;
         _g0Charset = CharsetTables.Lat1Map;
         _g1Charset = CharsetTables.Vt100Map;
+        _charsetsDesignated = false;
         _tabstops = new Dictionary<int, bool>();
         for (var x = 8; x < _columns; x += 8)
         {
@@ -343,6 +361,7 @@ public partial class Screen
 
     public void DefineCharset(string code, string mode)
     {
+        _charsetsDesignated = true;
         if (!Charsets.Maps.TryGetValue(code, out var map))
         {
             return;

@@ -97,7 +97,24 @@ class _TolerantScreen(pyte.Screen):
     another arity cannot reintroduce the crash. Sixty-two crashing shapes across
     twenty-one final bytes existed before this: `ESC[1;2M`, `ESC[1;2A`,
     `ESC[1;2;3H` and so on, each six or seven bytes long.
+
+    It also remembers whether the stream has designated a character set. pyte
+    powers on with G1 already DEC graphics, so a program that designated it so
+    itself (``ESC ) 0`` once, then SO/SI for every line it draws, as curses does
+    under TERM=screen) leaves the same state as one that never touched G1 --
+    and only the first needs a joining viewer told. See
+    :mod:`provide.uterm.render.terminal_state`.
     """
+
+    charsets_designated: bool = False
+
+    def define_charset(self, code: str, mode: str) -> None:
+        super().define_charset(code, mode)
+        self.charsets_designated = True
+
+    def reset(self) -> None:
+        super().reset()
+        self.charsets_designated = False
 
 
 for _name in (
@@ -267,14 +284,29 @@ class TerminalEmulator:
         needs the *visual* state including colors — :meth:`get_snapshot`'s
         plain ``screen`` field discards pyte's style attributes.
 
-        Rows are joined with ``\\n``; each row ends with ``\\x1b[0m`` so a
-        consumer's subsequent writes start from a clean attribute state.
+        Rows are joined with ``\\n`` (a consumer writing to a terminal turns
+        them into CRLF) and each ends with ``\\x1b[0m``.
+
+        It is a snapshot a viewer resumes the live stream from, so it also
+        carries the state that stream assumes, which the cells alone do not
+        show: the alternate screen before the rows, and after them the scroll
+        region, origin mode, the real cursor position (deferred wrap
+        included), autowrap/insert/new-line modes, input modes, the G0/G1
+        charsets and shift, the pen, and cursor visibility. Without it a
+        program that paints with relative movement drew everything in the
+        wrong place. See :mod:`provide.uterm.render.terminal_state`.
         """
         # Local import keeps the render module out of the import-time
         # graph for callers that only need plain-text snapshots.
         from provide.uterm.render.buffer import render_cell_rows
+        from provide.uterm.render.terminal_state import screen_state_prefix, screen_state_suffix
 
-        return "\n".join(render_cell_rows(self._screen.buffer, self.cols, self.rows))
+        screen = self._screen
+        rows = "\n".join(render_cell_rows(screen.buffer, self.cols, self.rows))
+        # Designations and SO/SI are state only where the stream honours them;
+        # see the use_utf8 note in __init__.
+        suffix = screen_state_suffix(screen, charsets=not self._stream.use_utf8)
+        return f"{screen_state_prefix(screen)}{rows}{suffix}"
 
     def reset(self) -> None:
         """Reset terminal to its initial state."""

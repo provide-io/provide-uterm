@@ -17,7 +17,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { renderCellRows } from "../render/index.ts";
+import { renderCellRows, screenStateSuffix } from "../render/index.ts";
 import { decodeCp437 } from "../screen/index.ts";
 import { Screen, Stream } from "../vt/index.ts";
 
@@ -159,9 +159,18 @@ export class TerminalEmulator {
    *
    * Use this where a consumer needs the *visual* state including colour;
    * a snapshot's plain `screen` field discards style attributes.
+   *
+   * It is a snapshot a viewer resumes the live stream from, so the rows are
+   * followed by the state that stream assumes and the cells do not show: the
+   * scroll region, the real cursor (deferred wrap included), insert mode, the
+   * character sets, the pen and cursor visibility. See
+   * `render/terminal-state.ts`.
    */
   ansiScreen(): string {
-    return renderCellRows((y, x) => this.#screen.peek(y, x), this.cols, this.rows).join("\n");
+    const rows = renderCellRows((y, x) => this.#screen.peek(y, x), this.cols, this.rows).join("\n");
+    // Designations and SO/SI are state only where the stream honours them,
+    // which is exactly where it draws DEC graphics.
+    return rows + screenStateSuffix(this.#screen, { charsets: this.receiveEncoding !== "cp437" });
   }
 
   /** Reset the terminal to its initial state. */

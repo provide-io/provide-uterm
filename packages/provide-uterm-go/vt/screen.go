@@ -34,6 +34,10 @@ type Screen struct {
 	cursor         Cursor
 	savepoints     []savepoint
 	savedColumns   int // -1 when unset (pyte's saved_columns = None)
+	// designated records a charset designation since the last reset: G1
+	// powers on as DEC graphics, so a program that designated it so itself
+	// leaves the same sets as one that never touched G1.
+	designated bool
 }
 
 // NewScreen creates a screen with the given dimensions and resets it to
@@ -77,6 +81,20 @@ func (s *Screen) Modes() []int {
 	sort.Ints(out)
 	return out
 }
+
+// HasMode reports whether mode is set. Private (DEC) modes are shifted left
+// by 5, as Modes reports them.
+func (s *Screen) HasMode(mode int) bool { return s.mode[mode] }
+
+// Charsets returns the designators of the G0 and G1 sets ("B", "0", "U" or
+// "V") and whether G1 is shifted in.
+func (s *Screen) Charsets() (g0, g1 string, shifted bool) {
+	return charsetCode(s.g0Charset), charsetCode(s.g1Charset), s.charset == 1
+}
+
+// CharsetsDesignated reports whether the stream has designated a character set
+// since the last reset.
+func (s *Screen) CharsetsDesignated() bool { return s.designated }
 
 // TabStops returns the current tab stop columns, sorted ascending.
 func (s *Screen) TabStops() []int {
@@ -196,6 +214,7 @@ func (s *Screen) Reset() {
 	s.charset = 0
 	s.g0Charset = &lat1Map
 	s.g1Charset = &vt100Map
+	s.designated = false
 	s.tabstops = make(map[int]bool)
 	for x := 8; x < s.columns; x += 8 {
 		s.tabstops[x] = true
@@ -375,6 +394,7 @@ func (s *Screen) ResetMode(private bool, modes ...int) {
 // DefineCharset defines the G0 ("(") or G1 (")") charset. Unknown charset
 // codes are ignored.
 func (s *Screen) DefineCharset(code, mode string) {
+	s.designated = true
 	m, ok := charsetMaps[code]
 	if !ok {
 		return

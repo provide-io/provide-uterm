@@ -27,15 +27,21 @@ func TestStyleToSGR(t *testing.T) {
 		want  string
 	}{
 		{DefaultStyle, ANSIReset},
-		{Style{FG: "red", BG: "default"}, "\x1b[31m"},
-		{Style{FG: "default", BG: "blue"}, "\x1b[44m"},
-		{Style{FG: "brightcyan", BG: "black", Bold: true}, "\x1b[1;96;40m"},
-		{Style{FG: "default", BG: "default", Underscore: true, Blink: true}, "\x1b[4;5m"},
-		// Reverse swaps fg/bg before mapping.
-		{Style{FG: "red", BG: "blue", Reverse: true}, "\x1b[34;41m"},
+		{Style{FG: "red", BG: "default"}, "\x1b[0;31m"},
+		{Style{FG: "default", BG: "blue"}, "\x1b[0;44m"},
+		{Style{FG: "brightcyan", BG: "black", Bold: true}, "\x1b[0;1;96;40m"},
+		{Style{FG: "default", BG: "default", Underscore: true, Blink: true}, "\x1b[0;4;5m"},
+		// Reverse is SGR 7, the colours left in place: a swap of two
+		// defaults is no change, and the reversed cell vanished.
+		{Style{FG: "red", BG: "blue", Reverse: true}, "\x1b[0;7;31;44m"},
+		{Style{FG: "default", BG: "default", Reverse: true}, "\x1b[0;7m"},
+		// The vt (pyte) names for yellow, and pyte's spelling of SGR 105.
+		{Style{FG: "brown", BG: "brightbrown"}, "\x1b[0;33;103m"},
+		{Style{FG: "brightbrown", BG: "brown"}, "\x1b[0;93;43m"},
+		{Style{FG: "default", BG: "bfightmagenta"}, "\x1b[0;105m"},
 		// pyte hex colors become truecolor operands.
-		{Style{FG: "ff8000", BG: "default"}, "\x1b[38;2;255;128;0m"},
-		{Style{FG: "default", BG: "0000FF"}, "\x1b[48;2;0;0;255m"},
+		{Style{FG: "ff8000", BG: "default"}, "\x1b[0;38;2;255;128;0m"},
+		{Style{FG: "default", BG: "0000FF"}, "\x1b[0;48;2;0;0;255m"},
 		// Unknown color names emit nothing.
 		{Style{FG: "chartreuse-ish", BG: "default"}, ANSIReset},
 		{Style{FG: "zzzzzz", BG: "default"}, ANSIReset}, // 6 chars but not hex
@@ -55,7 +61,7 @@ func TestAnsiBufferFeedAndRenderLines(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("lines = %d", len(lines))
 	}
-	if !strings.HasPrefix(lines[0], "\x1b[31mAB\x1b[0mC") {
+	if !strings.HasPrefix(lines[0], "\x1b[0;31mAB\x1b[0mC") {
 		t.Fatalf("row0 = %q", lines[0])
 	}
 	if !strings.HasSuffix(lines[0], ANSIReset) {
@@ -91,9 +97,9 @@ func TestRenderLinesStyleRuns(t *testing.T) {
 	b := NewAnsiBuffer(6, 1)
 	b.Feed([]byte("\x1b[1;33mAA\x1b[0mBB"))
 	row := b.RenderLines(6, 1)[0]
-	// pyte names SGR 33 "brown", which is not in FG_CODES — like the Python
-	// renderer, only the bold attribute survives, emitted once per run.
-	if !strings.HasPrefix(row, "\x1b[1mAA\x1b[0mBB") {
+	// pyte names SGR 33 "brown", which renders as 33; each run's style is
+	// emitted once, from a reset.
+	if !strings.HasPrefix(row, "\x1b[0;1;33mAA\x1b[0mBB") {
 		t.Fatalf("row = %q", row)
 	}
 	if !strings.HasSuffix(row, ANSIReset) {

@@ -14,3 +14,4 @@ export * from "./image.ts";
 export * from "./palette.ts";
 export * from "./segments.ts";
 export * from "./sgr.ts";
+export * from "./terminal-state.ts";

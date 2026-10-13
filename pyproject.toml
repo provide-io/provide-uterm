@@ -583,6 +583,7 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm/tests/bridge/test_behavior_policy.py",
     "packages/provide-uterm/tests/bridge/test_generated_parity.py",
     "packages/provide-uterm/tests/shell/test_shell_render.py",
+    "packages/provide-uterm/tests/terminal/test_emulator_snapshot_resume.py",
     "packages/provide-uterm/tests/deckmux/test_presence.py",
     "packages/provide-uterm/tests/deckmux/test_hub_mixin.py",
     "packages/provide-uterm/tests/deckmux/test_transfer.py",

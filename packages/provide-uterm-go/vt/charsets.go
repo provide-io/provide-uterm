@@ -14,3 +14,16 @@ var charsetMaps = map[string]*charsetMap{
 	"U": &ibmpcMap, // IBM codepage 437.
 	"V": &vax42Map, // VAX42.
 }
+
+// charsetCodes maps each translation table back to its designator.
+var charsetCodes = func() map[*charsetMap]string {
+	codes := make(map[*charsetMap]string, len(charsetMaps))
+	for code, table := range charsetMaps {
+		codes[table] = code
+	}
+	return codes
+}()
+
+// charsetCode is the designator a translation table was selected by. Every
+// table a screen holds comes from charsetMaps, so it always has one.
+func charsetCode(m *charsetMap) string { return charsetCodes[m] }

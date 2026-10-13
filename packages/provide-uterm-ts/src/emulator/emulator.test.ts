@@ -219,9 +219,12 @@ describe("styleToSgr", () => {
     ).toBe("\x1b[0m");
   });
 
-  it("swaps the colours for reverse video rather than emitting SGR 7", () => {
+  it("emits SGR 7 for reverse video and leaves the colours in place", () => {
+    // Swapping them instead is no change at all on a default pen, which is
+    // how a reversed cell vanished from snapshots.
     const style: CellStyle = { fg: "red", bg: "green", bold: false, underscore: false, reverse: true, blink: false };
-    expect(styleToSgr(style)).toBe("\x1b[32;41m");
+    expect(styleToSgr(style)).toBe("\x1b[0;7;31;42m");
+    expect(styleToSgr({ ...style, fg: "default", bg: "default" })).toBe("\x1b[0;7m");
   });
 
   it("emits truecolor for a hex colour", () => {
@@ -233,14 +236,24 @@ describe("styleToSgr", () => {
       reverse: false,
       blink: false,
     };
-    expect(styleToSgr(style)).toBe("\x1b[38;2;255;128;0m");
+    expect(styleToSgr(style)).toBe("\x1b[0;38;2;255;128;0m");
+  });
+
+  it("emits yellow for brown, the screen model's name for it", () => {
+    const style: CellStyle = {
+      fg: "brown",
+      bg: "brightbrown",
+      bold: false,
+      underscore: false,
+      reverse: false,
+      blink: false,
+    };
+    expect(styleToSgr(style)).toBe("\x1b[0;33;103m");
   });
 
   it("emits no colour for a name the table does not carry", () => {
-    // The screen model names its yellow "brown", which this table lacks, so
-    // a brown cell loses its colour. That is the reference's behaviour.
     const style: CellStyle = {
-      fg: "brown",
+      fg: "mauve",
       bg: "default",
       bold: false,
       underscore: false,
@@ -299,7 +312,8 @@ describe("renderCellRows", () => {
 
   it("emits an escape only where the style changes", () => {
     const emulator = drive(6, 1, ["\x1b[31maa\x1b[0mbb"]);
-    const row = emulator.ansiScreen();
+    // The painted row, without the terminal state that follows it.
+    const row = emulator.ansiScreen().split("\x1b[r")[0] as string;
     // Two style runs — red, then default for the rest of the row — plus the
     // trailing reset. Not one escape per cell.
     expect(row.match(/\x1b\[/g)?.length).toBe(3);

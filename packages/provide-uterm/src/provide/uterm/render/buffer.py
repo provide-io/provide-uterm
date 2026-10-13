@@ -49,6 +49,8 @@ FG_CODES: dict[str, int] = {
     "red": 31,
     "green": 32,
     "yellow": 33,
+    # pyte's name for SGR 33 / 43 (and 93 / 103): console_codes(4) calls it brown.
+    "brown": 33,
     "blue": 34,
     "magenta": 35,
     "cyan": 36,
@@ -57,6 +59,7 @@ FG_CODES: dict[str, int] = {
     "brightred": 91,
     "brightgreen": 92,
     "brightyellow": 93,
+    "brightbrown": 93,
     "brightblue": 94,
     "brightmagenta": 95,
     "brightcyan": 96,
@@ -68,6 +71,7 @@ BG_CODES: dict[str, int] = {
     "red": 41,
     "green": 42,
     "yellow": 43,
+    "brown": 43,
     "blue": 44,
     "magenta": 45,
     "cyan": 46,
@@ -76,8 +80,11 @@ BG_CODES: dict[str, int] = {
     "brightred": 101,
     "brightgreen": 102,
     "brightyellow": 103,
+    "brightbrown": 103,
     "brightblue": 104,
     "brightmagenta": 105,
+    # pyte's BG_AIXTERM spells SGR 105 this way; matched as spelled.
+    "bfightmagenta": 105,
     "brightcyan": 106,
     "brightwhite": 107,
 }
@@ -86,6 +93,23 @@ BG_CODES: dict[str, int] = {
 # ---------------------------------------------------------------------------
 # Shared per-cell SGR render loop
 # ---------------------------------------------------------------------------
+
+#: A cell's rendered style: ``(fg, bg, bold, underscore, reverse, blink)``.
+CellStyle = tuple[str, str, bool, bool, bool, bool]
+
+_DEFAULT_STYLE: CellStyle = ("default", "default", False, False, False, False)
+
+
+def cell_style(cell: Any) -> CellStyle:
+    """The style tuple :func:`style_to_sgr` takes, read from a pyte cell."""
+    return (
+        cell.fg or "default",
+        cell.bg or "default",
+        bool(cell.bold),
+        bool(getattr(cell, "underscore", False)),
+        bool(getattr(cell, "reverse", False)),
+        bool(getattr(cell, "blink", False)),
+    )
 
 
 def render_cell_rows(buffer: Any, cols: int, rows: int) -> list[str]:
@@ -102,20 +126,14 @@ def render_cell_rows(buffer: Any, cols: int, rows: int) -> list[str]:
     for y in range(rows):
         row: dict[int, Any] = buffer.get(y, {})
         line_parts: list[str] = []
-        last_style: tuple[str, str, bool, bool, bool, bool] | None = None
+        last_style: CellStyle | None = None
         for x in range(cols):
             cell = row.get(x)
             if cell is None:
                 char = " "
-                style = ("default", "default", False, False, False, False)
+                style = _DEFAULT_STYLE
             else:
-                fg = cell.fg or "default"
-                bg = cell.bg or "default"
-                bold = bool(cell.bold)
-                underscore = bool(getattr(cell, "underscore", False))
-                reverse = bool(getattr(cell, "reverse", False))
-                blink = bool(getattr(cell, "blink", False))
-                style = (fg, bg, bold, underscore, reverse, blink)
+                style = cell_style(cell)
                 char = cell.data or " "
 
             if style != last_style:
@@ -219,12 +237,20 @@ def style_to_sgr(
     """Convert pyte cell style attributes to an SGR escape sequence.
 
     Supports named 16-color, 256-color (pyte hex), and truecolor (pyte hex).
+
+    The sequence is absolute: it starts from a reset, so it sets exactly this
+    style whatever the previous cell's was. Emitted relative to the previous
+    style, a cell that dropped an attribute kept it -- bold, or a background,
+    bleeding along the row from the cell before.
     """
+    codes = [0, *_attr_codes(bold, underscore, blink)]
+    # Reverse is sent as reverse. Swapping the colours instead looks the same
+    # until both are the default, when the swap is no change at all -- which is
+    # how a reversed cell on a default pen (vitetris's selected level) vanished.
     if reverse:
-        fg, bg = bg, fg
-    codes = _attr_codes(bold, underscore, blink)
+        codes.append(7)
     codes.extend(_color_sgr(fg, is_fg=True))
     codes.extend(_color_sgr(bg, is_fg=False))
-    if not codes:
+    if codes == [0]:
         return ANSI_RESET
     return f"\x1b[{';'.join(str(c) for c in codes)}m"

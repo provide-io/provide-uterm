@@ -76,7 +76,7 @@ class TestAnsiBuffer:
         buf.feed(b"\x1b[1;31mRED\x1b[0m")
         lines = buf.render_lines(40, 5)
         first_line = lines[0]
-        assert "\x1b[1;31m" in first_line
+        assert "\x1b[0;1;31m" in first_line
         assert "RED" in first_line
 
     def test_resize(self) -> None:
@@ -139,44 +139,45 @@ class TestStyleToSgr:
 
     def test_bold(self) -> None:
         result = style_to_sgr("default", "default", True, False, False, False)
-        assert result == "\x1b[1m"
+        assert result == "\x1b[0;1m"
 
     def test_fg_color(self) -> None:
         result = style_to_sgr("green", "default", False, False, False, False)
-        assert result == f"\x1b[{FG_CODES['green']}m"
+        assert result == f"\x1b[0;{FG_CODES['green']}m"
 
     def test_bg_color(self) -> None:
         result = style_to_sgr("default", "blue", False, False, False, False)
-        assert result == f"\x1b[{BG_CODES['blue']}m"
+        assert result == f"\x1b[0;{BG_CODES['blue']}m"
 
     def test_bold_and_color(self) -> None:
         result = style_to_sgr("red", "default", True, False, False, False)
-        assert result == f"\x1b[1;{FG_CODES['red']}m"
+        assert result == f"\x1b[0;1;{FG_CODES['red']}m"
 
-    def test_reverse_swaps_fg_bg(self) -> None:
-        result = style_to_sgr("red", "blue", False, False, True, False)
-        assert f"{FG_CODES['blue']}" in result
-        assert f"{BG_CODES['red']}" in result
+    def test_reverse_is_sent_as_reverse(self) -> None:
+        # Not as swapped colours: with both colours default a swap is no
+        # change, and the reversed cell disappeared.
+        assert style_to_sgr("red", "blue", False, False, True, False) == "\x1b[0;7;31;44m"
+        assert style_to_sgr("default", "default", False, False, True, False) == "\x1b[0;7m"
 
     def test_underscore(self) -> None:
         result = style_to_sgr("default", "default", False, True, False, False)
-        assert result == "\x1b[4m"
+        assert result == "\x1b[0;4m"
 
     def test_blink(self) -> None:
         result = style_to_sgr("default", "default", False, False, False, True)
-        assert result == "\x1b[5m"
+        assert result == "\x1b[0;5m"
 
     def test_hex_fg_truecolor(self) -> None:
         result = style_to_sgr("ff8000", "default", False, False, False, False)
-        assert result == "\x1b[38;2;255;128;0m"
+        assert result == "\x1b[0;38;2;255;128;0m"
 
     def test_hex_bg_truecolor(self) -> None:
         result = style_to_sgr("default", "0000ff", False, False, False, False)
-        assert result == "\x1b[48;2;0;0;255m"
+        assert result == "\x1b[0;48;2;0;0;255m"
 
     def test_hex_fg_red(self) -> None:
         result = style_to_sgr("ff0000", "default", False, False, False, False)
-        assert result == "\x1b[38;2;255;0;0m"
+        assert result == "\x1b[0;38;2;255;0;0m"
 
     def test_hex_fg_and_bg(self) -> None:
         result = style_to_sgr("00ff00", "800080", False, False, False, False)
@@ -194,9 +195,9 @@ class TestStyleToSgr:
         assert "48;2;0;0;255" in result
 
     def test_hex_with_reverse(self) -> None:
+        """Reverse keeps hex fg and bg where they are and adds SGR 7."""
         result = style_to_sgr("ff0000", "0000ff", False, False, True, False)
-        assert "38;2;0;0;255" in result
-        assert "48;2;255;0;0" in result
+        assert result == "\x1b[0;7;38;2;255;0;0;48;2;0;0;255m"
 
     def test_invalid_hex_too_short(self) -> None:
         result = style_to_sgr("fff", "default", False, False, False, False)
@@ -212,11 +213,11 @@ class TestStyleToSgr:
 
     def test_black_hex(self) -> None:
         result = style_to_sgr("000000", "default", False, False, False, False)
-        assert result == "\x1b[38;2;0;0;0m"
+        assert result == "\x1b[0;38;2;0;0;0m"
 
     def test_white_hex(self) -> None:
         result = style_to_sgr("ffffff", "default", False, False, False, False)
-        assert result == "\x1b[38;2;255;255;255m"
+        assert result == "\x1b[0;38;2;255;255;255m"
 
 
 # ---------------------------------------------------------------------------
@@ -292,8 +293,15 @@ class TestEscapeHelpers:
 
 
 def test_fg_codes_has_16_entries() -> None:
-    assert len(FG_CODES) == 16
+    # Sixteen colours, plus pyte's spellings of two of them ("brown").
+    assert len(set(FG_CODES.values())) == 16
+    assert FG_CODES["brown"] == FG_CODES["yellow"]
+    assert FG_CODES["brightbrown"] == FG_CODES["brightyellow"]
 
 
 def test_bg_codes_has_16_entries() -> None:
-    assert len(BG_CODES) == 16
+    # Sixteen colours, plus pyte's spellings of three of them.
+    assert len(set(BG_CODES.values())) == 16
+    assert BG_CODES["brown"] == BG_CODES["yellow"]
+    assert BG_CODES["brightbrown"] == BG_CODES["brightyellow"]
+    assert BG_CODES["bfightmagenta"] == BG_CODES["brightmagenta"]
