@@ -447,10 +447,11 @@ def test_a_socket_is_judged_by_its_own_app_and_principal() -> None:
     service = AuthorizationService()
     service.revoke_share_viewers("s1", now=500.0)
     app = SimpleNamespace(state=SimpleNamespace(uterm_authz=service))
-    revoked = SimpleNamespace(app=app, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=100)))
-    fresh = SimpleNamespace(app=app, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=900)))
-    bare_hub = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()), state=revoked.state)
-    no_app = SimpleNamespace(state=revoked.state)
+    revoked = SimpleNamespace(scope={"app": app}, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=100)))
+    fresh = SimpleNamespace(scope={"app": app}, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=900)))
+    bare_hub = SimpleNamespace(scope={"app": SimpleNamespace(state=SimpleNamespace())}, state=revoked.state)
+    # A hub mounted with no app in its scope (the quota tests' harness).
+    no_app = SimpleNamespace(scope={}, state=revoked.state)
     assert socket_share_viewer_revoked(revoked, "s1") is True
     assert socket_share_viewer_revoked(fresh, "s1") is False
     assert socket_share_viewer_revoked(bare_hub, "s1") is False

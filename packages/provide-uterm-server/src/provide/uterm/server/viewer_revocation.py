@@ -70,7 +70,10 @@ def socket_share_viewer_revoked(websocket: Any, session_id: str) -> bool:
     caught here instead: either the scan saw it, or this sees the cutoff. A hub
     used outside the server app has no authorization service and revokes nothing.
     """
-    authz = getattr(getattr(getattr(websocket, "app", None), "state", None), "uterm_authz", None)
+    # Through the ASGI scope rather than ``websocket.app``: that property is a
+    # bare ``scope["app"]`` and raises KeyError for a hub mounted without one.
+    app = getattr(websocket, "scope", {}).get("app")
+    authz = getattr(getattr(app, "state", None), "uterm_authz", None)
     return authz is not None and _revoked(authz, getattr(websocket.state, "uterm_principal", None), session_id)
 
 
