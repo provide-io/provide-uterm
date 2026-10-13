@@ -86,8 +86,8 @@ def is_share_viewer(principal: Principal, session_id: str) -> bool:
     viewer cutoff would also refuse the links a rotation hands out.
     """
     return (
-        not principal.tunnel_share
-        and principal.subject_id.startswith(f"share:{session_id}:")
+        principal.subject_id.startswith(f"share:{session_id}:")
+        and not principal.tunnel_share
         and principal.roles <= frozenset({"viewer"})
         and principal.admin_session_scope is None
     )
