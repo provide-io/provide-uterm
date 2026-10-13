@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from provide.uterm.api_routes import HttpMethod
 from provide.uterm.server.audit import audit_event
+from provide.uterm.server.authorization import ShareViewerRevocationsFullError
 from provide.uterm.server.routes._helpers import (
     SessionId,
     authz,
@@ -63,7 +64,10 @@ async def revoke_viewers(request: Request, session_id: SessionId) -> dict[str, A
     for stale in az.share_viewer_revoked_sessions():
         if await reg.get_definition(stale) is None:
             az.forget_share_viewers(stale)
-    revoked_at = az.revoke_share_viewers(session_id)
+    try:
+        revoked_at = az.revoke_share_viewers(session_id)
+    except ShareViewerRevocationsFullError:
+        raise HTTPException(status_code=429, detail="too many sessions with revoked viewers; try again later") from None
     closed = await close_revoked_viewers(request.app.state.uterm_hub, az, session_id)
     closed += share_viewer_streams(request.app).revoke(az, session_id)
     audit_event(

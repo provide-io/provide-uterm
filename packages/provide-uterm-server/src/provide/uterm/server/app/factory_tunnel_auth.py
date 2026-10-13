@@ -110,6 +110,7 @@ def resolve_tunnel_share_principal(
             subject_id=f"share:{session_id}:viewer",
             roles=frozenset({"viewer"}),
             scopes=frozenset({"session.read"}),
+            tunnel_share=True,
         )
     logger.info("tunnel_token_validation_failed session_id=%s source_ip=%s", session_id, source_ip)
     return None

@@ -28,6 +28,7 @@ from starlette.websockets import WebSocketDisconnect
 from provide.uterm.client import connect_test_ws
 from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.authorization import (
+    SHARE_VIEWER_REVOCATION_TTL_S,
     SHARE_VIEWER_REVOCATIONS_MAX,
     AuthorizationService,
     is_share_viewer,
@@ -154,18 +155,35 @@ def test_a_later_revocation_moves_the_cutoff_forward() -> None:
     assert service.share_viewer_revoked(_viewer("s1", iat=600), "s1") is True
 
 
-def test_the_cutoff_table_is_bounded_and_forgets_the_oldest() -> None:
+def test_a_full_cutoff_table_refuses_new_sessions_instead_of_evicting_one() -> None:
+    from provide.uterm.server.authorization import ShareViewerRevocationsFullError
+
     service = AuthorizationService()
     base = 1.0e9
     for index in range(SHARE_VIEWER_REVOCATIONS_MAX):
         service.revoke_share_viewers(f"s{index}", now=base + index)
-    # Re-revoking s0 makes it the newest, so s1 is the one that falls out.
-    service.revoke_share_viewers("s0", now=base + 1.0e4)
-    service.revoke_share_viewers("overflow", now=base + 2.0e4)
+    # A session that already holds a cutoff can always move it forward.
+    assert service.revoke_share_viewers("s0", now=base + 1.0e4) == base + 1.0e4
+    # A new one is refused rather than pushing anybody's live cutoff out.
+    with pytest.raises(ShareViewerRevocationsFullError):
+        service.revoke_share_viewers("overflow", now=base + 2.0e4)
+    assert service.share_viewer_revocation("overflow") is None
+    assert service.share_viewer_revocation("s1") == base + 1
+    # Once the oldest cutoffs have aged out there is room again.
+    later = base + 1 + SHARE_VIEWER_REVOCATION_TTL_S + 0.5
+    assert service.revoke_share_viewers("overflow", now=later) == later
+    assert service.share_viewer_revocation("s0") == base + 1.0e4  # still live, kept
     assert service.share_viewer_revocation("s1") is None
-    assert service.share_viewer_revocation("s0") == base + 1.0e4
-    assert service.share_viewer_revocation("s2") == base + 2
-    assert service.share_viewer_revocation("overflow") == base + 2.0e4
+
+
+def test_tunnel_share_principals_are_not_share_viewers() -> None:
+    tunnel_viewer = Principal(
+        subject_id="share:s1:viewer", roles=frozenset({"viewer"}), scopes=frozenset({"session.read"}), tunnel_share=True
+    )
+    assert is_share_viewer(tunnel_viewer, "s1") is False
+    service = AuthorizationService()
+    service.revoke_share_viewers("s1", now=500.0)
+    assert service.share_viewer_revoked(tunnel_viewer, "s1") is False
 
 
 async def test_reads_are_refused_to_a_revoked_share_viewer_even_on_a_public_session() -> None:
@@ -226,7 +244,9 @@ async def test_only_revoked_share_viewer_sockets_are_closed() -> None:
     watcher = _Socket(_viewer("s1", iat=100))
     broken = _Socket(_viewer("s1", iat=101), fail=True)
     newcomer = _Socket(_viewer("s1", iat=900))
-    elevated = _Socket(_viewer("s1", iat=100))  # same token, but the socket holds a non-viewer role
+    # Same token, but the socket holds a non-viewer role (a webhook provider can
+    # resolve one): it is closed too, since the principal is what is revoked.
+    elevated = _Socket(_viewer("s1", iat=100))
     stranger = _Socket(Principal(subject_id="alice", roles=frozenset({"viewer"})))
     unauthenticated = _Socket(None)
     hub = _hub(
@@ -242,10 +262,11 @@ async def test_only_revoked_share_viewer_sockets_are_closed() -> None:
 
     closed = await close_revoked_viewers(hub, service, "s1")
 
-    assert closed == 2
+    assert closed == 3
     assert watcher.closed == [(VIEWER_REVOKED_CLOSE_CODE, VIEWER_REVOKED_REASON)]
     assert broken.closed == [(VIEWER_REVOKED_CLOSE_CODE, VIEWER_REVOKED_REASON)]
-    for untouched in (newcomer, elevated, stranger, unauthenticated):
+    assert elevated.closed == [(VIEWER_REVOKED_CLOSE_CODE, VIEWER_REVOKED_REASON)]
+    for untouched in (newcomer, stranger, unauthenticated):
         assert untouched.closed == []
 
 
@@ -659,11 +680,10 @@ async def test_a_revoked_registration_is_released_and_refused() -> None:
 
     revoked = SimpleNamespace(scope={"app": app}, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=100)))
     fresh = SimpleNamespace(scope={"app": app}, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=900)))
-    await refuse_revoked_registration(_Hub(), "s1", revoked, "operator")
-    await refuse_revoked_registration(_Hub(), "s1", fresh, "viewer")
+    await refuse_revoked_registration(_Hub(), "s1", fresh)
     assert cleaned == []
     with pytest.raises(WebSocketException) as caught:
-        await refuse_revoked_registration(_Hub(), "s1", revoked, "viewer")
+        await refuse_revoked_registration(_Hub(), "s1", revoked)
     assert (caught.value.code, caught.value.reason) == (VIEWER_REVOKED_CLOSE_CODE, VIEWER_REVOKED_REASON)
     assert cleaned == [("s1", revoked, False)]
 
@@ -702,3 +722,101 @@ def test_a_live_share_viewer_event_stream_ends_on_revoke() -> None:
         thread.join()
     assert lines[-1] == 'data: {"type": "viewer_access_revoked", "reason": "viewer access revoked"}'
     assert revoked == [1]
+
+
+def test_tunnel_viewers_are_revoked_by_rotation_not_by_the_viewer_cutoff() -> None:
+    """Revoke, then rotate: the new tunnel share link is admitted, the old one is not."""
+    from urllib.parse import urlparse
+
+    app = _app()
+    owner = _bearer(_token("alice", ["operator"]))
+
+    def cookie_for(client: TestClient, share_url: str) -> str:
+        parsed = urlparse(share_url)
+        landed = client.get(f"{parsed.path}?{parsed.query}", follow_redirects=False)
+        assert landed.status_code == 302
+        return landed.headers["set-cookie"].split(";", 1)[0]
+
+    with TestClient(app) as client:
+        created = client.post("/api/tunnels", json={"tunnel_type": "terminal"}, headers=owner).json()
+        tunnel_id = created["tunnel_id"]
+        old_cookie = cookie_for(client, created["share_url"])
+        client.cookies.clear()
+
+        def read(cookie: str) -> int:
+            return client.get(f"/api/sessions/{tunnel_id}", headers={"Cookie": cookie}).status_code
+
+        assert read(old_cookie) == 200
+        revoked = client.post(f"/api/sessions/{tunnel_id}/viewers/revoke", headers=owner)
+        assert revoked.status_code == 200
+        # Out of scope for the viewer cutoff: a tunnel viewer reads on.
+        assert read(old_cookie) == 200
+
+        rotated = client.post(f"/api/tunnels/{tunnel_id}/tokens/rotate", headers=owner).json()
+        new_cookie = cookie_for(client, rotated["share_url"])
+        client.cookies.clear()
+        assert read(new_cookie) == 200
+        assert read(old_cookie) == 401
+
+
+def test_a_long_poll_in_flight_when_its_viewer_is_revoked_answers_403() -> None:
+    import threading
+
+    app = _app()
+    watcher_token = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"])
+    admin = _bearer(_token("ops", ["admin"]))
+    with TestClient(app) as client:
+        polled: list[Any] = []
+
+        def poll() -> None:
+            polled.append(
+                client.get(f"/api/sessions/{_SESSION}/events/watch?timeout_ms=1500", headers=_bearer(watcher_token))
+            )
+
+        thread = threading.Thread(target=poll)
+        thread.start()
+        time.sleep(0.3)
+        assert client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin).status_code == 200
+        thread.join()
+        assert polled[0].status_code == 403
+        assert polled[0].json() == {"detail": "insufficient privileges"}
+        # Anyone else's long-poll is answered as before.
+        plain = client.get(f"/api/sessions/{_SESSION}/events/watch?timeout_ms=100", headers=admin)
+        assert plain.status_code == 200
+        assert plain.json()["timed_out"] is True
+
+
+async def test_the_watch_guard_passes_other_traffic_through_untouched() -> None:
+    from provide.uterm.server.viewer_revocation import ShareViewerWatchGuard
+
+    sent: list[dict[str, Any]] = []
+
+    async def inner(scope: Any, receive: Any, send: Any) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    async def collect(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    guard = ShareViewerWatchGuard(inner)
+    service = AuthorizationService()
+    service.revoke_share_viewers("s1", now=500.0)
+    app = SimpleNamespace(state=SimpleNamespace(uterm_authz=service))
+    revoked_state = {"uterm_principal": _viewer("s1", iat=100)}
+    for scope in (
+        {"type": "websocket", "path": "/api/sessions/s1/events/watch"},
+        {"type": "http", "method": "GET", "path": "/api/sessions/s1/events", "app": app, "state": revoked_state},
+        {"type": "http", "method": "POST", "path": "/api/sessions/s1/events/watch", "app": app, "state": revoked_state},
+        {"type": "http", "method": "GET", "path": "/api/sessions/s1/events/watch", "app": app, "state": {}},
+        {"type": "http", "method": "GET", "path": "/api/sessions/s1/events/watch", "state": revoked_state},
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/sessions/s1/events/watch",
+            "app": app,
+            "state": {"uterm_principal": _viewer("s1", iat=900)},
+        },
+    ):
+        sent.clear()
+        await guard(scope, None, collect)
+        assert [m.get("status", m.get("body")) for m in sent] == [200, b"ok"], scope

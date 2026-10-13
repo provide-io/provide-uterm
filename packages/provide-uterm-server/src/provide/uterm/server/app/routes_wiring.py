@@ -58,6 +58,10 @@ def install_routers(
     # Graphical-target CRUD is gated by capability + tenant scope inside each
     # handler; require_authenticated ensures a resolved principal is present.
     app.include_router(create_graphical_router(), dependencies=[Depends(require_authenticated)])
+    # A long-poll whose share viewer is revoked mid-wait answers 403, not events.
+    from provide.uterm.server.viewer_revocation import ShareViewerWatchGuard
+
+    app.add_middleware(ShareViewerWatchGuard)
     app.include_router(
         create_page_router(),
         prefix=mount_prefix(config.ui.app_path),

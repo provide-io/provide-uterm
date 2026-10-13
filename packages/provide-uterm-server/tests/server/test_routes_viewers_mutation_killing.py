@@ -155,3 +155,16 @@ async def test_cutoffs_of_deleted_sessions_are_forgotten_before_the_revoke(close
     assert order.mock_calls[0] == call.forget("gone")
     assert order.mock_calls[1] == call.revoke(_SID)
     assert len(order.mock_calls) == 2
+
+
+async def test_a_full_cutoff_table_is_a_429_that_closes_nothing(closer: AsyncMock, audit: MagicMock) -> None:
+    from provide.uterm.server.authorization import ShareViewerRevocationsFullError
+
+    request = _request()
+    request.app.state.uterm_authz.revoke_share_viewers = MagicMock(side_effect=ShareViewerRevocationsFullError())
+    with pytest.raises(HTTPException) as caught:
+        await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert caught.value.status_code == 429
+    assert caught.value.detail == "too many sessions with revoked viewers; try again later"
+    closer.assert_not_awaited()
+    audit.assert_not_called()

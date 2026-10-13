@@ -57,18 +57,19 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
     ),
 }
 
-# Revocation cutoffs held at once. One float per session that has ever had its
-# viewers revoked; an embedder that revokes on every "go private" and deletes
-# sessions afterwards would otherwise grow this without end. Past the bound the
-# oldest cutoff is forgotten, which can only matter for a share token that
-# outlived thousands of later revocations.
+# Revocation cutoffs held at once. One float per session whose viewers were
+# revoked within the last SHARE_VIEWER_REVOCATION_TTL_S. When the table is full
+# a revoke for a session not already in it is refused (the route answers 429)
+# rather than evicting a cutoff that may still be protecting another session.
 SHARE_VIEWER_REVOCATIONS_MAX = 10_000
 # How long a cutoff is kept. A cutoff only matters while a token issued before
-# it can still be valid, so it outlives any share token an embedder should
-# mint (blackbetty's live 60 s); past this it is dropped. Ageing out rather than
-# only evicting by count means nobody can push another session's fresh cutoff
-# out of the table by revoking many sessions of their own.
+# it can still be valid, so share tokens must live well under this (blackbetty
+# mints 60 s ones): a share token that outlives its cutoff is admitted again.
 SHARE_VIEWER_REVOCATION_TTL_S = 86_400
+
+
+class ShareViewerRevocationsFullError(Exception):
+    """The cutoff table is full of live cutoffs; a new session cannot be added."""
 
 
 def is_share_viewer(principal: Principal, session_id: str) -> bool:
@@ -79,9 +80,14 @@ def is_share_viewer(principal: Principal, session_id: str) -> bool:
     mints so someone can watch one session. A tunnel share *operator* uses the
     same subject prefix but holds a session-scoped ``admin`` grant, so it is
     not one, and neither is an owner, an operator or a global admin.
+
+    Nor is a tunnel share viewer (``share:{id}:viewer`` from a tunnel share
+    cookie): tunnel shares have their own revocation, token rotation, and a
+    viewer cutoff would also refuse the links a rotation hands out.
     """
     return (
-        principal.subject_id.startswith(f"share:{session_id}:")
+        not principal.tunnel_share
+        and principal.subject_id.startswith(f"share:{session_id}:")
         and principal.roles <= frozenset({"viewer"})
         and principal.admin_session_scope is None
     )
@@ -394,20 +400,21 @@ class AuthorizationService:
     def revoke_share_viewers(self, session_id: str, *, now: float | None = None) -> float:
         """Refuse every share-viewer token for ``session_id`` issued up to now.
 
-        Returns the cutoff. Wall clock, because that is the clock a token's
+        Returns the cutoff; raises ``ShareViewerRevocationsFullError`` when the
+        table is full and this session holds no cutoff yet. Wall clock, because that is the clock a token's
         ``iat`` is written in. A token issued in the same second as the cutoff
         is refused too: ``iat`` has one-second resolution, so it cannot say
         which side of the cutoff it fell on.
         """
         cutoff = time.time() if now is None else now
         revocations = self._share_viewer_revocations
+        # Insertion order is revocation order, so the stale ones are in front.
+        while revocations and revocations[oldest := next(iter(revocations))] < cutoff - SHARE_VIEWER_REVOCATION_TTL_S:
+            del revocations[oldest]
+        if session_id not in revocations and len(revocations) >= SHARE_VIEWER_REVOCATIONS_MAX:
+            raise ShareViewerRevocationsFullError
         revocations.pop(session_id, None)
         revocations[session_id] = cutoff
-        # Insertion order is revocation order, so the stale ones are in front.
-        while revocations[oldest := next(iter(revocations))] < cutoff - SHARE_VIEWER_REVOCATION_TTL_S:
-            del revocations[oldest]
-        while len(revocations) > SHARE_VIEWER_REVOCATIONS_MAX:
-            del revocations[next(iter(revocations))]
         return cutoff
 
     def share_viewer_revoked_sessions(self) -> list[str]:

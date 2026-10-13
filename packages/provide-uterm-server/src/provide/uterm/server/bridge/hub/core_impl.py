@@ -338,7 +338,7 @@ class TermHub:
         # registration was visible to the revoke's scan, is refused here.
         from provide.uterm.server.viewer_revocation import refuse_revoked_registration
 
-        await refuse_revoked_registration(self, worker_id, ws, role)
+        await refuse_revoked_registration(self, worker_id, ws)
         return state
 
     async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:

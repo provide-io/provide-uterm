@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 from typing import TYPE_CHECKING, Any
 
 from provide.uterm.server.authorization import AuthorizationService, is_share_viewer
@@ -44,11 +45,9 @@ async def close_revoked_viewers(hub: Any, authz: AuthorizationService, session_i
     async with hub._lock:
         state = hub.registry.get(session_id)
         browsers = [] if state is None else list(state.browsers.items())
-    targets = [
-        ws
-        for ws, role in browsers
-        if role == "viewer" and _revoked(authz, getattr(ws.state, "uterm_principal", None), session_id)
-    ]
+    # By principal alone: a provider can resolve a share viewer to a role other
+    # than viewer, and what is revoked is the token, not the role.
+    targets = [ws for ws, _role in browsers if _revoked(authz, getattr(ws.state, "uterm_principal", None), session_id)]
     for ws in targets:
         # A socket that is already closing has nothing left to tell.
         with contextlib.suppress(Exception):
@@ -81,7 +80,7 @@ def socket_share_viewer_revoked(websocket: Any, session_id: str) -> bool:
     )
 
 
-async def refuse_revoked_registration(hub: Any, worker_id: str, websocket: Any, role: str) -> None:
+async def refuse_revoked_registration(hub: Any, worker_id: str, websocket: Any) -> None:
     """Undo a just-made registration and refuse it if the viewer is now revoked.
 
     Called by ``TermHub.register_browser`` right after registering. The browser
@@ -89,7 +88,7 @@ async def refuse_revoked_registration(hub: Any, worker_id: str, websocket: Any, 
     per-principal quota slot) is released here, and the ``WebSocketException``
     closes the accepted socket with 4410.
     """
-    if role != "viewer" or not socket_share_viewer_revoked(websocket, worker_id):
+    if not socket_share_viewer_revoked(websocket, worker_id):
         return
     from fastapi import WebSocketException
 
@@ -185,3 +184,44 @@ async def stream_until_revoked(
             stop.cancel()
     finally:
         streams.close(session_id, ended)
+
+
+_WATCH_PATH = re.compile(r"^/api/sessions/(?P<session_id>[\w\-]+)/events/watch$")
+
+
+class ShareViewerWatchGuard:
+    """Refuse a long-poll answer that lands after its viewer was revoked.
+
+    ``GET /api/sessions/{id}/events/watch`` checks the cutoff when it starts and
+    then waits up to 30 s, so a revoke during the wait would otherwise still
+    get one batch of events out. The answer is held here and, if the caller is
+    now a revoked share viewer, replaced with the 403 the route itself gives.
+    ASGI middleware rather than a line in the route: the principal and the
+    authorization service are both on the scope once the route has run.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        match = _WATCH_PATH.match(scope.get("path", "")) if scope["type"] == "http" else None
+        if match is None or scope.get("method") != "GET":
+            await self.app(scope, receive, send)
+            return
+        held: list[Any] = []
+
+        async def hold(message: Any) -> None:
+            held.append(message)
+
+        await self.app(scope, receive, hold)
+        authz = getattr(getattr(scope.get("app"), "state", None), "uterm_authz", None)
+        principal = scope.get("state", {}).get("uterm_principal")
+        if isinstance(authz, AuthorizationService) and _revoked(authz, principal, match["session_id"]):
+            body = json.dumps({"detail": "insufficient privileges"}).encode()
+            headers = [(b"content-type", b"application/json"), (b"content-length", str(len(body)).encode())]
+            held = [
+                {"type": "http.response.start", "status": 403, "headers": headers},
+                {"type": "http.response.body", "body": body},
+            ]
+        for message in held:
+            await send(message)

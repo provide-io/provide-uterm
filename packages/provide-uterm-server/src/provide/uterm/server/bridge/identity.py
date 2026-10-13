@@ -34,6 +34,10 @@ class Principal:
     # so a per-session grant cannot escalate into cross-session admin if the
     # principal is ever resolved independently of the request path.
     admin_session_scope: str | None = None
+    # True for the principal a tunnel share cookie resolves to. Tunnel shares
+    # are revoked by rotating their tokens, so the share-viewer cutoff (which
+    # is for embedder-minted share JWTs) never applies to them.
+    tunnel_share: bool = False
 
     @property
     def name(self) -> str:
