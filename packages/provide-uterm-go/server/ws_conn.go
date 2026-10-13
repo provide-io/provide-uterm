@@ -7,6 +7,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -72,11 +73,16 @@ type browserConn struct {
 // var so tests can shorten it.
 var browserCloseGrace = 2 * time.Second
 
+// errBrowserCloseTimedOut is what Close returns when the peer has not answered
+// the close handshake within browserCloseGrace. The close is still under way.
+var errBrowserCloseTimedOut = errors.New("browser close handshake unanswered after the grace; closing in the background")
+
 // Close closes the browser socket with a WS close code (hub.BrowserCloser). A
 // peer that does not answer the close handshake is not waited on past
 // browserCloseGrace: the close carries on in the background, where
 // coder/websocket drops the connection once its own handshake timeout passes,
-// so the caller (a viewer revoke waits on its closes) is not held by it.
+// so the caller (a viewer revoke waits on its closes) is not held by it. That
+// case returns errBrowserCloseTimedOut, not a clean nil.
 func (c *browserConn) Close(_ context.Context, code int, reason string) error {
 	done := make(chan error, 1)
 	go func() { done <- c.conn.Close(websocket.StatusCode(code), reason) }()
@@ -84,7 +90,7 @@ func (c *browserConn) Close(_ context.Context, code int, reason string) error {
 	case err := <-done:
 		return err
 	case <-time.After(browserCloseGrace):
-		return nil
+		return errBrowserCloseTimedOut
 	}
 }
 

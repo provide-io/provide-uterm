@@ -7,6 +7,8 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,6 +43,45 @@ func TestBrowserConnClose(t *testing.T) {
 	// The server closed the socket → the client's read fails.
 	if _, _, rerr := conn.Read(ctx); rerr == nil {
 		t.Fatal("expected close from server-side browserConn.Close")
+	}
+}
+
+// TestBrowserConnCloseReportsAPeerThatIgnoresTheClose: a peer that never
+// reads cannot answer the close handshake. Close stops waiting after the grace
+// and says so, rather than reporting a clean close. The real grace is used:
+// the handler of the test before this one may still be reading it.
+func TestBrowserConnCloseReportsAPeerThatIgnoresTheClose(t *testing.T) {
+	closed := make(chan error, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+		if err != nil {
+			return
+		}
+		bc := &browserConn{wsBase: wsBase{conn: conn}}
+		started := time.Now()
+		err = bc.Close(context.Background(), 4410, "viewer access revoked")
+		if took := time.Since(started); took > browserCloseGrace+time.Second {
+			err = fmt.Errorf("close waited %v, past the grace", took)
+		}
+		closed <- err
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.CloseNow() }()
+	// Never read: the server's close frame goes unanswered.
+	select {
+	case err := <-closed:
+		if !errors.Is(err, errBrowserCloseTimedOut) {
+			t.Fatalf("Close = %v, want errBrowserCloseTimedOut", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Close did not return")
 	}
 }
 
