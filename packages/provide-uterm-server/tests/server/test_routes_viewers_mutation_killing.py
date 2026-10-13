@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 from fastapi import APIRouter, HTTPException
@@ -29,6 +29,7 @@ def _request(*, can_mutate: bool = True, definition: Any = "present") -> SimpleN
     az = MagicMock(name="authz")
     az.can_mutate_session = AsyncMock(return_value=can_mutate)
     az.revoke_share_viewers = MagicMock(return_value=123.5)
+    az.share_viewer_revoked_sessions = MagicMock(return_value=[])
     registry = MagicMock(name="registry")
     resolved = SimpleNamespace(session_id=_SID) if definition == "present" else definition
     registry.get_definition = AsyncMock(return_value=resolved)
@@ -136,3 +137,21 @@ def test_the_route_is_a_post_on_the_session_viewers_path() -> None:
     assert route.methods == {"POST"}  # type: ignore[attr-defined]
     assert route.name == "sessions.viewers.revoke"  # type: ignore[attr-defined]
     assert route.endpoint is viewers.revoke_viewers  # type: ignore[attr-defined]
+
+
+async def test_cutoffs_of_deleted_sessions_are_forgotten_before_the_revoke(closer: AsyncMock, audit: MagicMock) -> None:
+    request = _request()
+    az = request.app.state.uterm_authz
+    order = MagicMock()
+    az.share_viewer_revoked_sessions = MagicMock(return_value=["gone", "alive"])
+    az.forget_share_viewers = order.forget
+    az.revoke_share_viewers = order.revoke
+    order.revoke.return_value = 123.5
+    present = SimpleNamespace(session_id=_SID)
+    request.app.state.uterm_registry.get_definition = AsyncMock(
+        side_effect=lambda sid: None if sid == "gone" else present
+    )
+    await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert order.mock_calls[0] == call.forget("gone")
+    assert order.mock_calls[1] == call.revoke(_SID)
+    assert len(order.mock_calls) == 2

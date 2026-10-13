@@ -410,8 +410,12 @@ class AuthorizationService:
             del revocations[next(iter(revocations))]
         return cutoff
 
+    def share_viewer_revoked_sessions(self) -> list[str]:
+        """The sessions holding a cutoff, oldest first."""
+        return list(self._share_viewer_revocations)
+
     def forget_share_viewers(self, session_id: str) -> None:
-        """Drop the session's cutoff: it was deleted, so nothing is left to refuse."""
+        """Drop the session's cutoff (it was deleted, so nothing is left to refuse)."""
         self._share_viewer_revocations.pop(session_id, None)
 
     def share_viewer_revocation(self, session_id: str) -> float | None:

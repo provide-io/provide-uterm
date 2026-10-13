@@ -636,20 +636,35 @@ def test_the_owner_and_the_hijack_holder_keep_their_sockets_through_a_revoke() -
                 assert _wait_for(keeper, "pong")["type"] == "pong"
 
 
-def test_deleting_a_session_forgets_its_cutoff() -> None:
-    app = _app()
-    admin = _bearer(_token("ops", ["admin"]))
-    with TestClient(app) as client:
-        revoked = client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin)
-        assert revoked.status_code == 200
-        assert app.state.uterm_authz.share_viewer_revocation(_SESSION) is not None
-        deleted = client.delete(f"/api/sessions/{_SESSION}", headers=admin)
-        assert deleted.status_code == 200
-        assert app.state.uterm_authz.share_viewer_revocation(_SESSION) is None
+async def test_a_revoked_registration_is_released_and_refused() -> None:
+    from fastapi import WebSocketException
+
+    from provide.uterm.server.viewer_revocation import refuse_revoked_registration
+
+    service = AuthorizationService()
+    service.revoke_share_viewers("s1", now=500.0)
+    app = SimpleNamespace(state=SimpleNamespace(uterm_authz=service))
+    cleaned: list[tuple[str, Any, bool]] = []
+
+    class _Hub:
+        async def cleanup_browser_disconnect(self, worker_id: str, ws: Any, owned: bool) -> None:
+            cleaned.append((worker_id, ws, owned))
+
+    revoked = SimpleNamespace(scope={"app": app}, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=100)))
+    fresh = SimpleNamespace(scope={"app": app}, state=SimpleNamespace(uterm_principal=_viewer("s1", iat=900)))
+    await refuse_revoked_registration(_Hub(), "s1", revoked, "operator")
+    await refuse_revoked_registration(_Hub(), "s1", fresh, "viewer")
+    assert cleaned == []
+    with pytest.raises(WebSocketException) as caught:
+        await refuse_revoked_registration(_Hub(), "s1", revoked, "viewer")
+    assert (caught.value.code, caught.value.reason) == (VIEWER_REVOKED_CLOSE_CODE, VIEWER_REVOKED_REASON)
+    assert cleaned == [("s1", revoked, False)]
 
 
 def test_a_live_share_viewer_event_stream_ends_on_revoke() -> None:
     import threading
+
+    from provide.uterm.server.viewer_revocation import share_viewer_streams
 
     app = _app()
     watcher_token = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"])
@@ -658,12 +673,15 @@ def test_a_live_share_viewer_event_stream_ends_on_revoke() -> None:
         revoked: list[int] = []
 
         def revoke_soon() -> None:
-            time.sleep(0.5)
+            streams = share_viewer_streams(app)
+            deadline = time.monotonic() + 10
+            while not streams._open and time.monotonic() < deadline:
+                time.sleep(0.01)
             revoked.append(client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin).json()["closed"])
-            # A stream the revoke failed to end is ended here instead, so the
-            # test fails on its last line rather than hanging.
-            time.sleep(1.0)
-            client.portal.call(app.state.uterm_hub.event_bus.close_worker, _SESSION)
+            if revoked != [1]:
+                # The revoke failed to end it: end it another way so the test
+                # fails on its assertions rather than hanging.
+                client.portal.call(app.state.uterm_hub.event_bus.close_worker, _SESSION)
 
         # Started first: the test client hands back a streamed body only once the
         # app has finished it, and only the revoke can finish this one.

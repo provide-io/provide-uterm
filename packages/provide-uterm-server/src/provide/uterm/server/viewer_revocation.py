@@ -77,6 +77,22 @@ def socket_share_viewer_revoked(websocket: Any, session_id: str) -> bool:
     return authz is not None and _revoked(authz, getattr(websocket.state, "uterm_principal", None), session_id)
 
 
+async def refuse_revoked_registration(hub: Any, worker_id: str, websocket: Any, role: str) -> None:
+    """Undo a just-made registration and refuse it if the viewer is now revoked.
+
+    Called by ``TermHub.register_browser`` right after registering. The browser
+    handler has not entered its ``try`` yet, so the registration (and its
+    per-principal quota slot) is released here, and the ``WebSocketException``
+    closes the accepted socket with 4410.
+    """
+    if role != "viewer" or not socket_share_viewer_revoked(websocket, worker_id):
+        return
+    from fastapi import WebSocketException
+
+    await hub.cleanup_browser_disconnect(worker_id, websocket, False)
+    raise WebSocketException(code=VIEWER_REVOKED_CLOSE_CODE, reason=VIEWER_REVOKED_REASON)
+
+
 # The last event a share viewer's event stream gets before it is ended.
 STREAM_REVOKED_EVENT = (
     "data: " + json.dumps({"type": "viewer_access_revoked", "reason": VIEWER_REVOKED_REASON}) + "\n\n"

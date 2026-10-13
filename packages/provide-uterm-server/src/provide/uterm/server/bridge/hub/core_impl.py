@@ -333,7 +333,13 @@ class TermHub:
     async def register_browser(
         self, worker_id: str, ws: WebSocket, role: str, *, defer_broadcast: bool = False
     ) -> dict[str, Any]:
-        return await _conn.register_browser(self, worker_id, ws, role, defer_broadcast=defer_broadcast)
+        state = await _conn.register_browser(self, worker_id, ws, role, defer_broadcast=defer_broadcast)
+        # A share viewer revoked after its role was resolved, but before this
+        # registration was visible to the revoke's scan, is refused here.
+        from provide.uterm.server.viewer_revocation import refuse_revoked_registration
+
+        await refuse_revoked_registration(self, worker_id, ws, role)
+        return state
 
     async def activate_browser_broadcasts(self, worker_id: str, ws: WebSocket) -> None:
         await self.connection_mgr.activate_browser_broadcasts(worker_id, ws)

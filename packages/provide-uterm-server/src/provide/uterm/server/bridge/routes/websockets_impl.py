@@ -57,11 +57,6 @@ from provide.uterm.server.bridge.routes.websockets_worker import (
     _dispatch_worker_frame,
     _handle_worker_hello,
 )
-from provide.uterm.server.viewer_revocation import (
-    VIEWER_REVOKED_CLOSE_CODE,
-    VIEWER_REVOKED_REASON,
-    socket_share_viewer_revoked,
-)
 
 if TYPE_CHECKING:
     from provide.uterm.server.bridge.hub import BrowserRoleResolutionError, TermHub
@@ -314,11 +309,6 @@ async def _ws_browser_term(hub: TermHub, websocket: WebSocket, worker_id: str) -
     # the quota counter leaks and the principal is eventually locked out.
     browser_state = await hub.register_browser(worker_id, websocket, role, defer_broadcast=True)
     try:
-        # A share viewer's access may have been revoked between the role check
-        # and this registration, after the revoke's own scan of the sockets.
-        if role == "viewer" and socket_share_viewer_revoked(websocket, worker_id):
-            await websocket.close(code=VIEWER_REVOKED_CLOSE_CODE, reason=VIEWER_REVOKED_REASON)
-            return
         await hub.touch_activity(worker_id)
         with get_tracer(__name__).start_as_current_span("uterm.ws.browser.connect") as _b_span:
             _set_ws_span_attrs(_b_span, worker_id=worker_id, operation="ws.browser.connect", role=role)

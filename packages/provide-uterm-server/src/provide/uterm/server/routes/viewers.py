@@ -23,7 +23,14 @@ from fastapi import APIRouter, HTTPException, Request
 
 from provide.uterm.api_routes import HttpMethod
 from provide.uterm.server.audit import audit_event
-from provide.uterm.server.routes._helpers import SessionId, authz, principal, session_definition, source_ip
+from provide.uterm.server.routes._helpers import (
+    SessionId,
+    authz,
+    principal,
+    registry,
+    session_definition,
+    source_ip,
+)
 from provide.uterm.server.viewer_revocation import (
     VIEWER_REVOKED_CLOSE_CODE,
     VIEWER_REVOKED_REASON,
@@ -50,6 +57,12 @@ async def revoke_viewers(request: Request, session_id: SessionId) -> dict[str, A
     definition = await session_definition(request, session_id)
     if not await az.can_mutate_session(p, definition, "session.control.update"):
         raise HTTPException(status_code=403, detail="insufficient privileges")
+    # Cutoffs of sessions that have since been deleted go first: nothing is left
+    # for them to refuse, and keeping them is what would fill the table.
+    reg = registry(request)
+    for stale in az.share_viewer_revoked_sessions():
+        if await reg.get_definition(stale) is None:
+            az.forget_share_viewers(stale)
     revoked_at = az.revoke_share_viewers(session_id)
     closed = await close_revoked_viewers(request.app.state.uterm_hub, az, session_id)
     closed += share_viewer_streams(request.app).revoke(az, session_id)
