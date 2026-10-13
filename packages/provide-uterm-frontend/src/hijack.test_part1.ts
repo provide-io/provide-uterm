@@ -757,6 +757,19 @@ describe("text input field", () => {
     expect(getWs().sent.some((f) => f.includes("\r\n\t\x1b"))).toBe(true);
   });
 
+  it("sends \\x1b as ESC rather than typing it, and says so in the box", () => {
+    const { container } = makeWidget();
+    getWs().open();
+    sendMessage({ type: "hijack_state", hijacked: true, owner: "me" });
+    const field = q(container, "inputfield") as HTMLInputElement;
+    expect(field.placeholder).toContain("\\x1b");
+    expect(field.title).toContain("\\\\");
+    field.value = "\\x1b[A\\\\";
+    (q(container, "inputsend") as HTMLButtonElement).click();
+    expect(getWs().sent.some((f) => f.includes("\x1b[A\\"))).toBe(true);
+    expect(getWs().sent.some((f) => f.includes("x1b"))).toBe(false);
+  });
+
   it("send button sends input", () => {
     const { container } = makeWidget();
     getWs().open();

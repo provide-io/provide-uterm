@@ -21,6 +21,7 @@ import {
 import { type HijackHandlers, HijackState } from "./hijack-state.js";
 import { MOBILE_KEYS } from "./hijack-ui.js";
 import { SNAPSHOT_PREAMBLE, snapshotCursorRestore, snapshotRows } from "./snapshot-paint.js";
+import { SEND_KEYS_HELP, unescapeSendKeys } from "./send-keys.js";
 import { safeLinkHandler } from "./terminal-links.js";
 import {
   clearHeartbeat,
@@ -952,7 +953,7 @@ export class UtermSessionElement extends LitElement {
     const state = this._hijackState;
     if (!raw || (state.inputMode !== "open" && !state.hijackedByMe)) return;
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-    const data = raw.replace(/\\r/g, "\r").replace(/\\n/g, "\n").replace(/\\t/g, "\t").replace(/\\e/g, "\x1b");
+    const data = unescapeSendKeys(raw);
     this._showActivityIndicator();
     wsSend(state, { type: "input", data });
     this.inputField.value = "";
@@ -1034,7 +1035,8 @@ export class UtermSessionElement extends LitElement {
           ? html`
       <div class="hijack-input-row ${connected && canInput && this._resolvedConfig.showInput ? "visible" : ""}" id="inputrow">
         <input class="hijack-input-field" id="inputfield"
-          placeholder="Send keys… (Enter to send, e.g. \\r for Return)"
+          placeholder=${`Send keys… (Enter to send; ${SEND_KEYS_HELP})`}
+          title=${`Escapes: ${SEND_KEYS_HELP}. Anything else is sent as typed.`}
           autocomplete="off" spellcheck="false"
           @keydown=${this._onInputKeydown}>
         <button class="hijack-input-send" id="inputsend" @click=${this._sendInput}>Send</button>
