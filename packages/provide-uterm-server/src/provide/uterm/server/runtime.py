@@ -513,6 +513,10 @@ class HostedSessionRuntime:
         interval = self._recording_cfg.screen_interval_s
         if interval <= 0 or self._logger is None or self._unrecorded_since is None:
             return
+        # Past its quota the recording drops every write: a screen built for
+        # it would be rendered only to be thrown away.
+        if self._logger.quota_reached:
+            return
         now = time.monotonic()
         if now - self._last_screen_recorded_at < interval:
             return
@@ -534,9 +538,17 @@ class HostedSessionRuntime:
         if str(snapshot.get("screen", "")) == self._last_screen_recorded:
             self._unrecorded_since = None
             return
-        await self._log_snapshot(snapshot)
+        await self._log_snapshot(snapshot, annotate=False)
 
-    async def _log_snapshot(self, msg: dict[str, Any]) -> None:
+    async def _log_snapshot(self, msg: dict[str, Any], *, annotate: bool = True) -> None:
+        """Record a screen as a "read", and run the read-path rules over it.
+
+        ``annotate=False`` is for a screen the recording took for itself
+        (_record_settled_screen). Its output was already scanned as it
+        streamed; running the rules over it again, once an interval, would
+        re-annotate whatever stays on screen each time the bounded dedupe set
+        is cleared, where before only a viewer's read could.
+        """
         screen = str(msg.get("screen", ""))
         # Whoever asked for it, this screen is now in the recording.
         self._unrecorded_since = None
@@ -551,7 +563,7 @@ class HostedSessionRuntime:
             return
         await self._logger.log_screen(msg, screen.encode("cp437", errors="replace"))
         self._event_seq += 1
-        if self._detector is not None:
+        if self._detector is not None and annotate:
             for annotation in self._detector.detect("read", text, seq=self._event_seq):
                 # The snapshot path DEDUPES (rule in __init__): a match already
                 # recorded by the stream or an earlier snapshot is skipped; a new

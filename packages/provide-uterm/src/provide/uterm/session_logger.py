@@ -338,6 +338,11 @@ class SessionLogger:
     def _redact_text(self, value: str) -> str:
         return redact_text(value, self._redactor)
 
+    @property
+    def quota_reached(self) -> bool:
+        """True once the byte quota is spent, and nothing more will be written."""
+        return self._max_bytes > 0 and self._bytes_written >= self._max_bytes
+
     def _quota_reached(self) -> bool:
         """Return True (warning once) when the byte quota is exhausted.
 

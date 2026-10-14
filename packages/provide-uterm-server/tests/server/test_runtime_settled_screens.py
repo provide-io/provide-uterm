@@ -40,6 +40,7 @@ def _runtime(interval: float = INTERVAL) -> HostedSessionRuntime:
         recording=RecordingConfig(screen_interval_s=interval),
     )
     rt._logger = MagicMock()
+    rt._logger.quota_reached = False
     rt._logger.log_screen = AsyncMock()
     rt._logger.log_event = AsyncMock()
     rt._logger.log_wire = AsyncMock()
@@ -222,3 +223,36 @@ async def test_an_unread_capture_session_records_what_it_painted() -> None:
     await rt._bridge_session(_Ws())
     # The opening screen, then the painted one, though no viewer asked.
     assert _recorded(rt) == ["", "hello"]
+
+
+async def test_no_screen_is_built_once_the_recording_is_full() -> None:
+    rt = _runtime()
+    rt._logger.quota_reached = True
+    connector = _connector(["unwanted"])
+    clock = _Clock()
+    with patch("provide.uterm.server.runtime.time.monotonic", clock):
+        rt._note_output()
+        clock.now += INTERVAL * 2
+        await rt._record_settled_screen(connector)
+    connector.get_snapshot.assert_not_awaited()
+
+
+async def test_a_screen_the_recording_took_itself_is_not_annotated_again() -> None:
+    # Its output was scanned as it streamed. Scanning the screen too, once an
+    # interval, would re-annotate whatever stays on it whenever the bounded
+    # dedupe set clears.
+    rt = _runtime()
+    rt._logger.quota_reached = False
+    rt._detector = MagicMock()
+    rt._detector.detect = MagicMock(return_value=[])
+    connector = _connector(["$ sudo rm -rf /"])
+    clock = _Clock()
+    with patch("provide.uterm.server.runtime.time.monotonic", clock):
+        rt._note_output()
+        clock.now += INTERVAL * 2
+        await rt._record_settled_screen(connector)
+        assert _recorded(rt) == ["$ sudo rm -rf /"]
+        rt._detector.detect.assert_not_called()
+        # A viewer's read is annotated as it always was.
+        await rt._log_snapshot({"type": "snapshot", "screen": "$ sudo ls"})
+    rt._detector.detect.assert_called_once()
