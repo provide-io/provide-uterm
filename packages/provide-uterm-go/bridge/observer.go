@@ -39,6 +39,17 @@ type Observer interface {
 	// InputReceived is called with each decoded inbound data chunk (input for
 	// the terminal), before it is delivered.
 	InputReceived(data string) error
+	// RecordSettledScreen is called on each tick of a connection's settle
+	// loop (see TermBridge.settleLoop), so the recording can take the screen
+	// of a session nobody is reading. screen builds the snapshot frame a
+	// viewer's snapshot_req would get (TermBridge.snapshotFrame), or nil when
+	// there is no session; the implementation calls it only when its
+	// recording is due a screen, and logs the frame as a "read" without
+	// putting anything on the wire. Port of the reference's
+	// _record_settled_screen, which its socket loop runs on every pass.
+	// screen must be called without holding a lock the bridge's other
+	// goroutines could need, since it reads the session's emulator.
+	RecordSettledScreen(screen func() map[string]any) error
 	// AttemptEnded is called when an attempt is over: err is the dial error,
 	// or the error that ended a served connection (a failed read or write, or
 	// a stream the decoder rejected); nil when the bridge is stopping.
@@ -55,6 +66,8 @@ func (nopObserver) WireReceived(string) error              { return nil }
 func (nopObserver) ControlReceived(map[string]any) error   { return nil }
 func (nopObserver) InputReceived(string) error             { return nil }
 func (nopObserver) AttemptEnded(error)                     {}
+
+func (nopObserver) RecordSettledScreen(func() map[string]any) error { return nil }
 
 // observedFrame is the message form of a queued frame, as Observer.FrameSent
 // reports it.

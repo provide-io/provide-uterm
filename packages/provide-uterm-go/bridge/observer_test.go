@@ -25,6 +25,10 @@ type recordingObserver struct {
 	mu     sync.Mutex
 	calls  []string
 	failOn string
+	// screens holds each screen RecordSettledScreen was offered, built. Kept
+	// apart from calls: the settle loop ticks on its own time, so it would
+	// make the order of calls nondeterministic.
+	screens []map[string]any
 }
 
 var errObserver = errors.New("recording store down")
@@ -69,6 +73,23 @@ func (o *recordingObserver) InputReceived(data string) error {
 	o.add("input %q", data)
 	return o.fail("InputReceived")
 }
+func (o *recordingObserver) RecordSettledScreen(screen func() map[string]any) error {
+	if err := o.fail("RecordSettledScreen"); err != nil {
+		return err
+	}
+	frame := screen()
+	o.mu.Lock()
+	o.screens = append(o.screens, frame)
+	o.mu.Unlock()
+	return nil
+}
+
+func (o *recordingObserver) settledScreens() []map[string]any {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]map[string]any(nil), o.screens...)
+}
+
 func (o *recordingObserver) AttemptEnded(err error) {
 	if err != nil {
 		o.add("ended error")
@@ -223,6 +244,10 @@ func TestDefaultObserverIgnoresEverything(t *testing.T) {
 		o.WireReceived("w"),
 		o.ControlReceived(map[string]any{}),
 		o.InputReceived("i"),
+		o.RecordSettledScreen(func() map[string]any {
+			t.Fatal("the default observer built a screen")
+			return nil
+		}),
 	}
 	o.AttemptEnded(nil)
 	for _, err := range errs {
@@ -339,6 +364,7 @@ func TestAFailingObserverEndsTheConnection(t *testing.T) {
 	}{
 		{method: "Connected"},
 		{method: "FrameSent"},
+		{method: "RecordSettledScreen"},
 		{
 			method: "WireReceived",
 			drive:  func(t *testing.T, hub *fakeHub, c *websocket.Conn, _ *mockSession) { hub.writeData(t, c, "ls\r") },
@@ -375,7 +401,8 @@ func TestAFailingObserverEndsTheConnection(t *testing.T) {
 			obs.failOn = tc.method
 			session := &mockSession{}
 			worker := &mockWorker{session: session}
-			b := New(Config{Worker: worker, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs})
+			b := New(Config{Worker: worker, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs, RecordScreens: true})
+			b.settleTick = time.Millisecond
 			b.reconnectBackoff = []time.Duration{time.Hour}
 			b.Start(context.Background())
 			defer b.Stop()
@@ -391,5 +418,86 @@ func TestAFailingObserverEndsTheConnection(t *testing.T) {
 				tc.check(t, worker, session)
 			}
 		})
+	}
+}
+
+// A connection with an observer offers it the session's screen on every
+// settle tick, built as the snapshot a viewer would be sent, without putting
+// that screen on the wire: the observer decides whether to record it (the
+// reference's _record_settled_screen), the bridge only ticks.
+func TestSettleLoopOffersTheScreenWithoutSendingIt(t *testing.T) {
+	hub := newFakeHub(t)
+	session := &mockSession{snapshot: map[string]any{"screen": "PAINTED", "cols": 80, "rows": 24}}
+	obs := &recordingObserver{}
+	b := New(Config{
+		Worker: &mockWorker{session: session}, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs, RecordScreens: true,
+	})
+	b.settleTick = time.Millisecond
+	b.Start(context.Background())
+	hub.awaitConn(t)
+	waitFor(t, "a screen offered", func() bool { return len(obs.settledScreens()) >= 3 })
+	b.Stop()
+	frame := obs.settledScreens()[0]
+	if frame["type"] != "snapshot" || frame["screen"] != "PAINTED" || frame["cols"] != 80 || frame["rows"] != 24 {
+		t.Fatalf("offered %v, want the snapshot frame sendSnapshot builds", frame)
+	}
+	if obs.has("sent snapshot") {
+		t.Fatalf("an offered screen was put on the wire: %v", obs.snapshot())
+	}
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	for _, f := range hub.ctrl {
+		if f["type"] == "snapshot" {
+			t.Fatalf("the hub was sent a snapshot nobody asked for: %v", f)
+		}
+	}
+}
+
+// The settle loop stops with its connection: once the bridge is stopped, no
+// further screen is offered.
+func TestSettleLoopStopsWithTheConnection(t *testing.T) {
+	hub := newFakeHub(t)
+	obs := &recordingObserver{}
+	b := New(Config{
+		Worker: &mockWorker{session: &mockSession{}}, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs, RecordScreens: true,
+	})
+	b.settleTick = time.Millisecond
+	b.Start(context.Background())
+	hub.awaitConn(t)
+	waitFor(t, "a screen offered", func() bool { return len(obs.settledScreens()) > 0 })
+	b.Stop()
+	n := len(obs.settledScreens())
+	time.Sleep(20 * time.Millisecond)
+	if got := len(obs.settledScreens()); got != n {
+		t.Fatalf("%d screens offered after Stop", got-n)
+	}
+}
+
+// With no session there is no screen to offer: the frame is nil, not an
+// empty snapshot.
+func TestSnapshotFrameWithoutASessionIsNil(t *testing.T) {
+	b := newBridge(&mockWorker{})
+	if frame := b.snapshotFrame(); frame != nil {
+		t.Fatalf("snapshotFrame = %v, want nil", frame)
+	}
+}
+
+// A session that does not record its own screen (recording.screen_interval_s
+// is 0, the default) runs no settle loop: its observer is never offered one.
+func TestNoSettleLoopUnlessScreensAreRecorded(t *testing.T) {
+	hub := newFakeHub(t)
+	obs := &recordingObserver{}
+	b := New(Config{Worker: &mockWorker{session: &mockSession{}}, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs})
+	b.settleTick = time.Millisecond
+	b.Start(context.Background())
+	hub.awaitConn(t)
+	hub.awaitControl(t, "worker_hello")
+	time.Sleep(20 * time.Millisecond)
+	b.Stop()
+	if got := obs.settledScreens(); len(got) != 0 {
+		t.Fatalf("%d screens offered with RecordScreens off", len(got))
+	}
+	if New(Config{Worker: &mockWorker{}, WorkerID: "w", ManagerURL: "http://x", RecordScreens: true}).recordScreens {
+		t.Fatal("a bridge without an observer would run a settle loop")
 	}
 }

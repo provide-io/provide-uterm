@@ -21,6 +21,7 @@ import (
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/bridge"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/defaults"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/redaction"
@@ -44,6 +45,10 @@ import (
 // connection on it, as the exception does in the reference; the attempt's end
 // then records it as runtime_error and closes the recording. Connector output reaches the hub as term frames the bridge writes, so
 // it is recorded at the same point the reference records poll_messages output.
+// A screen is recorded when one is sent, and also, unsent, when
+// recording.screen_interval_s asks for it, once that output settles
+// (RecordSettledScreen, on the bridge's settle tick), so a session no viewer
+// asked a screen of is still recorded as it looked.
 
 // passwordPromptRE is the reference's test for "the screen is asking for a
 // secret" (runtime.py _log_snapshot): a password or passphrase line ending in a
@@ -195,6 +200,24 @@ type sessionRecorder struct {
 	// AttemptEnded.
 	readAnnotationKeys map[string]struct{}
 	snapshotOnlyKeys   map[string]struct{}
+
+	// now is the recorder's clock (time.Now; a test's own clock in tests).
+	now func() time.Time
+	// Output not yet in the recording as a screen: when the first of it came
+	// (zero: none), and when the latest did; and the last screen recorded,
+	// and when (screenRecorded false: none yet, so the reference's -inf, and
+	// the first screen is never held back). Port of the reference's
+	// _unrecorded_since, _last_output_at, _last_screen_recorded_at and
+	// _last_screen_recorded. They live here rather than on the bridge because
+	// the recorder is what knows whether a recording is open and when a
+	// screen was last logged, whoever sent it; the bridge only ticks (see
+	// RecordSettledScreen). Like the event sequence, they outlive a
+	// connection, as they do on the reference's runtime.
+	unrecordedSince      time.Time
+	lastOutputAt         time.Time
+	screenRecorded       bool
+	lastScreenRecordedAt time.Time
+	lastScreenRecorded   string
 }
 
 var _ bridge.Observer = (*sessionRecorder)(nil)
@@ -221,6 +244,7 @@ func newSessionRecorder(
 	s := &sessionRecorder{
 		sessionID: sessionID, instance: newRecordingInstance(), store: store, cfg: cfg, detector: detector, logger: logger,
 		readAnnotationKeys: map[string]struct{}{}, snapshotOnlyKeys: map[string]struct{}{},
+		now: time.Now,
 	}
 	if detector != nil {
 		s.sendStream = annotation.NewStreamingDetector(detector, 0)
@@ -406,10 +430,106 @@ func (s *sessionRecorder) FrameSent(payload string, frame map[string]any) error 
 	case "snapshot":
 		return s.logSnapshot(frame)
 	case "term":
+		s.noteOutput()
 		data, _ := frame["data"].(string)
 		return s.scanOutput(data)
 	}
 	return nil
+}
+
+// noteOutput is _note_output: terminal output was sent that no recorded
+// screen holds yet. Noted whether or not a recording is open, as the
+// reference notes it with or without a logger. Caller holds s.mu.
+func (s *sessionRecorder) noteOutput() {
+	now := s.now()
+	s.lastOutputAt = now
+	if s.unrecordedSince.IsZero() {
+		s.unrecordedSince = now
+	}
+}
+
+// screenInterval is recording.screen_interval_s: how often, at most, the
+// session's own screen is recorded as it changes; 0 or less is off, and only
+// the screens sent to a viewer are recorded.
+func (s *sessionRecorder) screenInterval() time.Duration {
+	return time.Duration(s.cfg.ScreenIntervalS * float64(time.Second))
+}
+
+// recordsScreens reports whether the session records its own screen as it
+// changes (recording.screen_interval_s > 0, and the session is recorded); the
+// registry gives the bridge a settle loop only then (bridge.Config
+// RecordScreens), so a session that does not runs no ticker at all.
+func (s *sessionRecorder) recordsScreens() bool {
+	return s.screenInterval() > 0 && s.isEnabled()
+}
+
+// settledScreenDue is _record_settled_screen's test: screens are asked for
+// (screen_interval_s > 0), a recording is open, output has gone unrecorded,
+// the last screen recorded is at least an interval old, and either the
+// output has paused for the settle period or the oldest of it has waited an
+// interval. Taken after a pause rather than per chunk because a repaint
+// arrives as many chunks, and a screen for each would be a recording of
+// halves; taken anyway once the oldest unrecorded output is an interval old,
+// so output that never pauses is recorded once an interval. Caller holds
+// s.mu.
+func (s *sessionRecorder) settledScreenDue() bool {
+	interval := s.screenInterval()
+	if interval <= 0 || s.rec == nil || s.unrecordedSince.IsZero() {
+		return false
+	}
+	now := s.now()
+	if s.screenRecorded && now.Sub(s.lastScreenRecordedAt) < interval {
+		return false
+	}
+	settle := time.Duration(defaults.RecordedScreenSettleS * float64(time.Second))
+	quiet := now.Sub(s.lastOutputAt) >= settle
+	return quiet || now.Sub(s.unrecordedSince) >= interval
+}
+
+// RecordSettledScreen is _record_settled_screen: when the open recording is
+// due a screen (settledScreenDue), the session's current one is logged as a
+// "read" through logSnapshot, exactly as a snapshot a viewer was sent is,
+// but with no wire entry, since it is never sent; unless it is the same
+// screen as the last one recorded, which settles the output and records
+// nothing. A connector that streams
+// raw output (a PAM capture) sends a screen only when a viewer asks for one,
+// and only a sent screen was recorded, so the recording of a session nobody
+// read held its opening screen and nothing after it.
+//
+// Nothing is built while the session is unrecorded or nothing is owed. The
+// screen is built outside mu, since it reads the session's emulator, which
+// the recorder must never hold its lock across. A viewer's snapshot logged
+// in that window already recorded the screen, so the check is repeated
+// before logging: the reference, which awaits get_snapshot in the same
+// place, would log the same screen twice.
+func (s *sessionRecorder) RecordSettledScreen(screenFn func() map[string]any) error {
+	s.mu.Lock()
+	if err := s.failed(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	due := s.settledScreenDue()
+	s.mu.Unlock()
+	if !due {
+		return nil
+	}
+	frame := screenFn()
+	if frame == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.rec == nil || s.unrecordedSince.IsZero() {
+		return nil
+	}
+	if err := s.failed(); err != nil {
+		return err
+	}
+	if raw, _ := frame["screen"].(string); s.screenRecorded && raw == s.lastScreenRecorded {
+		s.unrecordedSince = time.Time{}
+		return nil
+	}
+	return s.logSnapshot(frame)
 }
 
 // logSnapshot is _log_snapshot: the password-prompt flag is updated whether or
@@ -421,6 +541,14 @@ func (s *sessionRecorder) FrameSent(payload string, frame map[string]any) error 
 // screen as sent. Caller holds s.mu.
 func (s *sessionRecorder) logSnapshot(frame map[string]any) error {
 	raw, _ := frame["screen"].(string)
+	// Whoever asked for it, this screen is now in the recording (the
+	// reference sets _unrecorded_since, _last_screen_recorded_at and
+	// _last_screen_recorded here): a viewer's snapshot settles the output,
+	// and starts the interval, as well as RecordSettledScreen does.
+	s.unrecordedSince = time.Time{}
+	s.screenRecorded = true
+	s.lastScreenRecordedAt = s.now()
+	s.lastScreenRecorded = raw
 	text := screen.StripANSI(raw)
 	s.atPasswordPrompt = atPasswordPrompt(text)
 	if s.rec == nil {

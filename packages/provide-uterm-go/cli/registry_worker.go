@@ -70,6 +70,10 @@ func (r *SessionRegistryImpl) newWorkerBridge(e *sessionEntry) *bridge.TermBridg
 	// interface would be a non-nil Observer.
 	if rec := r.recorderFor(e); rec != nil {
 		cfg.Observer = rec
+		// The settle loop runs only for a session that records its own
+		// screen (recording.screen_interval_s): one that does not gets no
+		// ticker at all.
+		cfg.RecordScreens = rec.recordsScreens()
 	}
 	return bridge.New(cfg)
 }

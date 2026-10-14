@@ -154,6 +154,13 @@ type RecordingConfig struct {
 	WebhookTimeoutS    float64 `json:"webhook_timeout_s" toml:"webhook_timeout_s"`
 	FlushIntervalS     float64 `json:"flush_interval_s" toml:"flush_interval_s"`
 	FlushBatchSize     int     `json:"flush_batch_size" toml:"flush_batch_size"`
+	// ScreenIntervalS is how often, at most, a session's own screen is
+	// recorded as it changes. 0 records only the screens sent to a viewer,
+	// which for a connector that streams raw output (a PAM capture) means a
+	// session nobody watched records its opening screen and nothing after
+	// it. Each screen is a whole rendered screen, so this is the recording's
+	// size per second of a busy session.
+	ScreenIntervalS float64 `json:"screen_interval_s" toml:"screen_interval_s"`
 }
 
 func defaultRecordingConfig() RecordingConfig {

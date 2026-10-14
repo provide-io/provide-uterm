@@ -13,6 +13,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/defaults"
 )
 
 // enqueueHello queues the worker_hello handshake frame. Port of the
@@ -46,6 +47,43 @@ func (b *TermBridge) heartbeatLoop(ctx context.Context, cancel context.CancelFun
 			return
 		case <-ticker.C:
 			b.enqueue(queuedFrame{control: map[string]any{"type": "heartbeat", "ts": nowTS()}})
+		}
+	}
+}
+
+// defaultSettleTick is how often settleLoop offers the observer the screen: a
+// fifth of the settle period, so a screen is taken within a fifth of a period
+// of falling due. The reference checks on every pass of its socket loop, whose
+// cadence is its connector's poll interval; here the socket loop is the send
+// and receive goroutines, which block, so the check gets a ticker of its own.
+var defaultSettleTick = time.Duration(defaults.RecordedScreenSettleS * float64(time.Second) / 5)
+
+// settleLoop offers the observer the session's screen on every tick, for as
+// long as the connection is up, so a session nobody reads is still recorded:
+// a connector that streams raw output (a PAM capture) only sends term frames,
+// and a screen is otherwise sent, and so recorded, only when a viewer asks for
+// one. It runs only when the session records its own screen
+// (Config.RecordScreens, from recording.screen_interval_s). Whether a screen
+// is due -- output has paused, or has gone unrecorded for an interval, and
+// the last screen recorded is an interval old -- is the observer's to decide (the reference's
+// _record_settled_screen and _note_output live on the runtime that owns the
+// recording, which is the observer here); the bridge only owns the snapshot
+// source and the clock tick. A failed recording write ends the connection,
+// as the exception from _log_snapshot ends the reference's _bridge_session.
+// The ticker stops with the connection, like heartbeatLoop's.
+func (b *TermBridge) settleLoop(ctx context.Context, cancel context.CancelFunc) {
+	defer cancel()
+	ticker := time.NewTicker(b.settleTick)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := b.observer.RecordSettledScreen(b.snapshotFrame); err != nil {
+				b.setConnErr(err)
+				return
+			}
 		}
 	}
 }
@@ -182,9 +220,19 @@ func (b *TermBridge) dispatchControl(ctx context.Context, msg map[string]any) {
 // sendSnapshot queues a snapshot frame from the live emulator or the cached
 // latest snapshot. Port of _send_snapshot (routed through the send queue).
 func (b *TermBridge) sendSnapshot() {
+	if frame := b.snapshotFrame(); frame != nil {
+		b.enqueue(queuedFrame{control: frame})
+	}
+}
+
+// snapshotFrame is the snapshot frame sendSnapshot sends, from the live
+// emulator or the cached latest snapshot, or nil when there is no session.
+// settleLoop hands it to the observer as the screen to record, so a screen
+// recorded unasked is the one a viewer would have been sent.
+func (b *TermBridge) snapshotFrame() map[string]any {
 	session := b.worker.Session()
 	if session == nil {
-		return
+		return nil
 	}
 	b.AttachSession()
 	snap := session.Snapshot()
@@ -196,7 +244,7 @@ func (b *TermBridge) sendSnapshot() {
 	if snap == nil {
 		snap = map[string]any{}
 	}
-	b.enqueue(queuedFrame{control: map[string]any{
+	return map[string]any{
 		"type":               "snapshot",
 		"screen":             snapString(snap, "screen", ""),
 		"cursor":             snapCursor(snap),
@@ -207,7 +255,7 @@ func (b *TermBridge) sendSnapshot() {
 		"has_trailing_space": snapBool(snap, "has_trailing_space", false),
 		"prompt_detected":    snap["prompt_detected"],
 		"ts":                 nowTS(),
-	}})
+	}
 }
 
 // sendKeys forwards keystrokes to the session, swallowing errors. Port of

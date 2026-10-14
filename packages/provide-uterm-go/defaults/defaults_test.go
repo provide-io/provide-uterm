@@ -56,6 +56,9 @@ func TestConstantValues(t *testing.T) {
 	if ReconnectBaseBackoffS != 0.5 {
 		t.Errorf("ReconnectBaseBackoffS = %v, want 0.5", ReconnectBaseBackoffS)
 	}
+	if RecordedScreenSettleS != 0.25 {
+		t.Errorf("RecordedScreenSettleS = %v, want 0.25", RecordedScreenSettleS)
+	}
 	if ReconnectMaxBackoffS != 30.0 {
 		t.Errorf("ReconnectMaxBackoffS = %v, want 30.0", ReconnectMaxBackoffS)
 	}

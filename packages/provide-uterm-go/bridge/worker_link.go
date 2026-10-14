@@ -113,6 +113,11 @@ type Config struct {
 	// Observer, when set, sees each connection's traffic (see Observer); a
 	// hosted session records itself through it.
 	Observer Observer
+	// RecordScreens, with an Observer, runs a settle loop on each
+	// connection that offers the observer the session's screen (see
+	// settleLoop): set when the session records its own screen as it
+	// changes (recording.screen_interval_s > 0). Off, no ticker runs.
+	RecordScreens bool
 }
 
 // defaultReconnectBackoff mirrors the Python _RECONNECT_BACKOFF tuple.
@@ -134,9 +139,13 @@ type TermBridge struct {
 	bearerToken       string
 	logger            *slog.Logger
 	observer          Observer
+	recordScreens     bool
 
 	// reconnectBackoff is the backoff schedule (overridable in tests).
 	reconnectBackoff []time.Duration
+	// settleTick is how often a recorded connection's settle loop offers the
+	// observer the screen (overridable in tests). See settleLoop.
+	settleTick time.Duration
 
 	sendQ chan queuedFrame
 
@@ -202,7 +211,9 @@ func New(cfg Config) *TermBridge {
 		bearerToken:       cfg.BearerToken,
 		logger:            logger,
 		observer:          observer,
+		recordScreens:     cfg.RecordScreens && cfg.Observer != nil,
 		reconnectBackoff:  defaultReconnectBackoff,
+		settleTick:        defaultSettleTick,
 		sendQ:             make(chan queuedFrame, 2000),
 		resumeToken:       cfg.ResumeToken,
 		customHandlers:    map[string]MessageHandler{},
@@ -467,6 +478,12 @@ func (b *TermBridge) serveConnection(ctx context.Context, conn *websocket.Conn) 
 	if b.heartbeatInterval > 0 {
 		wg.Add(1)
 		go func() { defer wg.Done(); b.heartbeatLoop(connCtx, cancel) }()
+	}
+	// A session that does not record its own screen as it changes runs no
+	// settle loop at all.
+	if b.recordScreens {
+		wg.Add(1)
+		go func() { defer wg.Done(); b.settleLoop(connCtx, cancel) }()
 	}
 	wg.Wait()
 	if ctx.Err() != nil {

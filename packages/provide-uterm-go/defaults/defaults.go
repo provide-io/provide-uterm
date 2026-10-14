@@ -59,6 +59,12 @@ const (
 	ReconnectBaseBackoffS = 0.5
 	// ReconnectMaxBackoffS is the ceiling for reconnect backoff (seconds).
 	ReconnectMaxBackoffS = 30.0
+	// RecordedScreenSettleS is how long (seconds) a session's output must
+	// pause before its recording takes the screen, when
+	// recording.screen_interval_s asks for its screens. A repaint arrives as
+	// many chunks; a screen taken mid-burst is half of one. Port of
+	// TerminalDefaults.RECORDED_SCREEN_SETTLE_S.
+	RecordedScreenSettleS = 0.25
 )
 
 // TokenFile returns the default resume-token file path

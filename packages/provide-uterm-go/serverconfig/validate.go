@@ -263,6 +263,10 @@ func validateRecording(r *RecordingConfig) error {
 	if r.RetentionS < 0 {
 		return fmt.Errorf("recording.retention_s must be >= 0 (0 = keep indefinitely), got: %d", r.RetentionS)
 	}
+	if r.ScreenIntervalS < 0 {
+		return fmt.Errorf(
+			"recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: %s", pyFloat(r.ScreenIntervalS))
+	}
 	if !inSet(r.ControlChannelMode, "exclude", "wire") {
 		return literalError("recording.control_channel_mode", "exclude", "wire")
 	}
