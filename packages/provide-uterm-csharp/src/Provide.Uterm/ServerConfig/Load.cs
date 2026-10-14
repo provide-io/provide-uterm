@@ -526,24 +526,32 @@ public static class ConfigLoader
         if (double.IsNaN(v)) return "nan";
         if (double.IsPositiveInfinity(v)) return "inf";
         if (double.IsNegativeInfinity(v)) return "-inf";
-        // Shortest round-trip digits, then laid out as CPython does: fixed
-        // notation for decimal exponents in [-4, 16), otherwise d[.ddd]e+XX
-        // with a signed exponent of at least two digits.
-        var sci = v.ToString("E16", System.Globalization.CultureInfo.InvariantCulture);
-        var shortest = v.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
-        var negative = v < 0;
-        var digits = new string(shortest.TakeWhile(c => c != 'E').Where(char.IsDigit).ToArray()).TrimStart('0');
+        // The shortest round-trip string gives both the digits and the decimal
+        // exponent (taking them from different formats disagrees at a power of
+        // ten); it is then laid out as CPython does: fixed notation for
+        // exponents in [-4, 16), otherwise d[.ddd]e+XX with a signed exponent
+        // of at least two digits.
+        var negative = double.IsNegative(v);
         var sign = negative ? "-" : "";
-        if (v == 0) return negative ? "-0.0" : "0.0";
-        var exponent = int.Parse(sci[(sci.IndexOf('E') + 1)..], System.Globalization.CultureInfo.InvariantCulture);
-        digits = digits.TrimEnd('0');
-        if (digits.Length == 0) digits = "0";
+        if (v == 0) return sign + "0.0";
+        var text = Math.Abs(v).ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+        var split = text.IndexOf('E');
+        var written = split < 0 ? text : text[..split];
+        var scale = split < 0 ? 0 : int.Parse(text[(split + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+        var dot = written.IndexOf('.');
+        var whole = dot < 0 ? written : written[..dot];
+        var point = whole.Length + scale;
+        var digits = whole + (dot < 0 ? "" : written[(dot + 1)..]);
+        var lead = digits.Length - digits.TrimStart('0').Length;
+        point -= lead;
+        digits = digits.TrimStart('0').TrimEnd('0');
+        var exponent = point - 1;
         if (exponent >= -4 && exponent < 16)
         {
             if (exponent < 0) return $"{sign}0.{new string('0', -exponent - 1)}{digits}";
-            var whole = digits.Length > exponent + 1 ? digits[..(exponent + 1)] : digits.PadRight(exponent + 1, '0');
+            var intPart = digits.Length > exponent + 1 ? digits[..(exponent + 1)] : digits.PadRight(exponent + 1, '0');
             var frac = digits.Length > exponent + 1 ? digits[(exponent + 1)..] : "0";
-            return $"{sign}{whole}.{frac}";
+            return $"{sign}{intPart}.{frac}";
         }
 
         var tail = digits.Length > 1 ? "." + digits[1..] : "";
