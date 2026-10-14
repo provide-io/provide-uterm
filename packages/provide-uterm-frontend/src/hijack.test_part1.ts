@@ -763,6 +763,7 @@ describe("text input field", () => {
     sendMessage({ type: "hijack_state", hijacked: true, owner: "me" });
     const field = q(container, "inputfield") as HTMLInputElement;
     expect(field.placeholder).toContain("\\x1b");
+    expect(field.placeholder).toContain("\\xHH (00–7F)");
     expect(field.title).toContain("\\\\");
     field.value = "\\x1b[A\\\\";
     (q(container, "inputsend") as HTMLButtonElement).click();
