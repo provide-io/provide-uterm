@@ -260,6 +260,12 @@ class RecordingConfig(ServerBaseModel):
     webhook_timeout_s: float = 2.0
     flush_interval_s: float = 5.0
     flush_batch_size: int = 100
+    # How often, at most, a session's own screen is recorded as it changes. 0
+    # records only the screens sent to a viewer, which for a connector that
+    # streams raw output (a PAM capture) means a session nobody watched records
+    # its opening screen and nothing after it. Each screen is a whole rendered
+    # screen, so this is the recording's size per second of a busy session.
+    screen_interval_s: float = 0.0
 
     @field_validator("max_bytes")
     @classmethod
@@ -273,6 +279,15 @@ class RecordingConfig(ServerBaseModel):
     def _validate_retention_s(cls, value: int) -> int:
         if value < 0:
             raise ValueError(f"recording.retention_s must be >= 0 (0 = keep indefinitely), got: {value}")
+        return value
+
+    @field_validator("screen_interval_s")
+    @classmethod
+    def _validate_screen_interval_s(cls, value: float) -> float:
+        if value < 0:
+            raise ValueError(
+                f"recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: {value}"
+            )
         return value
 
     @model_validator(mode="after")

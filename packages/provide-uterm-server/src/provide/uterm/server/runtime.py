@@ -20,6 +20,7 @@ from provide.uterm.control_channel import (
     ControlFrameProtocolError,
     DataChunk,
 )
+from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.server.connectors import SessionConnector, build_connector
 from provide.uterm.server.models import RecordingConfig, SessionDefinition, SessionLifecycle, SessionRuntimeStatus
 
@@ -158,6 +159,13 @@ class HostedSessionRuntime:
         self._snapshot_only_keys: set[str] = set()
         self._event_seq: int = 0
         self._at_password_prompt: bool = False
+        # Output not yet in the recording as a screen: when the first of it
+        # came, and when the latest did; and the last screen recorded, and
+        # when. See _record_settled_screen.
+        self._unrecorded_since: float | None = None
+        self._last_output_at: float = 0.0
+        self._last_screen_recorded_at: float = float("-inf")
+        self._last_screen_recorded: str | None = None
 
     def _ws_url(self) -> str:
         if self._public_base_url.startswith("https://"):
@@ -484,8 +492,45 @@ class HostedSessionRuntime:
         finally:
             await self._discard_connector()
 
+    def _note_output(self) -> None:
+        now = time.monotonic()
+        self._last_output_at = now
+        if self._unrecorded_since is None:
+            self._unrecorded_since = now
+
+    async def _record_settled_screen(self, connector: Any) -> None:
+        """Record the session's screen as it changes, at recording.screen_interval_s.
+
+        A connector that streams raw output (a PAM capture) sends a screen only
+        when a viewer asks for one, and only a sent screen was recorded, so the
+        recording of a session nobody read held its opening screen and nothing
+        after it. Taken once output pauses, rather than per chunk: a repaint
+        arrives as many chunks, and a screen for each would be a recording of
+        halves. Output that never pauses is taken once an interval. A screen
+        the same as the last one recorded is not recorded again.
+        """
+
+        interval = self._recording_cfg.screen_interval_s
+        if interval <= 0 or self._logger is None or self._unrecorded_since is None:
+            return
+        now = time.monotonic()
+        if now - self._last_screen_recorded_at < interval:
+            return
+        quiet = now - self._last_output_at >= TerminalDefaults.RECORDED_SCREEN_SETTLE_S
+        if not quiet and now - self._unrecorded_since < interval:
+            return
+        snapshot = await connector.get_snapshot()
+        if str(snapshot.get("screen", "")) == self._last_screen_recorded:
+            self._unrecorded_since = None
+            return
+        await self._log_snapshot(snapshot)
+
     async def _log_snapshot(self, msg: dict[str, Any]) -> None:
         screen = str(msg.get("screen", ""))
+        # Whoever asked for it, this screen is now in the recording.
+        self._unrecorded_since = None
+        self._last_screen_recorded_at = time.monotonic()
+        self._last_screen_recorded = screen
         # Read as text. A rendered screen carries SGR codes and ends each row
         # with a reset, which hides a trailing "Password:" from the prompt check
         # and splits a styled match from the read-path rules.
@@ -588,6 +633,7 @@ class HostedSessionRuntime:
         if outbound.get("type") == "snapshot":
             await self._log_snapshot(outbound)
         elif outbound.get("type") == "term":
+            self._note_output()
             await self._scan_output(str(outbound.get("data") or ""))
 
     async def _process_control_msg(
@@ -649,6 +695,7 @@ class HostedSessionRuntime:
         recv_task: asyncio.Task[Any] | None = None
         try:
             while not self._stop.is_set():
+                await self._record_settled_screen(connector)
                 if self._queue is not None and not self._queue.empty():
                     outbound = await self._queue.get()
                     encoded = _encode_runtime_frame(outbound)

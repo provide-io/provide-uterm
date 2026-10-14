@@ -41,6 +41,10 @@ class TerminalDefaults:
     # would put a fully rendered screen on the wire for each one; this bounds how
     # long a screen change can stay unpublished without paying that cost.
     SNAPSHOT_PUSH_DEBOUNCE_S: float = 0.1
+    # How long a session's output must pause before its recording takes the
+    # screen, when recording.screen_interval_s asks for its screens. A repaint
+    # arrives as many chunks; a screen taken mid-burst is half of one.
+    RECORDED_SCREEN_SETTLE_S: float = 0.25
 
     @classmethod
     def token_file(cls) -> Path:
