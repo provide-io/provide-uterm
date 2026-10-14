@@ -243,11 +243,51 @@ func pyFloat(v float64) string {
 	if math.IsInf(v, -1) {
 		return "-inf"
 	}
-	s := strconv.FormatFloat(v, 'g', -1, 64)
-	if !strings.ContainsAny(s, ".e") {
-		s += ".0"
+	return pyFiniteRepr(v)
+}
+
+// pyFiniteRepr is CPython's float_repr for a finite v: the shortest digits
+// that round-trip (strconv's 'e' with precision -1 gives the same ones),
+// laid out the way repr lays them out. FormatFloat's own 'g' cannot be
+// used: it switches to exponent notation from 1e6 ("1e+06"), where repr
+// stays fixed ("1000000.0") until 1e16.
+//
+// The layout, for decimal exponent x (the digits read d.ddd × 10^x):
+//   - x < -4 or x >= 16: exponent notation, "1e-05", "1.5e+16", "-1e+20":
+//     the digits with a point after the first only when there are more, then
+//     a lower-case e, a sign and at least two exponent digits.
+//   - otherwise fixed notation, always with a point and at least one digit
+//     after it: "0.0001", "1234567.0", "1234567890123456.0", "-0.0".
+func pyFiniteRepr(v float64) string {
+	e := strconv.FormatFloat(v, 'e', -1, 64) // "-1.2345e+06"
+	sign := ""
+	if e[0] == '-' {
+		sign, e = "-", e[1:]
 	}
-	return s
+	mant, expText, _ := strings.Cut(e, "e")
+	x, _ := strconv.Atoi(expText)
+	digits := strings.Replace(mant, ".", "", 1)
+	if x < -4 || x >= 16 {
+		out := digits[:1]
+		if len(digits) > 1 {
+			out += "." + digits[1:]
+		}
+		expSign := "+"
+		if x < 0 {
+			expSign, x = "-", -x
+		}
+		return fmt.Sprintf("%s%se%s%02d", sign, out, expSign, x)
+	}
+	point := x + 1 // digits before the decimal point
+	// An if-chain rather than a tagless switch, for the coverage reason
+	// pyFloat gives.
+	if point <= 0 {
+		return sign + "0." + strings.Repeat("0", -point) + digits
+	}
+	if point >= len(digits) {
+		return sign + digits + strings.Repeat("0", point-len(digits)) + ".0"
+	}
+	return sign + digits[:point] + "." + digits[point:]
 }
 
 func validateAudit(a *AuditConfig) error {

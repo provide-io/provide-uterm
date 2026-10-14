@@ -50,6 +50,9 @@ func TestAScreenIntervalThatCouldNotMeanWhatItSaysIsRefused(t *testing.T) {
 		{math.NaN(), "nan"},
 		{math.Inf(1), "inf"},
 		{math.Inf(-1), "-inf"},
+		{-1234567, "-1234567.0"},
+		{1e-5, "1e-05"},
+		{-1e20, "-1e+20"},
 	} {
 		_, err := ConfigFromMapping(map[string]any{"recording": map[string]any{"screen_interval_s": tc.value}})
 		if want := screenIntervalRefusal + tc.got; err == nil || err.Error() != want {

@@ -240,6 +240,29 @@ func TestPyFloatMatchesPythonRepr(t *testing.T) {
 		{math.Inf(1), "inf"},
 		{math.Inf(-1), "-inf"},
 		{1e21, "1e+21"},
+		// CPython stays in fixed notation for decimal exponents in [-4, 16),
+		// where FormatFloat's 'g' would already have switched at 1e6.
+		{1e6, "1000000.0"},
+		{1234567, "1234567.0"},
+		{-1234567, "-1234567.0"},
+		{1.234567890123456e15, "1234567890123456.0"},
+		{1e15, "1000000000000000.0"},
+		{9999999999999998, "9999999999999998.0"},
+		{123.456, "123.456"},
+		{0.25, "0.25"},
+		{0.0001, "0.0001"},
+		{-0.00012345, "-0.00012345"},
+		{math.Copysign(0, -1), "-0.0"},
+		// Exponent notation: lower-case e, a sign, at least two digits, and
+		// no ".0" on a whole mantissa.
+		{1e16, "1e+16"},
+		{1.5e16, "1.5e+16"},
+		{1e17, "1e+17"},
+		{-1e20, "-1e+20"},
+		{0.00001, "1e-05"},
+		{1.5e-05, "1.5e-05"},
+		{5e-324, "5e-324"},
+		{math.MaxFloat64, "1.7976931348623157e+308"},
 	} {
 		if got := pyFloat(tc.value); got != tc.want {
 			t.Errorf("pyFloat(%v) = %q, want %q", tc.value, got, tc.want)
