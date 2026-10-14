@@ -529,10 +529,12 @@ class HostedSessionRuntime:
             # A screen for the recording is not worth the session's connection,
             # which an exception here would end. Tried again an interval on.
             self._last_screen_recorded_at = now
+            # Redacted as _run redacts a connector's errors: the text can quote
+            # what the connector was handed.
             logger.warning(
                 "hosted_session_settled_screen_failed session_id=%s error=%s",
                 self.definition.session_id,
-                error,
+                self._error_redactor(str(error)),
             )
             return
         if str(snapshot.get("screen", "")) == self._last_screen_recorded:

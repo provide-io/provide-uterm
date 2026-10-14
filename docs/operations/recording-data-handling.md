@@ -92,6 +92,7 @@ The recording configuration lives under `recording.*` in
 | `redact_sensitive`           | `true`               | Apply default secret redaction patterns before persistence |
 | `store_type`                 | `"local"`            | `local` / `memory` / `null` / `webhook` |
 | `webhook_url`                | unset                | Required when `store_type = "webhook"` |
+| `screen_interval_s`          | `0` (off)            | Also record the screen of a session nobody is reading (a PAM capture) once its output settles, at most every N s; 0, or >= 0.25. Each is a whole rendered screen (`screen`, `raw`, `raw_bytes_b64`, about 18 KB at 80x24 in truecolor) and counts toward `max_bytes` |
 
 `session_retention_s` lives at the top level of `UtermServerConfig` and applies
 to stopped session definitions in the in-memory registry; recording file TTL is

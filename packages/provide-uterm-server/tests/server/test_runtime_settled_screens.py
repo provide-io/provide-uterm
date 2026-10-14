@@ -256,3 +256,21 @@ async def test_a_screen_the_recording_took_itself_is_not_annotated_again() -> No
         # A viewer's read is annotated as it always was.
         await rt._log_snapshot({"type": "snapshot", "screen": "$ sudo ls"})
     rt._detector.detect.assert_called_once()
+
+
+async def test_a_failed_screen_is_logged_redacted() -> None:
+    # The error can quote what the connector was handed, as _run's can.
+    rt = _runtime()
+    rt._error_redactor = MagicMock(return_value="[redacted]")
+    connector = _connector([])
+    connector.get_snapshot = AsyncMock(side_effect=RuntimeError("https://user:hunter2@host"))
+    clock = _Clock()
+    with (
+        patch("provide.uterm.server.runtime.time.monotonic", clock),
+        patch("provide.uterm.server.runtime.logger") as log,
+    ):
+        rt._note_output()
+        clock.now += INTERVAL
+        await rt._record_settled_screen(connector)
+    rt._error_redactor.assert_called_once_with("https://user:hunter2@host")
+    assert "hunter2" not in str(log.warning.call_args)
