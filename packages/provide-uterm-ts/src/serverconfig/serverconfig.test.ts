@@ -10,6 +10,7 @@ import {
   cleanPath,
   derivePublicBaseUrl,
   LOOPBACK_HOSTS,
+  pyFloat,
   requireSecureUrl,
   UI_DEFAULTS,
   validateAuditConfig,
@@ -320,6 +321,29 @@ describe("the other configurations", () => {
     expect(() => validateRecordingConfig({ screen_interval_s: value })).toThrow(
       `recording.screen_interval_s must be 0 (only screens sent to a viewer) or a finite number of seconds >= 0.25, got: ${shown}`,
     );
+  });
+
+  it.each([
+    [1e-5, "1e-05"],
+    [-1e20, "-1e+20"],
+    [1.5e16, "1.5e+16"],
+    [1e16, "1e+16"],
+    [1234567890123456, "1234567890123456.0"],
+    [0.0001, "0.0001"],
+    [0.1, "0.1"],
+    [-1, "-1.0"],
+    [Number.NaN, "nan"],
+    [Number.POSITIVE_INFINITY, "inf"],
+    [Number.NEGATIVE_INFINITY, "-inf"],
+  ])("prints %s as Python's repr: %s", (value, shown) => {
+    expect(pyFloat(value)).toBe(shown);
+  });
+
+  it.each([
+    [1e-5, "1e-05"],
+    [-1, "-1.0"],
+  ])("quotes a refused screen interval of %s as %s", (value, shown) => {
+    expect(() => validateRecordingConfig({ screen_interval_s: value })).toThrow(`seconds >= 0.25, got: ${shown}`);
   });
 
   it.each([0, 0.25, 1])("accepts a screen interval of %s", (value) => {

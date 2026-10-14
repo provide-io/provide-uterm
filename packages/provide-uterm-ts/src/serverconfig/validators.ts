@@ -33,6 +33,13 @@ export function pyFloat(value: number): string {
   if (value === Number.NEGATIVE_INFINITY) {
     return "-inf";
   }
+  if (Math.abs(value) >= 1e16) {
+    // Every double this large is whole, but CPython switches to exponent
+    // notation at 1e16, so it reads `1e+16` and `-1e+20`, not the digits.
+    const [mantissa, exponentText] = value.toExponential().split("e") as [string, string];
+    const exponent = Number(exponentText);
+    return `${mantissa}e${exponent < 0 ? "-" : "+"}${Math.abs(exponent).toString().padStart(2, "0")}`;
+  }
   if (Number.isInteger(value)) {
     // A negative zero is still a signed float, and `${-0}` drops the sign.
     return `${Object.is(value, -0) ? "-0" : value}.0`;

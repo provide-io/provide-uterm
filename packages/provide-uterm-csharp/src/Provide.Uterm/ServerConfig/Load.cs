@@ -517,6 +517,40 @@ public static class ConfigLoader
         if (t.TryGetValue("fitaddon_cdn_integrity", out var fi) && fi is string fis) ui.FitAddonCdnIntegrity = fis;
     }
 
+    /// <summary>The settle period of a recorded screen: the fastest interval that means anything.</summary>
+    private const double MinScreenIntervalS = 0.25;
+
+    /// <summary>A float as Python's repr writes it: nan, inf, a whole number keeps its .0, and exponent form for 1e-5 and 1e16.</summary>
+    internal static string PyFloat(double v)
+    {
+        if (double.IsNaN(v)) return "nan";
+        if (double.IsPositiveInfinity(v)) return "inf";
+        if (double.IsNegativeInfinity(v)) return "-inf";
+        // Shortest round-trip digits, then laid out as CPython does: fixed
+        // notation for decimal exponents in [-4, 16), otherwise d[.ddd]e+XX
+        // with a signed exponent of at least two digits.
+        var sci = v.ToString("E16", System.Globalization.CultureInfo.InvariantCulture);
+        var shortest = v.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+        var negative = v < 0;
+        var digits = new string(shortest.TakeWhile(c => c != 'E').Where(char.IsDigit).ToArray()).TrimStart('0');
+        var sign = negative ? "-" : "";
+        if (v == 0) return negative ? "-0.0" : "0.0";
+        var exponent = int.Parse(sci[(sci.IndexOf('E') + 1)..], System.Globalization.CultureInfo.InvariantCulture);
+        digits = digits.TrimEnd('0');
+        if (digits.Length == 0) digits = "0";
+        if (exponent >= -4 && exponent < 16)
+        {
+            if (exponent < 0) return $"{sign}0.{new string('0', -exponent - 1)}{digits}";
+            var whole = digits.Length > exponent + 1 ? digits[..(exponent + 1)] : digits.PadRight(exponent + 1, '0');
+            var frac = digits.Length > exponent + 1 ? digits[(exponent + 1)..] : "0";
+            return $"{sign}{whole}.{frac}";
+        }
+
+        var tail = digits.Length > 1 ? "." + digits[1..] : "";
+        var expSign = exponent < 0 ? "-" : "+";
+        return $"{sign}{digits[0]}{tail}e{expSign}{Math.Abs(exponent):00}";
+    }
+
     /// <summary>
     /// The <c>[recording]</c> section, which was never read at all.
     /// </summary>
@@ -525,19 +559,6 @@ public static class ConfigLoader
     /// readers in the hosted factory, so a deployment that asked to record wrote
     /// nothing, and one that asked not to could not say so.
     /// </remarks>
-    /// <summary>The settle period of a recorded screen: the fastest interval that means anything.</summary>
-    private const double MinScreenIntervalS = 0.25;
-
-    /// <summary>A float as Python's repr writes it: nan, inf, and a whole number keeps its .0.</summary>
-    private static string PyFloat(double v)
-    {
-        if (double.IsNaN(v)) return "nan";
-        if (double.IsPositiveInfinity(v)) return "inf";
-        if (double.IsNegativeInfinity(v)) return "-inf";
-        var text = v.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
-        return text.Contains('.') || text.Contains('E') ? text : text + ".0";
-    }
-
     private static void ApplyRecording(RecordingConfig r, TomlTable t)
     {
         if (t.TryGetValue("enabled_by_default", out var en) && en is bool enb) r.EnabledByDefault = enb;
