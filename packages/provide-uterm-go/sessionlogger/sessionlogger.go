@@ -386,6 +386,15 @@ func (l *SessionLogger) redactText(value string) string {
 	return redaction.RedactText(value, l.redactor)
 }
 
+// QuotaReached reports whether the byte quota is spent, so nothing more will
+// be written: true when MaxBytes is set and the bytes written have reached
+// it. Port of SessionLogger.quota_reached. Unlike quotaReached it has no side
+// effect -- asking spends no warning -- so a caller can check it before
+// building something only to have it dropped (a recorder's settled screen).
+func (l *SessionLogger) QuotaReached() bool {
+	return l.maxBytes > 0 && l.bytesWritten.Load() >= int64(l.maxBytes)
+}
+
 // quotaReached reports (warning once) whether the byte quota is exhausted.
 // Every Log* entry point checks it before redacting, so nothing is redacted
 // for a record writeEvent would only drop; it reads atomics and takes no

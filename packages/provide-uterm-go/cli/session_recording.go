@@ -130,6 +130,7 @@ type recordingLog interface {
 	LogScreenFrame(frame map[string]any, raw []byte) error
 	LogSend(keys string) error
 	LogSendMasked(byteCount int) error
+	QuotaReached() bool
 	Flush() error
 	Stop() error
 }
@@ -540,7 +541,9 @@ func (s *sessionRecorder) RecordSettledScreen(screenFn func() map[string]any) er
 		s.mu.Unlock()
 		return err
 	}
-	due := s.settledScreenDue()
+	// Past its quota the recording drops every write: a screen built for it
+	// would be rendered only to be thrown away.
+	due := s.settledScreenDue() && !s.rec.QuotaReached()
 	outputs := s.outputs
 	s.mu.Unlock()
 	if !due {
@@ -565,7 +568,7 @@ func (s *sessionRecorder) RecordSettledScreen(screenFn func() map[string]any) er
 		s.unrecordedSince = time.Time{}
 		return nil
 	}
-	return s.logSnapshot(frame)
+	return s.logScreen(frame, false)
 }
 
 // keepOutputSince leaves output noted since the outputs count read owed a
@@ -585,6 +588,17 @@ func (s *sessionRecorder) keepOutputSince(outputs uint64) {
 // check and splits a styled match from the rules. The "read" entry keeps the
 // screen as sent. Caller holds s.mu.
 func (s *sessionRecorder) logSnapshot(frame map[string]any) error {
+	return s.logScreen(frame, true)
+}
+
+// logScreen is _log_snapshot with its annotate flag. annotate is false only
+// for a screen the recording took for itself (RecordSettledScreen): its
+// output was already scanned as it streamed, and running the read-path rules
+// over the screen too, once an interval, would re-annotate whatever stays on
+// it each time the bounded dedupe set is cleared, where before only a
+// viewer's read could. The "read" entry is the same either way. Caller holds
+// s.mu.
+func (s *sessionRecorder) logScreen(frame map[string]any, annotate bool) error {
 	raw, _ := frame["screen"].(string)
 	// Whoever asked for it, this screen is now in the recording (the
 	// reference sets _unrecorded_since, _last_screen_recorded_at and
@@ -603,7 +617,7 @@ func (s *sessionRecorder) logSnapshot(frame map[string]any) error {
 		return err
 	}
 	s.eventSeq++
-	if s.detector == nil {
+	if s.detector == nil || !annotate {
 		return nil
 	}
 	// The snapshot path DEDUPES (rule on sessionRecorder): a match already

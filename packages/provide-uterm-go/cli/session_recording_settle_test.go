@@ -14,10 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/bridge"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/defaults"
 	uptty "github.com/provide-io/provide-uterm/packages/provide-uterm-go/pty"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
@@ -273,6 +275,73 @@ func TestAHugeScreenIntervalDoesNotOverflow(t *testing.T) {
 	clock.advance(settle)
 	must(t, rec.RecordSettledScreen((&screens{next: []string{"only"}}).take))
 	wantRecorded(t, recorded, "only")
+}
+
+// Past its byte quota the recording drops every write, so no screen is built
+// for it: one would be rendered only to be thrown away.
+func TestNoScreenIsBuiltOnceTheRecordingIsFull(t *testing.T) {
+	t.Run("as the logger reports it", func(t *testing.T) {
+		rec, clock, _ := clockedRecorder(t)
+		wrapLog(t, rec, func(l recordingLog) recordingLog { return fullLog{l} })
+		src := &screens{next: []string{"unwanted"}}
+		output(t, rec)
+		clock.advance(interval * 2)
+		must(t, rec.RecordSettledScreen(src.take))
+		if src.taken != 0 {
+			t.Fatal("a screen was built for a full recording")
+		}
+	})
+	t.Run("with a real quota", func(t *testing.T) {
+		cfg := testRecordingConfig()
+		cfg.ScreenIntervalS = interval.Seconds()
+		cfg.MaxBytes = 1 // spent by the log_start entry
+		rec, _ := newTestRecorder(t, cfg)
+		clock := &settleClock{t: time.Unix(100, 0)}
+		rec.now = clock.now
+		rec.AttemptStarted()
+		src := &screens{next: []string{"unwanted"}}
+		output(t, rec)
+		clock.advance(interval * 2)
+		must(t, rec.RecordSettledScreen(src.take))
+		if src.taken != 0 {
+			t.Fatal("a screen was built for a full recording")
+		}
+	})
+}
+
+type fullLog struct{ recordingLog }
+
+func (fullLog) QuotaReached() bool { return true }
+
+// A screen the recording took itself is logged as a "read" but not run
+// through the read-path rules: its output was scanned as it streamed, and
+// scanning the screen too, once an interval, would re-annotate whatever stays
+// on it whenever the bounded dedupe set clears. A viewer's read is annotated
+// as it always was.
+func TestAScreenTheRecordingTookItselfIsNotAnnotatedAgain(t *testing.T) {
+	cfg := testRecordingConfig()
+	cfg.ScreenIntervalS = interval.Seconds()
+	store := recording.NewInMemoryStore()
+	rec := newSessionRecorder("s1", store, cfg, annotation.NewPatternDetector(nil), nil)
+	rec.setEnabled(true)
+	clock := &settleClock{t: time.Unix(100, 0)}
+	rec.now = clock.now
+	rec.AttemptStarted()
+	output(t, rec)
+	clock.advance(interval * 2)
+	must(t, rec.RecordSettledScreen((&screens{next: []string{"$ sudo rm -rf /"}}).take))
+	must(t, rec.flush())
+	if got := len(entries(t, store, "read")); got != 1 {
+		t.Fatalf("%d reads recorded, want the settled screen", got)
+	}
+	if got := descriptions(t, store); len(got) != 0 {
+		t.Fatalf("the settled screen was annotated: %v", got)
+	}
+	sendFrame(t, rec, snapshotFrame("$ sudo ls"))
+	must(t, rec.flush())
+	if got, want := descriptions(t, store), []string{"sudo command detected: sudo"}; !slices.Equal(got, want) {
+		t.Fatalf("annotations = %v, want the viewer's read annotated: %v", got, want)
+	}
 }
 
 // A screen recorded unasked is logged as a "read" and nothing else: it was

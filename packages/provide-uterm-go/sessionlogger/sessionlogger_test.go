@@ -430,3 +430,28 @@ func TestLogScreenFrameOverQuotaWritesNothing(t *testing.T) {
 		t.Fatalf("reads = %v, want none past the quota", got)
 	}
 }
+
+// QuotaReached is SessionLogger.quota_reached: true once the bytes written
+// meet MaxBytes, read without side effects -- asking spends no warning.
+func TestQuotaReachedOnceTheBytesWrittenMeetTheQuota(t *testing.T) {
+	l := newLogger(t, recording.NewInMemoryStore(), Options{MaxBytes: 1 << 20})
+	if l.QuotaReached() {
+		t.Fatal("a fresh recording is full")
+	}
+	l.bytesWritten.Store(1 << 20)
+	if !l.QuotaReached() {
+		t.Fatal("a recording at its quota is not full")
+	}
+	if l.quotaWarned.Load() {
+		t.Fatal("asking spent the quota warning")
+	}
+}
+
+// An unlimited recording is never full.
+func TestAnUnlimitedRecordingIsNeverFull(t *testing.T) {
+	l := newLogger(t, recording.NewInMemoryStore(), Options{})
+	l.bytesWritten.Store(1 << 40)
+	if l.QuotaReached() {
+		t.Fatal("an unlimited recording is full")
+	}
+}

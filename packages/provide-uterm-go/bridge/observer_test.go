@@ -469,6 +469,10 @@ func TestSettleLoopStopsWithTheConnection(t *testing.T) {
 	if !settleLoopRunning() {
 		t.Fatal("no settle loop is running on the connection")
 	}
+	waitFor(t, "the connection served", func() bool { serving, _ := connectionGoroutines(); return serving })
+	if _, started := connectionGoroutines(); started != 3 {
+		t.Fatalf("%d connection goroutines with RecordScreens on, want send, receive and settle", started)
+	}
 	b.Stop()
 	// Stop waits for the connection's goroutines, so the loop is gone by the
 	// time it returns: checked against the goroutines themselves rather than
@@ -478,16 +482,46 @@ func TestSettleLoopStopsWithTheConnection(t *testing.T) {
 	}
 }
 
-// settleLoopRunning reports whether any goroutine is in settleLoop.
-func settleLoopRunning() bool {
+// goroutineDump is every goroutine's stack, one block per goroutine.
+func goroutineDump() []string {
 	buf := make([]byte, 1<<20)
 	for {
 		n := runtime.Stack(buf, true)
 		if n < len(buf) {
-			return strings.Contains(string(buf[:n]), ").settleLoop(")
+			return strings.Split(string(buf[:n]), "\n\n")
 		}
 		buf = make([]byte, 2*len(buf))
 	}
+}
+
+// settleLoopRunning reports whether any goroutine is in settleLoop.
+func settleLoopRunning() bool {
+	for _, g := range goroutineDump() {
+		if strings.Contains(g, ").settleLoop(") {
+			return true
+		}
+	}
+	return false
+}
+
+// connectionGoroutines reports whether a connection is being served with all
+// its goroutines started -- serveConnection is parked in its WaitGroup's
+// Wait, which it reaches only after every go statement -- and how many
+// goroutines serveConnection started that are still alive. A goroutine that
+// has not been scheduled yet is counted too: it is "created by"
+// serveConnection from the moment its go statement runs. The bridge tests do
+// not run in parallel and every one stops its bridge, so the only connection
+// is the calling test's.
+func connectionGoroutines() (serving bool, started int) {
+	for _, g := range goroutineDump() {
+		if strings.Contains(g, "(*TermBridge).serveConnection(") && strings.Contains(g, "sync.(*WaitGroup).Wait(") {
+			serving = true
+		}
+		if strings.Contains(g, "(*TermBridge).serveConnection in goroutine ") {
+			started++
+		}
+	}
+	return serving, started
 }
 
 // With no session there is no screen to offer: the frame is nil, not an
@@ -505,14 +539,22 @@ func TestNoSettleLoopUnlessScreensAreRecorded(t *testing.T) {
 	hub := newFakeHub(t)
 	obs := &recordingObserver{}
 	b := New(Config{Worker: &mockWorker{session: &mockSession{}}, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs})
-	// A zero tick makes time.NewTicker panic, so a settle loop started on
-	// this connection would crash the test before Stop could return (Stop
-	// waits for every goroutine the connection started). Structural, rather
-	// than waiting a while to see that no screen is offered.
-	b.settleTick = 0
+	b.settleTick = time.Millisecond
 	b.Start(context.Background())
+	defer b.Stop()
 	hub.awaitConn(t)
 	hub.awaitControl(t, "worker_hello")
+	// Checked against the goroutines themselves while the connection is up,
+	// rather than by waiting a while to see that no screen is offered. Once
+	// serveConnection waits on its goroutines, all of them have been started,
+	// scheduled or not, so a settle loop would be counted.
+	waitFor(t, "the connection served", func() bool { serving, _ := connectionGoroutines(); return serving })
+	if _, started := connectionGoroutines(); started != 2 {
+		t.Fatalf("%d connection goroutines with RecordScreens off, want only send and receive", started)
+	}
+	if settleLoopRunning() {
+		t.Fatal("a settle loop is running with RecordScreens off")
+	}
 	b.Stop()
 	if got := obs.settledScreens(); len(got) != 0 {
 		t.Fatalf("%d screens offered with RecordScreens off", len(got))
