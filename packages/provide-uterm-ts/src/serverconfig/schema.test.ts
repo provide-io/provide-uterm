@@ -419,3 +419,35 @@ describe("the browser ceiling", () => {
     }
   });
 });
+
+describe("the recorded-screen interval", () => {
+  // The corpus predates the field, and the goldens are not re-recorded for it,
+  // so these are what pin the section's own refusal. The messages are the
+  // reference's, value for value, as `RecordingConfig(screen_interval_s=...)`
+  // words them.
+  const refusal = (shown: string): ConfigError[] => [
+    {
+      type: "value_error",
+      loc: ["screen_interval_s"],
+      msg:
+        "Value error, recording.screen_interval_s must be 0 (only screens sent to a viewer) or a finite number " +
+        `of seconds >= 0.25, got: ${shown}`,
+    },
+  ];
+
+  it.each([
+    [-1, "-1.0"],
+    [0.1, "0.1"],
+    ["0.2", "0.2"],
+    [1e-5, "1e-05"],
+    [Number.NaN, "nan"],
+    [Number.POSITIVE_INFINITY, "inf"],
+    [Number.NEGATIVE_INFINITY, "-inf"],
+  ])("refuses %s, quoting it as %s", (value, shown) => {
+    expect(validateSection("RecordingConfig", { screen_interval_s: value })).toEqual(refusal(shown));
+  });
+
+  it.each([0, -0, 0.25, "1", 2e16])("accepts %s", (value) => {
+    expect(validateSection("RecordingConfig", { screen_interval_s: value })).toEqual([]);
+  });
+});

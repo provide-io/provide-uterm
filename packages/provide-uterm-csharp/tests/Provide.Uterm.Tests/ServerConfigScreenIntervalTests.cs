@@ -53,6 +53,7 @@ public sealed class ServerConfigScreenIntervalTests
     [InlineData(-1.0, "-1.0")]
     [InlineData(1e15, "1000000000000000.0")]
     [InlineData(100.0, "100.0")]
+    [InlineData(120.0, "120.0")]
     [InlineData(10.5, "10.5")]
     [InlineData(0.00501, "0.00501")]
     [InlineData(1.234e-5, "1.234e-05")]
@@ -69,6 +70,17 @@ public sealed class ServerConfigScreenIntervalTests
     public void AFloatPrintsAsPythonsRepr(double value, string expected)
     {
         Assert.Equal(expected, ConfigLoader.PyFloat(value));
+    }
+
+    /// <summary>
+    /// A value that is not a number at all is refused under this key's own
+    /// name, so the operator is told which line of the file to fix.
+    /// </summary>
+    [Fact]
+    public void AnIntervalThatIsNotANumberIsRefusedByName()
+    {
+        var error = Assert.Throws<ArgumentException>(() => Load("\"fast\""));
+        Assert.Equal("recording.screen_interval_s must be a number, got: fast", error.Message);
     }
 
     [Theory]

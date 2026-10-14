@@ -530,18 +530,17 @@ public static class ConfigLoader
         // exponent (taking them from different formats disagrees at a power of
         // ten); it is then laid out as CPython does: fixed notation for
         // exponents in [-4, 16), otherwise d[.ddd]e+XX with a signed exponent
-        // of at least two digits.
+        // of at least two digits. .NET's default double format is that
+        // shortest string, written d[.ddd] or d[.ddd]E+XX, so splitting it at
+        // the E and the point needs no test for either being absent.
         var negative = double.IsNegative(v);
         var sign = negative ? "-" : "";
         if (v == 0) return sign + "0.0";
-        var text = Math.Abs(v).ToString("R", System.Globalization.CultureInfo.InvariantCulture);
-        var split = text.IndexOf('E');
-        var written = split < 0 ? text : text[..split];
-        var scale = split < 0 ? 0 : int.Parse(text[(split + 1)..], System.Globalization.CultureInfo.InvariantCulture);
-        var dot = written.IndexOf('.');
-        var whole = dot < 0 ? written : written[..dot];
-        var point = whole.Length + scale;
-        var digits = whole + (dot < 0 ? "" : written[(dot + 1)..]);
+        var parts = Math.Abs(v).ToString(System.Globalization.CultureInfo.InvariantCulture).Split('E');
+        var written = parts[0];
+        var scale = parts.Length > 1 ? int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
+        var point = written.Split('.')[0].Length + scale;
+        var digits = written.Replace(".", "", StringComparison.Ordinal);
         var lead = digits.Length - digits.TrimStart('0').Length;
         point -= lead;
         digits = digits.TrimStart('0').TrimEnd('0');
@@ -549,14 +548,15 @@ public static class ConfigLoader
         if (exponent >= -4 && exponent < 16)
         {
             if (exponent < 0) return $"{sign}0.{new string('0', -exponent - 1)}{digits}";
-            var intPart = digits.Length > exponent + 1 ? digits[..(exponent + 1)] : digits.PadRight(exponent + 1, '0');
-            var frac = digits.Length > exponent + 1 ? digits[(exponent + 1)..] : "0";
-            return $"{sign}{intPart}.{frac}";
+            var padded = digits.PadRight(exponent + 1, '0');
+            var frac = padded[(exponent + 1)..];
+            return $"{sign}{padded[..(exponent + 1)]}.{(frac.Length == 0 ? "0" : frac)}";
         }
 
+        // The format's two sections sign the exponent either way, which is
+        // what CPython writes: e+16, e-05.
         var tail = digits.Length > 1 ? "." + digits[1..] : "";
-        var expSign = exponent < 0 ? "-" : "+";
-        return $"{sign}{digits[0]}{tail}e{expSign}{Math.Abs(exponent):00}";
+        return $"{sign}{digits[0]}{tail}e{exponent.ToString("+00;-00", System.Globalization.CultureInfo.InvariantCulture)}";
     }
 
     /// <summary>
