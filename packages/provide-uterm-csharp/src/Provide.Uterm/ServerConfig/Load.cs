@@ -525,6 +525,19 @@ public static class ConfigLoader
     /// readers in the hosted factory, so a deployment that asked to record wrote
     /// nothing, and one that asked not to could not say so.
     /// </remarks>
+    /// <summary>The settle period of a recorded screen: the fastest interval that means anything.</summary>
+    private const double MinScreenIntervalS = 0.25;
+
+    /// <summary>A float as Python's repr writes it: nan, inf, and a whole number keeps its .0.</summary>
+    private static string PyFloat(double v)
+    {
+        if (double.IsNaN(v)) return "nan";
+        if (double.IsPositiveInfinity(v)) return "inf";
+        if (double.IsNegativeInfinity(v)) return "-inf";
+        var text = v.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+        return text.Contains('.') || text.Contains('E') ? text : text + ".0";
+    }
+
     private static void ApplyRecording(RecordingConfig r, TomlTable t)
     {
         if (t.TryGetValue("enabled_by_default", out var en) && en is bool enb) r.EnabledByDefault = enb;
@@ -535,10 +548,13 @@ public static class ConfigLoader
         if (t.TryGetValue("screen_interval_s", out var si))
         {
             var interval = RequireRate("recording.screen_interval_s", si);
-            if (interval < 0)
+            // 0 is off; anything else must be finite and no faster than the
+            // settle period. Written as a negated >= so a NaN is refused.
+            if (interval != 0 && (!double.IsFinite(interval) || !(interval >= MinScreenIntervalS)))
             {
                 throw new ArgumentException(
-                    $"recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: {si}");
+                    "recording.screen_interval_s must be 0 (only screens sent to a viewer) or a finite number "
+                    + $"of seconds >= {PyFloat(MinScreenIntervalS)}, got: {PyFloat(interval)}");
             }
 
             r.ScreenIntervalS = interval;

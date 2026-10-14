@@ -18,11 +18,13 @@
  * rather than falling back to one.
  */
 
-import { floatRepr, pyRepr as pyStrRepr } from "../pycompat/index.ts";
+import { pyRepr as pyStrRepr } from "../pycompat/index.ts";
 import { MIN_RATE_PER_SEC } from "../ratelimit/index.ts";
 import { SECTION_FIELD_SPECS, TOP_LEVEL_FIELD_SPEC } from "./schema-fields.ts";
 import {
   cleanPath,
+  pyFloat,
+  screenIntervalComplaint,
   validateAuditConfig,
   validateAuthConfig,
   validateControlPlaneConfig,
@@ -292,12 +294,7 @@ const FIELD_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
       notBelow(value, 0, `recording.max_bytes must be >= 0 (0 = unlimited), got: ${value as number}`),
     retention_s: (value) =>
       notBelow(value, 0, `recording.retention_s must be >= 0 (0 = keep indefinitely), got: ${value as number}`),
-    screen_interval_s: (value) =>
-      notBelow(
-        value,
-        0,
-        `recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: ${value as number}`,
-      ),
+    screen_interval_s: (value) => screenIntervalComplaint(value),
   },
   ControlPlaneConfig: {
     reap_interval_s: (value) =>
@@ -389,30 +386,6 @@ function pyStr(value: unknown): string {
 /** A value as Python's `repr()` writes it. */
 function pyRepr(value: unknown): string {
   return typeof value === "string" ? pyStrRepr(value) : pyStr(value);
-}
-
-/**
- * A float as CPython's `repr` writes it, which is what these messages carry.
- *
- * The value has already been coerced to a float by the time a rule sees it, so
- * a whole one keeps its `.0` and the two values a comparison cannot order have
- * the interpreter's names rather than JavaScript's.
- */
-function pyFloat(value: number): string {
-  if (Number.isNaN(value)) {
-    return "nan";
-  }
-  if (value === Number.POSITIVE_INFINITY) {
-    return "inf";
-  }
-  if (value === Number.NEGATIVE_INFINITY) {
-    return "-inf";
-  }
-  if (Number.isInteger(value)) {
-    // A negative zero is still a signed float, and `${-0}` drops the sign.
-    return `${Object.is(value, -0) ? "-0" : value}.0`;
-  }
-  return floatRepr(value);
 }
 
 /**

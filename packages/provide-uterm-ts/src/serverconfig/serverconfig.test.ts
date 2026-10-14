@@ -310,6 +310,22 @@ describe("the other configurations", () => {
     expect(() => validateRecordingConfig({ retention_s: "-5" })).not.toThrow();
   });
 
+  it.each([
+    [Number.NaN, "nan"],
+    [Number.POSITIVE_INFINITY, "inf"],
+    [Number.NEGATIVE_INFINITY, "-inf"],
+    [0.1, "0.1"],
+    [-1, "-1.0"],
+  ])("refuses a screen interval of %s as the reference does", (value, shown) => {
+    expect(() => validateRecordingConfig({ screen_interval_s: value })).toThrow(
+      `recording.screen_interval_s must be 0 (only screens sent to a viewer) or a finite number of seconds >= 0.25, got: ${shown}`,
+    );
+  });
+
+  it.each([0, 0.25, 1])("accepts a screen interval of %s", (value) => {
+    expect(() => validateRecordingConfig({ screen_interval_s: value })).not.toThrow();
+  });
+
   it("names the recording webhook url specifically", () => {
     expect(() => validateRecordingConfig({ webhook_url: "http://evil.example" })).toThrow("recording.webhook_url");
   });

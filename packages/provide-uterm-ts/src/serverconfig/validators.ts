@@ -13,7 +13,53 @@
  * operator without telling them.
  */
 
+import { floatRepr } from "../pycompat/index.ts";
 import { AUTH_DEFAULTS, AUTH_FIELDS } from "./defaults.ts";
+
+/**
+ * A float as CPython's `repr` writes it, which is what these messages carry.
+ *
+ * The value has already been coerced to a float by the time a rule sees it, so
+ * a whole one keeps its `.0` and the two values a comparison cannot order have
+ * the interpreter's names rather than JavaScript's.
+ */
+export function pyFloat(value: number): string {
+  if (Number.isNaN(value)) {
+    return "nan";
+  }
+  if (value === Number.POSITIVE_INFINITY) {
+    return "inf";
+  }
+  if (value === Number.NEGATIVE_INFINITY) {
+    return "-inf";
+  }
+  if (Number.isInteger(value)) {
+    // A negative zero is still a signed float, and `${-0}` drops the sign.
+    return `${Object.is(value, -0) ? "-0" : value}.0`;
+  }
+  return floatRepr(value);
+}
+
+/** The shortest screen interval that means anything: the settle period of a recorded screen. */
+const MIN_SCREEN_INTERVAL_S = 0.25;
+
+/**
+ * Why a `recording.screen_interval_s` is refused, or undefined when it is fine.
+ *
+ * 0 turns it off; anything else must be finite and at least the settle period.
+ * Written `!(value >= floor)` so a NaN falls into the refusal; inf would record
+ * one screen and never another.
+ */
+export function screenIntervalComplaint(value: unknown): string | undefined {
+  const interval = value as number;
+  if (interval === 0 || (Number.isFinite(interval) && interval >= MIN_SCREEN_INTERVAL_S)) {
+    return undefined;
+  }
+  return (
+    "recording.screen_interval_s must be 0 (only screens sent to a viewer) or a finite number of " +
+    `seconds >= ${pyFloat(MIN_SCREEN_INTERVAL_S)}, got: ${pyFloat(interval)}`
+  );
+}
 
 /** Hosts that count as this machine. */
 export const LOOPBACK_HOSTS: readonly string[] = ["127.0.0.1", "::1", "localhost"];
@@ -162,10 +208,11 @@ export function validateRecordingConfig(input: Record<string, unknown>): void {
     throw new Error(`recording.retention_s must be >= 0 (0 = keep indefinitely), got: ${retention}`);
   }
   const screenInterval = input.screen_interval_s;
-  if (typeof screenInterval === "number" && screenInterval < 0) {
-    throw new Error(
-      `recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: ${screenInterval}`,
-    );
+  if (typeof screenInterval === "number") {
+    const complaint = screenIntervalComplaint(screenInterval);
+    if (complaint !== undefined) {
+      throw new Error(complaint);
+    }
   }
   requireSecureUrl(input.webhook_url as string | undefined, "recording.webhook_url");
 }
