@@ -130,11 +130,14 @@ func TestBucketRateLimitRefusesUnhonourableRates(t *testing.T) {
 				if !strings.Contains(err.Error(), key) {
 					t.Errorf("error must name the offending key %q, got: %v", key, err)
 				}
-				if !strings.Contains(err.Error(), "must be >= 1.0") {
-					t.Errorf("error must state the floor, got: %v", err)
+				// The reference's two refusals, word for word: a value that is
+				// not a number at all is told so.
+				floor := "must be >= 1.0"
+				if f, ok := tc.value.(float64); ok && (math.IsNaN(f) || math.IsInf(f, 0)) {
+					floor = "must be a finite number >= 1.0"
 				}
-				if !strings.Contains(err.Error(), tc.want) {
-					t.Errorf("error must echo the offending value (%s), got: %v", tc.want, err)
+				if want := key + " " + floor + ", " + tc.want; err.Error() != want {
+					t.Errorf("error = %q, want %q", err.Error(), want)
 				}
 			})
 		}
@@ -170,7 +173,11 @@ func TestBucketRateLimitRefusedAtLoad(t *testing.T) {
 				t.Errorf("%s = %s loaded; want refusal", key, literal)
 				continue
 			}
-			if !strings.Contains(err.Error(), key+" must be >= 1.0") {
+			floor := key + " must be >= 1.0"
+			if strings.Contains(literal, "nan") || strings.Contains(literal, "inf") {
+				floor = key + " must be a finite number >= 1.0"
+			}
+			if !strings.Contains(err.Error(), floor) {
 				t.Errorf("%s = %s: unexpected error: %v", key, literal, err)
 			}
 		}

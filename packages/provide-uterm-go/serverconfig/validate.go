@@ -217,10 +217,15 @@ func validateRateLimit(field string, value float64) error {
 	return nil
 }
 
-// rateLimitError is the single refusal message: it names the offending key,
-// states the floor, and echoes the value that was written.
+// rateLimitError is the refusal message: it names the offending key, states
+// the floor, and echoes the value that was written. A value that is not a
+// number at all (NaN, ±inf) is told so, as the reference's validator says it.
 func rateLimitError(field string, value float64) error {
-	return fmt.Errorf("%s must be >= %s, got: %s", field, pyFloat(hub.MinRatePerSec), pyFloat(value))
+	floor := pyFloat(hub.MinRatePerSec)
+	if math.IsInf(value, 0) || math.IsNaN(value) {
+		return fmt.Errorf("%s must be a finite number >= %s, got: %s", field, floor, pyFloat(value))
+	}
+	return fmt.Errorf("%s must be >= %s, got: %s", field, floor, pyFloat(value))
 }
 
 // pyFloat renders a float the way Python's repr does, so a refusal reads

@@ -179,6 +179,25 @@ public sealed class ServerConfigBrowserRateLimitTests
     }
 
     /// <summary>
+    /// The refusal reads as the reference's does, word for word, value
+    /// included: Python prints the float as its repr, so NaN is <c>nan</c>, a
+    /// whole number keeps its <c>.0</c>, and a million is not in exponent form.
+    /// </summary>
+    [Theory]
+    [InlineData("0", "must be >= 1.0, got: 0.0")]
+    [InlineData("-1", "must be >= 1.0, got: -1.0")]
+    [InlineData("0.1", "must be >= 1.0, got: 0.1")]
+    [InlineData("-1e6", "must be >= 1.0, got: -1000000.0")]
+    [InlineData("nan", "must be a finite number >= 1.0, got: nan")]
+    [InlineData("inf", "must be a finite number >= 1.0, got: inf")]
+    [InlineData("-inf", "must be a finite number >= 1.0, got: -inf")]
+    public void A_Refused_Rate_Reads_As_The_Reference_Says_It(string literal, string expected)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => LoadToml($"{Key} = {literal}\n"));
+        Assert.Equal($"{Key} {expected}", ex.Message);
+    }
+
+    /// <summary>
     /// TOML is not the only way a config is built — the CLI, the conformance
     /// serve driver, and embedding callers all construct one in memory. The
     /// guard lives on the property, so those paths are refused at the moment of

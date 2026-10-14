@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
-using System.Globalization;
 using Provide.Uterm.Defaults;
 using Provide.Uterm.Hub;
 
@@ -375,17 +374,18 @@ public sealed class UtermServerConfig
     /// </summary>
     private static double ValidateRateLimit(string key, double value)
     {
-        var floor = TokenBucket.MinRatePerSec.ToString("0.0##", CultureInfo.InvariantCulture);
+        // Floor and value print as Python's repr, so the refusal reads as the
+        // reference's does: nan, not NaN; 0.0, not 0; -1000000.0, not -1E+06.
+        var floor = ConfigLoader.PyFloat(TokenBucket.MinRatePerSec);
         if (!double.IsFinite(value))
         {
-            throw new ArgumentException(FormattableString.Invariant(
-                $"{key} must be a finite number >= {floor}, got: {value}"));
+            throw new ArgumentException(
+                $"{key} must be a finite number >= {floor}, got: {ConfigLoader.PyFloat(value)}");
         }
 
         if (!(value >= TokenBucket.MinRatePerSec))
         {
-            throw new ArgumentException(FormattableString.Invariant(
-                $"{key} must be >= {floor}, got: {value}"));
+            throw new ArgumentException($"{key} must be >= {floor}, got: {ConfigLoader.PyFloat(value)}");
         }
 
         return value;

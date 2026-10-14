@@ -225,7 +225,8 @@ public sealed class ServerConfigRestRateLimitTests
         var ex = Assert.Throws<ArgumentException>(() => LoadToml($"{SendKey} = nan\n"));
         Assert.Contains(SendKey, ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain(AcquireKey, ex.Message, StringComparison.Ordinal);
-        Assert.Contains("NaN", ex.Message, StringComparison.Ordinal);
+        // Python's repr spelling, as the reference's message has it.
+        Assert.Contains("got: nan", ex.Message, StringComparison.Ordinal);
     }
 
     // -- The property the floor exists for ---------------------------------
