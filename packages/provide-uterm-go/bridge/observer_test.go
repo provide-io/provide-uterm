@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -465,11 +466,27 @@ func TestSettleLoopStopsWithTheConnection(t *testing.T) {
 	b.Start(context.Background())
 	hub.awaitConn(t)
 	waitFor(t, "a screen offered", func() bool { return len(obs.settledScreens()) > 0 })
+	if !settleLoopRunning() {
+		t.Fatal("no settle loop is running on the connection")
+	}
 	b.Stop()
-	n := len(obs.settledScreens())
-	time.Sleep(20 * time.Millisecond)
-	if got := len(obs.settledScreens()); got != n {
-		t.Fatalf("%d screens offered after Stop", got-n)
+	// Stop waits for the connection's goroutines, so the loop is gone by the
+	// time it returns: checked against the goroutines themselves rather than
+	// by waiting to see whether another screen is offered.
+	if settleLoopRunning() {
+		t.Fatal("the settle loop outlived Stop")
+	}
+}
+
+// settleLoopRunning reports whether any goroutine is in settleLoop.
+func settleLoopRunning() bool {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			return strings.Contains(string(buf[:n]), ").settleLoop(")
+		}
+		buf = make([]byte, 2*len(buf))
 	}
 }
 
@@ -488,16 +505,30 @@ func TestNoSettleLoopUnlessScreensAreRecorded(t *testing.T) {
 	hub := newFakeHub(t)
 	obs := &recordingObserver{}
 	b := New(Config{Worker: &mockWorker{session: &mockSession{}}, WorkerID: "w", ManagerURL: hub.baseURL(), Observer: obs})
-	b.settleTick = time.Millisecond
+	// A zero tick makes time.NewTicker panic, so a settle loop started on
+	// this connection would crash the test before Stop could return (Stop
+	// waits for every goroutine the connection started). Structural, rather
+	// than waiting a while to see that no screen is offered.
+	b.settleTick = 0
 	b.Start(context.Background())
 	hub.awaitConn(t)
 	hub.awaitControl(t, "worker_hello")
-	time.Sleep(20 * time.Millisecond)
 	b.Stop()
 	if got := obs.settledScreens(); len(got) != 0 {
 		t.Fatalf("%d screens offered with RecordScreens off", len(got))
 	}
-	if New(Config{Worker: &mockWorker{}, WorkerID: "w", ManagerURL: "http://x", RecordScreens: true}).recordScreens {
-		t.Fatal("a bridge without an observer would run a settle loop")
+	for _, tc := range []struct {
+		cfg  Config
+		want bool
+	}{
+		{Config{Observer: obs, RecordScreens: true}, true},
+		{Config{Observer: obs}, false},
+		{Config{RecordScreens: true}, false}, // no observer: nothing could record a screen
+	} {
+		tc.cfg.Worker, tc.cfg.WorkerID, tc.cfg.ManagerURL = &mockWorker{}, "w", "http://x"
+		if got := New(tc.cfg).recordScreens; got != tc.want {
+			t.Errorf("RecordScreens=%t, observer=%t: settle loop %t, want %t",
+				tc.cfg.RecordScreens, tc.cfg.Observer != nil, got, tc.want)
+		}
 	}
 }

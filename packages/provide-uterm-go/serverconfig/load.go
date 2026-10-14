@@ -8,6 +8,7 @@ package serverconfig
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -134,6 +135,10 @@ func ConfigFromMapping(data map[string]any) (*UtermServerConfig, error) {
 		if _, known := knownTopLevel[k]; !known {
 			return nil, errExtraInputs()
 		}
+	}
+
+	if err := refuseNonFiniteScreenInterval(data); err != nil {
+		return nil, err
 	}
 
 	cfg := DefaultServerConfig()
@@ -382,4 +387,17 @@ func LoadServerConfig(path string) (*UtermServerConfig, error) {
 		cfg.Recording.Directory = abs
 	}
 	return cfg, nil
+}
+
+// refuseNonFiniteScreenInterval refuses a nan or inf recording.screen_interval_s
+// (TOML has literals for both) with the reference's own refusal. Checked
+// before the sections are decoded, because decodeSection's JSON round trip
+// cannot carry a non-finite float and would refuse it with an encoder error
+// instead, and this setting's refusal names what it accepts.
+func refuseNonFiniteScreenInterval(data map[string]any) error {
+	rec, _ := data["recording"].(map[string]any)
+	if v, ok := rec["screen_interval_s"].(float64); ok && (math.IsNaN(v) || math.IsInf(v, 0)) {
+		return screenIntervalError(v)
+	}
+	return nil
 }

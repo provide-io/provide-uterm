@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/defaults"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 )
 
@@ -256,6 +257,29 @@ func validateAudit(a *AuditConfig) error {
 	return nil
 }
 
+// validateScreenInterval is RecordingConfig._validate_screen_interval_s:
+// recording.screen_interval_s is 0 (off) or a finite number of seconds no
+// shorter than the settle period. NaN passed a plain `< 0` test and then
+// failed every comparison the recorder makes; +Inf records one screen and
+// never another (and overflows a Duration); and an interval under the settle
+// period records whole screens fast enough to fill a quota in minutes. The
+// range test is written `!(v >= floor)` so NaN is refused by it too.
+func validateScreenInterval(v float64) error {
+	floor := defaults.RecordedScreenSettleS
+	if v != 0 && (math.IsInf(v, 0) || math.IsNaN(v) || !(v >= floor)) { //nolint:staticcheck // QF1001: deliberate, refuses NaN
+		return screenIntervalError(v)
+	}
+	return nil
+}
+
+// screenIntervalError is the reference's refusal, the value printed as
+// Python prints a float (-1 as -1.0, nan as nan).
+func screenIntervalError(v float64) error {
+	return fmt.Errorf(
+		"recording.screen_interval_s must be 0 (only screens sent to a viewer) or a finite number of seconds >= %s, got: %s",
+		pyFloat(defaults.RecordedScreenSettleS), pyFloat(v))
+}
+
 func validateRecording(r *RecordingConfig) error {
 	if r.MaxBytes < 0 {
 		return fmt.Errorf("recording.max_bytes must be >= 0 (0 = unlimited), got: %d", r.MaxBytes)
@@ -263,9 +287,8 @@ func validateRecording(r *RecordingConfig) error {
 	if r.RetentionS < 0 {
 		return fmt.Errorf("recording.retention_s must be >= 0 (0 = keep indefinitely), got: %d", r.RetentionS)
 	}
-	if r.ScreenIntervalS < 0 {
-		return fmt.Errorf(
-			"recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: %s", pyFloat(r.ScreenIntervalS))
+	if err := validateScreenInterval(r.ScreenIntervalS); err != nil {
+		return err
 	}
 	if !inSet(r.ControlChannelMode, "exclude", "wire") {
 		return literalError("recording.control_channel_mode", "exclude", "wire")

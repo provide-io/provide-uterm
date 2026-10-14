@@ -7,6 +7,7 @@ package cli
 
 import (
 	"context"
+	"math"
 	"reflect"
 	"slices"
 	"strings"
@@ -204,6 +205,74 @@ func TestTheScreenIntervalIsOffByDefault(t *testing.T) {
 	if got := serverconfig.DefaultServerConfig().Recording.ScreenIntervalS; got != 0 {
 		t.Fatalf("screen_interval_s defaults to %v, want 0", got)
 	}
+}
+
+// Output sent while the screen is being built -- the emulator runs ahead of
+// the wire, so its term frame can be noted after the screen was read -- stays
+// owed a screen: once it settles, a later tick records again. Otherwise the
+// last chunk of a burst could land there and the final screen go unrecorded.
+func TestOutputSentWhileTheScreenIsBuiltIsStillOwedAScreen(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		screens []string
+	}{
+		{"a new screen", []string{"mid-stream", "final"}},
+		{"the screen already recorded", []string{"same", "same", "final"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec, clock, recorded := clockedRecorder(t)
+			src := &screens{next: tc.screens}
+			if len(tc.screens) == 3 {
+				// Record "same" first, so the racing tick takes the
+				// identical-screen branch.
+				output(t, rec)
+				clock.advance(interval)
+				must(t, rec.RecordSettledScreen(src.take))
+			}
+			output(t, rec)
+			clock.advance(interval)
+			must(t, rec.RecordSettledScreen(func() map[string]any {
+				frame := src.take()
+				output(t, rec) // the last chunk, written while the screen was read
+				return frame
+			}))
+			clock.advance(interval)
+			must(t, rec.RecordSettledScreen(src.take))
+			want := []string{"mid-stream", "final"}
+			if len(tc.screens) == 3 {
+				want = []string{"same", "final"}
+			}
+			wantRecorded(t, recorded, want...)
+		})
+	}
+}
+
+// No accepted interval overflows a Duration into a negative one (which would
+// turn recording off): a huge one is held at the largest Duration, and the
+// first screen is still recorded.
+func TestAHugeScreenIntervalDoesNotOverflow(t *testing.T) {
+	for _, v := range []float64{1e10, 1e300, maxScreenIntervalS, math.Inf(1)} {
+		cfg := testRecordingConfig()
+		cfg.ScreenIntervalS = v
+		rec, _ := newTestRecorder(t, cfg)
+		if got := rec.screenInterval(); got <= 0 {
+			t.Fatalf("screen_interval_s = %v became %v", v, got)
+		}
+	}
+	for _, v := range []float64{0, -1, math.NaN()} {
+		cfg := testRecordingConfig()
+		cfg.ScreenIntervalS = v
+		rec, _ := newTestRecorder(t, cfg)
+		if got := rec.screenInterval(); got != 0 {
+			t.Fatalf("screen_interval_s = %v became %v, want off", v, got)
+		}
+	}
+	rec, clock, recorded := clockedRecorderAt(t, time.Duration(math.MaxInt64))
+	rec.cfg.ScreenIntervalS = 1e300
+	output(t, rec)
+	clock.advance(settle)
+	must(t, rec.RecordSettledScreen((&screens{next: []string{"only"}}).take))
+	wantRecorded(t, recorded, "only")
 }
 
 // A screen recorded unasked is logged as a "read" and nothing else: it was

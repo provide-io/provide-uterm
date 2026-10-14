@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"log/slog"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
@@ -213,8 +214,12 @@ type sessionRecorder struct {
 	// screen was last logged, whoever sent it; the bridge only ticks (see
 	// RecordSettledScreen). Like the event sequence, they outlive a
 	// connection, as they do on the reference's runtime.
-	unrecordedSince      time.Time
-	lastOutputAt         time.Time
+	unrecordedSince time.Time
+	lastOutputAt    time.Time
+	// outputs counts the term frames noted, so RecordSettledScreen can tell
+	// whether any came while it built a screen even on a clock too coarse to
+	// tell two times apart.
+	outputs              uint64
 	screenRecorded       bool
 	lastScreenRecordedAt time.Time
 	lastScreenRecorded   string
@@ -443,6 +448,7 @@ func (s *sessionRecorder) FrameSent(payload string, frame map[string]any) error 
 func (s *sessionRecorder) noteOutput() {
 	now := s.now()
 	s.lastOutputAt = now
+	s.outputs++
 	if s.unrecordedSince.IsZero() {
 		s.unrecordedSince = now
 	}
@@ -451,9 +457,27 @@ func (s *sessionRecorder) noteOutput() {
 // screenInterval is recording.screen_interval_s: how often, at most, the
 // session's own screen is recorded as it changes; 0 or less is off, and only
 // the screens sent to a viewer are recorded.
+//
+// The config refuses anything but 0 or a finite number of seconds >= the
+// settle period, but the conversion is guarded all the same: a value past
+// what a Duration holds (about 292 years) would overflow to a negative one,
+// silently turning recording off, so it is held at the largest Duration
+// instead, which records the first screen and, like the reference's huge
+// interval, never another.
 func (s *sessionRecorder) screenInterval() time.Duration {
-	return time.Duration(s.cfg.ScreenIntervalS * float64(time.Second))
+	v := s.cfg.ScreenIntervalS
+	if !(v > 0) { //nolint:staticcheck // QF1001: `!(v > 0)` is deliberate -- it treats NaN as off
+		return 0
+	}
+	if v >= maxScreenIntervalS {
+		return time.Duration(math.MaxInt64)
+	}
+	return time.Duration(v * float64(time.Second))
 }
+
+// maxScreenIntervalS is the largest whole number of seconds a Duration holds;
+// screenInterval holds anything at or past it at the largest Duration.
+const maxScreenIntervalS = float64(math.MaxInt64 / int64(time.Second))
 
 // recordsScreens reports whether the session records its own screen as it
 // changes (recording.screen_interval_s > 0, and the session is recorded); the
@@ -498,10 +522,18 @@ func (s *sessionRecorder) settledScreenDue() bool {
 //
 // Nothing is built while the session is unrecorded or nothing is owed. The
 // screen is built outside mu, since it reads the session's emulator, which
-// the recorder must never hold its lock across. A viewer's snapshot logged
-// in that window already recorded the screen, so the check is repeated
-// before logging: the reference, which awaits get_snapshot in the same
-// place, would log the same screen twice.
+// the recorder must never hold its lock across. Two things can happen in
+// that window that cannot in the reference, whose _note_output runs only on
+// the coroutine that awaits get_snapshot:
+//   - A viewer's snapshot is logged, recording the screen already, so the
+//     check is repeated before logging (the reference would log it twice).
+//   - Output is sent and noted (FrameSent runs on the send goroutine). The
+//     emulator runs ahead of the wire, so that output may or may not be on
+//     the screen just built; it stays owed a screen, from the time it was
+//     noted, rather than being cleared with the rest. Otherwise the last
+//     chunk of a burst could land there, and with output then stopped, the
+//     session's final screen would go unrecorded -- the very failure this
+//     exists to fix.
 func (s *sessionRecorder) RecordSettledScreen(screenFn func() map[string]any) error {
 	s.mu.Lock()
 	if err := s.failed(); err != nil {
@@ -509,6 +541,7 @@ func (s *sessionRecorder) RecordSettledScreen(screenFn func() map[string]any) er
 		return err
 	}
 	due := s.settledScreenDue()
+	outputs := s.outputs
 	s.mu.Unlock()
 	if !due {
 		return nil
@@ -525,11 +558,23 @@ func (s *sessionRecorder) RecordSettledScreen(screenFn func() map[string]any) er
 	if err := s.failed(); err != nil {
 		return err
 	}
+	// Output noted while the screen was built stays owed, whichever way this
+	// goes (see above).
+	defer s.keepOutputSince(outputs)
 	if raw, _ := frame["screen"].(string); s.screenRecorded && raw == s.lastScreenRecorded {
 		s.unrecordedSince = time.Time{}
 		return nil
 	}
 	return s.logSnapshot(frame)
+}
+
+// keepOutputSince leaves output noted since the outputs count read owed a
+// screen: if any came, unrecordedSince is the time of the latest rather than
+// unset. Caller holds s.mu.
+func (s *sessionRecorder) keepOutputSince(outputs uint64) {
+	if s.outputs != outputs {
+		s.unrecordedSince = s.lastOutputAt
+	}
 }
 
 // logSnapshot is _log_snapshot: the password-prompt flag is updated whether or
