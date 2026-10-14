@@ -116,20 +116,27 @@ func issuedAt(p *Principal) (float64, bool) {
 // or before now (wall-clock seconds, the clock a token's iat is written in) and
 // returns the cutoff. A token issued in the same second is refused too: iat has
 // one-second resolution, so it cannot say which side of the cutoff it fell on.
-// The cutoff counts against no principal; see RevokeShareViewersBy.
+// A new cutoff counts against no principal (a global admin's revoke); see
+// RevokeShareViewersBy.
 func (s *AuthorizationService) RevokeShareViewers(sessionID string, now float64) (float64, error) {
-	cutoff, _, err := s.RevokeShareViewersBy(sessionID, now, "")
+	cutoff, _, err := s.revoke(sessionID, now, "", false)
 	return cutoff, err
 }
 
 // RevokeShareViewersBy is RevokeShareViewers with a new cutoff counted against
 // revoker, who holds at most ShareViewerRevocationsPerPrincipalMax of them,
-// its oldest evicted first. An empty revoker (a global admin) is not capped.
-// evicted names the session whose cutoff that eviction dropped, or is empty.
-// A re-revoke moves the cutoff forward but leaves it counted against whoever
-// held it, so no principal can pull another's cutoff into its own quota and
-// then flush it out.
+// its oldest evicted first. Every revoker is capped, an empty subject
+// included, as in the other ports; a global admin revokes through
+// RevokeShareViewers. evicted names the session whose cutoff that eviction
+// dropped, or is empty (a session ID never is). A re-revoke moves the cutoff
+// forward but leaves it counted against whoever held it, so no principal can
+// pull another's cutoff into its own quota and then flush it out.
 func (s *AuthorizationService) RevokeShareViewersBy(sessionID string, now float64, revoker string) (cutoff float64, evicted string, err error) {
+	return s.revoke(sessionID, now, revoker, true)
+}
+
+// revoke records sessionID's cutoff, counted against revoker when capped.
+func (s *AuthorizationService) revoke(sessionID string, now float64, revoker string, capped bool) (cutoff float64, evicted string, err error) {
 	r := &s.revocations
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -143,12 +150,12 @@ func (s *AuthorizationService) RevokeShareViewersBy(sessionID string, now float6
 		r.dropLocked(r.order[0])
 	}
 	_, seen := r.cutoffs[sessionID]
-	owner := revoker
+	owner, ownerCapped := revoker, capped
 	if seen {
-		owner = r.revokers[sessionID]
+		owner, ownerCapped = r.revokers[sessionID]
 	}
 	r.dropLocked(sessionID)
-	if mine := r.byRevoker[revoker]; !seen && revoker != "" && len(mine) >= ShareViewerRevocationsPerPrincipalMax {
+	if mine := r.byRevoker[revoker]; !seen && capped && len(mine) >= ShareViewerRevocationsPerPrincipalMax {
 		evicted = mine[0]
 		r.dropLocked(evicted)
 	}
@@ -159,7 +166,7 @@ func (s *AuthorizationService) RevokeShareViewersBy(sessionID string, now float6
 	}
 	r.cutoffs[sessionID] = now
 	r.order = append(r.order, sessionID)
-	if owner != "" {
+	if ownerCapped {
 		r.revokers[sessionID] = owner
 		r.byRevoker[owner] = append(r.byRevoker[owner], sessionID)
 	}

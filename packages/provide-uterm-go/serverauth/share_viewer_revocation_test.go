@@ -264,7 +264,9 @@ func TestOnePrincipalHoldsAtMostItsCapKeepingTheNewest(t *testing.T) {
 func TestThePerPrincipalCapLeavesOtherPrincipalsAlone(t *testing.T) {
 	s := NewAuthorizationService()
 	revokeBy(t, s, "bobs", 1, "bob")
-	revokeBy(t, s, "admins", 1, "")
+	if _, err := s.RevokeShareViewers("admins", 1); err != nil {
+		t.Fatal(err)
+	}
 	for i := 0; i <= ShareViewerRevocationsPerPrincipalMax; i++ {
 		revokeBy(t, s, fmt.Sprintf("s%d", i), 10+float64(i), "alice")
 	}
@@ -360,7 +362,9 @@ func TestTheCapReportsEachCutoffItEvictsAndNothingElse(t *testing.T) {
 func TestAnUncappedRevokeIsNeverEvictedByThePerPrincipalCap(t *testing.T) {
 	s := NewAuthorizationService()
 	for i := 0; i < ShareViewerRevocationsPerPrincipalMax+5; i++ {
-		revokeBy(t, s, fmt.Sprintf("s%d", i), 100+float64(i), "")
+		if _, err := s.RevokeShareViewers(fmt.Sprintf("s%d", i), 100+float64(i)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if cutoffOf(s, "s0") != 100.0 || held(s) != ShareViewerRevocationsPerPrincipalMax+5 {
 		t.Errorf("s0 %v held %d", cutoffOf(s, "s0"), held(s))
@@ -374,7 +378,9 @@ func TestAPrincipalAtItsCapMakesItsOwnRoomInAFullTable(t *testing.T) {
 		revokeBy(t, s, fmt.Sprintf("a%d", i), base+float64(i), "alice")
 	}
 	for i := 0; i < ShareViewerRevocationsMax-limit; i++ {
-		revokeBy(t, s, fmt.Sprintf("s%d", i), base+float64(limit+i), "")
+		if _, err := s.RevokeShareViewers(fmt.Sprintf("s%d", i), base+float64(limit+i)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if got, evicted, err := s.RevokeShareViewersBy("a-new", base+2e4, "alice"); err != nil || got != base+2e4 || evicted != "a0" {
 		t.Fatalf("revoke at cap in a full table: %v %q %v", got, evicted, err)
@@ -395,5 +401,29 @@ func TestAgeingOutAndForgettingFreeAPrincipalsSlots(t *testing.T) {
 	}
 	if cutoffOf(s, "s0") != 10+ShareViewerRevocationTTLSeconds || held(s) != limit {
 		t.Errorf("s0 %v held %d", cutoffOf(s, "s0"), held(s))
+	}
+}
+
+// TestAnEmptySubjectIsCappedLikeAnyOther: "" is an ordinary (if odd) subject,
+// as in the other ports, not a way to revoke uncapped.
+func TestAnEmptySubjectIsCappedLikeAnyOther(t *testing.T) {
+	s := NewAuthorizationService()
+	const limit = ShareViewerRevocationsPerPrincipalMax
+	for i := 0; i < limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("s%d", i), 100+float64(i), "")
+	}
+	if _, evicted, err := s.RevokeShareViewersBy("new", 400, ""); err != nil || evicted != "s0" {
+		t.Fatalf("evicted %q err %v", evicted, err)
+	}
+	if cutoffOf(s, "s0") != nil || held(s) != limit {
+		t.Errorf("s0 %v held %d", cutoffOf(s, "s0"), held(s))
+	}
+	// A re-revoke keeps the cutoff in the "" quota too.
+	revokeBy(t, s, "new", 500, "alice")
+	for i := 0; i < limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("e%d", i), 600+float64(i), "")
+	}
+	if cutoffOf(s, "new") != nil {
+		t.Error(`a re-revoke moved the "" cutoff out of its quota`)
 	}
 }

@@ -36,11 +36,14 @@ func (s *Server) handleRevokeViewers(w http.ResponseWriter, r *http.Request) {
 	authz := s.deps.Authz
 	// The embedder's service token is a global admin and revokes for everyone,
 	// so only other callers are held to a per-principal share of the table.
-	revoker := ""
-	if p := principalOf(r); !authz.IsAdmin(p) {
-		revoker = p.SubjectID
+	var revokedAt float64
+	var evicted string
+	var err error
+	if p := principalOf(r); authz.IsAdmin(p) {
+		revokedAt, err = authz.RevokeShareViewers(id, s.deps.Clock.Wall())
+	} else {
+		revokedAt, evicted, err = authz.RevokeShareViewersBy(id, s.deps.Clock.Wall(), p.SubjectID)
 	}
-	revokedAt, evicted, err := authz.RevokeShareViewersBy(id, s.deps.Clock.Wall(), revoker)
 	if err != nil {
 		detailError(w, http.StatusTooManyRequests, "too many sessions with revoked viewers; try again later")
 		return
