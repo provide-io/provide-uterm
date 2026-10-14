@@ -284,9 +284,15 @@ class RecordingConfig(ServerBaseModel):
     @field_validator("screen_interval_s")
     @classmethod
     def _validate_screen_interval_s(cls, value: float) -> float:
-        if value < 0:
+        # Written ``not value >= floor`` so a NaN falls into the refusal; and
+        # no faster than the settle period: every screen is a whole rendered
+        # one, so a tiny interval is a recording that fills its quota in
+        # minutes. inf would record one screen and never another.
+        floor = TerminalDefaults.RECORDED_SCREEN_SETTLE_S
+        if value != 0 and (not math.isfinite(value) or not value >= floor):
             raise ValueError(
-                f"recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: {value}"
+                "recording.screen_interval_s must be 0 (only screens sent to a viewer) or a "
+                f"finite number of seconds >= {floor}, got: {value}"
             )
         return value
 

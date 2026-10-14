@@ -186,6 +186,46 @@
       "name": "a negative retention"
     },
     {
+      "error": null,
+      "kwargs": {
+        "screen_interval_s": 0
+      },
+      "model": "RecordingConfig",
+      "name": "screen recording off"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "screen_interval_s": 0.25
+      },
+      "model": "RecordingConfig",
+      "name": "screen recording at the settle period"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "screen_interval_s": 1
+      },
+      "model": "RecordingConfig",
+      "name": "screen recording once a second"
+    },
+    {
+      "error": "recording.screen_interval_s must be 0 (only screens sent to a viewer) or a finite number of seconds >= 0.25, got: -1.0",
+      "kwargs": {
+        "screen_interval_s": -1
+      },
+      "model": "RecordingConfig",
+      "name": "a negative screen interval"
+    },
+    {
+      "error": "recording.screen_interval_s must be 0 (only screens sent to a viewer) or a finite number of seconds >= 0.25, got: 0.1",
+      "kwargs": {
+        "screen_interval_s": 0.1
+      },
+      "model": "RecordingConfig",
+      "name": "a screen interval under the settle period"
+    },
+    {
       "error": "control_plane.reap_interval_s must be > 0, got: 0",
       "kwargs": {
         "reap_interval_s": 0

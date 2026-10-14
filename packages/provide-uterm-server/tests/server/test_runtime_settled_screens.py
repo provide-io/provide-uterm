@@ -140,11 +140,11 @@ async def test_a_screen_a_viewer_read_counts_as_recorded() -> None:
     connector.get_snapshot.assert_not_awaited()
 
 
-@pytest.mark.parametrize("recorded", [False, True])
-async def test_nothing_is_taken_unless_asked_for_and_recorded(recorded: bool) -> None:
+@pytest.mark.parametrize("asked_for", [False, True])
+async def test_nothing_is_taken_unless_asked_for_and_recorded(asked_for: bool) -> None:
     # Off by default; and asked for but not recorded is off too.
-    rt = _runtime(interval=0.0 if recorded else INTERVAL)
-    if not recorded:
+    rt = _runtime(interval=INTERVAL if asked_for else 0.0)
+    if asked_for:
         rt._logger = None
     connector = _connector(["unwanted"])
     clock = _Clock()
@@ -155,10 +155,37 @@ async def test_nothing_is_taken_unless_asked_for_and_recorded(recorded: bool) ->
     connector.get_snapshot.assert_not_awaited()
 
 
-def test_the_interval_is_off_by_default_and_never_negative() -> None:
+def test_the_interval_is_off_by_default() -> None:
     assert RecordingConfig().screen_interval_s == 0.0
-    with pytest.raises(ValueError, match="screen_interval_s"):
-        RecordingConfig(screen_interval_s=-1)
+    assert RecordingConfig(screen_interval_s=SETTLE).screen_interval_s == SETTLE
+
+
+@pytest.mark.parametrize("value", [-1.0, SETTLE / 2, float("nan"), float("inf"), float("-inf")])
+def test_an_interval_that_could_not_mean_what_it_says_is_refused(value: float) -> None:
+    # nan passed a `< 0` test and recorded a screen on every pass of the loop;
+    # inf recorded one and never another; anything under the settle period is
+    # a recording that fills its quota in minutes.
+    with pytest.raises(ValueError, match="screen_interval_s must be 0"):
+        RecordingConfig(screen_interval_s=value)
+
+
+async def test_a_screen_that_cannot_be_taken_does_not_end_the_session() -> None:
+    rt = _runtime()
+    connector = _connector([])
+    connector.get_snapshot = AsyncMock(
+        side_effect=[RuntimeError("emulator gone"), {"type": "snapshot", "screen": "back"}]
+    )
+    clock = _Clock()
+    with patch("provide.uterm.server.runtime.time.monotonic", clock):
+        rt._note_output()
+        clock.now += INTERVAL
+        await rt._record_settled_screen(connector)
+        assert _recorded(rt) == []
+        await rt._record_settled_screen(connector)
+        assert _recorded(rt) == []  # an interval on, not at once
+        clock.now += INTERVAL
+        await rt._record_settled_screen(connector)
+    assert _recorded(rt) == ["back"]
 
 
 async def test_an_unread_capture_session_records_what_it_painted() -> None:
@@ -180,7 +207,8 @@ async def test_an_unread_capture_session_records_what_it_painted() -> None:
     rt._connector = connector
 
     class _Ws:
-        sent: list[dict[str, Any]] = []
+        def __init__(self) -> None:
+            self.sent: list[dict[str, Any]] = []
 
         async def send(self, data: str) -> None:
             self.sent.extend(decode_chunk(data, data_type="term"))

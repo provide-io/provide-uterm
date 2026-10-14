@@ -519,7 +519,18 @@ class HostedSessionRuntime:
         quiet = now - self._last_output_at >= TerminalDefaults.RECORDED_SCREEN_SETTLE_S
         if not quiet and now - self._unrecorded_since < interval:
             return
-        snapshot = await connector.get_snapshot()
+        try:
+            snapshot = await connector.get_snapshot()
+        except Exception as error:
+            # A screen for the recording is not worth the session's connection,
+            # which an exception here would end. Tried again an interval on.
+            self._last_screen_recorded_at = now
+            logger.warning(
+                "hosted_session_settled_screen_failed session_id=%s error=%s",
+                self.definition.session_id,
+                error,
+            )
+            return
         if str(snapshot.get("screen", "")) == self._last_screen_recorded:
             self._unrecorded_since = None
             return
