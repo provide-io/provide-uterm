@@ -17,6 +17,7 @@
 import { describe, expect, it } from "vitest";
 import { NullRecordingStore } from "../recording/index.ts";
 import { encodeJwt } from "../serverauth/index.ts";
+import { type Logger, noopLogger } from "../telemetry/index.ts";
 import { createServerApp } from "./app.ts";
 import { handleHijackRequest } from "./hijack-routes.ts";
 import { SessionHub } from "./session-hub.ts";
@@ -141,20 +142,55 @@ describe("the revocation cutoff", () => {
     expect(revocations.cutoff("s1")).toBeUndefined();
   });
 
-  it("counts a cutoff against whoever revoked it last", () => {
+  it("leaves a re-revoked cutoff with its first revoker", () => {
     const revocations = new ShareViewerRevocations();
-    revocations.revoke("shared", 1, "bob");
-    for (let index = 0; index < CAP - 1; index += 1) {
-      revocations.revoke(`a${index}`, 10 + index, "alice");
+    revocations.revoke("shared", 1, "alice");
+    // Bob re-revokes alice's session: the cutoff moves forward, but it stays in
+    // alice's quota, so bob's own revokes cannot flush it out.
+    revocations.revoke("shared", 5, "bob");
+    expect(revocations.cutoff("shared")).toBe(5);
+    for (let index = 0; index <= CAP; index += 1) {
+      revocations.revoke(`b${index}`, 10 + index, "bob");
     }
-    // Alice takes "shared" over from bob: her cap is now full, nothing evicted.
-    revocations.revoke("shared", 500, "alice");
-    expect(revocations.size).toBe(CAP);
-    revocations.revoke("bob2", 600, "bob");
-    expect(revocations.cutoff("shared")).toBe(500);
-    expect(revocations.cutoff("a0")).toBe(10);
-    revocations.revoke("a-next", 700, "alice");
-    expect(revocations.cutoff("a0")).toBeUndefined();
+    expect(revocations.cutoff("shared")).toBe(5);
+    expect(revocations.cutoff("b0")).toBeUndefined();
+    // It is still alice's: a full cap of her own pushes it out.
+    for (let index = 0; index < CAP; index += 1) {
+      revocations.revoke(`a${index}`, 500 + index, "alice");
+    }
+    expect(revocations.cutoff("shared")).toBeUndefined();
+    expect(revocations.cutoff("a0")).toBe(500);
+  });
+
+  it("neither caps an uncapped cutoff nor frees a capped one on a re-revoke", () => {
+    const revocations = new ShareViewerRevocations();
+    revocations.revoke("admins", 1);
+    revocations.revoke("alices", 1, "alice");
+    revocations.revoke("admins", 2, "bob");
+    revocations.revoke("alices", 2);
+    for (let index = 0; index <= CAP; index += 1) {
+      revocations.revoke(`b${index}`, 10 + index, "bob");
+    }
+    expect(revocations.cutoff("admins")).toBe(2);
+    for (let index = 0; index < CAP; index += 1) {
+      revocations.revoke(`a${index}`, 500 + index, "alice");
+    }
+    expect(revocations.cutoff("alices")).toBeUndefined();
+  });
+
+  it("reports each cutoff the cap evicts and nothing else", () => {
+    const revocations = new ShareViewerRevocations();
+    const evicted: string[] = [];
+    const onEvict = (sessionId: string) => evicted.push(sessionId);
+    for (let index = 0; index < CAP; index += 1) {
+      revocations.revoke(`s${index}`, 100 + index, "alice", onEvict);
+    }
+    // A re-revoke at the cap evicts nothing.
+    revocations.revoke("s5", 300, "alice", onEvict);
+    expect(evicted).toEqual([]);
+    revocations.revoke("new", 400, "alice", onEvict);
+    expect(evicted).toEqual(["s0"]);
+    expect(revocations.cutoff("s0")).toBeUndefined();
   });
 
   it("never evicts an uncapped cutoff for the per-principal cap", () => {
@@ -229,7 +265,7 @@ function bearer(value: string): Record<string, string> {
   return { Authorization: `Bearer ${value}` };
 }
 
-function buildApp(now?: () => number) {
+function buildApp(now?: () => number, logger?: Logger) {
   const registry = new SessionRegistry(
     [sessionDefinitionFrom({ session_id: "bb", visibility: "public", owner: "owner1" }, "2026-01-01T00:00:00.000Z")],
     false,
@@ -248,6 +284,7 @@ function buildApp(now?: () => number) {
     controlPlaneBackend: "memory",
     startupTime: 0,
     now,
+    logger,
   });
 }
 
@@ -331,7 +368,7 @@ describe("POST /api/sessions/{id}/viewers/revoke", () => {
     const original = ShareViewerRevocations.prototype.revoke;
     const calls: unknown[][] = [];
     ShareViewerRevocations.prototype.revoke = function (this: ShareViewerRevocations, ...args) {
-      calls.push(args.slice(2));
+      calls.push(args.slice(2, 3));
       return original.apply(this, args);
     };
     try {
@@ -345,6 +382,38 @@ describe("POST /api/sessions/{id}/viewers/revoke", () => {
       ShareViewerRevocations.prototype.revoke = original;
     }
     expect(calls).toEqual([[undefined], ["owner1"]]);
+  });
+
+  it("audits a cutoff the cap evicts, naming the session and the principal", async () => {
+    const records: Array<[Record<string, unknown>, string | undefined]> = [];
+    const logger: Logger = { ...noopLogger, info: (obj, msg) => records.push([obj, msg]) };
+    const app = buildApp(() => 1_700_000_100, logger);
+    const original = ShareViewerRevocations.prototype.revoke;
+    ShareViewerRevocations.prototype.revoke = function (this: ShareViewerRevocations, ...args) {
+      for (let index = 0; index < SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX; index += 1) {
+        original.call(this, `mine-${index}`, 1_700_000_000, "owner1");
+      }
+      ShareViewerRevocations.prototype.revoke = original;
+      return original.apply(this, args);
+    };
+    try {
+      const owner = token("owner1", ["operator"], 1_700_000_000);
+      const response = await app.handle(new Request(`${BASE}${PATH}`, { method: "POST", headers: bearer(owner) }));
+      expect(response.status).toBe(200);
+    } finally {
+      ShareViewerRevocations.prototype.revoke = original;
+    }
+    expect(records).toEqual([
+      [
+        {
+          action: "session.viewers.cutoff_evicted",
+          principal: "owner1",
+          session_id: "mine-0",
+          revoked_session_id: "bb",
+        },
+        "audit_event",
+      ],
+    ]);
   });
 
   it("stamps the cutoff with the wall clock when no clock was given", async () => {

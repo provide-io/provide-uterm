@@ -22,12 +22,17 @@ const ShareViewerRevocationsMax = 10000
 // ShareViewerRevocationsPerPrincipalMax bounds the cutoffs one revoking
 // principal holds at once (port of SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX),
 // so no single owner can fill the table. Past it, that principal's own oldest
-// cutoff makes room for its newest. A global admin is not capped.
+// cutoff makes room for its newest (the route logs each eviction). A global
+// admin is not capped.
 const ShareViewerRevocationsPerPrincipalMax = 100
 
-// ShareViewerRevocationTTLSeconds is how long a cutoff is kept (port of
-// SHARE_VIEWER_REVOCATION_TTL_S). Share tokens must live well under this: a
-// token that outlives its cutoff is admitted again.
+// ShareViewerRevocationTTLSeconds is how long a cutoff is kept at most (port
+// of SHARE_VIEWER_REVOCATION_TTL_S). Share tokens must live well under this: a
+// token that outlives its cutoff is admitted again. A capped revoker's cutoff
+// can go sooner: it lasts min(24 h, until that principal's next
+// ShareViewerRevocationsPerPrincipalMax revokes of other sessions), so a
+// non-admin that revokes more sessions than that within one share-token
+// lifetime readmits its oldest session's tokens.
 const ShareViewerRevocationTTLSeconds = 86400.0
 
 // ErrShareViewerRevocationsFull is returned by RevokeShareViewers when the
@@ -40,8 +45,9 @@ type shareViewerRevocations struct {
 	mu      sync.Mutex
 	cutoffs map[string]float64
 	order   []string // oldest first
-	// revokers maps a session to the capped principal that last revoked it;
-	// byRevoker lists each such principal's sessions, oldest first.
+	// revokers maps a session to the capped principal it counts against (the
+	// one that first revoked it, while it is held); byRevoker lists each such
+	// principal's sessions, oldest first.
 	revokers  map[string]string
 	byRevoker map[string][]string
 }
@@ -112,13 +118,18 @@ func issuedAt(p *Principal) (float64, bool) {
 // one-second resolution, so it cannot say which side of the cutoff it fell on.
 // The cutoff counts against no principal; see RevokeShareViewersBy.
 func (s *AuthorizationService) RevokeShareViewers(sessionID string, now float64) (float64, error) {
-	return s.RevokeShareViewersBy(sessionID, now, "")
+	cutoff, _, err := s.RevokeShareViewersBy(sessionID, now, "")
+	return cutoff, err
 }
 
-// RevokeShareViewersBy is RevokeShareViewers with the cutoff counted against
+// RevokeShareViewersBy is RevokeShareViewers with a new cutoff counted against
 // revoker, who holds at most ShareViewerRevocationsPerPrincipalMax of them,
 // its oldest evicted first. An empty revoker (a global admin) is not capped.
-func (s *AuthorizationService) RevokeShareViewersBy(sessionID string, now float64, revoker string) (float64, error) {
+// evicted names the session whose cutoff that eviction dropped, or is empty.
+// A re-revoke moves the cutoff forward but leaves it counted against whoever
+// held it, so no principal can pull another's cutoff into its own quota and
+// then flush it out.
+func (s *AuthorizationService) RevokeShareViewersBy(sessionID string, now float64, revoker string) (cutoff float64, evicted string, err error) {
 	r := &s.revocations
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -132,22 +143,27 @@ func (s *AuthorizationService) RevokeShareViewersBy(sessionID string, now float6
 		r.dropLocked(r.order[0])
 	}
 	_, seen := r.cutoffs[sessionID]
+	owner := revoker
+	if seen {
+		owner = r.revokers[sessionID]
+	}
 	r.dropLocked(sessionID)
-	if mine := r.byRevoker[revoker]; revoker != "" && len(mine) >= ShareViewerRevocationsPerPrincipalMax {
-		r.dropLocked(mine[0])
+	if mine := r.byRevoker[revoker]; !seen && revoker != "" && len(mine) >= ShareViewerRevocationsPerPrincipalMax {
+		evicted = mine[0]
+		r.dropLocked(evicted)
 	}
 	// Nothing was dropped above unless this session or the revoker's own
 	// oldest made room, so a refusal leaves the table as it was.
 	if !seen && len(r.order) >= ShareViewerRevocationsMax {
-		return 0, ErrShareViewerRevocationsFull
+		return 0, "", ErrShareViewerRevocationsFull
 	}
 	r.cutoffs[sessionID] = now
 	r.order = append(r.order, sessionID)
-	if revoker != "" {
-		r.revokers[sessionID] = revoker
-		r.byRevoker[revoker] = append(r.byRevoker[revoker], sessionID)
+	if owner != "" {
+		r.revokers[sessionID] = owner
+		r.byRevoker[owner] = append(r.byRevoker[owner], sessionID)
 	}
-	return now, nil
+	return now, evicted, nil
 }
 
 // ForgetShareViewers drops sessionID's cutoff: the session was deleted.

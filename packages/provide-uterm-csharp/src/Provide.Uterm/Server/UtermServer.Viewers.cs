@@ -27,6 +27,16 @@ public sealed partial class UtermServer
     /// <summary>Deliberately generic: the embedder knows why, and says so in its own words.</summary>
     internal const string ViewerRevokedReason = "viewer access revoked";
 
+    private static readonly Provide.Telemetry.Logger ViewersLog =
+        Provide.Telemetry.ProvideTelemetry.GetLogger("provide.uterm.server.viewers");
+
+    /// <summary>
+    /// Where audit records of this route go: the telemetry log, or a test's
+    /// recorder.
+    /// </summary>
+    internal static Action<IReadOnlyDictionary<string, object?>> ViewersAudit { get; set; } =
+        static fields => ViewersLog.Info("audit_event", fields);
+
     /// <summary>Open share-viewer event streams, ended by a revoke.</summary>
     private readonly ShareViewerStreams _viewerStreams = new();
 
@@ -68,7 +78,16 @@ public sealed partial class UtermServer
         double revokedAt;
         try
         {
-            revokedAt = _deps.Authz.RevokeShareViewers(sessionId, _clock.Wall(), revoker);
+            // The cap made room by dropping this principal's oldest cutoff, so
+            // that session's earlier share tokens are admitted again: say so.
+            revokedAt = _deps.Authz.RevokeShareViewers(sessionId, _clock.Wall(), revoker, evicted =>
+                ViewersAudit(new Dictionary<string, object?>
+                {
+                    ["action"] = "session.viewers.cutoff_evicted",
+                    ["principal"] = p!.SubjectId,
+                    ["session_id"] = evicted,
+                    ["revoked_session_id"] = sessionId,
+                }));
         }
         catch (ShareViewerRevocationsFullException)
         {

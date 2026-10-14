@@ -16,6 +16,8 @@ from provide.uterm.server.egress import assert_webhook_target_allowed
 from provide.uterm.server.webhook_signing import build_webhook_signature, verify_webhook_signature
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from provide.uterm.server.auth import Principal
     from provide.uterm.server.models import SessionDefinition
     from provide.uterm.server.profiles import ConnectionProfile
@@ -64,11 +66,16 @@ ROLE_CAPABILITIES: dict[Role, frozenset[Capability]] = {
 SHARE_VIEWER_REVOCATIONS_MAX = 10_000
 # Cutoffs one revoking principal holds at once, so no single owner can fill the
 # table above. Past it, that principal's own oldest cutoff makes room for its
-# newest. A global admin (the embedder's service token) is not capped.
+# newest (the route audits each eviction). A global admin (the embedder's
+# service token) is not capped.
 SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX = 100
-# How long a cutoff is kept. A cutoff only matters while a token issued before
-# it can still be valid, so share tokens must live well under this (blackbetty
-# mints 60 s ones): a share token that outlives its cutoff is admitted again.
+# How long a cutoff is kept at most. A cutoff only matters while a token issued
+# before it can still be valid, so share tokens must live well under this
+# (blackbetty mints 60 s ones): a share token that outlives its cutoff is
+# admitted again. A capped revoker's cutoff can go sooner: it lasts
+# min(24 h, until that principal's next SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
+# revokes of other sessions), so a non-admin that revokes more sessions than
+# that within one share-token lifetime readmits its oldest session's tokens.
 SHARE_VIEWER_REVOCATION_TTL_S = 86_400
 
 
@@ -400,12 +407,20 @@ class AuthorizationService:
     # was issued at or before the cutoff is refused (see ``share_viewer_revoked``).
     # Process-local, like the tunnel token store.
     _share_viewer_revocations: dict[str, float] = field(default_factory=dict)
-    # session_id -> the capped principal that last revoked it, and that
-    # principal's sessions oldest first (dicts as ordered sets).
+    # session_id -> the capped principal it counts against (the one that first
+    # revoked it, while it is held), and that principal's sessions oldest first
+    # (dicts as ordered sets).
     _share_viewer_revokers: dict[str, str] = field(default_factory=dict)
     _share_viewer_revoked_by: dict[str, dict[str, None]] = field(default_factory=dict)
 
-    def revoke_share_viewers(self, session_id: str, *, now: float | None = None, revoker: str | None = None) -> float:
+    def revoke_share_viewers(
+        self,
+        session_id: str,
+        *,
+        now: float | None = None,
+        revoker: str | None = None,
+        on_evict: Callable[[str], None] | None = None,
+    ) -> float:
         """Refuse every share-viewer token for ``session_id`` issued up to now.
 
         Returns the cutoff; raises ``ShareViewerRevocationsFullError`` when the
@@ -414,9 +429,13 @@ class AuthorizationService:
         is refused too: ``iat`` has one-second resolution, so it cannot say
         which side of the cutoff it fell on.
 
-        ``revoker`` is the subject the cutoff counts against, at most
+        ``revoker`` is the subject a new cutoff counts against, at most
         ``SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX`` of them, its oldest
-        evicted first; ``None`` (a global admin) is not capped.
+        evicted first; ``None`` (a global admin) is not capped. ``on_evict`` is
+        called with the session whose cutoff that eviction dropped. A re-revoke
+        moves the cutoff forward but leaves it counted against whoever held it,
+        so no principal can pull another's cutoff into its own quota and then
+        flush it out.
         """
         cutoff = time.time() if now is None else now
         revocations = self._share_viewer_revocations
@@ -424,19 +443,24 @@ class AuthorizationService:
         while revocations and revocations[oldest := next(iter(revocations))] < cutoff - SHARE_VIEWER_REVOCATION_TTL_S:
             self._drop_share_viewer_revocation(oldest)
         seen = session_id in revocations
+        owner = self._share_viewer_revokers.get(session_id) if seen else revoker
         self._drop_share_viewer_revocation(session_id)
-        if revoker is not None:
+        evicted = None
+        if not seen and revoker is not None:
             mine = self._share_viewer_revoked_by.get(revoker, {})
             if len(mine) >= SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX:
-                self._drop_share_viewer_revocation(next(iter(mine)))
+                evicted = next(iter(mine))
+                self._drop_share_viewer_revocation(evicted)
         # Nothing was dropped above unless this session or the revoker's own
         # oldest made room, so a refusal leaves the table as it was.
         if not seen and len(revocations) >= SHARE_VIEWER_REVOCATIONS_MAX:
             raise ShareViewerRevocationsFullError
         revocations[session_id] = cutoff
-        if revoker is not None:
-            self._share_viewer_revokers[session_id] = revoker
-            self._share_viewer_revoked_by.setdefault(revoker, {})[session_id] = None
+        if owner is not None:
+            self._share_viewer_revokers[session_id] = owner
+            self._share_viewer_revoked_by.setdefault(owner, {})[session_id] = None
+        if evicted is not None and on_evict is not None:
+            on_evict(evicted)
         return cutoff
 
     def _drop_share_viewer_revocation(self, session_id: str) -> None:

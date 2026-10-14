@@ -40,10 +40,15 @@ func (s *Server) handleRevokeViewers(w http.ResponseWriter, r *http.Request) {
 	if p := principalOf(r); !authz.IsAdmin(p) {
 		revoker = p.SubjectID
 	}
-	revokedAt, err := authz.RevokeShareViewersBy(id, s.deps.Clock.Wall(), revoker)
+	revokedAt, evicted, err := authz.RevokeShareViewersBy(id, s.deps.Clock.Wall(), revoker)
 	if err != nil {
 		detailError(w, http.StatusTooManyRequests, "too many sessions with revoked viewers; try again later")
 		return
+	}
+	// The cap made room by dropping this principal's oldest cutoff, so that
+	// session's earlier share tokens are admitted again: say so.
+	if evicted != "" {
+		s.audit(r, "session.viewers.cutoff_evicted", map[string]any{"session_id": evicted, "revoked_session_id": id})
 	}
 	// By principal alone: a provider can resolve a share viewer to a role other
 	// than viewer, and what is revoked is the token, not the role.

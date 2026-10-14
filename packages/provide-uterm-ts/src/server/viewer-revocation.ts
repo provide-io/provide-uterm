@@ -41,13 +41,17 @@ export const SHARE_VIEWER_REVOCATIONS_MAX = 10000;
 /**
  * How many cutoffs one revoking principal holds at once, so no single owner
  * can fill the table. Past it, that principal's own oldest cutoff makes room
- * for its newest. A global admin is not capped.
+ * for its newest (the route logs each eviction). A global admin is not capped.
  */
 export const SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX = 100;
 
 /**
- * How long a cutoff is kept, in seconds. Share tokens must live well under
- * this: a token that outlives its cutoff is admitted again.
+ * How long a cutoff is kept at most, in seconds. Share tokens must live well
+ * under this: a token that outlives its cutoff is admitted again. A capped
+ * revoker's cutoff can go sooner: it lasts min(24 h, until that principal's
+ * next {@link SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX} revokes of other
+ * sessions), so a non-admin that revokes more sessions than that within one
+ * share-token lifetime readmits its oldest session's tokens.
  */
 export const SHARE_VIEWER_REVOCATION_TTL_S = 86400;
 
@@ -77,7 +81,8 @@ export function isShareViewer(principal: AuthorizablePrincipal, sessionId: strin
 export class ShareViewerRevocations {
   // A Map iterates in insertion order, so the first key is the oldest cutoff.
   readonly #cutoffs = new Map<string, number>();
-  // A session's capped revoker, and each such principal's sessions, oldest first.
+  // The capped principal a session counts against (the one that first revoked
+  // it, while it is held), and each such principal's sessions, oldest first.
   readonly #revokers = new Map<string, string>();
   readonly #revokedBy = new Map<string, Set<string>>();
 
@@ -92,11 +97,15 @@ export class ShareViewerRevocations {
    * the cutoff. A token issued in the same second is refused too: `iat` has
    * one-second resolution, so it cannot say which side it fell on. Throws
    * {@link ShareViewerRevocationsFullError} when the table is full and this
-   * session holds no cutoff yet. The cutoff counts against `revoker`, who
+   * session holds no cutoff yet. A new cutoff counts against `revoker`, who
    * holds at most {@link SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX} of them,
    * its oldest evicted first; no revoker (a global admin) is not capped.
+   * `onEvict` is called with the session whose cutoff that eviction dropped.
+   * A re-revoke moves the cutoff forward but leaves it counted against
+   * whoever held it, so no principal can pull another's cutoff into its own
+   * quota and then flush it out.
    */
-  revoke(sessionId: string, now: number, revoker?: string): number {
+  revoke(sessionId: string, now: number, revoker?: string, onEvict?: (sessionId: string) => void): number {
     // Insertion order is revocation order, so the stale cutoffs are in front.
     for (const [oldest, cutoff] of this.#cutoffs) {
       if (cutoff >= now - SHARE_VIEWER_REVOCATION_TTL_S) {
@@ -105,10 +114,13 @@ export class ShareViewerRevocations {
       this.#drop(oldest);
     }
     const seen = this.#cutoffs.has(sessionId);
+    const owner = seen ? this.#revokers.get(sessionId) : revoker;
     this.#drop(sessionId);
-    const mine = revoker === undefined ? undefined : this.#revokedBy.get(revoker);
+    const mine = seen || revoker === undefined ? undefined : this.#revokedBy.get(revoker);
+    let evicted: string | undefined;
     if (mine !== undefined && mine.size >= SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX) {
-      this.#drop(mine.values().next().value as string);
+      evicted = mine.values().next().value as string;
+      this.#drop(evicted);
     }
     // Nothing was dropped above unless this session or the revoker's own
     // oldest made room, so a refusal leaves the table as it was.
@@ -116,11 +128,14 @@ export class ShareViewerRevocations {
       throw new ShareViewerRevocationsFullError();
     }
     this.#cutoffs.set(sessionId, now);
-    if (revoker !== undefined) {
-      this.#revokers.set(sessionId, revoker);
-      const sessions = this.#revokedBy.get(revoker) ?? new Set<string>();
+    if (owner !== undefined) {
+      this.#revokers.set(sessionId, owner);
+      const sessions = this.#revokedBy.get(owner) ?? new Set<string>();
       sessions.add(sessionId);
-      this.#revokedBy.set(revoker, sessions);
+      this.#revokedBy.set(owner, sessions);
+    }
+    if (evicted !== undefined) {
+      onEvict?.(evicted);
     }
     return now;
   }

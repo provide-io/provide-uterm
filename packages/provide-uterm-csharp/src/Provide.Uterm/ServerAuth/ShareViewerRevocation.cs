@@ -25,13 +25,17 @@ public sealed partial class AuthorizationService
     /// <summary>
     /// How many cutoffs one revoking principal holds at once, so no single owner
     /// can fill the table. Past it, that principal's own oldest cutoff makes room
-    /// for its newest. A global admin is not capped.
+    /// for its newest (the route logs each eviction). A global admin is not capped.
     /// </summary>
     public const int ShareViewerRevocationsPerPrincipalMax = 100;
 
     /// <summary>
-    /// How long a cutoff is kept. Share tokens must live well under this: a token
-    /// that outlives its cutoff is admitted again.
+    /// How long a cutoff is kept at most. Share tokens must live well under this:
+    /// a token that outlives its cutoff is admitted again. A capped revoker's
+    /// cutoff can go sooner: it lasts min(24 h, until that principal's next
+    /// <see cref="ShareViewerRevocationsPerPrincipalMax"/> revokes of other
+    /// sessions), so a non-admin that revokes more sessions than that within one
+    /// share-token lifetime readmits its oldest session's tokens.
     /// </summary>
     public const double ShareViewerRevocationTtlSeconds = 86400;
 
@@ -39,8 +43,9 @@ public sealed partial class AuthorizationService
     private readonly Dictionary<string, double> _revocations = new(StringComparer.Ordinal);
     private readonly LinkedList<string> _revocationOrder = new();
 
-    // Session -> the capped principal that last revoked it, and each such
-    // principal's sessions, oldest first.
+    // Session -> the capped principal it counts against (the one that first
+    // revoked it, while it is held), and each such principal's sessions, oldest
+    // first.
     private readonly Dictionary<string, string> _revokers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, LinkedList<string>> _revokedBy = new(StringComparer.Ordinal);
 
@@ -63,13 +68,18 @@ public sealed partial class AuthorizationService
     /// Refuse every share-viewer token for <paramref name="sessionId"/> issued at
     /// or before <paramref name="now"/> (wall-clock seconds, the clock a token's
     /// iat is written in) and return the cutoff. A token issued in the same
-    /// second is refused too: iat has one-second resolution. The cutoff counts
+    /// second is refused too: iat has one-second resolution. A new cutoff counts
     /// against <paramref name="revoker"/>, who holds at most
     /// <see cref="ShareViewerRevocationsPerPrincipalMax"/> of them, its oldest
     /// evicted first; <c>null</c> (a global admin) is not capped.
+    /// <paramref name="onEvict"/> is called, outside the lock, with the session
+    /// whose cutoff that eviction dropped. A re-revoke moves the cutoff forward
+    /// but leaves it counted against whoever held it, so no principal can pull
+    /// another's cutoff into its own quota and then flush it out.
     /// </summary>
-    public double RevokeShareViewers(string sessionId, double now, string? revoker = null)
+    public double RevokeShareViewers(string sessionId, double now, string? revoker = null, Action<string>? onEvict = null)
     {
+        string? evicted = null;
         lock (_revocationLock)
         {
             // Order is revocation order, so the stale cutoffs are at the front.
@@ -78,11 +88,13 @@ public sealed partial class AuthorizationService
                 DropRevocation(oldest.Value);
             }
             var seen = _revocations.ContainsKey(sessionId);
+            var owner = seen ? _revokers.GetValueOrDefault(sessionId) : revoker;
             DropRevocation(sessionId);
-            if (revoker is not null && _revokedBy.TryGetValue(revoker, out var mine)
+            if (!seen && revoker is not null && _revokedBy.TryGetValue(revoker, out var mine)
                 && mine.Count >= ShareViewerRevocationsPerPrincipalMax)
             {
-                DropRevocation(mine.First!.Value);
+                evicted = mine.First!.Value;
+                DropRevocation(evicted);
             }
             // Nothing was dropped above unless this session or the revoker's own
             // oldest made room, so a refusal leaves the table as it was.
@@ -92,14 +104,15 @@ public sealed partial class AuthorizationService
             }
             _revocations[sessionId] = now;
             _revocationOrder.AddLast(sessionId);
-            if (revoker is not null)
+            if (owner is not null)
             {
-                _revokers[sessionId] = revoker;
-                if (!_revokedBy.TryGetValue(revoker, out var list)) _revokedBy[revoker] = list = new LinkedList<string>();
+                _revokers[sessionId] = owner;
+                if (!_revokedBy.TryGetValue(owner, out var list)) _revokedBy[owner] = list = new LinkedList<string>();
                 list.AddLast(sessionId);
             }
-            return now;
         }
+        if (evicted is not null) onEvict?.Invoke(evicted);
+        return now;
     }
 
     /// <summary>Drop <paramref name="sessionId"/>'s cutoff: the session was deleted.</summary>

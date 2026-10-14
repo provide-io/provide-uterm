@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import ANY, AsyncMock, MagicMock, call
 
 import pytest
 from fastapi import APIRouter, HTTPException
@@ -86,7 +86,7 @@ async def test_revoke_records_the_cutoff_then_closes_through_the_hub(
     request = _request()
     result = await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
     az = request.app.state.uterm_authz
-    az.revoke_share_viewers.assert_called_once_with(_SID, revoker="owner-1")
+    az.revoke_share_viewers.assert_called_once_with(_SID, revoker="owner-1", on_evict=ANY)
     closer.assert_awaited_once_with(request.app.state.uterm_hub, az, _SID)
     # Event streams are ended too, and counted with the sockets: 2 + 3.
     streams.finder.assert_called_once_with(request.app)
@@ -105,7 +105,7 @@ async def test_a_global_admins_revoke_is_not_counted_against_a_principal(closer:
     await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
     az = request.app.state.uterm_authz
     az.is_admin.assert_awaited_once_with(request.state.uterm_principal)
-    az.revoke_share_viewers.assert_called_once_with(_SID, revoker=None)
+    az.revoke_share_viewers.assert_called_once_with(_SID, revoker=None, on_evict=ANY)
 
 
 async def test_revoke_leaves_an_audit_record(closer: AsyncMock, audit: MagicMock) -> None:
@@ -117,6 +117,33 @@ async def test_revoke_leaves_an_audit_record(closer: AsyncMock, audit: MagicMock
         detail={"closed": 5, "revoked_at": 123.5},
         source_ip="10.0.0.9",
     )
+
+
+async def test_a_cutoff_the_cap_evicts_is_audited_by_session_and_principal(closer: AsyncMock, audit: MagicMock) -> None:
+    request = _request()
+
+    def revoke(session_id: str, *, revoker: str | None, on_evict: Any) -> float:
+        on_evict("s-old")
+        return 123.5
+
+    request.app.state.uterm_authz.revoke_share_viewers = MagicMock(side_effect=revoke)
+    await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert audit.mock_calls == [
+        call(
+            "session.viewers.cutoff_evicted",
+            principal="owner-1",
+            session_id="s-old",
+            detail={"revoked_session_id": _SID},
+            source_ip="10.0.0.9",
+        ),
+        call(
+            "session.viewers.revoke",
+            principal="owner-1",
+            session_id=_SID,
+            detail={"closed": 5, "revoked_at": 123.5},
+            source_ip="10.0.0.9",
+        ),
+    ]
 
 
 async def test_a_refused_caller_moves_no_cutoff_and_closes_nothing(closer: AsyncMock, audit: MagicMock) -> None:
@@ -164,7 +191,7 @@ async def test_cutoffs_of_deleted_sessions_are_forgotten_before_the_revoke(close
     registry.unknown_sessions.assert_awaited_once_with(["gone", "alive"])
     registry.get_definition.assert_awaited_once_with(_SID)
     assert order.mock_calls[0] == call.forget("gone")
-    assert order.mock_calls[1] == call.revoke(_SID, revoker="owner-1")
+    assert order.mock_calls[1] == call.revoke(_SID, revoker="owner-1", on_evict=ANY)
     assert len(order.mock_calls) == 2
 
 

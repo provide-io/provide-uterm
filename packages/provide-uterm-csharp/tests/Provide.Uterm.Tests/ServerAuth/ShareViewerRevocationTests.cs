@@ -252,19 +252,49 @@ public sealed class ShareViewerRevocationTests
     }
 
     [Fact]
-    public void A_cutoff_counts_against_whoever_revoked_it_last()
+    public void A_re_revoke_leaves_the_cutoff_with_its_first_revoker()
     {
         var authz = new AuthorizationService();
-        authz.RevokeShareViewers("shared", 1, "bob");
-        for (var i = 0; i < Cap - 1; i++) authz.RevokeShareViewers("a" + i, 10 + i, "alice");
-        // Alice takes "shared" over from bob: her cap is now full, nothing evicted.
-        authz.RevokeShareViewers("shared", 500, "alice");
-        Assert.Equal(Cap, authz.ShareViewerRevocationCount);
-        authz.RevokeShareViewers("bob2", 600, "bob");
-        Assert.Equal(500, authz.ShareViewerRevocation("shared"));
-        Assert.Equal(10, authz.ShareViewerRevocation("a0"));
-        authz.RevokeShareViewers("a-next", 700, "alice");
-        Assert.Null(authz.ShareViewerRevocation("a0"));
+        authz.RevokeShareViewers("shared", 1, "alice");
+        // Bob re-revokes alice's session: the cutoff moves forward, but it stays
+        // in alice's quota, so bob's own revokes cannot flush it out.
+        authz.RevokeShareViewers("shared", 5, "bob");
+        Assert.Equal(5, authz.ShareViewerRevocation("shared"));
+        for (var i = 0; i <= Cap; i++) authz.RevokeShareViewers("b" + i, 10 + i, "bob");
+        Assert.Equal(5, authz.ShareViewerRevocation("shared"));
+        Assert.Null(authz.ShareViewerRevocation("b0"));
+        // It is still alice's: a full cap of her own pushes it out.
+        for (var i = 0; i < Cap; i++) authz.RevokeShareViewers("a" + i, 500 + i, "alice");
+        Assert.Null(authz.ShareViewerRevocation("shared"));
+        Assert.Equal(500, authz.ShareViewerRevocation("a0"));
+    }
+
+    [Fact]
+    public void A_re_revoke_neither_caps_an_uncapped_cutoff_nor_frees_a_capped_one()
+    {
+        var authz = new AuthorizationService();
+        authz.RevokeShareViewers("admins", 1);
+        authz.RevokeShareViewers("alices", 1, "alice");
+        authz.RevokeShareViewers("admins", 2, "bob");
+        authz.RevokeShareViewers("alices", 2);
+        for (var i = 0; i <= Cap; i++) authz.RevokeShareViewers("b" + i, 10 + i, "bob");
+        Assert.Equal(2, authz.ShareViewerRevocation("admins"));
+        for (var i = 0; i < Cap; i++) authz.RevokeShareViewers("a" + i, 500 + i, "alice");
+        Assert.Null(authz.ShareViewerRevocation("alices"));
+    }
+
+    [Fact]
+    public void The_cap_reports_each_cutoff_it_evicts_and_nothing_else()
+    {
+        var authz = new AuthorizationService();
+        var evicted = new List<string>();
+        for (var i = 0; i < Cap; i++) authz.RevokeShareViewers("s" + i, 100 + i, "alice", evicted.Add);
+        // A re-revoke at the cap evicts nothing.
+        authz.RevokeShareViewers("s5", 300, "alice", evicted.Add);
+        Assert.Empty(evicted);
+        authz.RevokeShareViewers("new", 400, "alice", evicted.Add);
+        Assert.Equal(["s0"], evicted);
+        Assert.Null(authz.ShareViewerRevocation("s0"));
     }
 
     [Fact]

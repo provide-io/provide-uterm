@@ -414,12 +414,45 @@ public sealed class ServerIntegrationViewerRevocationTests
             }
             Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "admin1", "admin")).StatusCode);
             Assert.NotNull(authz.ShareViewerRevocation("mine-0"));
+            // A re-revoke would leave bb with the admin, uncapped: start afresh.
+            authz.ForgetShareViewers("bb");
             Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "owner1", "operator")).StatusCode);
             Assert.Null(authz.ShareViewerRevocation("mine-0"));
             Assert.NotNull(authz.ShareViewerRevocation("bb"));
         }
         finally
         {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task A_cutoff_the_cap_evicts_is_audited_by_session_and_principal()
+    {
+        var authz = new AuthorizationService();
+        var (server, port) = await BootAsync(authz);
+        var records = new List<IReadOnlyDictionary<string, object?>>();
+        UtermServer.ViewersAudit = fields =>
+        {
+            lock (records) records.Add(fields);
+        };
+        try
+        {
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            for (var i = 0; i < AuthorizationService.ShareViewerRevocationsPerPrincipalMax; i++)
+            {
+                authz.RevokeShareViewers("mine-" + i, now, "owner1");
+            }
+            Assert.Equal(HttpStatusCode.OK, (await PostRevokeAsync(port, "owner1", "operator")).StatusCode);
+            var record = Assert.Single(records);
+            Assert.Equal("session.viewers.cutoff_evicted", record["action"]);
+            Assert.Equal("owner1", record["principal"]);
+            Assert.Equal("mine-0", record["session_id"]);
+            Assert.Equal("bb", record["revoked_session_id"]);
+        }
+        finally
+        {
+            UtermServer.ViewersAudit = static _ => { };
             await server.StopAsync();
         }
     }

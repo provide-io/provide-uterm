@@ -232,7 +232,7 @@ func held(s *AuthorizationService) int {
 
 func revokeBy(t *testing.T, s *AuthorizationService, sessionID string, now float64, revoker string) {
 	t.Helper()
-	if _, err := s.RevokeShareViewersBy(sessionID, now, revoker); err != nil {
+	if _, _, err := s.RevokeShareViewersBy(sessionID, now, revoker); err != nil {
 		t.Fatalf("revoke %s: %v", sessionID, err)
 	}
 }
@@ -290,25 +290,70 @@ func TestMovingYourOwnCutoffForwardEvictsNothing(t *testing.T) {
 	}
 }
 
-func TestACutoffCountsAgainstWhoeverRevokedItLast(t *testing.T) {
+func TestAReRevokeLeavesTheCutoffWithItsFirstRevoker(t *testing.T) {
 	s := NewAuthorizationService()
 	const limit = ShareViewerRevocationsPerPrincipalMax
-	revokeBy(t, s, "shared", 1, "bob")
-	for i := 0; i < limit-1; i++ {
-		revokeBy(t, s, fmt.Sprintf("a%d", i), 10+float64(i), "alice")
+	revokeBy(t, s, "shared", 1, "alice")
+	// Bob re-revokes alice's session: the cutoff moves forward, but it stays in
+	// alice's quota, so bob's own revokes cannot flush it out.
+	revokeBy(t, s, "shared", 5, "bob")
+	if cutoffOf(s, "shared") != 5.0 {
+		t.Fatalf("shared %v", cutoffOf(s, "shared"))
 	}
-	// Alice takes "shared" over from bob: her cap is now full, nothing evicted.
-	revokeBy(t, s, "shared", 500, "alice")
-	if held(s) != limit {
-		t.Fatalf("held %d", held(s))
+	for i := 0; i <= limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("b%d", i), 10+float64(i), "bob")
 	}
-	revokeBy(t, s, "bob2", 600, "bob")
-	if cutoffOf(s, "shared") != 500.0 || cutoffOf(s, "a0") != 10.0 {
-		t.Fatal("bob's revoke evicted alice's cutoffs")
+	if cutoffOf(s, "shared") != 5.0 || cutoffOf(s, "b0") != nil {
+		t.Fatalf("bob's revokes: shared %v b0 %v", cutoffOf(s, "shared"), cutoffOf(s, "b0"))
 	}
-	revokeBy(t, s, "a-next", 700, "alice")
-	if cutoffOf(s, "a0") != nil {
-		t.Error("alice's oldest was kept past her cap")
+	// It is still alice's: a full cap of her own pushes it out.
+	for i := 0; i < limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("a%d", i), 500+float64(i), "alice")
+	}
+	if cutoffOf(s, "shared") != nil || cutoffOf(s, "a0") != 500.0 {
+		t.Errorf("alice's revokes: shared %v a0 %v", cutoffOf(s, "shared"), cutoffOf(s, "a0"))
+	}
+}
+
+func TestAReRevokeNeitherCapsAnUncappedCutoffNorFreesACappedOne(t *testing.T) {
+	s := NewAuthorizationService()
+	const limit = ShareViewerRevocationsPerPrincipalMax
+	if _, err := s.RevokeShareViewers("admins", 1); err != nil {
+		t.Fatal(err)
+	}
+	revokeBy(t, s, "alices", 1, "alice")
+	revokeBy(t, s, "admins", 2, "bob")
+	if _, err := s.RevokeShareViewers("alices", 2); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i <= limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("b%d", i), 10+float64(i), "bob")
+	}
+	if cutoffOf(s, "admins") != 2.0 {
+		t.Fatalf("bob's revokes evicted the admin's cutoff")
+	}
+	for i := 0; i < limit; i++ {
+		revokeBy(t, s, fmt.Sprintf("a%d", i), 500+float64(i), "alice")
+	}
+	if cutoffOf(s, "alices") != nil {
+		t.Error("an uncapped re-revoke took alice's cutoff out of her quota")
+	}
+}
+
+func TestTheCapReportsEachCutoffItEvictsAndNothingElse(t *testing.T) {
+	s := NewAuthorizationService()
+	const limit = ShareViewerRevocationsPerPrincipalMax
+	for i := 0; i < limit; i++ {
+		if _, evicted, err := s.RevokeShareViewersBy(fmt.Sprintf("s%d", i), 100+float64(i), "alice"); err != nil || evicted != "" {
+			t.Fatalf("s%d: evicted %q err %v", i, evicted, err)
+		}
+	}
+	// A re-revoke at the cap evicts nothing.
+	if _, evicted, _ := s.RevokeShareViewersBy("s5", 300, "alice"); evicted != "" {
+		t.Fatalf("re-revoke evicted %q", evicted)
+	}
+	if _, evicted, _ := s.RevokeShareViewersBy("new", 400, "alice"); evicted != "s0" || cutoffOf(s, "s0") != nil {
+		t.Errorf("evicted %q, s0 %v", evicted, cutoffOf(s, "s0"))
 	}
 }
 
@@ -331,8 +376,8 @@ func TestAPrincipalAtItsCapMakesItsOwnRoomInAFullTable(t *testing.T) {
 	for i := 0; i < ShareViewerRevocationsMax-limit; i++ {
 		revokeBy(t, s, fmt.Sprintf("s%d", i), base+float64(limit+i), "")
 	}
-	if got, err := s.RevokeShareViewersBy("a-new", base+2e4, "alice"); err != nil || got != base+2e4 {
-		t.Fatalf("revoke at cap in a full table: %v %v", got, err)
+	if got, evicted, err := s.RevokeShareViewersBy("a-new", base+2e4, "alice"); err != nil || got != base+2e4 || evicted != "a0" {
+		t.Fatalf("revoke at cap in a full table: %v %q %v", got, evicted, err)
 	}
 	if cutoffOf(s, "a0") != nil || cutoffOf(s, "s0") != base+float64(limit) {
 		t.Errorf("a0 %v s0 %v", cutoffOf(s, "a0"), cutoffOf(s, "s0"))

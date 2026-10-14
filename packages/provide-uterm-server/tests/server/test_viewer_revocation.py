@@ -214,20 +214,52 @@ def test_moving_your_own_cutoff_forward_evicts_nothing() -> None:
     assert service.share_viewer_revocation("s1") is None
 
 
-def test_a_cutoff_counts_against_whoever_revoked_it_last() -> None:
+def test_a_re_revoke_leaves_the_cutoff_with_its_first_revoker() -> None:
     service = AuthorizationService()
     cap = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
-    service.revoke_share_viewers("shared", now=1.0, revoker="bob")
-    for index in range(cap - 1):
-        service.revoke_share_viewers(f"a{index}", now=10.0 + index, revoker="alice")
-    # Alice takes "shared" over from bob: her cap is now full, nothing evicted.
-    service.revoke_share_viewers("shared", now=500.0, revoker="alice")
-    assert len(service.share_viewer_revoked_sessions()) == cap
-    service.revoke_share_viewers("bob2", now=600.0, revoker="bob")
-    assert service.share_viewer_revocation("shared") == 500.0
-    assert service.share_viewer_revocation("a0") == 10.0
-    service.revoke_share_viewers("a-next", now=700.0, revoker="alice")
-    assert service.share_viewer_revocation("a0") is None
+    service.revoke_share_viewers("shared", now=1.0, revoker="alice")
+    # Bob re-revokes alice's session: the cutoff moves forward, but it stays in
+    # alice's quota, so bob's own revokes cannot flush it out.
+    service.revoke_share_viewers("shared", now=5.0, revoker="bob")
+    assert service.share_viewer_revocation("shared") == 5.0
+    for index in range(cap + 1):
+        service.revoke_share_viewers(f"b{index}", now=10.0 + index, revoker="bob")
+    assert service.share_viewer_revocation("shared") == 5.0
+    assert service.share_viewer_revocation("b0") is None
+    # It is still alice's: a full cap of her own pushes it out.
+    for index in range(cap):
+        service.revoke_share_viewers(f"a{index}", now=500.0 + index, revoker="alice")
+    assert service.share_viewer_revocation("shared") is None
+    assert service.share_viewer_revocation("a0") == 500.0
+
+
+def test_a_re_revoke_neither_caps_an_uncapped_cutoff_nor_frees_a_capped_one() -> None:
+    service = AuthorizationService()
+    cap = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
+    service.revoke_share_viewers("admins", now=1.0)
+    service.revoke_share_viewers("alices", now=1.0, revoker="alice")
+    service.revoke_share_viewers("admins", now=2.0, revoker="bob")
+    service.revoke_share_viewers("alices", now=2.0)
+    for index in range(cap + 1):
+        service.revoke_share_viewers(f"b{index}", now=10.0 + index, revoker="bob")
+    assert service.share_viewer_revocation("admins") == 2.0
+    for index in range(cap):
+        service.revoke_share_viewers(f"a{index}", now=500.0 + index, revoker="alice")
+    assert service.share_viewer_revocation("alices") is None
+
+
+def test_the_cap_reports_each_cutoff_it_evicts_and_nothing_else() -> None:
+    service = AuthorizationService()
+    cap = SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX
+    evicted: list[str] = []
+    for index in range(cap):
+        service.revoke_share_viewers(f"s{index}", now=100.0 + index, revoker="alice", on_evict=evicted.append)
+    # A re-revoke at the cap evicts nothing.
+    service.revoke_share_viewers("s5", now=300.0, revoker="alice", on_evict=evicted.append)
+    assert evicted == []
+    service.revoke_share_viewers("new", now=400.0, revoker="alice", on_evict=evicted.append)
+    assert evicted == ["s0"]
+    assert service.share_viewer_revocation("s0") is None
 
 
 def test_an_uncapped_revoke_is_never_evicted_by_the_per_principal_cap() -> None:

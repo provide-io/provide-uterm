@@ -264,6 +264,7 @@ export function bootstrapServer(options: BootstrapOptions = {}): BootstrappedSer
     controlPlaneBackend: String(section(config, "control_plane").backend),
     startupTime: (options.now ?? (() => Date.now() / 1000))(),
     now: options.now,
+    logger: options.logger,
   });
   // Read off the merged document, so a deployment that never mentioned
   // `[webhooks]` still gets the reference's own default and the bind term.

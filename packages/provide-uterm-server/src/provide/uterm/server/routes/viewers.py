@@ -66,10 +66,21 @@ async def revoke_viewers(request: Request, session_id: SessionId) -> dict[str, A
     # The embedder's service token is a global admin and revokes for everyone,
     # so only other callers are held to a per-principal share of the table.
     revoker = None if await az.is_admin(p) else p.subject_id
+    evicted: list[str] = []
     try:
-        revoked_at = az.revoke_share_viewers(session_id, revoker=revoker)
+        revoked_at = az.revoke_share_viewers(session_id, revoker=revoker, on_evict=evicted.append)
     except ShareViewerRevocationsFullError:
         raise HTTPException(status_code=429, detail="too many sessions with revoked viewers; try again later") from None
+    # The cap made room by dropping this principal's oldest cutoff, so that
+    # session's earlier share tokens are admitted again: say so.
+    for gone in evicted:
+        audit_event(
+            "session.viewers.cutoff_evicted",
+            principal=p.subject_id,
+            session_id=gone,
+            detail={"revoked_session_id": session_id},
+            source_ip=source_ip(request),
+        )
     closed = await close_revoked_viewers(request.app.state.uterm_hub, az, session_id)
     closed += share_viewer_streams(request.app).revoke(az, session_id)
     audit_event(

@@ -7,10 +7,12 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -22,6 +24,7 @@ import (
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/tunnel"
 )
 
@@ -476,7 +479,7 @@ func TestAnOwnersRevokesAreCappedPerPrincipalButAGlobalAdminsAreNot(t *testing.T
 	now := ts.srv.deps.Clock.Wall()
 	authz := ts.srv.deps.Authz
 	for i := 0; i < serverauth.ShareViewerRevocationsPerPrincipalMax; i++ {
-		_, _ = authz.RevokeShareViewersBy(fmt.Sprintf("mine-%d", i), now, "owner1")
+		_, _, _ = authz.RevokeShareViewersBy(fmt.Sprintf("mine-%d", i), now, "owner1")
 	}
 	if rec := ts.do("POST", "/api/sessions/bb/viewers/revoke", "", adminHeaders()); rec.Code != http.StatusOK {
 		t.Fatalf("admin revoke: %d", rec.Code)
@@ -492,5 +495,31 @@ func TestAnOwnersRevokesAreCappedPerPrincipalButAGlobalAdminsAreNot(t *testing.T
 	}
 	if _, ok := authz.ShareViewerRevocation("bb2"); !ok {
 		t.Error("owner1's newest cutoff was not recorded")
+	}
+}
+
+func TestACutoffTheCapEvictsIsAuditedBySessionAndPrincipal(t *testing.T) {
+	var logs bytes.Buffer
+	ts := newTestServer(t, func(_ *serverconfig.UtermServerConfig, deps *Deps) {
+		deps.Logger = slog.New(slog.NewTextHandler(&logs, nil))
+	})
+	ts.reg.add("bb", "owner1", "public")
+	now := ts.srv.deps.Clock.Wall()
+	for i := 0; i < serverauth.ShareViewerRevocationsPerPrincipalMax; i++ {
+		_, _, _ = ts.srv.deps.Authz.RevokeShareViewersBy(fmt.Sprintf("mine-%d", i), now, "owner1")
+	}
+	if rec := ts.do("POST", "/api/sessions/bb/viewers/revoke", "", flat(headers("owner1", "operator", 100))); rec.Code != http.StatusOK {
+		t.Fatalf("owner revoke: %d", rec.Code)
+	}
+	var evicted string
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, "action=session.viewers.cutoff_evicted") {
+			evicted = line
+		}
+	}
+	for _, want := range []string{"principal=owner1", "session_id:mine-0", "revoked_session_id:bb"} {
+		if !strings.Contains(evicted, want) {
+			t.Errorf("eviction audit %q lacks %q", evicted, want)
+		}
 	}
 }

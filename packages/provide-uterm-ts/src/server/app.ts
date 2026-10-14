@@ -36,6 +36,7 @@ import {
   resolveJwtPrincipal,
   type ServerPrincipal,
 } from "../serverauth/index.ts";
+import { getLogger, type Logger } from "../telemetry/index.ts";
 import { type AuthorizableSession, canMutateSession, canReadSession, isAdmin } from "./authorization.ts";
 import { healthReport, livenessReport, readinessReport } from "./health.ts";
 import { handleHijackRequest, INPUT_MODES, readJsonBody as readBody } from "./hijack-routes.ts";
@@ -86,6 +87,8 @@ export interface ServerAppOptions {
   startupTime: number;
   /** The clock, in seconds. The runtime's own unless a test says otherwise. */
   now?: (() => number) | undefined;
+  /** Where audit records go. The runtime's own logger unless one is supplied. */
+  logger?: Logger | undefined;
 }
 
 /** A built application. */
@@ -280,6 +283,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
   const app: BuiltApp = { options, ready: true };
   const recordings = options.recordings;
   const revocations = new ShareViewerRevocations();
+  const logger = options.logger ?? getLogger("provide.uterm.server.viewers");
 
   /** The read decision, refusing a share viewer whose access was revoked. */
   function canRead(principal: ServerPrincipal, session: AuthorizableSession): boolean {
@@ -437,7 +441,19 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       // The embedder's service token is a global admin and revokes for
       // everyone, so only other callers are held to a per-principal share.
       const revoker = isAdmin(principal) ? undefined : principal.subject_id;
-      revokedAt = revocations.revoke(sessionId, (options.now ?? (() => Date.now() / 1000))(), revoker);
+      revokedAt = revocations.revoke(sessionId, (options.now ?? (() => Date.now() / 1000))(), revoker, (evicted) => {
+        // The cap made room by dropping this principal's oldest cutoff, so
+        // that session's earlier share tokens are admitted again: say so.
+        logger.info(
+          {
+            action: "session.viewers.cutoff_evicted",
+            principal: principal.subject_id,
+            session_id: evicted,
+            revoked_session_id: sessionId,
+          },
+          "audit_event",
+        );
+      });
     } catch {
       // The one thing revoke throws: ShareViewerRevocationsFullError.
       return refusal(429, "too many sessions with revoked viewers; try again later");
