@@ -44,6 +44,8 @@ export interface RecordingSettings {
   redactSensitive: boolean;
   flushIntervalS: number;
   flushBatchSize: number;
+  /** Seconds between recorded screens of a changing session; 0 records only screens sent to a viewer. */
+  screenIntervalS: number;
 }
 
 /**
@@ -63,6 +65,7 @@ export function recordingSettingsFrom(section: Readonly<Record<string, unknown>>
     redactSensitive: Boolean(section.redact_sensitive),
     flushIntervalS: Number(section.flush_interval_s),
     flushBatchSize: Number(section.flush_batch_size),
+    screenIntervalS: Number(section.screen_interval_s),
   };
 }
 

@@ -161,6 +161,12 @@ export function validateRecordingConfig(input: Record<string, unknown>): void {
   if (typeof retention === "number" && retention < 0) {
     throw new Error(`recording.retention_s must be >= 0 (0 = keep indefinitely), got: ${retention}`);
   }
+  const screenInterval = input.screen_interval_s;
+  if (typeof screenInterval === "number" && screenInterval < 0) {
+    throw new Error(
+      `recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: ${screenInterval}`,
+    );
+  }
   requireSecureUrl(input.webhook_url as string | undefined, "recording.webhook_url");
 }
 

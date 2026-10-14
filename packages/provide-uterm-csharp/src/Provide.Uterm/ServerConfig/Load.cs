@@ -200,8 +200,8 @@ public static class ConfigLoader
         ["recording"] = new(StringComparer.Ordinal)
         {
             "control_channel_mode", "directory", "enabled_by_default", "flush_batch_size",
-            "flush_interval_s", "max_bytes", "redact_sensitive", "retention_s", "store_type",
-            "webhook_secret", "webhook_timeout_s", "webhook_url"
+            "flush_interval_s", "max_bytes", "redact_sensitive", "retention_s", "screen_interval_s",
+            "store_type", "webhook_secret", "webhook_timeout_s", "webhook_url"
         },
         ["profiles"] = new(StringComparer.Ordinal)
         {
@@ -532,6 +532,17 @@ public static class ConfigLoader
         if (t.TryGetValue("control_channel_mode", out var ccm) && ccm is string ccms) r.ControlChannelMode = ccms;
         if (t.TryGetValue("redact_sensitive", out var rs) && rs is bool rsb) r.RedactSensitive = rsb;
         if (t.TryGetValue("store_type", out var st) && st is string sts) r.StoreType = sts;
+        if (t.TryGetValue("screen_interval_s", out var si))
+        {
+            var interval = RequireRate("recording.screen_interval_s", si);
+            if (interval < 0)
+            {
+                throw new ArgumentException(
+                    $"recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: {si}");
+            }
+
+            r.ScreenIntervalS = interval;
+        }
     }
 
     /// <summary>

@@ -331,6 +331,7 @@ describe("recording settings", () => {
       redactSensitive: true,
       flushIntervalS: 5,
       flushBatchSize: 100,
+      screenIntervalS: 0,
     });
   });
 

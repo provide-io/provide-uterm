@@ -188,6 +188,7 @@ describe("a session recording", () => {
     redactSensitive: false,
     flushIntervalS: 3600,
     flushBatchSize: 100,
+    screenIntervalS: 0,
   };
 
   async function oneConnection(recording: SessionRecording, keys: string): Promise<void> {

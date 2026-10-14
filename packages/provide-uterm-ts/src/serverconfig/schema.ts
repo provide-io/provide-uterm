@@ -292,6 +292,12 @@ const FIELD_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
       notBelow(value, 0, `recording.max_bytes must be >= 0 (0 = unlimited), got: ${value as number}`),
     retention_s: (value) =>
       notBelow(value, 0, `recording.retention_s must be >= 0 (0 = keep indefinitely), got: ${value as number}`),
+    screen_interval_s: (value) =>
+      notBelow(
+        value,
+        0,
+        `recording.screen_interval_s must be >= 0 (0 = only screens sent to a viewer), got: ${value as number}`,
+      ),
   },
   ControlPlaneConfig: {
     reap_interval_s: (value) =>

@@ -127,6 +127,7 @@ export const SERVER_CONFIG_DEFAULTS: ServerConfigDocument = deepFreeze({
     max_bytes: 0,
     redact_sensitive: true,
     retention_s: 0,
+    screen_interval_s: 0.0,
     store_type: "local",
     webhook_secret: null,
     webhook_timeout_s: 2.0,

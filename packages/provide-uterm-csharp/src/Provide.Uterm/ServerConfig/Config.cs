@@ -131,6 +131,11 @@ public sealed class RecordingConfig
     public string ControlChannelMode { get; set; } = "exclude";
     public bool RedactSensitive { get; set; } = true;
     public string StoreType { get; set; } = "local";
+
+    /// <summary>Seconds between recorded screens of a changing session; 0 records
+    /// only the screens sent to a viewer. This port has no capture connector, so
+    /// the value is carried for config parity and nothing reads it yet.</summary>
+    public double ScreenIntervalS { get; set; }
 }
 
 public sealed class ControlPlaneConfig

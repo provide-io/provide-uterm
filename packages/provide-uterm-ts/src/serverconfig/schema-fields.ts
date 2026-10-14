@@ -88,6 +88,7 @@ export const SECTION_FIELD_SPECS = {
     webhook_timeout_s: "float",
     flush_interval_s: "float",
     flush_batch_size: "int",
+    screen_interval_s: "float",
   },
   ControlPlaneConfig: {
     backend: ["memory", "sqlite"],
