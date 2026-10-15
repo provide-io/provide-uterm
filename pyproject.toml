@@ -17,13 +17,13 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "asyncssh>=2.24.0",
+    "asyncssh>=2.24.1",
     "bandit>=1.9.4",
     "codespell>=2.4.3",
     "detect-secrets>=1.5.0",
-    "fastapi>=0.142.2",
+    "fastapi>=0.143.0",
     "httpx2>=2.13.1",
-    "hypothesis>=6.168.3",
+    "hypothesis>=6.168.5",
     "memray>=1.20.0; sys_platform != 'win32'",
     "mutmut>=3.8.0",
     "Pillow>=12.3.0",
@@ -31,23 +31,23 @@ dev = [
     "pip-audit>=2.10.1",
     "pip-licenses>=5.5.5",
     "pre-commit>=4.6.2",
-    "pydantic>=2.13.5",
+    "pydantic>=2.14.0",
     "pyjwt>=2.15.1",
     "pyte>=0.8.2",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
-    "pytest-playwright>=0.9.0",
+    "pytest-playwright>=0.10.0",
     "pytest-randomly>=5.0.0",
     "pytest-timeout>=2.4.0",
     "pytest-xdist>=3.8",
     "reuse>=6.2.0",
-    "ruff>=0.16.10",
-    "ty>=0.0.84",
-    "uv>=0.12.22",
+    "ruff>=0.17.0",
+    "ty>=0.0.86",
+    "uv>=0.13.0",
     "uvicorn>=0.54.0",
     "vulture>=2.16",
-    "websockets>=17.1",
+    "websockets>=17.2",
     # The Cloudflare package declares this in its own dev EXTRA, but CI syncs
     # the workspace-root dev GROUP, which does not install member extras — so
     # the CF lifecycle scenario suite (part of the default root testpaths)
@@ -57,10 +57,10 @@ dev = [
     # versions import from rich.console and support 3.11 again, so no rich pin
     # is needed. Its pywrangler also requires wrangler >=4.109, which is why
     # that npm tool is a pinned devDependency rather than whatever npx cached.
-    "workers-py>=1.17.6",
+    "workers-py>=1.17.7",
     "pyyaml>=6.0",
     "xenon>=0.9.3",
-    "mcp>=2.0.0",
+    "mcp>=2.3.0",
     "pytest-textual-snapshot>=1.0.0",
     "pytest-pyodide>=0.59.2",
 ]
