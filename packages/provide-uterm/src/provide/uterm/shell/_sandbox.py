@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import base64
 import builtins
-import datetime
+import datetime as dt
 import hashlib
 import json
 import re
@@ -137,7 +137,7 @@ class Sandbox:
         self.namespace["print"] = self._print
 
         self.namespace["json"] = json
-        self.namespace["datetime"] = datetime
+        self.namespace["datetime"] = dt
         self.namespace["re"] = re
         self.namespace["hashlib"] = hashlib
         self.namespace["base64"] = base64

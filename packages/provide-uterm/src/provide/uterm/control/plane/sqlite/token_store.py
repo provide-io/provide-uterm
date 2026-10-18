@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def _row_data(row: Any) -> dict[str, Any]:
-    return cast("dict[str, Any]", dict(row))
+    return dict(row)
 
 
 class SqliteTokenStore:

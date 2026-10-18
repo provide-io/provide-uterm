@@ -24,7 +24,7 @@ from provide.telemetry import get_tracer
 from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
     from provide.uterm.cloudflare.bridge.hijack import HijackSession
     from provide.uterm.cloudflare.cf_types import CFWebSocket
@@ -147,7 +147,7 @@ class _SessionRuntimeIoMixin:
         async def send_ws(self, ws: CFWebSocket, payload: dict[str, Any]) -> None: ...
 
     @contextlib.asynccontextmanager
-    async def input_delivery_guard(self) -> AsyncIterator[None]:
+    async def input_delivery_guard(self) -> AsyncGenerator[None]:
         """Serialize ownership decisions, worker delivery, and lease changes."""
         async with self._input_delivery_lock:
             yield

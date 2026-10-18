@@ -76,7 +76,7 @@ from provide.uterm.server.vnc_upstream import attach_vnc_upstream_factory
 from provide.uterm.server.webhooks import WebhookManager
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
     from typing import Protocol
 
     from provide.uterm.server.audit_chain import AuditChain
@@ -501,7 +501,7 @@ def create_server_app(
     attach_vnc_upstream_factory(hub, graphical_targets)
 
     @asynccontextmanager
-    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         async def _delayed_boot() -> None:
             # Yield to the event loop so FastAPI finishes its own startup tasks
             # (route registration, middleware init) before we connect sessions.

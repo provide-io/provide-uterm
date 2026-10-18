@@ -44,7 +44,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
 from mcp.server.mcpserver import MCPServer
 
@@ -143,7 +143,7 @@ def create_mcp_app(
     auth_ctx = AuthorizationContext(default_principal=default_principal)
 
     @contextlib.asynccontextmanager
-    async def _lifespan(_app: MCPServer) -> AsyncIterator[None]:
+    async def _lifespan(_app: MCPServer) -> AsyncGenerator[None]:
         yield
         await client.__aexit__(None, None, None)
 

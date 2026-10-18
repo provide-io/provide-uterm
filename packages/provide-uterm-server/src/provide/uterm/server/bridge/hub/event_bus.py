@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Callable
+    from collections.abc import AsyncGenerator, Callable
 
 from provide.telemetry import get_logger
 
@@ -282,7 +282,7 @@ class EventBus:
         event_types: list[str] | None = None,
         pattern: str | None = None,
         max_queue_bytes: int | None = None,
-    ) -> AsyncIterator[_Subscription]:
+    ) -> AsyncGenerator[_Subscription]:
         """Context manager that yields a :class:`_Subscription` for *worker_id*.
 
         The subscription is registered on enter and automatically removed on

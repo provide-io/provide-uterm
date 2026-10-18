@@ -278,7 +278,8 @@ def make_hello_frame(**payload: Any) -> HelloFrame:
     # so route through the loose TypedDict path and just stamp ``type``.
     payload.setdefault("mcp_supported", True)
     payload.setdefault("vnc_supported", True)
-    return cast("HelloFrame", {"type": "hello", **payload})
+    frame: dict[str, Any] = {"type": "hello", **payload}
+    return cast("HelloFrame", frame)
 
 
 def coerce_worker_status_frame(payload: dict[str, Any]) -> WorkerStatusFrame:

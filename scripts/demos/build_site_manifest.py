@@ -21,7 +21,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
+import datetime as dt
 import importlib
 import json
 import logging
@@ -185,7 +185,7 @@ def build_manifest(*, generate_posters: bool = False) -> dict[str, Any]:
         demos.append(meta)
 
     return {
-        "generated_at": _dt.datetime.now(_dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "demos": demos,
     }
 

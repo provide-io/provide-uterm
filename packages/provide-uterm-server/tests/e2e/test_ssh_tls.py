@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import datetime
+import datetime as dt
 import ipaddress
 import ssl
 from pathlib import Path
@@ -71,7 +71,7 @@ def _generate_self_signed_cert(tmp_path: Path) -> tuple[Path, Path]:
             x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
         ]
     )
-    now = datetime.datetime.now(datetime.UTC)
+    now = dt.datetime.now(dt.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -79,7 +79,7 @@ def _generate_self_signed_cert(tmp_path: Path) -> tuple[Path, Path]:
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now)
-        .not_valid_after(now + datetime.timedelta(hours=1))
+        .not_valid_after(now + dt.timedelta(hours=1))
         .add_extension(
             x509.SubjectAlternativeName(
                 [

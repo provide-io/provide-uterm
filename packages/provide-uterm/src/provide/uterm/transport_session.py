@@ -47,7 +47,7 @@ from provide.uterm.control_channel import ControlFrameDecoder, DataChunk
 from provide.uterm.emulator import TerminalEmulator
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Generator
 
     from provide.uterm.transports.base import ConnectionTransport
 
@@ -457,7 +457,7 @@ class TransportSession:
         self._control_watchers.append(callback)
 
     @contextlib.contextmanager
-    def capture_output(self, *, max_chars: int = 65_536) -> Iterator[TerminalCapture]:
+    def capture_output(self, *, max_chars: int = 65_536) -> Generator[TerminalCapture]:
         """Capture terminal-only text received during this bounded scope.
 
         Control frames are removed before text reaches the capture. The
