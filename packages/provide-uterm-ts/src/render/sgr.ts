@@ -15,7 +15,7 @@
  * `provide.uterm.render.buffer` and the Go package `render`.
  */
 
-import type { Char } from "../vt/index.ts";
+import { type Char, charWidth } from "../vt/index.ts";
 
 /** Reset every attribute. */
 export const ANSI_RESET = "\x1b[0m";
@@ -216,27 +216,143 @@ function sameStyle(a: CellStyle, b: CellStyle): boolean {
 export type CellReader = (y: number, x: number) => Char | undefined;
 
 /**
+ * Drawn where a cell holds the empty second half of a wide character whose
+ * first half is gone, to recreate that cell: see {@link renderCellRow}. Any
+ * wide character would do; this one is blank should a terminal ever show it.
+ */
+const PLACEHOLDER = "\u3000";
+
+/** Whether a cell holds what a wide character's second cell does: nothing, or marks. */
+export function isSecondHalf(text: string): boolean {
+  return text === "" || charWidth(text) === 0;
+}
+
+/** The text and style of a cell, an absent one being a blank default cell. */
+function cellAt(read: CellReader, y: number, x: number): [string, CellStyle] {
+  const cell = read(y, x);
+  return cell === undefined ? [" ", DEFAULT_STYLE] : [cell.data, cellStyle(cell)];
+}
+
+/**
+ * Render row `y` so that drawing it on a fresh row recreates every cell.
+ *
+ * A wide character is drawn once and takes two cells; the cell after it is
+ * recreated by drawing it, so nothing is written for that cell. Writing a
+ * space there, as this once did, made every wide character a column wider on
+ * the terminal it was drawn on, and a row holding one overflowed. Combining
+ * marks that joined that second cell are written straight after the wide
+ * character, which joins them to it again; marks joined to the wide character
+ * itself are written with the column set back onto its second cell, which
+ * joins them to the wide character instead.
+ *
+ * Two cells cannot be recreated by drawing left to right, and get a cursor
+ * move. A wide character whose second half was overwritten is drawn, and the
+ * column is then set back onto that half (CHA, not CUB: from the deferred
+ * wrap at the last column CUB steps one further). A second half whose first
+ * half is gone (overwritten, or deleted) is recreated the way the stream made
+ * it: a placeholder wide character drawn in its style, its marks joined to
+ * it, and the placeholder's first half deleted (DCH). In the last column,
+ * where a wide character has no second half, the placeholder is drawn one
+ * column left instead, and the cell there drawn again over its first half.
+ * That needs the cell before it to be drawable, so one arrangement is left
+ * blank: such a cell in the last column right after another second half (a
+ * wide character's, or another such cell). Any marks in it are lost with it.
+ *
+ * A cell with marks written into the last column is written with autowrap
+ * off: the marks join the cell before the cursor, which then rests past the
+ * last column, and with autowrap on they would first wrap to the next row.
+ *
+ * Port of the Python `_render_row`; every port writes the same bytes.
+ */
+function renderCellRow(read: CellReader, y: number, cols: number): string {
+  const parts: string[] = [];
+  let lastStyle: CellStyle | undefined;
+  const put = (text: string, style: CellStyle): void => {
+    if (lastStyle === undefined || !sameStyle(style, lastStyle)) {
+      parts.push(styleToSgr(style));
+      lastStyle = style;
+    }
+    parts.push(text);
+  };
+  const putCell = (text: string, style: CellStyle, x: number): void => {
+    if (text === "") {
+      return;
+    }
+    if (x === cols - 1 && ([...text].length > 1 || charWidth(text) === 0)) {
+      parts.push("\x1b[?7l");
+      put(text, style);
+      parts.push("\x1b[?7h");
+    } else {
+      put(text, style);
+    }
+  };
+
+  let x = 0;
+  while (x < cols) {
+    const [data, style] = cellAt(read, y, x);
+    if (isSecondHalf(data)) {
+      if (x + 1 < cols) {
+        put(PLACEHOLDER, style);
+        putCell(data, style, x + 1);
+        parts.push(`\x1b[${x + 1}G\x1b[P\x1b[C`);
+      } else if (x > 0) {
+        const [before, beforeStyle] = cellAt(read, y, x - 1);
+        if (!isSecondHalf(before)) {
+          parts.push(`\x1b[${x}G`);
+          put(PLACEHOLDER, style);
+          putCell(data, style, x);
+          parts.push(`\x1b[${x}G`);
+          putCell(before, beforeStyle, x - 1);
+        }
+      }
+      x += 1;
+      continue;
+    }
+    if (x + 1 === cols || charWidth(data) !== 2) {
+      putCell(data, style, x);
+      x += 1;
+      continue;
+    }
+    // A wide character with a cell after it. Its own marks are written with
+    // the cursor back on that cell, which joins them to the wide character
+    // rather than to it.
+    const base = String.fromCodePoint(data.codePointAt(0) as number);
+    const own = data.slice(base.length);
+    put(base, style);
+    const [after, afterStyle] = cellAt(read, y, x + 1);
+    if (isSecondHalf(after)) {
+      putCell(after, afterStyle, x + 1);
+      if (own !== "") {
+        parts.push(`\x1b[${x + 2}G`);
+        put(own, style);
+        if (x + 2 < cols) {
+          parts.push(`\x1b[${x + 3}G`);
+        }
+      }
+      x += 2;
+    } else {
+      parts.push(`\x1b[${x + 2}G`);
+      if (own !== "") {
+        put(own, style);
+      }
+      x += 1;
+    }
+  }
+  parts.push(ANSI_RESET);
+  return parts.join("");
+}
+
+/**
  * Render a screen's cells to ANSI-styled row strings.
  *
  * An escape is emitted only where the style changes between adjacent cells,
  * and each row ends with a reset so a consumer's next write starts clean.
+ * Drawn on fresh rows, the rows recreate the cells: see {@link renderCellRow}.
  */
 export function renderCellRows(read: CellReader, cols: number, rows: number): string[] {
   const lines: string[] = [];
   for (let y = 0; y < rows; y += 1) {
-    const parts: string[] = [];
-    let lastStyle: CellStyle | undefined;
-    for (let x = 0; x < cols; x += 1) {
-      const cell = read(y, x);
-      const style = cell === undefined ? DEFAULT_STYLE : cellStyle(cell);
-      if (lastStyle === undefined || !sameStyle(style, lastStyle)) {
-        parts.push(styleToSgr(style));
-        lastStyle = style;
-      }
-      parts.push(cell === undefined || cell.data === "" ? " " : cell.data);
-    }
-    parts.push(ANSI_RESET);
-    lines.push(parts.join(""));
+    lines.push(renderCellRow(read, y, cols));
   }
   return lines;
 }

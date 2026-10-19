@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using Provide.Uterm.Emulator;
 using Provide.Uterm.Session;
 using Provide.Uterm.TermSession;
 using Provide.Uterm.Transports;
@@ -193,10 +194,12 @@ public sealed class ShellConnector : BaseConnector
     public override async Task StartAsync(CancellationToken cancellationToken = default)
     {
         var transport = new Pty.PtyTransport(_shell);
+        // UTF-8, as the reference's PTY connector decodes a local program's
+        // output: it is not a BBS drawing in CP437.
         var session = new TransportSession(
             transport,
             ct => transport.ConnectAsync("local", 0, new ConnectOptions(), ct),
-            new TransportSessionOptions());
+            new TransportSessionOptions { ReceiveEncoding = ReceiveEncoding.Utf8 });
         AttachWatch(session);
         await session.ConnectAsync(cancellationToken);
         LiveSession = session;

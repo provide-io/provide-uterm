@@ -19,6 +19,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlchannel"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/emulator"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/session"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/transports"
 )
@@ -706,5 +707,38 @@ func TestResizeToTheSameSizeDoesNothing(t *testing.T) {
 	s.Resize(80, 24, []byte("x"))
 	if heard || s.ScreenChangeSeq() != before {
 		t.Fatal("a resize to the current size must change nothing")
+	}
+}
+
+// A UTF-8 session decodes the wire as UTF-8, and a character split between two
+// reads reaches the screen whole: the emulator's decoder joins it.
+func TestReceiveEncodingUTF8JoinsACharacterSplitBetweenReads(t *testing.T) {
+	ft := &fakeTransport{}
+	s := newFakeSession(t, ft, Options{ReceiveEncoding: emulator.UTF8})
+	data := []byte("中é!")
+	ft.queue(data[:2])
+	ft.queue(data[2:4])
+	ft.queue(data[4:])
+	waitForScreen(t, s, "中é!")
+}
+
+// With control frames on, a UTF-8 session's data chunks are decoded and
+// re-encoded as UTF-8, not CP437: each read on its own, as in the reference.
+func TestReceiveEncodingUTF8WithControlFrames(t *testing.T) {
+	frame := controlFrameBytes(t, map[string]any{"type": "render_speed", "cps": float64(2400)})
+	ft := &fakeTransport{}
+	s := newFakeSession(t, ft, Options{ControlFrames: true, ReceiveEncoding: emulator.UTF8})
+	ft.queue(append(append([]byte(nil), frame...), []byte("café 中")...))
+	waitForScreen(t, s, "café 中")
+}
+
+// A resize rebuilds the emulator with the session's receive encoding: the
+// redraw is UTF-8, which a CP437 emulator would draw as three characters.
+func TestResizeKeepsTheReceiveEncoding(t *testing.T) {
+	s := New(&fakeTransport{}, func(context.Context) error { return nil },
+		Options{Cols: 10, Rows: 2, ReceiveEncoding: emulator.UTF8})
+	s.Resize(12, 3, []byte("\u4e2d"))
+	if first := strings.SplitN(s.Snapshot().Screen, "\n", 2)[0]; first != "中          " {
+		t.Fatalf("first row = %q", first)
 	}
 }

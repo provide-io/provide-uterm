@@ -15,7 +15,7 @@
  */
 
 import { ControlFrameDecoder, type DataChunk } from "../control-channel/index.ts";
-import { TerminalEmulator } from "../emulator/index.ts";
+import { TerminalEmulator, type TerminalEmulatorOptions } from "../emulator/index.ts";
 import { closeFromException, TransportClose, TransportClosedError } from "../transports/close.ts";
 import { DEFAULT_CAPTURE_MAX_CHARS, TerminalCapture } from "./capture.ts";
 import { type ExpectResult, type SendAndExpectOptions, sendAndExpect } from "./expect.ts";
@@ -56,6 +56,12 @@ export interface TransportSessionOptions {
   cols?: number;
   /** Terminal height. */
   rows?: number;
+  /**
+   * The codec the emulator decodes the wire with, the Python
+   * TransportSession's `receive_encoding`: CP437 by default, as there. See
+   * {@link TerminalEmulatorOptions.receiveEncoding}.
+   */
+  receiveEncoding?: string;
 }
 
 /** A transport plus terminal emulation, behind the session protocol. */
@@ -78,6 +84,7 @@ export class TransportSession {
     this.#emulator = new TerminalEmulator({
       ...(options.cols === undefined ? {} : { cols: options.cols }),
       ...(options.rows === undefined ? {} : { rows: options.rows }),
+      ...(options.receiveEncoding === undefined ? {} : { receiveEncoding: options.receiveEncoding }),
     });
     this.#decoder = options.controlChannel === true ? new ControlFrameDecoder() : undefined;
   }

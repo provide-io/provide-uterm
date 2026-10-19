@@ -14,6 +14,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 )
 
 // validModes is the set of accepted input modes. Port of connector.py _VALID_MODES.
@@ -72,7 +74,7 @@ type PTYConnector struct {
 	flowPaused bool
 	buffer     string
 	dirty      bool
-	decoder    *incrementalDecoder
+	decoder    *screen.UTF8Decoder
 
 	captureSocket *CaptureSocket
 	captureTmpDir string
@@ -159,7 +161,7 @@ func NewPTYConnector(sessionID, displayName string, config map[string]any) (*PTY
 		rows:        coerceIntOr(config["rows"], 24),
 		inputMode:   inputMode,
 		uidMap:      NewUidMap(nil, false),
-		decoder:     &incrementalDecoder{},
+		decoder:     &screen.UTF8Decoder{},
 		geteuid:     os.Geteuid,
 		newPam:      NewPamSession,
 	}

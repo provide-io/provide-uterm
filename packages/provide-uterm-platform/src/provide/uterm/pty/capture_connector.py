@@ -28,6 +28,7 @@ Config keys accepted in connector_config:
 from __future__ import annotations
 
 import asyncio
+import codecs
 import hashlib
 import re
 import time
@@ -131,6 +132,12 @@ class CaptureConnector:
         # Output since the last full clear, replayed into a new emulator when the
         # size changes: see reconfigure.
         self._since_clear = ""
+        # One decoder for the session's whole output stream: the shim sends each
+        # write() as it happens, so a multibyte character can be split across two
+        # frames. Decoding each frame on its own would turn both halves into
+        # U+FFFD; this decoder holds the first half until the rest arrives, and
+        # still replaces bytes that are genuinely invalid.
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self._buffer = ""
         self._pending = ""  # new bytes not yet streamed to the browser
         self._connect_log: list[str] = []
@@ -249,7 +256,7 @@ class CaptureConnector:
     def _ingest_stdout(self, data: bytes) -> str:
         """Take one chunk of captured output into the screen; return it for streaming."""
 
-        raw = data.decode("utf-8", errors="replace")
+        raw = self._decoder.decode(data)
         # Normalize bare \n → \r\n: DYLD capture bypasses the PTY ONLCR
         # driver, so xterm.js would advance cursor down without a CR.
         text = raw.replace("\r\n", "\n").replace("\n", "\r\n")

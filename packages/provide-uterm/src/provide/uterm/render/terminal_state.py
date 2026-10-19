@@ -31,8 +31,16 @@ from typing import Any
 import pyte
 from pyte import charsets as cs
 from pyte import modes as mo
+from wcwidth import wcwidth
 
-from provide.uterm.render.buffer import ANSI_HIDE_CURSOR, ANSI_SHOW_CURSOR, _color_sgr, cell_style, style_to_sgr
+from provide.uterm.render.buffer import (
+    ANSI_HIDE_CURSOR,
+    ANSI_SHOW_CURSOR,
+    _color_sgr,
+    _is_second_half,
+    cell_style,
+    style_to_sgr,
+)
 
 #: DECCKM, application cursor keys, stored the way pyte stores private modes.
 DECCKM = 1 << 5
@@ -74,24 +82,74 @@ def screen_state_prefix(screen: pyte.Screen) -> str:
     return f"{entered}\x1b[H" if entered else ""
 
 
+def _last_cell_redraw(line: Any, columns: int, *, exact: bool) -> str | None:
+    """The column and bytes that redraw a row's last cell, leaving the cursor deferred.
+
+    Returned as ``"<column>H<pen><text>"``, for a caller to prefix with
+    ``ESC [ <row> ;``. The cell is drawn again, in its own style, from the
+    column before; a wide character there occupies the last two cells and is
+    redrawn whole. Marks in the cell, or in a wide character's second cell, are
+    written after it with autowrap off: they join the cell before the cursor,
+    which rests past the last column, and the suffix has already turned
+    autowrap on, so they would otherwise wrap to the next row first.
+
+    A last cell holding a second half whose first half is gone, or the second
+    half of a wide character with marks of its own, cannot be drawn that way:
+    with ``exact`` this returns None for it, and otherwise the nearest thing.
+    """
+    x = columns - 1
+    marks = ""
+    if x > 0 and _is_second_half(line[x].data):
+        before = line[x - 1].data
+        if exact and not (len(before) == 1 and wcwidth(before) == 2):
+            return None
+        marks = line[x].data
+        x -= 1
+    elif exact and _is_second_half(line[x].data):
+        return None
+    cell = line[x]
+    text = cell.data or " "
+    held = text[1:] + marks
+    redraw = f"{x + 1}H{style_to_sgr(*cell_style(cell))}{text[0]}"
+    return f"{redraw}\x1b[?7l{held}\x1b[?7h" if held else redraw
+
+
 def _cursor_placement(screen: pyte.Screen, row: int) -> str:
     """Move to the cursor, reproducing the deferred wrap at the last column.
 
     pyte records a cursor that has just drawn into the last column as
     ``x == columns``: the next printable wraps first. No CUP can address that
-    position, so the last cell is drawn again, in its own style, from the column
-    before -- which leaves any terminal in the same deferred state. A wide
-    character there occupies the last two cells and is redrawn whole.
+    position, so the row's last cell is drawn again (see
+    :func:`_last_cell_redraw`), which leaves any terminal in the same deferred
+    state.
+
+    Some last cells cannot be drawn so: a second half whose first half is gone,
+    or one of a wide character with marks of its own. A cursor gets there
+    deferred when CUU, CUD, IND or RI move it from another row, all of which
+    keep the column. So that is done here too: the cursor is left deferred
+    past a neighbouring row's last cell, redrawn as it is, and moved onto this
+    row with CUD from the row above or CUU from the row below. Either must
+    land on this row despite the scrolling region, and in origin mode the
+    neighbour must be inside it. Only with no such neighbour (a one-row screen,
+    or neighbours that cannot be drawn either) is the last cell drawn as
+    nearly as it can be.
     """
     columns = screen.columns
     if screen.cursor.x < columns:
         return f"\x1b[{row};{screen.cursor.x + 1}H"
-    line = screen.buffer[screen.cursor.y]
-    x = columns - 1
-    if line[x].data == "" and x > 0:
-        x -= 1
-    cell = line[x]
-    return f"\x1b[{row};{x + 1}H{style_to_sgr(*cell_style(cell))}{cell.data or ' '}"
+    y = screen.cursor.y
+    redraw = _last_cell_redraw(screen.buffer[y], columns, exact=True)
+    if redraw is not None:
+        return f"\x1b[{row};{redraw}"
+    top, bottom = screen.margins or (0, screen.lines - 1)
+    origin = mo.DECOM in screen.mode
+    for neighbour, move, lands in ((y - 1, "\x1b[B", y <= bottom), (y + 1, "\x1b[A", y >= top)):
+        if not (lands and 0 <= neighbour < screen.lines) or (origin and not top <= neighbour <= bottom):
+            continue
+        redraw = _last_cell_redraw(screen.buffer[neighbour], columns, exact=True)
+        if redraw is not None:
+            return f"\x1b[{row + neighbour - y};{redraw}{move}"
+    return f"\x1b[{row};{_last_cell_redraw(screen.buffer[y], columns, exact=False)}"
 
 
 def _charset_state(screen: pyte.Screen) -> str:

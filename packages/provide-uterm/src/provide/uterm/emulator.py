@@ -16,10 +16,19 @@ import hashlib
 import time
 from typing import Any
 
+# wcwidth is the width function pyte draws with; _unicode pins the Unicode data it composes with.
 try:
     import pyte
+    from pyte import modes as _modes
+    from wcwidth import wcwidth as _wcwidth
+
+    from provide.uterm import _unicode  # noqa: F401  (pins the Unicode data pyte composes with)
 except ImportError as _e:  # pragma: no cover
-    raise ImportError("pyte is required for TerminalEmulator: pip install 'provide-uterm[emulator]'") from _e
+    # Named, because pyte is no longer the only one: wcwidth and unicodedata2
+    # are emulator dependencies too.
+    raise ImportError(
+        f"{_e.name or 'pyte'} is required for TerminalEmulator: pip install 'provide-uterm[emulator]'"
+    ) from _e
 
 _CP437 = "cp437"
 
@@ -116,6 +125,46 @@ class _TolerantScreen(pyte.Screen):
         super().reset()
         self.charsets_designated = False
 
+    def cursor_to_line(self, line: int | None = None) -> None:
+        """VPA, with origin mode on and no scrolling region taken as absolute.
+
+        pyte asserts that origin mode has a region to count from. The surplus-
+        parameter wrapper below swallowed that AssertionError, which left the
+        cursor wherever the row put it, unclamped and possibly past the last
+        row. With no region there is nothing to offset by, so the row is
+        absolute and clamped to the screen, as in the Go, C# and TypeScript
+        ports.
+        """
+        if self.margins is None and _modes.DECOM in self.mode:
+            self.cursor.y = (line or 1) - 1
+            self.ensure_vbounds()
+            return
+        super().cursor_to_line(line)
+
+    @property
+    def display(self) -> list[str]:
+        """The rows as text, a wide character's second cell left out.
+
+        pyte's own ``display`` reads the first character of every cell it does
+        not skip, and the second cell of a wide character holds the empty
+        string. When the wide character's first cell is overwritten, that cell
+        is no longer skipped, and pyte raised IndexError on every later read of
+        the screen. Here an empty cell is drawn as nothing, as in the Go, C#
+        and TypeScript ports; everything else is as pyte renders it.
+        """
+
+        def render(line: Any) -> Any:
+            after_wide = False
+            for x in range(self.columns):
+                if after_wide:
+                    after_wide = False
+                    continue
+                data = line[x].data
+                after_wide = bool(data) and _wcwidth(data[0]) == 2
+                yield data
+
+        return ["".join(render(self.buffer[y])) for y in range(self.lines)]
+
 
 for _name in (
     "cursor_up",
@@ -148,7 +197,9 @@ for _name in (
     # whole shim exists to prevent, reintroduced quietly by an upgrade. An
     # AttributeError at import names the handler instead, which is the moment to
     # look at what else moved.
-    setattr(_TolerantScreen, _name, _tolerant_of_surplus_params(getattr(pyte.Screen, _name)))
+    # The handler is read from this class, not pyte.Screen, so an override
+    # defined above (cursor_to_line) is the one wrapped.
+    setattr(_TolerantScreen, _name, _tolerant_of_surplus_params(getattr(_TolerantScreen, _name)))
 del _name
 
 
@@ -188,6 +239,13 @@ class TerminalEmulator:
         self.rows = rows
         self.term = term
         self.receive_encoding = receive_encoding
+        # One decoder for the whole stream: a transport hands over whatever its
+        # last read returned, which can end inside a multibyte UTF-8 character.
+        # Decoding each read on its own turned both halves into U+FFFD; this
+        # holds the first until the rest arrives, and still replaces bytes that
+        # are genuinely invalid. (A single-byte codec such as CP437 has no
+        # state to hold, so it decodes exactly as before.)
+        self._decoder = codecs.getincrementaldecoder(receive_encoding)(errors="replace")
         self._screen = _TolerantScreen(cols, rows)
         self._stream = pyte.Stream(self._screen)
         if codecs.lookup(receive_encoding).name == "utf-8":
@@ -209,7 +267,7 @@ class TerminalEmulator:
         Args:
             data: Raw bytes from a transport or file.
         """
-        text = data.decode(self.receive_encoding, errors="replace")
+        text = self._decoder.decode(data)
         self._stream.feed(text)
         # Retain a bounded tail of the raw decoded stream (ANSI/control intact)
         # so consumers can recover content that scrolled off pyte's viewport

@@ -29,6 +29,10 @@ from pathlib import Path
 from typing import Any
 
 import pyte
+import unicodedata2
+from wcwidth import wcwidth
+
+from provide.uterm.emulator import _TolerantScreen
 
 OUT = Path(__file__).with_name("vt_golden.json")
 
@@ -36,9 +40,11 @@ COLS = 20
 ROWS = 6
 
 
-def _capture(cols: int, rows: int, chunks: list[str], *, use_utf8: bool = True) -> dict[str, Any]:
+def _capture(
+    cols: int, rows: int, chunks: list[str], *, use_utf8: bool = True, screen_class: type[pyte.Screen] = pyte.Screen
+) -> dict[str, Any]:
     """Feed chunks to a fresh screen and capture the full observable state."""
-    screen = pyte.Screen(cols, rows)
+    screen = screen_class(cols, rows)
     stream = pyte.Stream(screen)
     stream.use_utf8 = use_utf8
     for chunk in chunks:
@@ -192,15 +198,129 @@ CASES: list[tuple[str, int, int, list[str]]] = [
     ("extended background truncated", COLS, ROWS, ["\x1b[48;2;1ma"]),
     ("256-colour index out of range", COLS, ROWS, ["\x1b[38;5;999ma"]),
     ("margins that are too narrow are ignored", COLS, ROWS, ["\x1b[3;3r\x1b[1;1Hx"]),
+    # ── Full reset (RIS) ───────────────────────────────────────────────────
+    ("full reset clears the screen and homes the cursor", COLS, ROWS, ["abc\ndef\x1b[3;5H\x1bcx"]),
+    ("full reset clears the pen", COLS, ROWS, ["\x1b[1;4;31;42m\x1bcx"]),
+    ("full reset turns insert mode off", COLS, ROWS, ["\x1b[4h\x1bcabc\x1b[1;1HX"]),
+    ("full reset shows the cursor", COLS, ROWS, ["\x1b[?25l\x1bc"]),
+    ("full reset clears the scrolling region", COLS, ROWS, ["\x1b[2;4r\x1bca\x1b[4;1H\nb"]),
+    ("full reset restores the tab stops", COLS, ROWS, ["\x1b[3g\x1bca\tb"]),
+    ("full reset keeps the saved cursor", COLS, ROWS, ["\x1b[3;5H\x1b7\x1bc\x1b8x"]),
+    ("full reset split across feeds", COLS, ROWS, ["abc\x1b", "cx"]),
+    # ── Character sets in UTF-8 mode ───────────────────────────────────────
+    ("designations are consumed but not applied", COLS, ROWS, ["\x1b(0q\x1b)0\x1b(Uq\x1b(Vq"]),
+    ("shift out and shift in are ignored", COLS, ROWS, ["a\x0eb\x0fc\x0e"]),
+    # ── Tab stops (HTS, TBC) ───────────────────────────────────────────────
+    ("set a tab stop", COLS, ROWS, ["\x1b[1;4H\x1bH\ra\tb"]),
+    ("clear the tab stop at the cursor", COLS, ROWS, ["\x1b[1;9H\x1b[g\ra\tb"]),
+    ("clear the tab stop at the cursor with a zero", COLS, ROWS, ["\x1b[1;9H\x1b[0g\ra\tb"]),
+    ("clear a column that has no tab stop", COLS, ROWS, ["\x1b[1;5H\x1b[g\ra\tb"]),
+    ("clear every tab stop", COLS, ROWS, ["\x1b[3ga\tb"]),
+    ("an unknown tab clear does nothing", COLS, ROWS, ["\x1b[1;9H\x1b[2g\ra\tb"]),
+    ("a tab stop at the last column", COLS, ROWS, ["\x1b[3g\x1b[1;20H\x1bH\x1b[1;3H\tb"]),
+    ("tab stops after clearing and setting", COLS, ROWS, ["\x1b[3g\x1b[1;6H\x1bH\x1b[1;12H\x1bH\r\ta\tb\tc"]),
+    ("a tab from a pending wrap", COLS, ROWS, ["x" * COLS + "\ty"]),
+    ("a tab stop set twice is cleared once", COLS, ROWS, ["\x1b[1;4H\x1bH\x1bH\x1b[g\ra\tb"]),
+    ("a tab stop set at a pending wrap", COLS, ROWS, ["\x1b[3g" + "x" * COLS + "\x1bH\r\ty"]),
+    # ── Autowrap (DECAWM) ──────────────────────────────────────────────────
+    ("autowrap off overwrites the last column", COLS, ROWS, ["\x1b[?7l" + "x" * (COLS - 1) + "abc"]),
+    ("autowrap off then on wraps again", COLS, ROWS, ["\x1b[?7l\x1b[?7h" + "x" * (COLS + 2)]),
+    ("autowrap off keeps a pending wrap", COLS, ROWS, ["\x1b[?7l" + "x" * COLS + "\x1b[Dy"]),
+    ("a control at a pending wrap still wraps", COLS, ROWS, ["x" * COLS + "\x01", "y"]),
+    ("a control at a pending wrap with autowrap off", COLS, ROWS, ["\x1b[?7l" + "x" * COLS + "\x01", "y"]),
+    ("a non-private mode this screen does not model", COLS, ROWS, ["\x1b[12habc\ndef\x1b[12l"]),
+    # ── Origin mode (DECOM) and the scrolling region ───────────────────────
+    ("origin mode homes to the top of the region", COLS, ROWS, ["\x1b[3;5r\x1b[?6hx"]),
+    ("origin mode addresses rows within the region", COLS, ROWS, ["\x1b[3;5r\x1b[?6h\x1b[2;4Hx"]),
+    ("origin mode ignores a position outside the region", COLS, ROWS, ["\x1b[3;5r\x1b[?6h\x1b[2;2H\x1b[9;9Hx"]),
+    ("origin mode clamps the column", COLS, ROWS, ["\x1b[3;5r\x1b[?6h\x1b[1;99Hx"]),
+    ("origin mode line position is relative", COLS, ROWS, ["\x1b[3;5r\x1b[?6h\x1b[2dx"]),
+    ("origin mode line position clamps to the region", COLS, ROWS, ["\x1b[3;5r\x1b[?6h\x1b[9dx"]),
+    ("origin mode off homes to the top of the screen", COLS, ROWS, ["\x1b[3;5r\x1b[?6h\x1b[?6lx"]),
+    ("a region set in origin mode homes to its top", COLS, ROWS, ["\x1b[?6h\x1b[2;4rx"]),
+    ("origin mode without a region is absolute", COLS, ROWS, ["\x1b[?6h\x1b[3;3Hx"]),
+    ("origin mode keeps cursor movement in the region", COLS, ROWS, ["\x1b[2;4r\x1b[?6h\x1b[9B\x1b[9Cx"]),
+    ("cursor up stops at the top of the region", COLS, ROWS, ["\x1b[2;5r\x1b[4;1H\x1b[9Ax"]),
+    ("cursor up from above the region", COLS, ROWS, ["\x1b[3;5r\x1b[1;1H\x1b[Ax"]),
+    ("cursor down stops at the bottom of the region", COLS, ROWS, ["\x1b[2;4r\x1b[2;1H\x1b[9Bx"]),
+    ("cursor down from below the region", COLS, ROWS, ["\x1b[2;3r\x1b[6;1H\x1b[Bx"]),
+    ("cursor next line stops at the bottom of the region", COLS, ROWS, ["\x1b[2;4r\x1b[2;5H\x1b[9Ex"]),
+    ("cursor previous line stops at the top of the region", COLS, ROWS, ["\x1b[2;4r\x1b[4;5H\x1b[9Fx"]),
+    ("line feed below the region", COLS, ROWS, ["\x1b[2;3r\x1b[6;1H\nx"]),
+    ("reverse index above the region", COLS, ROWS, ["\x1b[3;5r\x1b[1;1H\x1bMx"]),
+    ("resetting the region does not home", COLS, ROWS, ["\x1b[2;4r\x1b[5;5H\x1b[rx"]),
+    ("a region with only a top", COLS, ROWS, ["ab\x1b[5;5H\x1b[3rc\x1b[3;1Hd\x1b[6;1H\ne"]),
+    ("a region with only a bottom", COLS, ROWS, ["\x1b[5;5H\x1b[;3rx"]),
+    # ── The savepoint stack (DECSC, DECRC) ─────────────────────────────────
+    ("a second restore homes", COLS, ROWS, ["\x1b[3;5H\x1b7\x1b[1;1H\x1b8\x1b[1;9H\x1b8x"]),
+    ("saves are restored last in first out", COLS, ROWS, ["\x1b[2;2H\x1b7\x1b[3;3H\x1b7\x1b[6;6H\x1b8a\x1b8b\x1b8c"]),
+    ("restore clamps a pending wrap", COLS, ROWS, ["x" * COLS + "\x1b7\x1b8y"]),
+    ("restore clamps to the region", COLS, ROWS, ["\x1b[6;1H\x1b7\x1b[2;4r\x1b8x"]),
+    ("restore brings back origin mode", COLS, ROWS, ["\x1b[2;4r\x1b[?6h\x1b7\x1b[?6l\x1b8\x1b[1;1Hx"]),
+    ("restore does not clear origin mode", COLS, ROWS, ["\x1b[2;4r\x1b7\x1b[?6h\x1b8\x1b[1;1Hx"]),
+    ("restore with nothing saved clears origin mode", COLS, ROWS, ["\x1b[2;4r\x1b[?6h\x1b[3;3H\x1b8\x1b[1;1Hx"]),
+    ("restore brings back autowrap", COLS, ROWS, ["\x1b7\x1b[?7l\x1b8" + "x" * (COLS + 1)]),
+    ("restore does not clear autowrap", COLS, ROWS, ["\x1b[?7l\x1b7\x1b[?7h\x1b8" + "x" * (COLS + 1)]),
+    ("restore brings back the pen and visibility", COLS, ROWS, ["\x1b[1;31m\x1b[?25l\x1b7\x1b[0m\x1b[?25h\x1b8x"]),
+    # ── New line mode (LNM) ────────────────────────────────────────────────
+    ("new line mode adds a carriage return", COLS, ROWS, ["\x1b[20habc\ndef"]),
+    ("new line mode off", COLS, ROWS, ["\x1b[20h\x1b[20labc\ndef"]),
+    ("new line mode for vertical tab and form feed", COLS, ROWS, ["\x1b[20hab\x0bc\x0cd"]),
+    ("new line mode leaves index alone", COLS, ROWS, ["\x1b[20habc\x1bDx"]),
+    ("new line mode applies to next line", COLS, ROWS, ["\x1b[20habc\x1bEx"]),
+    ("new line mode on a wrap", COLS, ROWS, ["\x1b[20h" + "x" * (COLS + 1)]),
+    ("full reset turns new line mode off", COLS, ROWS, ["\x1b[20h\x1bcab\ncd"]),
+    ("full reset turns origin mode off", COLS, ROWS, ["\x1b[2;4r\x1b[?6h\x1bc\x1b[1;1Hx"]),
+    ("full reset turns autowrap back on", COLS, ROWS, ["\x1b[?7l\x1bc" + "x" * (COLS + 1)]),
+    # ── C1 controls ────────────────────────────────────────────────────────
+    ("c1 csi", COLS, ROWS, ["ab\x9b2Dx"]),
+    ("c1 csi with a private mode", COLS, ROWS, ["\x9b?25lx"]),
+    ("c1 csi split across feeds", COLS, ROWS, ["ab\x9b", "2Dx"]),
+    ("c1 osc terminated by bel", COLS, ROWS, ["a\x9d0;t\x07b"]),
+    ("c1 osc terminated by c1 st", COLS, ROWS, ["a\x9d0;t\x9cb"]),
+    ("c1 osc terminated by c0 st", COLS, ROWS, ["a\x9d0;t\x1b\\b"]),
+    ("c0 osc terminated by c1 st", COLS, ROWS, ["a\x1b]0;t\x9cb"]),
+    ("an escape inside an osc does not end it", COLS, ROWS, ["a\x1b]0;t\x1bxy\x07b"]),
+    ("an osc palette reset ends at once", COLS, ROWS, ["a\x1b]Rbc"]),
+    ("a c1 osc palette set ends at once", COLS, ROWS, ["a\x9dPbc"]),
+    ("an osc whose code is bel", COLS, ROWS, ["a\x1b]\x07bc\x07d"]),
+    # ── Character width (wcwidth) ──────────────────────────────────────────
+    ("a wide character takes two cells", COLS, ROWS, ["\u4e2dx"]),
+    ("an emoji takes two cells", COLS, ROWS, ["\U0001f600x"]),
+    ("a fullwidth form takes two cells", COLS, ROWS, ["\uff21x"]),
+    ("a wide character with a pen", COLS, ROWS, ["\x1b[1;31m\u4e2d\x1b[0mx"]),
+    ("a wide character in the last column", COLS, ROWS, ["x" * (COLS - 1) + "\u4e2d"]),
+    ("a wide character in the last column then text", COLS, ROWS, ["x" * (COLS - 1) + "\u4e2dy"]),
+    ("a wide character at a pending wrap", COLS, ROWS, ["x" * COLS + "\u4e2dy"]),
+    ("a wide character at a pending wrap with autowrap off", COLS, ROWS, ["\x1b[?7l" + "x" * COLS + "\u4e2d"]),
+    ("a wide character over the second half of another", COLS, ROWS, ["\u4e2d\x1b[1;2Hab"]),
+    ("a wide character in insert mode", COLS, ROWS, ["abcd\x1b[1;1H\x1b[4h\u4e2d"]),
+    ("cursor back from a wide character in the last column", COLS, ROWS, ["x" * (COLS - 1) + "\u4e2d\x1b[Dy"]),
+    ("a combining mark joins the cell before it", COLS, ROWS, ["e\u0301x"]),
+    ("combining marks that compose and one that does not", COLS, ROWS, ["a\u0301\u0302q\u0307"]),
+    ("a combining mark after a pending wrap joins the row above", COLS, ROWS, ["x" * COLS + "\u0301y"]),
+    ("a combining mark at the top left is dropped", COLS, ROWS, ["\u0301x"]),
+    ("a combining mark at column zero joins the row above", COLS, ROWS, ["abc\r\n\u0301x"]),
+    ("a combining mark after a wide character joins its second cell", COLS, ROWS, ["\u4e2d\u0301x"]),
+    ("a zero width space ends the run", COLS, ROWS, ["a\u200bb", "c"]),
+    ("a zero width joiner ends the run", COLS, ROWS, ["\U0001f468\u200d\U0001f469x"]),
+    ("a variation selector ends the run", COLS, ROWS, ["\u2764\ufe0fx"]),
+    ("a hangul medial vowel ends the run", COLS, ROWS, ["\u1100\u1161x"]),
+    ("ambiguous width is narrow", COLS, ROWS, ["\u00b1\u00e9\u2500x"]),
+    # U+105C9 is a Unicode 16 composite of these two. The pinned data (18.0)
+    # composes them; CPython's own unicodedata before 3.14 would not.
+    ("a unicode 16 composite composes", COLS, ROWS, ["\U000105d2\u0307x"]),
+    ("marks composed out of canonical order", COLS, ROWS, ["a\u0323\u0302q\u0302\u0323"]),
+    ("hangul jamo drawn as marks stay apart", COLS, ROWS, ["\u1100\u1161"]),
 ]
 
 
-# Streams where pyte's own behaviour is not worth reproducing. A C0 control
-# it has no handler for stalls its parser: everything after the control is
-# swallowed for the life of the stream, so one stray byte freezes the display
-# permanently. The Go port draws such a control instead, and this port follows
-# Go — the ports are meant to agree with each other, and a stall is a bug.
-# Recorded so the choice is visible rather than assumed.
+# Streams with a C0 control pyte has no handler for. It belongs to the run of
+# text it arrived in, it has no width, and pyte stops drawing the run there:
+# the rest of that run is dropped, though the stream is parsed on as before.
+# The Go and C# ports do the same, and so does this one. They are kept under
+# "stall_divergences", the name they were recorded under when this port drew
+# the control instead, so that the corpus only ever grows.
 STALL_CASES: list[tuple[str, list[str]]] = [
     ("unhandled c0 swallows the rest of the stream", ["a\x01bc"]),
     ("a second unhandled c0 changes nothing", ["a\x01\x01bc"]),
@@ -224,7 +344,96 @@ DEC_GRAPHICS_CASES: list[tuple[str, int, int, list[str]]] = [
     ("save and restore keep the charset", COLS, ROWS, ["\x1b(0\x1b7\x1b(B\x1b8lqk"]),
     ("restore with nothing saved keeps the charset", COLS, ROWS, ["\x1b(0\x1b8lqk"]),
     ("styled graphics keep their attributes", COLS, ROWS, ["\x1b[1;32m\x1b(0qq\x1b(B\x1b[0mq"]),
+    # 0x9B and above in the C1 range are controls to the reference (CSI, ST,
+    # OSC), so the 0x80 row stops short of them.
+    ("ibmpc from 0x80 to 0x9a", COLS, ROWS, ["\x1b(U" + "".join(map(chr, range(0x80, 0x9B)))]),
+    ("ibmpc for the c1 bytes that are not controls", COLS, ROWS, ["\x1b(U\x9c\x9e\x9f"]),
+    ("ibmpc draws the c0 bytes that are text", COLS, ROWS, ["\x1b(U\x01\x02\x1f\x10"]),
+    ("a control ends the run of text in ascii", COLS, ROWS, ["\x1b(Ua\x01b\x1b(Bc\x01d", "e"]),
+    ("ibmpc above 0x9f", COLS, ROWS, ["\x1b(U" + "".join(map(chr, range(0xA0, 0x100)))]),
+    ("ibmpc leaves printable ascii alone", COLS, ROWS, ["\x1b(U !09AZaz~\x7f"]),
+    ("ibmpc in g1 shifted", COLS, ROWS, ["\x1b)U\x0e\xcd\xba\xb0\x0f\xcd"]),
+    ("ibmpc leaves code points above 255 alone", COLS, ROWS, ["\x1b(U\u2500\u00e9\u20ac"]),
+    ("vax42 below 0x80", COLS, ROWS, ["\x1b(V" + "".join(map(chr, range(0x20, 0x7F)))]),
+    ("vax42 above 0x9f", COLS, ROWS, ["\x1b(V" + "".join(map(chr, range(0xA0, 0x100)))]),
+    ("full reset returns the sets to ascii and dec", COLS, ROWS, ["\x1b(0\x1b)U\x0e\x1bcqx\x0eq"]),
+    ("full reset keeps the saved sets", COLS, ROWS, ["\x1b(U\x1b7\x1bc\xcd\x1b8\xcd"]),
 ]
+
+
+# Streams plain pyte raises on, recorded through the screen the Python
+# emulator runs (provide.uterm.emulator._TolerantScreen), which fixes both: a
+# line position in origin mode with no region is absolute and clamped, and the
+# empty second cell of a wide character whose first cell was overwritten is
+# displayed as nothing. Every port reproduces these.
+REFERENCE_FIX_CASES: list[tuple[str, int, int, list[str]]] = [
+    ("half of an overwritten wide character", COLS, ROWS, ["\u4e2d\x1b[1;1Ha"]),
+    ("a narrow character over the first half of a wide one", COLS, ROWS, ["\u4e2d\u4e2d\x1b[1;3Hx"]),
+    ("a line position in origin mode with no region", COLS, ROWS, ["\x1b[?6h\x1b[1;5H\x1b[3dx"]),
+    ("a line position past the screen in origin mode with no region", COLS, ROWS, ["\x1b[?6h\x1b[9dx"]),
+]
+
+
+def _width_ranges() -> list[list[int]]:
+    """Every run of code points whose wcwidth is not 1, as [first, last, width]."""
+    ranges: list[list[int]] = []
+    for point in range(0x110000):
+        width = wcwidth(chr(point))
+        if width == 1:
+            continue
+        if ranges and ranges[-1][1] == point - 1 and ranges[-1][2] == width:
+            ranges[-1][1] = point
+        else:
+            ranges.append([point, point, width])
+    return ranges
+
+
+def _combining_classes() -> list[list[int]]:
+    """Every run of code points with one non-zero combining class, as [first, last, class]."""
+    ranges: list[list[int]] = []
+    for point in range(0x110000):
+        combining = unicodedata2.combining(chr(point))
+        if not combining:
+            continue
+        if ranges and ranges[-1][1] == point - 1 and ranges[-1][2] == combining:
+            ranges[-1][1] = point
+        else:
+            ranges.append([point, point, combining])
+    return ranges
+
+
+def _combining_ranges() -> list[list[int]]:
+    """Every run of code points with a non-zero combining class, as [first, last]."""
+    ranges: list[list[int]] = []
+    for first, last, _ in _combining_classes():
+        if ranges and ranges[-1][1] == first - 1:
+            ranges[-1][1] = last
+        else:
+            ranges.append([first, last])
+    return ranges
+
+
+def _canonical_decompositions() -> list[list[int]]:
+    """Each canonical one-level decomposition, as [code point, first, second or -1]."""
+    out = []
+    for point in range(0x110000):
+        # Hangul syllables decompose by arithmetic in every port, not by table.
+        if 0xAC00 <= point <= 0xD7A3:
+            continue
+        mapping = unicodedata2.decomposition(chr(point))
+        if mapping and not mapping.startswith("<"):
+            parts = [int(part, 16) for part in mapping.split()]
+            out.append([point, parts[0], parts[1] if len(parts) > 1 else -1])
+    return out
+
+
+def _composition_pairs() -> list[list[int]]:
+    """Each primary composite, as [starter, combiner, composite]: what NFC recomposes."""
+    return sorted(
+        [first, second, point]
+        for point, first, second in _canonical_decompositions()
+        if second >= 0 and unicodedata2.normalize("NFC", chr(first) + chr(second)) == chr(point)
+    )
 
 
 def main() -> int:
@@ -240,6 +449,10 @@ def main() -> int:
         # against. Exported rather than transcribed: its first sixteen
         # entries are pyte's own base palette, not the uterm BBS one.
         "fg_bg_256": list(pyte.graphics.FG_BG_256),
+        # The tables ESC ( U and ESC ( V draw from, as code points, for the
+        # same reason: the port's copies are checked entry by entry against
+        # these, including the C0 entries no stream can reach.
+        "charset_tables": {code: [ord(c) for c in pyte.charsets.MAPS[code]] for code in ("U", "V")},
         "cases": records,
         "dec_graphics_cases": [
             {
@@ -254,6 +467,29 @@ def main() -> int:
         "stall_divergences": [
             {"name": name, "chunks": chunks, "pyte": _capture(COLS, ROWS, chunks)} for (name, chunks) in STALL_CASES
         ],
+        "reference_fix_cases": [
+            {
+                "name": name,
+                "cols": cols,
+                "rows": rows,
+                "chunks": chunks,
+                "state": _capture(cols, rows, chunks, screen_class=_TolerantScreen),
+            }
+            for (name, cols, rows, chunks) in REFERENCE_FIX_CASES
+        ],
+        # The width pyte gives each code point (wcwidth) and the Unicode data
+        # it composes a combining mark with (unicodedata2, pinned: see
+        # provide/uterm/_unicode.py), exported for the same reason as
+        # fg_bg_256: every port's tables are checked against these, so a
+        # wcwidth or Unicode upgrade shows up as a failing port until
+        # scripts/gen_unicode_tables.py is rerun.
+        "wcwidth_version": version("wcwidth"),
+        "unicode_version": unicodedata2.unidata_version,
+        "wcwidth_ranges": _width_ranges(),
+        "combining_ranges": _combining_ranges(),
+        "combining_classes": _combining_classes(),
+        "canonical_decompositions": _canonical_decompositions(),
+        "composition_pairs": _composition_pairs(),
     }
     OUT.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {OUT} ({len(records)} cases)")

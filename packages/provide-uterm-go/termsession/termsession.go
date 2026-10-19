@@ -53,9 +53,10 @@ type ControlFrameFunc func(payload map[string]any)
 // It satisfies session.Session, session.ExpectSession, and
 // session.ConnectionChecker.
 type TransportSession struct {
-	transport    transports.ConnectionTransport
-	cols, rows   int
-	sendEncoding SendEncoding
+	transport       transports.ConnectionTransport
+	cols, rows      int
+	sendEncoding    SendEncoding
+	receiveEncoding emulator.Encoding
 	// connectTransport is the single transport-specific hook (the Python
 	// _connect_transport override point).
 	connectTransport func(ctx context.Context) error
@@ -86,6 +87,10 @@ type Options struct {
 	Cols, Rows int
 	// SendEncoding defaults to EncodingUTF8.
 	SendEncoding SendEncoding
+	// ReceiveEncoding is the codec the emulator decodes the wire with, the
+	// Python TransportSession's receive_encoding. The zero value is CP437, its
+	// default.
+	ReceiveEncoding emulator.Encoding
 	// ControlFrames enables inline DLE/STX control-frame parsing. When true,
 	// a server-emitted control frame (e.g. a "render_speed" event) is parsed
 	// out and routed to AddControlFrameWatch callbacks instead of appearing
@@ -110,8 +115,9 @@ func New(transport transports.ConnectionTransport, connect func(ctx context.Cont
 		cols:             opts.Cols,
 		rows:             opts.Rows,
 		sendEncoding:     opts.SendEncoding,
+		receiveEncoding:  opts.ReceiveEncoding,
 		connectTransport: connect,
-		emu:              emulator.New(opts.Cols, opts.Rows, ""),
+		emu:              emulator.NewWithEncoding(opts.Cols, opts.Rows, "", opts.ReceiveEncoding),
 		updateCh:         make(chan struct{}),
 	}
 	if opts.ControlFrames {
@@ -334,7 +340,7 @@ func (s *TransportSession) Resize(cols, rows int, redraw []byte) {
 		return
 	}
 	s.cols, s.rows = cols, rows
-	s.emu = emulator.New(cols, rows, "")
+	s.emu = emulator.NewWithEncoding(cols, rows, "", s.receiveEncoding)
 	s.emu.Process(redraw)
 	s.changeSeq++
 	close(s.updateCh)
@@ -408,12 +414,20 @@ func (s *TransportSession) readerLoop(ctx context.Context, done chan<- struct{})
 
 // splitControlFrames runs data through the control-frame decoder. Control
 // chunks are dispatched to control-frame watchers; data chunks are re-joined
-// and returned (CP437-re-encoded, matching the raw wire encoding the
-// emulator/watchers already expect). ok is false when the read contained
+// and returned re-encoded with the receive encoding, matching the raw wire
+// encoding the emulator/watchers already expect. As in the reference each
+// read is decoded on its own here, so with control frames on a character split
+// between two reads is replaced with U+FFFD before the emulator sees it. ok is
+// false when the read contained
 // only control frames — there is nothing left for the caller to feed onward
 // this round.
 func (s *TransportSession) splitControlFrames(data []byte) (out []byte, ok bool) {
-	chunks, err := s.controlDecoder.Feed(screen.DecodeCP437(data))
+	utf8 := s.receiveEncoding == emulator.UTF8
+	decoded := screen.DecodeCP437(data)
+	if utf8 {
+		decoded = screen.DecodeUTF8(data)
+	}
+	chunks, err := s.controlDecoder.Feed(decoded)
 	if err != nil {
 		// A malformed control-frame stream is treated like any other
 		// unusable read: skip this round rather than kill the reader.
@@ -439,6 +453,9 @@ func (s *TransportSession) splitControlFrames(data []byte) (out []byte, ok bool)
 	}
 	if text.Len() == 0 {
 		return nil, false
+	}
+	if utf8 {
+		return []byte(text.String()), true
 	}
 	return screen.EncodeCP437(text.String()), true
 }

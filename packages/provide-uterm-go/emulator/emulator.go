@@ -36,16 +36,27 @@ const rawTailMax = 4096
 type TerminalEmulator struct {
 	cols, rows int
 	term       string
-	screen     *vt.Screen
-	stream     *vt.Stream
-	dirty      bool
-	last       *session.Snapshot
-	rawTail    string
+	encoding   Encoding
+	// utf8 is the decoder for the whole stream in a UTF-8 session: a
+	// transport hands over whatever its last read returned, which can end
+	// inside a multibyte character.
+	utf8    screen.UTF8Decoder
+	screen  *vt.Screen
+	stream  *vt.Stream
+	dirty   bool
+	last    *session.Snapshot
+	rawTail string
 }
 
-// New creates an emulator; cols/rows <= 0 select 80×25, empty term selects
-// "ANSI".
+// New creates a CP437 emulator; cols/rows <= 0 select 80×25, empty term
+// selects "ANSI".
 func New(cols, rows int, term string) *TerminalEmulator {
+	return NewWithEncoding(cols, rows, term, CP437)
+}
+
+// NewWithEncoding creates an emulator that decodes what it is fed with
+// encoding, as New does otherwise.
+func NewWithEncoding(cols, rows int, term string, encoding Encoding) *TerminalEmulator {
 	if cols <= 0 {
 		cols = 80
 	}
@@ -56,20 +67,32 @@ func New(cols, rows int, term string) *TerminalEmulator {
 		term = "ANSI"
 	}
 	s := vt.NewScreen(cols, rows)
+	stream := vt.NewStream(s)
+	// A UTF-8 session honours DEC special graphics (ESC ( 0, SO/SI), as the
+	// reference's does: its decoded text no longer needs the stream's UTF-8
+	// mode. A CP437 session keeps the default, so a stray SO in ANSI art
+	// stays inert.
+	stream.UseUTF8 = encoding != UTF8
 	return &TerminalEmulator{
-		cols:   cols,
-		rows:   rows,
-		term:   term,
-		screen: s,
-		stream: vt.NewStream(s),
-		dirty:  true,
+		cols:     cols,
+		rows:     rows,
+		term:     term,
+		encoding: encoding,
+		screen:   s,
+		stream:   stream,
+		dirty:    true,
 	}
 }
 
-// Process feeds raw bytes (CP437) through the emulator, retaining a bounded
-// tail of the decoded stream (ANSI/control intact).
+// Process feeds raw bytes through the emulator, decoded with its encoding,
+// retaining a bounded tail of the decoded stream (ANSI/control intact).
 func (e *TerminalEmulator) Process(data []byte) {
-	text := screen.DecodeCP437(data)
+	var text string
+	if e.encoding == UTF8 {
+		text = e.utf8.Decode(data)
+	} else {
+		text = screen.DecodeCP437(data)
+	}
 	e.stream.Feed(text)
 	if text != "" {
 		combined := e.rawTail + text
@@ -154,8 +177,9 @@ func (e *TerminalEmulator) GetSnapshot() session.Snapshot {
 // the state that stream assumes and the cells do not show: the alternate
 // screen before the rows, and after them the scroll region, origin mode, the
 // real cursor (deferred wrap included), autowrap/insert/new-line modes, input
-// modes, the pen and cursor visibility. This emulator decodes CP437, where the
-// stream ignores charset designations and SO/SI, so it has none to restore.
+// modes, the G0/G1 sets and shift where the stream honours them (a UTF-8
+// session; a CP437 one ignores them, so has none to restore), the pen and
+// cursor visibility.
 func (e *TerminalEmulator) ANSIScreen() string {
 	rows := strings.Join(render.RenderScreenLines(e.screen, e.cols, e.rows), "\n")
 	return render.ScreenStatePrefix(e.screen) + rows + render.ScreenStateSuffix(e.screen, !e.stream.UseUTF8)

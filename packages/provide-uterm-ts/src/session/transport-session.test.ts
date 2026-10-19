@@ -100,6 +100,24 @@ describe("TransportSession lifecycle", () => {
     expect(session.isConnected()).toBe(false);
   });
 
+  it("decodes with the receive encoding it is given, across reads", async () => {
+    // The transport hands over one character per byte. A UTF-8 session joins
+    // a character split between two reads; the default is CP437.
+    const transport = new ScriptedTransport();
+    const session = new TransportSession({ transport, cols: 6, rows: 1, receiveEncoding: "utf-8" });
+    await session.connect();
+    await transport.feed("\xe4\xb8");
+    await transport.feed("\xad\xc3\xa9");
+    expect(session.snapshot().screen).toBe("\u4e2d\u00e9   ");
+    await session.close();
+    const { transport: cp437, session: plain } = await build();
+    await cp437.feed("\xcd");
+    expect(plain.snapshot().screen).toBe(
+      `\u2550${" ".repeat(79)}\n${`${" ".repeat(80)}\n`.repeat(23)}${" ".repeat(80)}`,
+    );
+    await plain.close();
+  });
+
   it("takes the terminal size it is given", async () => {
     const transport = new ScriptedTransport();
     const session = new TransportSession({ transport, cols: 100, rows: 40 });

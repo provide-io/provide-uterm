@@ -33,18 +33,23 @@ func captureSock(t *testing.T, tag string) string {
 	return p
 }
 
-func sendCapture(t *testing.T, path string, payload string) {
+// sendCapture writes each payload as its own stdout frame, in order, on one
+// connection: the listener serves each connection on its own goroutine, so
+// frames sent on two connections may arrive in either order.
+func sendCapture(t *testing.T, path string, payloads ...string) {
 	t.Helper()
 	conn, err := net.Dial("unix", path)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
 	defer func() { _ = conn.Close() }()
-	hdr := make([]byte, 5)
-	hdr[0] = uptty.ChannelStdout
-	binary.BigEndian.PutUint32(hdr[1:], uint32(len(payload)))
-	if _, err := conn.Write(append(hdr, payload...)); err != nil {
-		t.Fatalf("write: %v", err)
+	for _, payload := range payloads {
+		hdr := make([]byte, 5)
+		hdr[0] = uptty.ChannelStdout
+		binary.BigEndian.PutUint32(hdr[1:], uint32(len(payload)))
+		if _, err := conn.Write(append(hdr, payload...)); err != nil {
+			t.Fatalf("write: %v", err)
+		}
 	}
 }
 

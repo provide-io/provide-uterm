@@ -34,10 +34,14 @@ all = [
     "fastapi>=0.142.2", "uvicorn>=0.24", "pyjwt>=2.15.1", "websockets>=16.0",
     "textual>=0.50", "httpx2>=2.10", "asyncssh>=2.24.1",
     "provide-uterm-annotation>=0.5.6",
-    # core's emulator dep — declared here so `uv sync --extra all` installs it
-    # from the lock instead of a side-channel `uv pip install pyte` that
-    # escapes UV_FROZEN (unpinned, hash-unverified).
+    # core's emulator deps — declared here so `uv sync --extra all` installs
+    # them from the lock instead of a side-channel `uv pip install pyte` that
+    # escapes UV_FROZEN (unpinned, hash-unverified). Kept in step with core's
+    # `emulator` extra: without wcwidth and unicodedata2 the emulator does not
+    # import.
     "pyte>=0.8",
+    "wcwidth>=0.8.4",
+    "unicodedata2>=18.0.0",
 ]
 dev = [
     "pytest>=9.0",

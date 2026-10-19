@@ -124,10 +124,11 @@ COPY packages/provide-uterm-platform/ packages/provide-uterm-platform/
 COPY --from=frontend-build /src/${FRONTEND_DIR}/ ${FRONTEND_DIR}/
 
 # Install the server with all extras (pulls core + client + annotation workspace
-# deps AND core's `emulator` dep pyte, now declared in server[all], from the
-# lock) NON-editable so the members are baked into /app/.venv and the runtime
-# stage needs only the venv. No side-channel `uv pip install pyte` — that
-# escaped UV_FROZEN (unpinned/hash-unverified); pyte is now in uv.lock.
+# deps AND core's `emulator` deps pyte, wcwidth and unicodedata2, declared in
+# server[all], from the lock) NON-editable so the members are baked into
+# /app/.venv and the runtime stage needs only the venv. No side-channel
+# `uv pip install pyte` — that escaped UV_FROZEN (unpinned/hash-unverified);
+# pyte is now in uv.lock.
 RUN uv sync --frozen --no-dev --no-editable --package provide-uterm-server --extra all
 
 # setuptools package-data globs historically drop leading-dot dirs; ensure the

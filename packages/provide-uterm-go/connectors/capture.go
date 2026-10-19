@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/emulator"
 	uptty "github.com/provide-io/provide-uterm/packages/provide-uterm-go/pty"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/termsession"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/transports"
@@ -45,8 +46,8 @@ const captureReplayMax = 512 * 1024
 // is what the runtime needs — a Session() for the worker bridge to watch, and a
 // snapshot that comes from an emulated screen.
 //
-// pty imports nothing else from this module, so importing it here closes no
-// cycle and needs no registration hook.
+// pty imports only screen from this module, which imports nothing from it, so
+// importing pty here closes no cycle and needs no registration hook.
 func newCapture(sessionID, displayName string, config map[string]any) (*transportConnector, error) {
 	// Validation (allowed keys, required socket_path) is the pty connector's
 	// own, so the two cannot drift apart.
@@ -65,10 +66,13 @@ func newCapture(sessionID, displayName string, config map[string]any) (*transpor
 		connect := func(ctx context.Context) error {
 			return tr.Connect(ctx, "", 0, transports.ConnectOptions{Cols: cols, Rows: rows})
 		}
+		// UTF-8, as the reference's capture emulator decodes: the shim
+		// captures what a local program writes.
 		sess := termsession.New(tr, connect, termsession.Options{
-			Cols:         cols,
-			Rows:         rows,
-			SendEncoding: termsession.EncodingUTF8,
+			Cols:            cols,
+			Rows:            rows,
+			SendEncoding:    termsession.EncodingUTF8,
+			ReceiveEncoding: emulator.UTF8,
 		})
 		// A geometry frame on the capture wire resizes the session viewers
 		// see, redrawn from what was drawn since the last clear.

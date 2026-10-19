@@ -1,0 +1,199 @@
+{
+ "generator": "conformance/snapshot/gen_session_encoding.py",
+ "records": [
+  {
+   "name": "utf-8 wide characters and combining marks",
+   "encoding": "utf-8",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "5Lit5paHIGNhZsOpIPCfmIAgZcyBIOS4rcyB"
+   ],
+   "screen": "中文 café 😀 é 中   \n                    \n                    ",
+   "cursor": {
+    "x": 17,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0m中文 café 😀 é 中́   \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;18H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "utf-8 split inside every multibyte character",
+   "encoding": "utf-8",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "5A==",
+    "uA==",
+    "rQ==",
+    "5g==",
+    "lg==",
+    "hw==",
+    "IA==",
+    "Yw==",
+    "YQ==",
+    "Zg==",
+    "ww==",
+    "qQ==",
+    "IA==",
+    "8A==",
+    "nw==",
+    "mA==",
+    "gA==",
+    "IA==",
+    "ZQ==",
+    "zA==",
+    "gQ==",
+    "IA==",
+    "5A==",
+    "uA==",
+    "rQ==",
+    "zA==",
+    "gQ=="
+   ],
+   "screen": "中文 café 😀 é 中   \n                    \n                    ",
+   "cursor": {
+    "x": 17,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0m中文 café 😀 é 中́   \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;18H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "utf-8 split at every other byte",
+   "encoding": "utf-8",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "5Lg=",
+    "reY=",
+    "loc=",
+    "IGM=",
+    "YWY=",
+    "w6k=",
+    "IPA=",
+    "n5g=",
+    "gCA=",
+    "Zcw=",
+    "gSA=",
+    "5Lg=",
+    "rcw=",
+    "gQ=="
+   ],
+   "screen": "中文 café 😀 é 中   \n                    \n                    ",
+   "cursor": {
+    "x": 17,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0m中文 café 😀 é 中́   \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;18H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "utf-8 invalid bytes",
+   "encoding": "utf-8",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "Yf9i4oJj7aCAZPCfmA==",
+    "ZcCv"
+   ],
+   "screen": "a�b�c���d�e��       \n                    \n                    ",
+   "cursor": {
+    "x": 13,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0ma�b�c���d�e��       \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;14H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "utf-8 a sequence the next read does not complete",
+   "encoding": "utf-8",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "eOKC",
+    "eQ=="
+   ],
+   "screen": "x�y                 \n                    \n                    ",
+   "cursor": {
+    "x": 3,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0mx�y                 \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;4H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "utf-8 a split sequence then an escape",
+   "encoding": "utf-8",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "5Lg=",
+    "rRtbMTszMW3m",
+    "loc="
+   ],
+   "screen": "中文                \n                    \n                    ",
+   "cursor": {
+    "x": 4,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0m中\u001b[0;1;31m文\u001b[0m                \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;5H\u001b[20l\u001b[?1l\u001b[0;1;31m\u001b[?25h"
+  },
+  {
+   "name": "utf-8 dec graphics",
+   "encoding": "utf-8",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "GygwbHFxaxsoQiAOcXEP"
+   ],
+   "screen": "┌──┐ ──             \n                    \n                    ",
+   "cursor": {
+    "x": 7,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0m┌──┐ ──             \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;8H\u001b[20l\u001b[?1l\u001b(B\u001b)0\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "cp437 high bytes",
+   "encoding": "cp437",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "sLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f",
+    "DQoBAgM="
+   ],
+   "screen": "─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫\n╪┘┌█▄▌▐▀            \n                    ",
+   "cursor": {
+    "x": 0,
+    "y": 2
+   },
+   "ansi_screen": "\u001b[0m─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫\u001b[0m\n\u001b[0m╪┘┌█▄▌▐▀            \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[3;1H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "cp437 what utf-8 would decode",
+   "encoding": "cp437",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "5Litw6k="
+   ],
+   "screen": "Σ╕¡├⌐               \n                    \n                    ",
+   "cursor": {
+    "x": 5,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0mΣ╕¡├⌐               \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;6H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "cp437 ignores dec graphics",
+   "encoding": "cp437",
+   "cols": 20,
+   "rows": 3,
+   "reads": [
+    "GygwbHFxaw5xcQ8="
+   ],
+   "screen": "lqqkqq              \n                    \n                    ",
+   "cursor": {
+    "x": 6,
+    "y": 0
+   },
+   "ansi_screen": "\u001b[0mlqqkqq              \u001b[0m\n\u001b[0m                    \u001b[0m\n\u001b[0m                    \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;7H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  }
+ ]
+}

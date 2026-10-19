@@ -11,6 +11,8 @@ import (
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 )
 
 // captureBufferCap bounds the CaptureConnector rendered buffer. Port of
@@ -49,6 +51,11 @@ type CaptureConnector struct {
 	connectLog  []string
 	stdinCount  int
 	stdinWriter net.Conn
+	// decoder is the session's one UTF-8 decoder for its output stream. The
+	// shim sends each write() as it happens, so a multibyte character can be
+	// split across two frames; decoding each frame on its own would turn both
+	// halves into U+FFFD. Port of capture_connector.py's _decoder.
+	decoder screen.UTF8Decoder
 }
 
 // NewCaptureConnector validates config and builds a capture connector. Port of
@@ -141,7 +148,7 @@ func (c *CaptureConnector) PollMessages() []Frame {
 		case ChannelStdout:
 			// Normalize bare \n → \r\n: capture bypasses the PTY ONLCR driver,
 			// so xterm.js would otherwise advance the cursor without a CR.
-			text := decodeReplace(frame.Data)
+			text := c.decoder.Decode(frame.Data)
 			text = strings.ReplaceAll(text, "\r\n", "\n")
 			text = strings.ReplaceAll(text, "\n", "\r\n")
 			c.buffer += text
@@ -153,7 +160,7 @@ func (c *CaptureConnector) PollMessages() []Frame {
 		case ChannelStdin:
 			c.stdinCount++
 		case ChannelConnect:
-			c.connectLog = append(c.connectLog, decodeReplace(frame.Data))
+			c.connectLog = append(c.connectLog, screen.DecodeUTF8(frame.Data))
 			if len(c.connectLog) > 100 {
 				c.connectLog = c.connectLog[len(c.connectLog)-100:]
 			}

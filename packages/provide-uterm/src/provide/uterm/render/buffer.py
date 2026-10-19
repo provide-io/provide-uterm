@@ -18,6 +18,9 @@ from __future__ import annotations
 from typing import Any
 
 import pyte
+from wcwidth import wcwidth
+
+from provide.uterm import _unicode  # noqa: F401  (pins the Unicode data pyte composes with)
 
 # ---------------------------------------------------------------------------
 # ANSI escape constants
@@ -115,37 +118,135 @@ def cell_style(cell: Any) -> CellStyle:
     )
 
 
+#: Drawn where a cell holds the empty second half of a wide character whose
+#: first half is gone, to recreate that cell: see :func:`_render_row`. Any wide
+#: character would do; this one is blank should a terminal ever show it.
+_PLACEHOLDER = "\u3000"
+
+
+def _cell_at(row: dict[int, Any], x: int) -> tuple[str, CellStyle]:
+    """The text and style of a cell, an absent one being a blank default cell."""
+    cell = row.get(x)
+    if cell is None:
+        return " ", _DEFAULT_STYLE
+    return cell.data, cell_style(cell)
+
+
+def _is_second_half(text: str) -> bool:
+    """Whether a cell holds what a wide character's second cell does: nothing, or marks."""
+    return text == "" or wcwidth(text[0]) == 0
+
+
+def _render_row(row: dict[int, Any], cols: int) -> str:
+    """Render one row so that drawing it on a fresh row recreates every cell.
+
+    A wide character is drawn once and takes two cells; the cell after it is
+    recreated by drawing it, so nothing is written for that cell. Writing a
+    space there, as this once did, made every wide character a column wider on
+    the terminal it was drawn on, and a row holding one overflowed. Combining
+    marks that joined that second cell are written straight after the wide
+    character, which joins them to it again; marks joined to the wide
+    character itself are written with the column set back onto its second
+    cell, which joins them to the wide character instead.
+
+    Two cells cannot be recreated by drawing left to right, and get a cursor
+    move. A wide character whose second half was overwritten is drawn, and
+    the column is then set back onto that half (CHA, not CUB: from the
+    deferred wrap at the last column CUB steps one further). A second half
+    whose first half is gone (overwritten, or deleted) is recreated the way
+    the stream made it: a placeholder wide character drawn in its style, its
+    marks joined to it, and the placeholder's first half deleted (DCH). In the
+    last column, where a wide character has no second half, the placeholder is
+    drawn one column left instead, and the cell there drawn again over its
+    first half. That needs the cell before it to be drawable, so one
+    arrangement is left blank: such a cell in the last column right after
+    another second half (a wide character's, or another such cell). Any
+    marks in it are lost with it.
+
+    A cell with marks written into the last column is written with autowrap
+    off: the marks join the cell before the cursor, which then rests past the
+    last column, and with autowrap on they would first wrap to the next row.
+    """
+    parts: list[str] = []
+    last_style: CellStyle | None = None
+
+    def put(text: str, style: CellStyle) -> None:
+        nonlocal last_style
+        if style != last_style:
+            parts.append(style_to_sgr(*style))
+            last_style = style
+        parts.append(text)
+
+    def put_cell(text: str, style: CellStyle, x: int) -> None:
+        # Marks join the cell before the cursor. Into the last column (x) the
+        # cursor then rests past it, where autowrap would first move to the
+        # next row, so it is off while a cell with marks is written there.
+        if not text:
+            return
+        if x == cols - 1 and (len(text) > 1 or wcwidth(text[0]) == 0):
+            parts.append("\x1b[?7l")
+            put(text, style)
+            parts.append("\x1b[?7h")
+        else:
+            put(text, style)
+
+    x = 0
+    while x < cols:
+        data, style = _cell_at(row, x)
+        if _is_second_half(data):
+            if x + 1 < cols:
+                put(_PLACEHOLDER, style)
+                put_cell(data, style, x + 1)
+                parts.append(f"\x1b[{x + 1}G\x1b[P\x1b[C")
+            elif x > 0:
+                before, before_style = _cell_at(row, x - 1)
+                if not _is_second_half(before):
+                    parts.append(f"\x1b[{x}G")
+                    put(_PLACEHOLDER, style)
+                    put_cell(data, style, x)
+                    parts.append(f"\x1b[{x}G")
+                    put_cell(before, before_style, x - 1)
+            x += 1
+            continue
+        if x + 1 == cols or wcwidth(data[0]) != 2:
+            put_cell(data, style, x)
+            x += 1
+            continue
+        # A wide character with a cell after it. Its own marks are written
+        # with the cursor back on that cell, which joins them to the wide
+        # character rather than to it.
+        put(data[0], style)
+        own = data[1:]
+        after, after_style = _cell_at(row, x + 1)
+        if _is_second_half(after):
+            put_cell(after, after_style, x + 1)
+            if own:
+                parts.append(f"\x1b[{x + 2}G")
+                put(own, style)
+                if x + 2 < cols:
+                    parts.append(f"\x1b[{x + 3}G")
+            x += 2
+        else:
+            parts.append(f"\x1b[{x + 2}G")
+            if own:
+                put(own, style)
+            x += 1
+    parts.append(ANSI_RESET)
+    return "".join(parts)
+
+
 def render_cell_rows(buffer: Any, cols: int, rows: int) -> list[str]:
     """Render a pyte per-cell style *buffer* to ANSI-styled row strings.
 
     Walks the ``rows`` x ``cols`` grid, emitting an SGR escape sequence
     whenever the style changes between adjacent cells. Each row ends with
-    ``ANSI_RESET`` so a downstream consumer starts from a clean state.
+    ``ANSI_RESET`` so a downstream consumer starts from a clean state. Drawn
+    on fresh rows, the rows recreate the buffer: see :func:`_render_row`.
 
     Shared by :meth:`AnsiBuffer.render_lines` and
     ``TerminalEmulator.ansi_screen``.
     """
-    lines: list[str] = []
-    for y in range(rows):
-        row: dict[int, Any] = buffer.get(y, {})
-        line_parts: list[str] = []
-        last_style: CellStyle | None = None
-        for x in range(cols):
-            cell = row.get(x)
-            if cell is None:
-                char = " "
-                style = _DEFAULT_STYLE
-            else:
-                style = cell_style(cell)
-                char = cell.data or " "
-
-            if style != last_style:
-                line_parts.append(style_to_sgr(*style))
-                last_style = style
-            line_parts.append(char)
-        line_parts.append(ANSI_RESET)
-        lines.append("".join(line_parts))
-    return lines
+    return [_render_row(buffer.get(y, {}), cols) for y in range(rows)]
 
 
 # ---------------------------------------------------------------------------

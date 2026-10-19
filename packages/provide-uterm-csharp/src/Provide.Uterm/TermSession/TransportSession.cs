@@ -21,6 +21,12 @@ public sealed class TransportSessionOptions
     public int Cols { get; set; } = 80;
     public int Rows { get; set; } = 25;
     public bool ControlFrames { get; set; }
+
+    /// <summary>
+    /// The codec the emulator decodes the wire with: the Python TransportSession's
+    /// <c>receive_encoding</c>, CP437 by default as there.
+    /// </summary>
+    public ReceiveEncoding ReceiveEncoding { get; set; } = ReceiveEncoding.Cp437;
 }
 
 /// <summary>Telnet-specific session options (same fields as <see cref="ConnectOptions"/>).</summary>
@@ -54,6 +60,7 @@ public sealed class TransportSession : IAsyncDisposable
     private readonly Func<CancellationToken, Task> _connect;
     private readonly int _cols;
     private readonly int _rows;
+    private readonly ReceiveEncoding _receiveEncoding;
     private readonly TerminalEmulator _emu;
     private readonly ControlChannel.Decoder? _controlDecoder;
     private readonly object _gate = new();
@@ -81,7 +88,8 @@ public sealed class TransportSession : IAsyncDisposable
         options ??= new TransportSessionOptions();
         _cols = options.Cols > 0 ? options.Cols : 80;
         _rows = options.Rows > 0 ? options.Rows : 25;
-        _emu = new TerminalEmulator(_cols, _rows);
+        _receiveEncoding = options.ReceiveEncoding;
+        _emu = new TerminalEmulator(_cols, _rows, "", _receiveEncoding);
         if (options.ControlFrames)
         {
             _controlDecoder = new ControlChannel.Decoder();
@@ -389,7 +397,10 @@ public sealed class TransportSession : IAsyncDisposable
 
         if (_controlDecoder is not null)
         {
-            var text = Encoding.UTF8.GetString(chunk);
+            // Each read on its own, with the receive encoding, as in the
+            // reference: with control frames on, a character split between two
+            // reads is replaced with U+FFFD here, before the emulator sees it.
+            var text = _receiveEncoding == ReceiveEncoding.Utf8 ? Encoding.UTF8.GetString(chunk) : Screen.Cp437.Decode(chunk);
             IReadOnlyList<Chunk> events;
             try
             {
@@ -407,7 +418,7 @@ public sealed class TransportSession : IAsyncDisposable
                 switch (ev)
                 {
                     case DataChunk d:
-                        var dataBytes = Encoding.UTF8.GetBytes(d.Data);
+                        var dataBytes = _receiveEncoding == ReceiveEncoding.Utf8 ? Encoding.UTF8.GetBytes(d.Data) : Screen.Cp437.Encode(d.Data);
                         ApplyData(dataBytes);
                         NotifyWatchers(watchers, dataBytes);
                         break;

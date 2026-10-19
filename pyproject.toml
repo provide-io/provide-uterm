@@ -34,6 +34,8 @@ dev = [
     "pydantic>=2.14.0",
     "pyjwt>=2.15.1",
     "pyte>=0.8.2",
+    "unicodedata2>=18.0.0",
+    "wcwidth>=0.8.4",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
@@ -172,6 +174,13 @@ module = ["provide.telemetry", "provide.telemetry.*", "provide.uterm.deckmux", "
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+# A C extension with no stubs or py.typed: the pinned Unicode database the
+# emulator composes with (provide/uterm/_unicode.py). Only `unidata_version` is
+# read, and the module is handed to pyte as a drop-in for unicodedata.
+module = ["unicodedata2"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 # CF-runtime-only imports. The Cloudflare Python Workers SDK ships py.typed
 # but uses PEP 695 `type` statements, which mypy cannot parse under
 # python_version = "3.11"; pyodide's presence in the venv varies with how the
@@ -209,7 +218,8 @@ extra-paths = []
 # `skip` exempts generated / vendored / build-output trees — nobody writes prose
 # there, and their contents are not ours to spell-correct. Two entries worth
 # calling out beyond the vendored bundles:
-#   packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata and
+#   packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata,
+#     packages/provide-uterm-go/vt/testdata and
 #     packages/provide-uterm-ts/testdata — differential golden corpora and their
 #     gen_*.py producers. They deliberately embed accented words (JSON-escaped,
 #     so codespell reads the un-accented prefix as a misspelling) and truncated
@@ -220,7 +230,7 @@ extra-paths = []
 # Build outputs (dist/build/reports/coverage/StrykerOutput, the CF ui/static and
 # python_modules trees) are gitignored, so they never reach CI, but skipping
 # them keeps a whole-tree local run clean.
-skip = ".git,./packages/provide-telemetry/*,packages/provide-telemetry/*,*.pyc,__pycache__,.venv,node_modules,uv.lock,package-lock.json,*.mmd,./packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,./packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,./packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/structlog/*,./packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/ui/static/*,packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/ui/static/*,./packages/provide-uterm-ts/testdata/*,packages/provide-uterm-ts/testdata/*,./conformance/fuzz/*,conformance/fuzz/*,./packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/*,packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/*,*/bin/Debug/*,*/bin/Release/*,*/obj/*,mutants,dist,build,reports,coverage,StrykerOutput,python_modules"
+skip = ".git,./packages/provide-telemetry/*,packages/provide-telemetry/*,*.pyc,__pycache__,.venv,node_modules,uv.lock,package-lock.json,*.mmd,./packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,packages/provide-uterm/src/provide/uterm/frontend/assets/*.js,./packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,packages/provide-uterm-server/src/provide/uterm/server/frontend/assets/*.js,./packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/provide/uterm/frontend/assets/*.js,packages/provide-uterm-cloudflare/python_modules/structlog/*,./packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/ui/static/*,packages/provide-uterm-cloudflare/src/provide/uterm/cloudflare/ui/static/*,./packages/provide-uterm-ts/testdata/*,packages/provide-uterm-ts/testdata/*,./packages/provide-uterm-go/vt/testdata/*,packages/provide-uterm-go/vt/testdata/*,./conformance/fuzz/*,conformance/fuzz/*,./packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/*,packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/*,*/bin/Debug/*,*/bin/Release/*,*/obj/*,mutants,dist,build,reports,coverage,StrykerOutput,python_modules"
 ignore-words-list = "ore,opps,wont,strat,nd,rade,ans,unparseable,cna,intoto,te,shiftin,shttp,defint,onws,alo,ahi,blo,bhi,fo,afterall,wit,dependant"
 
 [tool.bandit]
