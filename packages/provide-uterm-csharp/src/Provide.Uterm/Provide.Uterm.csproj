@@ -15,7 +15,7 @@
   <ItemGroup>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageReference Include="FxSsh" Version="1.4.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
     <!-- Pinned above the transitive 2.1.x: those carry GHSA-2m69-gcr7-jv3q. -->
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
     <PackageReference Include="SSH.NET" Version="2026.0.0" />

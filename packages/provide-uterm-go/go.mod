@@ -8,10 +8,10 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/creack/pty v1.1.24
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/mark3labs/mcp-go v1.2.1
+	github.com/mark3labs/mcp-go v1.3.0
 	github.com/muesli/termenv v0.16.0
 	github.com/pelletier/go-toml/v2 v2.4.3
-	github.com/provide-io/provide-telemetry/go v0.10.0
+	github.com/provide-io/provide-telemetry/go v0.11.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/crypto v0.58.0
 	golang.org/x/sys v0.49.0
