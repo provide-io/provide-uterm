@@ -242,11 +242,17 @@ class TestHealthRouter:
             ),
             resp,
         )
-        assert out["status"] == "ok"
-        assert out["ok"] is True
-        assert out["active_sessions"] == 2
-        assert out["control_plane_backend"] == "postgres"
-        assert out["service"] == "uterm-server"
+        assert out == {
+            "status": "ok",
+            "ok": True,
+            "ready": True,
+            "service": "uterm-server",
+            "version": out["version"],
+            "uptime_s": out["uptime_s"],
+            "active_sessions": 2,
+            "control_plane_backend": "postgres",
+            "features": ["viewers.revoke.subject"],
+        }
 
     async def test_healthz_always_ok(self) -> None:
         healthz = _endpoint(self._router(), "/healthz")

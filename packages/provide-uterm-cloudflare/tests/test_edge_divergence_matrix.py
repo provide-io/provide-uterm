@@ -271,8 +271,17 @@ def test_edge_ships_no_rfb_implementation() -> None:
 
 # Keys the FastAPI backend adds and the Worker cannot compute: a Durable Object
 # has no process uptime, no cross-session registry, and no control-plane backend
-# choice.
-_FASTAPI_ONLY_HEALTH_KEYS = ("version", "uptime_s", "active_sessions", "control_plane_backend", "ready", "status")
+# choice. Nor does it serve the viewer-revoke route, so it advertises no
+# ``features`` (in particular not ``viewers.revoke.subject``).
+_FASTAPI_ONLY_HEALTH_KEYS = (
+    "version",
+    "uptime_s",
+    "active_sessions",
+    "control_plane_backend",
+    "ready",
+    "status",
+    "features",
+)
 
 
 async def test_edge_worker_health_payload_is_minimal() -> None:

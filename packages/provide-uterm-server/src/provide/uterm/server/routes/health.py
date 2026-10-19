@@ -6,7 +6,7 @@
 """Unauthenticated health-check endpoints for the hosted terminal server.
 
 ``/api/health`` returns rich diagnostic info (version, uptime, session count,
-control-plane backend).  ``/healthz`` is a minimal liveness probe suitable for
+control-plane backend) and the optional features this server supports.  ``/healthz`` is a minimal liveness probe suitable for
 Kubernetes readiness/liveness checks.
 
 The health/liveness/readiness endpoints are mounted **without** authentication
@@ -42,6 +42,13 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from starlette.requests import HTTPConnection
+
+# Optional behaviour a client cannot otherwise tell apart from an older server,
+# listed in a ready ``/api/health`` answer so it can ask before relying on it.
+# ``viewers.revoke.subject``: ``POST /api/sessions/{id}/viewers/revoke`` honours
+# a ``{"subject": ...}`` body. A server without it ignores the body and revokes
+# every share viewer of the session, so a caller must not send one blind.
+SERVER_FEATURES = ("viewers.revoke.subject",)
 
 
 def create_health_router(
@@ -95,6 +102,7 @@ def create_health_router(
             "uptime_s": uptime_s,
             "active_sessions": active_sessions,
             "control_plane_backend": backend,
+            "features": list(SERVER_FEATURES),
         }
 
     @router.get("/healthz")

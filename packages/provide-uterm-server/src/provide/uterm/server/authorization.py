@@ -77,10 +77,33 @@ SHARE_VIEWER_REVOCATIONS_PER_PRINCIPAL_MAX = 100
 # revokes of other sessions), so a non-admin that revokes more sessions than
 # that within one share-token lifetime readmits its oldest session's tokens.
 SHARE_VIEWER_REVOCATION_TTL_S = 86_400
+# Subject cutoffs one session holds at once: one per share subject revoked on
+# its own (a ``{"subject": ...}`` revoke) within the last
+# SHARE_VIEWER_REVOCATION_TTL_S. Past it a new subject is refused (the route
+# answers 429) rather than evicting one, which would readmit that watcher; a
+# revoke of every viewer of the session frees them, since it subsumes them.
+SHARE_VIEWER_SUBJECT_REVOCATIONS_PER_SESSION_MAX = 100
+# Subject cutoffs held at once across every session, the counterpart of
+# SHARE_VIEWER_REVOCATIONS_MAX: when it is full a new subject is refused (the
+# route answers 429) rather than evicting a cutoff that may still protect
+# another session's viewers.
+SHARE_VIEWER_SUBJECT_REVOCATIONS_MAX = 10_000
+# The longest share subject a revoke accepts, in UTF-8 bytes, so a held subject
+# cutoff costs a bounded amount of memory. Subjects are minted by the embedder
+# and are short (blackbetty's are ``share:{session}:blackbetty:{n}``).
+SHARE_VIEWER_SUBJECT_MAX_BYTES = 512
+# The largest revoke body read, in bytes: a SHARE_VIEWER_SUBJECT_MAX_BYTES
+# subject in its ``{"subject": ...}`` envelope with room for whitespace and
+# escapes. A longer body is refused before it is read in full.
+SHARE_VIEWER_REVOKE_BODY_MAX_BYTES = 4096
 
 
 class ShareViewerRevocationsFullError(Exception):
-    """The cutoff table is full of live cutoffs; a new session cannot be added."""
+    """A cutoff table is full of live cutoffs; a new session or subject cannot be added."""
+
+
+class ShareViewerSubjectRevocationsFullError(Exception):
+    """The session holds its cap of subject cutoffs; a new subject cannot be added."""
 
 
 def is_share_viewer(principal: Principal, session_id: str) -> bool:
@@ -412,6 +435,11 @@ class AuthorizationService:
     # (dicts as ordered sets).
     _share_viewer_revokers: dict[str, str] = field(default_factory=dict)
     _share_viewer_revoked_by: dict[str, dict[str, None]] = field(default_factory=dict)
+    # (session_id, subject) -> wall-clock cutoff for one share subject of the
+    # session, oldest first, and each session's subjects (dicts as ordered
+    # sets), so neither a session's count nor its deletion needs a scan.
+    _share_viewer_subject_revocations: dict[tuple[str, str], float] = field(default_factory=dict)
+    _share_viewer_revoked_subjects: dict[str, dict[str, None]] = field(default_factory=dict)
 
     def revoke_share_viewers(
         self,
@@ -459,6 +487,11 @@ class AuthorizationService:
         if owner is not None:
             self._share_viewer_revokers[session_id] = owner
             self._share_viewer_revoked_by.setdefault(owner, {})[session_id] = None
+        # The session's subject cutoffs at or before this one refuse nothing it
+        # does not (the later cutoff decides), so they go and free their slots.
+        for subject in list(self._share_viewer_revoked_subjects.get(session_id, {})):
+            if self._share_viewer_subject_revocations[(session_id, subject)] <= cutoff:
+                self._drop_share_viewer_subject(session_id, subject)
         if evicted is not None and on_evict is not None:
             on_evict(evicted)
         return cutoff
@@ -472,25 +505,76 @@ class AuthorizationService:
             if not mine:
                 del self._share_viewer_revoked_by[revoker]
 
+    def revoke_share_viewer_subject(self, session_id: str, subject: str, *, now: float | None = None) -> float:
+        """Refuse ``subject``'s share-viewer tokens for ``session_id`` issued up to now.
+
+        The cutoff ``revoke_share_viewers`` records, for one share subject: the
+        same wall clock, and a token issued in the same second refused too. The
+        session's other share viewers are untouched, and a token minted for
+        ``subject`` after the cutoff is admitted, so that watcher can be let
+        back in. Returns the cutoff; raises
+        ``ShareViewerSubjectRevocationsFullError`` when the session already
+        holds ``SHARE_VIEWER_SUBJECT_REVOCATIONS_PER_SESSION_MAX`` subject
+        cutoffs and none of them is ``subject``'s, and
+        ``ShareViewerRevocationsFullError`` when every session together holds
+        ``SHARE_VIEWER_SUBJECT_REVOCATIONS_MAX`` and this is a new one. The
+        caller checks that ``subject`` is one of this session's share subjects.
+        """
+        cutoff = time.time() if now is None else now
+        cutoffs = self._share_viewer_subject_revocations
+        # Insertion order is revocation order, so the stale ones are in front.
+        while cutoffs and cutoffs[oldest := next(iter(cutoffs))] < cutoff - SHARE_VIEWER_REVOCATION_TTL_S:
+            self._drop_share_viewer_subject(*oldest)
+        held = self._share_viewer_revoked_subjects.get(session_id, {})
+        if subject not in held and len(held) >= SHARE_VIEWER_SUBJECT_REVOCATIONS_PER_SESSION_MAX:
+            raise ShareViewerSubjectRevocationsFullError
+        if subject not in held and len(cutoffs) >= SHARE_VIEWER_SUBJECT_REVOCATIONS_MAX:
+            raise ShareViewerRevocationsFullError
+        # Dropped and re-added, so a re-revoke moves to the back of the order
+        # and ages out from its newest cutoff.
+        self._drop_share_viewer_subject(session_id, subject)
+        cutoffs[(session_id, subject)] = cutoff
+        self._share_viewer_revoked_subjects.setdefault(session_id, {})[subject] = None
+        return cutoff
+
+    def _drop_share_viewer_subject(self, session_id: str, subject: str) -> None:
+        if self._share_viewer_subject_revocations.pop((session_id, subject), None) is None:
+            return
+        held = self._share_viewer_revoked_subjects[session_id]
+        del held[subject]
+        if not held:
+            del self._share_viewer_revoked_subjects[session_id]
+
     def share_viewer_revoked_sessions(self) -> list[str]:
-        """The sessions holding a cutoff, oldest first."""
-        return list(self._share_viewer_revocations)
+        """The sessions holding a cutoff of either kind, each once."""
+        return list(dict.fromkeys([*self._share_viewer_revocations, *self._share_viewer_revoked_subjects]))
 
     def forget_share_viewers(self, session_id: str) -> None:
-        """Drop the session's cutoff (it was deleted, so nothing is left to refuse)."""
+        """Drop the session's cutoffs (it was deleted, so nothing is left to refuse)."""
         self._drop_share_viewer_revocation(session_id)
+        for subject in list(self._share_viewer_revoked_subjects.get(session_id, {})):
+            self._drop_share_viewer_subject(session_id, subject)
 
     def share_viewer_revocation(self, session_id: str) -> float | None:
         """The cutoff recorded for ``session_id``, if its viewers were revoked."""
         return self._share_viewer_revocations.get(session_id)
 
-    def share_viewer_revoked(self, principal: Principal, session_id: str) -> bool:
-        """True when ``principal`` is a share viewer whose token predates the cutoff.
+    def share_viewer_subject_revocation(self, session_id: str, subject: str) -> float | None:
+        """The cutoff recorded for one share subject of ``session_id``, if it was revoked."""
+        return self._share_viewer_subject_revocations.get((session_id, subject))
 
-        A token without a numeric ``iat`` cannot show it postdates the cutoff,
-        so it is refused.
+    def share_viewer_revoked(self, principal: Principal, session_id: str) -> bool:
+        """True when ``principal`` is a share viewer whose token predates a cutoff.
+
+        Both the session's cutoff and its own subject's count, so the later of
+        the two decides. A token without a numeric ``iat`` cannot show it
+        postdates the cutoff, so it is refused.
         """
-        cutoff = self._share_viewer_revocations.get(session_id)
+        held = (
+            self._share_viewer_revocations.get(session_id),
+            self._share_viewer_subject_revocations.get((session_id, principal.subject_id)),
+        )
+        cutoff = max((one for one in held if one is not None), default=None)
         if cutoff is None or not is_share_viewer(principal, session_id):
             return False
         issued = _issued_at(principal)

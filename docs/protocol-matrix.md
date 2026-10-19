@@ -221,7 +221,7 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | `POST /api/tunnels` | served | served |
 | `DELETE /api/tunnels/{id}/tokens` | served (revocation) | served (revocation) |
 | `POST /api/tunnels/{id}/tokens/rotate` | served (rotation) | served (rotation) |
-| `POST /api/sessions/{id}/viewers/revoke` | served: refuses every `share:{id}:...` viewer token issued up to now and closes live share-viewer sockets with `4410 viewer access revoked` (also Go, C#; TS refuses reads, binds no socket). The browser elements treat 4410 as final and do not reconnect (`uterm:close` reports it) | not served (no share-viewer grants) |
+| `POST /api/sessions/{id}/viewers/revoke` | served: refuses every `share:{id}:...` viewer token issued up to now and closes live share-viewer sockets with `4410 viewer access revoked` (also Go, C#; TS refuses reads, binds no socket). An optional body `{"subject": "share:{id}:..."}` does the same for that one subject only: the session's other viewers keep watching and a token minted for the subject later is admitted. No body, a blank one, `null` or `{}` revokes the whole session, which also drops that session's subject cutoffs at or before it. Any other body, one past 4 KiB, or a subject that is not a string or spells a lone surrogate is `422 invalid request body`; a subject without the `share:{id}:` prefix, with nothing after it, or past 512 UTF-8 bytes is `422 subject must be a share subject of this session`. A new subject is refused with `429` when the session already holds 100 subject cutoffs or all sessions together hold 10 000. A subject revoke's answer adds `"subject"` (the subject applied); a whole-session answer has no `subject` key. Servers that support the body list `viewers.revoke.subject` in `/api/health` `features`; an older server ignores the body and revokes every viewer, so check before sending one. The browser elements treat 4410 as final and do not reconnect (`uterm:close` reports it) | not served (no share-viewer grants) |
 | Share URL (`?invite=...`) | `/s/{id}` → set HttpOnly cookie, 302 clean redirect | `/s/{id}` → set HttpOnly cookie, 302 clean redirect |
 | Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
 
@@ -324,6 +324,7 @@ Unauthenticated endpoints for load balancers, orchestrators, and monitoring.
 | Response: `uptime_s` | seconds since server start | not included |
 | Response: `active_sessions` | count from session registry | not included |
 | Response: `control_plane_backend` | `"memory"` or `"sqlite"` | not included |
+| Response: `features` | `["viewers.revoke.subject"]` when ready (also Go, C#, TS): optional behaviour a client cannot otherwise detect; absent from the 503 answers | not included |
 | `GET /healthz` | served (minimal, no deps) | unsupported |
 | Auth required | no | no |
 

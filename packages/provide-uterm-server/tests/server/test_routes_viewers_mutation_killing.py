@@ -25,11 +25,14 @@ from provide.uterm.server.routes import viewers
 _SID = "s-1"
 
 
-def _request(*, can_mutate: bool = True, definition: Any = "present", admin: bool = False) -> SimpleNamespace:
+def _request(
+    *, can_mutate: bool = True, definition: Any = "present", admin: bool = False, body: bytes | list[bytes] = b""
+) -> SimpleNamespace:
     az = MagicMock(name="authz")
     az.can_mutate_session = AsyncMock(return_value=can_mutate)
     az.is_admin = AsyncMock(return_value=admin)
     az.revoke_share_viewers = MagicMock(return_value=123.5)
+    az.revoke_share_viewer_subject = MagicMock(return_value=124.5)
     az.share_viewer_revoked_sessions = MagicMock(return_value=[])
     registry = MagicMock(name="registry")
     resolved = SimpleNamespace(session_id=_SID) if definition == "present" else definition
@@ -41,7 +44,24 @@ def _request(*, can_mutate: bool = True, definition: Any = "present", admin: boo
         app=SimpleNamespace(state=state),
         state=SimpleNamespace(uterm_principal=SimpleNamespace(subject_id="owner-1", roles=set())),
         client=SimpleNamespace(host="10.0.0.9"),
+        stream=_Stream([body] if isinstance(body, bytes) else body),
     )
+
+
+class _Stream:
+    """``request.stream`` over fixed chunks, recording how many were read."""
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+        self.read = 0
+
+    async def _iterate(self) -> Any:
+        for chunk in self.chunks:
+            self.read += 1
+            yield chunk
+
+    def __call__(self) -> Any:
+        return self._iterate()
 
 
 @pytest.fixture
@@ -204,5 +224,126 @@ async def test_a_full_cutoff_table_is_a_429_that_closes_nothing(closer: AsyncMoc
         await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
     assert caught.value.status_code == 429
     assert caught.value.detail == "too many sessions with revoked viewers; try again later"
+    closer.assert_not_awaited()
+    audit.assert_not_called()
+
+
+_SUBJECT_BODY = b'{"subject": "share:s-1:blackbetty:7"}'
+
+
+async def test_a_subject_revoke_records_only_that_subjects_cutoff(
+    closer: AsyncMock, audit: MagicMock, streams: MagicMock
+) -> None:
+    request = _request(body=_SUBJECT_BODY)
+    result = await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    az = request.app.state.uterm_authz
+    az.revoke_share_viewer_subject.assert_called_once_with(_SID, "share:s-1:blackbetty:7")
+    az.revoke_share_viewers.assert_not_called()
+    az.is_admin.assert_not_awaited()
+    closer.assert_awaited_once_with(request.app.state.uterm_hub, az, _SID)
+    streams.revoke.assert_called_once_with(az, _SID)
+    assert result == {
+        "session_id": _SID,
+        "revoked_at": 124.5,
+        "closed": 5,
+        "close_code": 4410,
+        "close_reason": "viewer access revoked",
+        "subject": "share:s-1:blackbetty:7",
+    }
+    audit.assert_called_once_with(
+        "session.viewers.revoke",
+        principal="owner-1",
+        session_id=_SID,
+        detail={"closed": 5, "revoked_at": 124.5, "subject": "share:s-1:blackbetty:7"},
+        source_ip="10.0.0.9",
+    )
+
+
+async def test_a_subject_revoke_also_forgets_deleted_sessions_first(closer: AsyncMock, audit: MagicMock) -> None:
+    request = _request(body=_SUBJECT_BODY)
+    az = request.app.state.uterm_authz
+    order = MagicMock()
+    az.share_viewer_revoked_sessions = MagicMock(return_value=["gone"])
+    az.forget_share_viewers = order.forget
+    az.revoke_share_viewer_subject = order.revoke
+    order.revoke.return_value = 124.5
+    request.app.state.uterm_registry.unknown_sessions = AsyncMock(return_value=["gone"])
+    await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert order.mock_calls == [call.forget("gone"), call.revoke(_SID, "share:s-1:blackbetty:7")]
+
+
+async def test_a_session_full_of_subject_cutoffs_is_a_429_that_closes_nothing(
+    closer: AsyncMock, audit: MagicMock
+) -> None:
+    from provide.uterm.server.authorization import ShareViewerSubjectRevocationsFullError
+
+    request = _request(body=_SUBJECT_BODY)
+    request.app.state.uterm_authz.revoke_share_viewer_subject = MagicMock(
+        side_effect=ShareViewerSubjectRevocationsFullError()
+    )
+    with pytest.raises(HTTPException) as caught:
+        await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert caught.value.status_code == 429
+    assert caught.value.detail == "too many viewers of this session revoked one by one; revoke them all instead"
+    closer.assert_not_awaited()
+    audit.assert_not_called()
+
+
+async def test_a_refused_body_prunes_and_records_nothing(closer: AsyncMock, audit: MagicMock) -> None:
+    request = _request(body=b'{"subject": 7}')
+    with pytest.raises(HTTPException) as caught:
+        await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert caught.value.status_code == 422
+    assert caught.value.detail == "invalid request body"
+    az = request.app.state.uterm_authz
+    request.app.state.uterm_registry.unknown_sessions.assert_not_awaited()
+    az.revoke_share_viewers.assert_not_called()
+    az.revoke_share_viewer_subject.assert_not_called()
+    closer.assert_not_awaited()
+
+
+async def test_a_refused_caller_never_has_its_body_read(closer: AsyncMock, audit: MagicMock) -> None:
+    request = _request(can_mutate=False, body=_SUBJECT_BODY)
+    with pytest.raises(HTTPException):
+        await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert request.stream.read == 0
+
+
+async def test_a_body_in_several_chunks_is_read_whole(closer: AsyncMock, audit: MagicMock) -> None:
+    request = _request(body=[b'{"subject": ', b'"share:s-1:', b'blackbetty:7"}'])
+    await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    request.app.state.uterm_authz.revoke_share_viewer_subject.assert_called_once_with(_SID, "share:s-1:blackbetty:7")
+
+
+async def test_a_body_past_the_cap_is_refused_without_reading_on(closer: AsyncMock, audit: MagicMock) -> None:
+    from provide.uterm.server.authorization import SHARE_VIEWER_REVOKE_BODY_MAX_BYTES
+
+    request = _request(body=[b" " * SHARE_VIEWER_REVOKE_BODY_MAX_BYTES, b"{", b"}"])
+    with pytest.raises(HTTPException) as caught:
+        await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert caught.value.status_code == 422
+    assert caught.value.detail == "invalid request body"
+    # The chunk that crossed the cap was the last one read.
+    assert request.stream.read == 2
+    request.app.state.uterm_authz.revoke_share_viewers.assert_not_called()
+
+
+async def test_a_body_exactly_at_the_cap_is_read(closer: AsyncMock, audit: MagicMock) -> None:
+    from provide.uterm.server.authorization import SHARE_VIEWER_REVOKE_BODY_MAX_BYTES
+
+    request = _request(body=[b" " * (SHARE_VIEWER_REVOKE_BODY_MAX_BYTES - 2), b"{}"])
+    await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    request.app.state.uterm_authz.revoke_share_viewers.assert_called_once()
+
+
+async def test_a_full_subject_table_is_a_429_that_closes_nothing(closer: AsyncMock, audit: MagicMock) -> None:
+    from provide.uterm.server.authorization import ShareViewerRevocationsFullError
+
+    request = _request(body=_SUBJECT_BODY)
+    request.app.state.uterm_authz.revoke_share_viewer_subject = MagicMock(side_effect=ShareViewerRevocationsFullError())
+    with pytest.raises(HTTPException) as caught:
+        await viewers.revoke_viewers(request, _SID)  # type: ignore[arg-type]
+    assert caught.value.status_code == 429
+    assert caught.value.detail == "too many viewers revoked one by one; try again later"
     closer.assert_not_awaited()
     audit.assert_not_called()

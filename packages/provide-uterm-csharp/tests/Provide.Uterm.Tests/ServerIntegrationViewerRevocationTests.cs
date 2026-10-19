@@ -52,10 +52,10 @@ public sealed class ServerIntegrationViewerRevocationTests
         return port;
     }
 
-    private static async Task<(UtermServer Server, int Port)> BootAsync() =>
+    internal static async Task<(UtermServer Server, int Port)> BootAsync() =>
         await BootAsync(new AuthorizationService());
 
-    private static async Task<(UtermServer Server, int Port)> BootAsync(AuthorizationService authz)
+    internal static async Task<(UtermServer Server, int Port)> BootAsync(AuthorizationService authz)
     {
         var port = FreePort();
         var cfg = UtermServerConfig.Default();
@@ -88,14 +88,14 @@ public sealed class ServerIntegrationViewerRevocationTests
         return (server, port);
     }
 
-    private static void Identify(Action<string, string> set, string subject, string role, double iat)
+    internal static void Identify(Action<string, string> set, string subject, string role, double iat)
     {
         set("X-Test-Subject", subject);
         set("X-Test-Role", role);
         set("X-Test-Iat", iat.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private static async Task<ClientWebSocket> ConnectAsync(int port, string subject, string role, double iat)
+    internal static async Task<ClientWebSocket> ConnectAsync(int port, string subject, string role, double iat)
     {
         var ws = new ClientWebSocket();
         Identify(ws.Options.SetRequestHeader, subject, role, iat);
@@ -104,7 +104,7 @@ public sealed class ServerIntegrationViewerRevocationTests
     }
 
     /// <summary>Read until a text message containing <paramref name="needle"/>, or the close.</summary>
-    private static async Task<string?> ReadUntilAsync(ClientWebSocket ws, string needle)
+    internal static async Task<string?> ReadUntilAsync(ClientWebSocket ws, string needle)
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var buffer = new byte[64 * 1024];

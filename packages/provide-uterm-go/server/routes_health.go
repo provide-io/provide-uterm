@@ -12,6 +12,13 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
 
+// serverFeatures is the optional behaviour a client cannot otherwise tell apart
+// from an older server, listed in a ready /api/health answer (port of
+// SERVER_FEATURES). "viewers.revoke.subject": the viewer-revoke route honours a
+// {"subject": ...} body; a server without it ignores the body and revokes
+// every share viewer of the session, so a caller must not send one blind.
+var serverFeatures = []string{"viewers.revoke.subject"}
+
 // registerHealthRoutes wires the anonymous liveness/readiness/health routes and
 // the authenticated security-posture route. Port of create_health_router.
 func (s *Server) registerHealthRoutes(mux *http.ServeMux) {
@@ -22,7 +29,7 @@ func (s *Server) registerHealthRoutes(mux *http.ServeMux) {
 }
 
 // handleHealth is the rich health endpoint. It is 503 until the server is ready,
-// then 200 with version/uptime/session counts.
+// then 200 with version/uptime/session counts and the supported features.
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if !s.isReady() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
@@ -48,6 +55,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"uptime_s":              uptime,
 		"active_sessions":       active,
 		"control_plane_backend": backend,
+		"features":              serverFeatures,
 	})
 }
 

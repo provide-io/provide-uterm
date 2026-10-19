@@ -14,6 +14,16 @@ namespace Provide.Uterm.Server;
 // UtermServer: hijack REST handlers plus auth/validation and JSON body helpers.
 public sealed partial class UtermServer
 {
+    /// <summary>
+    /// Optional behaviour a client cannot otherwise tell apart from an older
+    /// server, listed in a ready <c>/api/health</c> answer (port of
+    /// SERVER_FEATURES). <c>viewers.revoke.subject</c>: the viewer-revoke route
+    /// honours a <c>{"subject": ...}</c> body; a server without it ignores the
+    /// body and revokes every share viewer of the session, so a caller must not
+    /// send one blind.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> ServerFeatures = ["viewers.revoke.subject"];
+
     private IResult HandleHealth()
     {
         if (!_ready)
@@ -42,6 +52,7 @@ public sealed partial class UtermServer
             uptime_s = uptime,
             active_sessions = active,
             control_plane_backend = backend,
+            features = ServerFeatures,
         });
     }
 

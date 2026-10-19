@@ -22,6 +22,15 @@
 
 import { pyRoundTo } from "../pycompat/index.ts";
 
+/**
+ * Optional behaviour a client cannot otherwise tell apart from an older
+ * server, listed in a ready `/api/health` answer (port of `SERVER_FEATURES`).
+ * `viewers.revoke.subject`: the viewer-revoke route honours a
+ * `{"subject": ...}` body; a server without it ignores the body and revokes
+ * every share viewer of the session, so a caller must not send one blind.
+ */
+export const SERVER_FEATURES: readonly string[] = ["viewers.revoke.subject"];
+
 /** What the health endpoints read off the running server. */
 export interface HealthState {
   /** Whether the session registry has been attached at all. */
@@ -67,6 +76,7 @@ export function healthReport(state: HealthState): HealthAnswer {
       uptime_s: uptimeSeconds(state),
       active_sessions: state.activeSessions,
       control_plane_backend: state.controlPlaneBackend,
+      features: [...SERVER_FEATURES],
     },
   };
 }

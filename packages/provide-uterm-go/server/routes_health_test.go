@@ -8,6 +8,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -42,7 +43,13 @@ func TestHealthLifecycle(t *testing.T) {
 		t.Fatalf("health ready: %d", rec.Code)
 	}
 	body := decode(t, rec.Body.Bytes())
-	if body["status"] != "ok" || body["version"] != "9.9.9" || body["control_plane_backend"] != "memory" {
+	uptime, active := body["uptime_s"], body["active_sessions"]
+	want := map[string]any{
+		"status": "ok", "ok": true, "ready": true, "service": "uterm-server", "version": "9.9.9",
+		"uptime_s": uptime, "active_sessions": active, "control_plane_backend": "memory",
+		"features": []any{"viewers.revoke.subject"},
+	}
+	if !reflect.DeepEqual(body, want) {
 		t.Fatalf("health body: %v", body)
 	}
 	if rec := ts.do("GET", "/readyz", "", nil); rec.Code != http.StatusOK {
