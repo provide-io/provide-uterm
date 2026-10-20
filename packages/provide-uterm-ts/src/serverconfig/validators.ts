@@ -277,6 +277,101 @@ export function validateGovernanceConfig(input: Record<string, unknown>): void {
 }
 
 /**
+ * Normalise a filesystem path the way `pathlib.Path` does.
+ *
+ * Duplicate and trailing separators go, a bare `.` component goes, and `..` is
+ * kept — resolving it would need the filesystem and would change what the path
+ * means when a symlink is in it.
+ */
+export function normalizePath(value: string): string {
+  const absolute = value.startsWith("/");
+  const parts = value.split("/").filter((part) => part !== "" && part !== ".");
+  const joined = parts.join("/");
+  if (absolute) {
+    return `/${joined}`;
+  }
+  return joined === "" ? "." : joined;
+}
+
+/** The most days a previous capture session is kept (`session_persistence.previous_keep_days`). */
+export const MAX_PREVIOUS_KEEP_DAYS = 3650;
+
+/** The most rows of scrollback a previous capture session keeps (`session_persistence.previous_scrollback_lines`). */
+export const MAX_PREVIOUS_SCROLLBACK_LINES = 10000;
+
+/**
+ * The reference's refusal of a `previous_keep_days` outside its bounds, or
+ * nothing when the value is inside them.
+ *
+ * This port has no capture connector, so it keeps no capture session; it
+ * still loads a config that sets these, and refuses one the reference would.
+ * One function a field, so neither message can stand in for the other.
+ */
+export function keepDaysComplaint(value: number): string | undefined {
+  return value < 0 || value > MAX_PREVIOUS_KEEP_DAYS
+    ? `session_persistence.previous_keep_days must be between 0 (keep no previous sessions) and ${MAX_PREVIOUS_KEEP_DAYS}, got: ${value}`
+    : undefined;
+}
+
+/** The reference's refusal of a `previous_scrollback_lines` outside its bounds, or nothing. */
+export function scrollbackLinesComplaint(value: number): string | undefined {
+  return value < 0 || value > MAX_PREVIOUS_SCROLLBACK_LINES
+    ? `session_persistence.previous_scrollback_lines must be between 0 and ${MAX_PREVIOUS_SCROLLBACK_LINES}, got: ${value}`
+    : undefined;
+}
+
+/** Each bounded `[session_persistence]` field, and its refusal. */
+const SESSION_PERSISTENCE_BOUNDS = {
+  previous_keep_days: keepDaysComplaint,
+  previous_scrollback_lines: scrollbackLinesComplaint,
+} as const;
+
+/**
+ * The reference's refusal of a `state_dir` that is not absolute, or nothing.
+ *
+ * Given the path already normalised as the reference's `Path` writes it, so
+ * the message quotes the same text; `null` (the default) is not refused here.
+ */
+export function stateDirComplaint(value: string | null): string | undefined {
+  return value === null || value.startsWith("/")
+    ? undefined
+    : `session_persistence.state_dir must be an absolute path, got: ${value}`;
+}
+
+/** The refusal of a section that keeps something with nowhere named to keep it. */
+export const STATE_DIR_REQUIRED =
+  "session_persistence.state_dir is required when session_persistence.persist_capture " +
+  "is on or session_persistence.previous_keep_days is above 0";
+
+/**
+ * Check a session-persistence section.
+ *
+ * @throws {Error} On a number of days or of scrollback rows outside its
+ *   bounds, a `state_dir` that is not absolute, or either feature on with no
+ *   `state_dir` at all.
+ */
+export function validateSessionPersistenceConfig(input: Record<string, unknown>): void {
+  for (const [field, complaintOf] of Object.entries(SESSION_PERSISTENCE_BOUNDS)) {
+    const value = input[field];
+    // Only a number is bounded: any other type is its field's complaint.
+    const complaint = typeof value === "number" ? complaintOf(value) : undefined;
+    if (complaint !== undefined) {
+      throw new Error(complaint);
+    }
+  }
+  const stateDir = typeof input.state_dir === "string" ? normalizePath(input.state_dir) : null;
+  const absolute = stateDirComplaint(stateDir);
+  if (absolute !== undefined) {
+    throw new Error(absolute);
+  }
+  const keeps =
+    input.persist_capture === true || (typeof input.previous_keep_days === "number" && input.previous_keep_days > 0);
+  if (keeps && stateDir === null) {
+    throw new Error(STATE_DIR_REQUIRED);
+  }
+}
+
+/**
  * The base URL the server hands out in links.
  *
  * Derived from the bind when the operator gave none; behind a proxy the bind

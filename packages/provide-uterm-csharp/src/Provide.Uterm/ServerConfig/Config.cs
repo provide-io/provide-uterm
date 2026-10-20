@@ -183,6 +183,28 @@ public sealed class WebhooksConfig
     public bool AllowLoopbackDestinations { get; set; }
 }
 
+/// <summary>
+/// <c>[session_persistence]</c>: PAM capture sessions kept across a restart, and
+/// after they end. This port has no capture connector, so it keeps none; the
+/// values are carried for config parity and nothing reads them.
+/// </summary>
+public sealed class SessionPersistenceConfig
+{
+    /// <summary>The most days a previous session may be kept.</summary>
+    public const int MaxPreviousKeepDays = 3650;
+
+    /// <summary>The most rows of scrollback a previous session may keep.</summary>
+    public const int MaxPreviousScrollbackLines = 10000;
+
+    public bool PersistCapture { get; set; }
+    public int PreviousKeepDays { get; set; }
+    public int PreviousScrollbackLines { get; set; } = 1000;
+
+    /// <summary>Where the files would go: an absolute path, as the reference
+    /// normalises it; null until one is named.</summary>
+    public string? StateDir { get; set; }
+}
+
 /// <summary>Governance section — external policy/authz webhooks (Go GovernanceConfig subset).</summary>
 public sealed class GovernanceConfig
 {
@@ -274,6 +296,7 @@ public sealed class UtermServerConfig
     public TunnelConfig Tunnel { get; set; } = new();
     public GovernanceConfig Governance { get; set; } = new();
     public WebhooksConfig Webhooks { get; set; } = new();
+    public SessionPersistenceConfig SessionPersistence { get; set; } = new();
     public List<SessionDefinition> Sessions { get; set; } = new();
     public List<GraphicalTargetDefinition> GraphicalTargets { get; set; } = new();
     /// <summary>Permit dormant fan-out members at creation; send-time authz still applies.</summary>

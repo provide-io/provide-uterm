@@ -18,6 +18,7 @@ import {
   validateControlPlaneConfig,
   validatePamConfig,
   validateRecordingConfig,
+  validateSessionPersistenceConfig,
 } from "./index.ts";
 
 interface ServerConfigGolden {
@@ -49,6 +50,7 @@ const VALIDATORS: Record<string, (input: Record<string, unknown>) => void> = {
   RecordingConfig: validateRecordingConfig,
   ControlPlaneConfig: validateControlPlaneConfig,
   PamConfig: validatePamConfig,
+  SessionPersistenceConfig: validateSessionPersistenceConfig,
 };
 
 describe("requireSecureUrl", () => {
@@ -349,6 +351,57 @@ describe("the other configurations", () => {
   it.each([0, 0.25, 1])("accepts a screen interval of %s", (value) => {
     expect(() => validateRecordingConfig({ screen_interval_s: value })).not.toThrow();
   });
+
+  it.each([
+    ["previous_keep_days", -1],
+    ["previous_keep_days", 3651],
+  ])("refuses %s of %s in the reference's words", (field, value) => {
+    expect(() => validateSessionPersistenceConfig({ [field]: value })).toThrow(
+      `session_persistence.previous_keep_days must be between 0 (keep no previous sessions) and 3650, got: ${value}`,
+    );
+  });
+
+  it.each([
+    ["previous_scrollback_lines", -1],
+    ["previous_scrollback_lines", 10001],
+  ])("refuses %s of %s in the reference's words", (field, value) => {
+    expect(() => validateSessionPersistenceConfig({ [field]: value })).toThrow(
+      `session_persistence.previous_scrollback_lines must be between 0 and 10000, got: ${value}`,
+    );
+  });
+
+  it.each([
+    { previous_keep_days: 0, previous_scrollback_lines: 0 },
+    { previous_keep_days: 3650, previous_scrollback_lines: 10000, state_dir: "/var/lib/u" },
+    { persist_capture: true, state_dir: "/var/lib/u/" },
+    { previous_keep_days: "7" },
+    // Only a number is bounded here; another type is its field's complaint.
+    { previous_keep_days: "99999", previous_scrollback_lines: "99999" },
+    { persist_capture: "yes" },
+    {},
+  ])("accepts session persistence of %o", (input) => {
+    expect(() => validateSessionPersistenceConfig(input)).not.toThrow();
+  });
+
+  it.each([
+    ["state/", "state"],
+    ["", "."],
+    ["./a//b/", "a/b"],
+  ])("refuses a state directory of %j that is not absolute, quoting it as the reference does", (value, shown) => {
+    expect(() => validateSessionPersistenceConfig({ state_dir: value })).toThrow(
+      `session_persistence.state_dir must be an absolute path, got: ${shown}`,
+    );
+  });
+
+  it.each([{ persist_capture: true }, { previous_keep_days: 1 }, { persist_capture: true, state_dir: 5 }])(
+    "refuses %o, which keeps something with nowhere to keep it",
+    (input) => {
+      expect(() => validateSessionPersistenceConfig(input)).toThrow(
+        "session_persistence.state_dir is required when session_persistence.persist_capture " +
+          "is on or session_persistence.previous_keep_days is above 0",
+      );
+    },
+  );
 
   it("names the recording webhook url specifically", () => {
     expect(() => validateRecordingConfig({ webhook_url: "http://evil.example" })).toThrow("recording.webhook_url");

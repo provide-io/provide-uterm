@@ -240,7 +240,8 @@ public sealed class ServerConfigNestedKeyTests
         var expected = new[]
         {
             "server", "auth", "control_plane", "ui", "recording", "profiles", "security",
-            "tunnel", "webhooks", "pam", "governance", "audit", "graphical_targets", "sessions",
+            "tunnel", "webhooks", "session_persistence", "pam", "governance", "audit", "graphical_targets",
+            "sessions",
         };
 
         Assert.Equal(

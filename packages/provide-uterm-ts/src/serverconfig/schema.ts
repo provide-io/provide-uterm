@@ -23,14 +23,19 @@ import { MIN_RATE_PER_SEC } from "../ratelimit/index.ts";
 import { SECTION_FIELD_SPECS, TOP_LEVEL_FIELD_SPEC } from "./schema-fields.ts";
 import {
   cleanPath,
+  keepDaysComplaint,
+  normalizePath,
   pyFloat,
   screenIntervalComplaint,
+  scrollbackLinesComplaint,
+  stateDirComplaint,
   validateAuditConfig,
   validateAuthConfig,
   validateControlPlaneConfig,
   validateGovernanceConfig,
   validatePamConfig,
   validateRecordingConfig,
+  validateSessionPersistenceConfig,
 } from "./validators.ts";
 
 /** One complaint about one place in a document, in the reference's own terms. */
@@ -144,23 +149,6 @@ type Coerced = { value: unknown } | { error: string };
 /** Whether this is a table rather than a list or a null. */
 function isTable(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * Normalise a filesystem path the way `pathlib.Path` does.
- *
- * Duplicate and trailing separators go, a bare `.` component goes, and `..` is
- * kept — resolving it would need the filesystem and would change what the path
- * means when a symlink is in it.
- */
-function normalizePath(value: string): string {
-  const absolute = value.startsWith("/");
-  const parts = value.split("/").filter((part) => part !== "" && part !== ".");
-  const joined = parts.join("/");
-  if (absolute) {
-    return `/${joined}`;
-  }
-  return joined === "" ? "." : joined;
 }
 
 function coerceBool(value: unknown): Coerced {
@@ -308,6 +296,11 @@ const FIELD_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
   },
   TunnelConfig: {
     token_ttl_s: (value) => notBelow(value, 60, `tunnel.token_ttl_s must be >= 60, got: ${value as number}`),
+  },
+  SessionPersistenceConfig: {
+    previous_keep_days: (value) => keepDaysComplaint(value as number),
+    previous_scrollback_lines: (value) => scrollbackLinesComplaint(value as number),
+    state_dir: (value) => stateDirComplaint(value as string | null),
   },
   SessionDefinition: {
     connector_type: (value, accepted) => connectorTypeComplaint(value as string, accepted),
@@ -543,6 +536,7 @@ const SECTION_RULES: Readonly<Record<string, (input: Record<string, unknown>) =>
   ControlPlaneConfig: validateControlPlaneConfig,
   PamConfig: validatePamConfig,
   GovernanceConfig: validateGovernanceConfig,
+  SessionPersistenceConfig: validateSessionPersistenceConfig,
 };
 
 /** The fields of a section, or a complaint that there is no such section. */

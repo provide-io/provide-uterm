@@ -158,6 +158,12 @@ export const SERVER_CONFIG_DEFAULTS: ServerConfigDocument = deepFreeze({
     title: "provide-uterm-server",
   },
   session_idle_timeout_s: 0,
+  session_persistence: {
+    persist_capture: false,
+    previous_keep_days: 0,
+    previous_scrollback_lines: 1000,
+    state_dir: null,
+  },
   session_retention_s: 0,
   sessions: [
     {
@@ -221,6 +227,7 @@ export const SERVER_CONFIG_SECTIONS: readonly string[] = [
   "recording",
   "security",
   "server",
+  "session_persistence",
   "tunnel",
   "ui",
   "webhooks",

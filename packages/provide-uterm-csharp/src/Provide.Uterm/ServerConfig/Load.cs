@@ -75,7 +75,7 @@ public static class ConfigLoader
     private static readonly HashSet<string> KnownTopLevelKeys = new(StringComparer.Ordinal)
     {
         "environment", "server", "auth", "control_plane", "ui", "recording",
-        "profiles", "security", "tunnel", "webhooks", "pam", "governance",
+        "profiles", "security", "tunnel", "webhooks", "session_persistence", "pam", "governance",
         "audit", "sessions", "graphical_targets",
         "session_idle_timeout_s", "session_retention_s",
         "browser_rate_limit_per_sec",
@@ -133,6 +133,7 @@ public static class ConfigLoader
         ["security"] = "SecurityConfig",
         ["tunnel"] = "TunnelConfig",
         ["webhooks"] = "WebhooksConfig",
+        ["session_persistence"] = "SessionPersistenceConfig",
         ["pam"] = "PamConfig",
         ["governance"] = "GovernanceConfig",
         ["audit"] = "AuditConfig",
@@ -221,6 +222,10 @@ public static class ConfigLoader
         ["webhooks"] = new(StringComparer.Ordinal)
         {
             "allow_loopback_destinations"
+        },
+        ["session_persistence"] = new(StringComparer.Ordinal)
+        {
+            "persist_capture", "previous_keep_days", "previous_scrollback_lines", "state_dir"
         },
         ["pam"] = new(StringComparer.Ordinal)
         {
@@ -439,6 +444,11 @@ public static class ConfigLoader
             && wh.TryGetValue("allow_loopback_destinations", out var loopback) && loopback is bool loopbackB)
         {
             cfg.Webhooks.AllowLoopbackDestinations = loopbackB;
+        }
+
+        if (root.TryGetValue("session_persistence", out var spObj) && spObj is TomlTable sp)
+        {
+            SessionPersistenceLoader.Apply(cfg.SessionPersistence, sp);
         }
 
         if (root.TryGetValue("sessions", out var sessObj) && sessObj is TomlTableArray sessions)

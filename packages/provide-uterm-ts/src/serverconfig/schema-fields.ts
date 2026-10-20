@@ -163,6 +163,12 @@ export const SECTION_FIELD_SPECS = {
     telemetry_webhook_timeout_s: "float",
     external_connectors: "str[]",
   },
+  SessionPersistenceConfig: {
+    persist_capture: "bool",
+    previous_keep_days: "int",
+    previous_scrollback_lines: "int",
+    state_dir: "path?",
+  },
   GraphicalTargetConfig: {
     target_id: "str",
     tenant_id: "str",
@@ -207,6 +213,7 @@ export const TOP_LEVEL_FIELD_SPEC = {
   security: "model:SecurityConfig",
   tunnel: "model:TunnelConfig",
   webhooks: "model:WebhooksConfig",
+  session_persistence: "model:SessionPersistenceConfig",
   pam: "model:PamConfig",
   governance: "model:GovernanceConfig",
   audit: "model:AuditConfig",
