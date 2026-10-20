@@ -222,6 +222,8 @@ Flags: `0x00` = data, `0x01` = EOF (half-close).
 | `DELETE /api/tunnels/{id}/tokens` | served (revocation) | served (revocation) |
 | `POST /api/tunnels/{id}/tokens/rotate` | served (rotation) | served (rotation) |
 | `POST /api/sessions/{id}/viewers/revoke` | served: refuses every `share:{id}:...` viewer token issued up to now and closes live share-viewer sockets with `4410 viewer access revoked` (also Go, C#; TS refuses reads, binds no socket). An optional body `{"subject": "share:{id}:..."}` does the same for that one subject only: the session's other viewers keep watching and a token minted for the subject later is admitted. No body, a blank one, `null` or `{}` revokes the whole session, which also drops that session's subject cutoffs at or before it. Any other body, one past 4 KiB, or a subject that is not a string or spells a lone surrogate is `422 invalid request body`; a subject without the `share:{id}:` prefix, with nothing after it, or past 512 UTF-8 bytes is `422 subject must be a share subject of this session`. A new subject is refused with `429` when the session already holds 100 subject cutoffs or all sessions together hold 10 000. A subject revoke's answer adds `"subject"` (the subject applied); a whole-session answer has no `subject` key. Servers that support the body list `viewers.revoke.subject` in `/api/health` `features`; an older server ignores the body and revokes every viewer, so check before sending one. The browser elements treat 4410 as final and do not reconnect (`uterm:close` reports it) | not served (no share-viewer grants) |
+| `GET /api/previous-sessions` | served (also Go; not C#, TS): `{"sessions": [{"id", "display_name", "owner", "ended_at", "cols", "rows"}]}`, newest first (ties by id), only the ended PAM capture sessions the caller may read. History is read by fewer than the live session was: its owner, an admin, and an operator unless it was private, admin and operator being the caller's standing, asked of the authorization provider once a request rather than once a record (admin: the provider's `is_admin` with `session.control.hijack`, the take-over capability the live read's admin role requires, so a webhook provider decides it; an admin scoped to a session is admin of only that one; operator: the operator role, as the live read's role resolution reads it); nobody else, not even for a public session, and never a share viewer (a `share:` subject, a watch or a tunnel share), whatever its token: a grant is for the live stream, and its revocations are not kept across a restart. Each must also pass `can_read_session` on the definition it ended with. Empty when `session_persistence.previous_keep_days` is 0. Listed in `/api/health` `features` as `sessions.previous` when on | not served (no capture sessions) |
+| `GET /api/previous-sessions/{id}` | served (also Go): the listing's fields plus `"screen"` (the last `ansi_screen()`, rows joined with LF) and `"scrollback"` (plain-text rows that scrolled off above it, oldest first, at most `previous_scrollback_lines`), both through the output-redaction policy the live screen is redacted by, its rules fetched once a read; a policy that cannot answer: `503 output policy unavailable`, never the unredacted screen. Unknown, or its file gone since: `404 unknown previous session: {id}`; not readable by the caller (by the listing's rule): `403 insufficient privileges`, as the live session's read answers; a path-unsafe id: `422` | not served |
 | Share URL (`?invite=...`) | `/s/{id}` → set HttpOnly cookie, 302 clean redirect | `/s/{id}` → set HttpOnly cookie, 302 clean redirect |
 | Inspect view | `/app/inspect/{id}` | `/app/inspect/{id}` |
 
@@ -312,6 +314,106 @@ owner adds. Owner-only socket (`0600`, bound under umask `0177`).
   to one reading of each frame.
 - C# has no capture connector.
 
+### Capture sessions across a restart
+
+`[session_persistence]` (Python and Go; TypeScript and C# accept and bound the
+keys, with the same refusals, and keep nothing). A PAM capture session, one
+whose id is `pam-<user>-capture-<pid>-<start ticks>` (`<user>` ASCII
+`[A-Za-z0-9_-]`, the id at most 200 bytes, pid and ticks int64), is kept in one
+JSON file under `state_dir`: `live/<id>.json` while it exists,
+`previous/<id>.json` once it has ended.
+
+`state_dir` is named outright, never derived, so two servers do not share one
+by accident: required when `persist_capture` is on or `previous_keep_days` is
+above 0 (`session_persistence.state_dir is required when
+session_persistence.persist_capture is on or session_persistence.previous_keep_days
+is above 0`), and absolute (`session_persistence.state_dir must be an absolute
+path, got: <path>`, the path as `pathlib` writes it). At startup it is created
+`0700` if missing (its parent must exist), and a server whose `state_dir` is
+not a `0700` directory this user owns does not start:
+`session_persistence.state_dir <path>: mode 0755, not 0700`, `...: not a
+directory this user owns`, or `...: cannot create: ENOENT`. A `live/` or
+`previous/` directory that will not do the same way is skipped with
+`capture_state_dir_ignored` (`error=` the reason, or `cannot list: EACCES`),
+never fatal. Both ports write and read the same
+format (`packages/provide-uterm-go/capturestate/testdata/capture_record_golden.json`
+holds the reference's files and its refusals):
+
+```json
+{"format": 1, "kind": "live",
+ "session": {"session_id": "...", "connector_type": "pty_capture", "...": "the whole definition"},
+ "recording_instance": "<hex>", "login": {"pid": 4242, "start_ticks": 777},
+ "screen": {"ansi": "<ansi_screen()>", "cols": 80, "rows": 24},
+ "scrollback": ["<plain text>"], "saved_at": 1760875200.5}
+```
+
+A previous record has `"kind": "previous"` and `"ended_at"`; `screen` is
+`null` until one was taken. Both ports judge a file on its JSON, so they accept
+and refuse the same files.
+
+- `format` is the compatibility contract: a newer one than the build reads is
+  refused (`newer format: 2`), one below 1 or not an integer is `unknown
+  format`. A change an older build could not read safely, beyond a definition
+  key added or removed, is a new format.
+- Within a format, builds may differ in the definition's keys, since an
+  upgrade or a downgrade restarts on the files the other build wrote. A key
+  this build does not know is ignored, never folded into `connector_config`
+  and never matched by case; it is noted once a file at load, as
+  `capture_state_keys_ignored path=... keys=a,b` at info, not a warning. A
+  missing key that has a default takes the model's (`display_name` the id,
+  `input_mode` `open`, `auto_start` true, `tags` `[]`, `recording_enabled`
+  null, `created_at` now, `ephemeral` and `presence` false,
+  `auto_transfer_idle_s` 30, `keystroke_queue` `display`). `session_id`,
+  `connector_type`, `connector_config`, `owner` and `visibility` are never
+  defaulted, since a default would change what the session connects to or who
+  reads it: without one, `bad session: <key>`.
+- Every key present is of its JSON type (`bad session: <key>`); `login` and
+  `screen` have exactly their keys, with int64 numbers; `scrollback` is a list
+  of strings; `saved_at` and `ended_at` are finite and not negative.
+
+Bytes that are not one JSON object (not UTF-8, `NaN`, nested past the parser)
+are `not an object`. Any other refusal is a reason with no file content in it
+(`session id is not the file's name`, `owned by another user`, `not a regular
+file`, `too large` past 16 MiB, `cannot open: ELOOP` for a symlink, `cannot
+read: EIO` on a failing disk, by errno name in both ports), logged as
+`capture_state_file_ignored` and skipped; a previous session's read answers
+it 404, as a file gone since it was listed. The file is opened without
+following a symlink and without blocking, so a FIFO is refused rather than
+waited on.
+
+- With `persist_capture`, the definition is written on create, update and mode
+  change (in Go outside the registry's and the store's locks, in order per
+  session); the screen on the recording's settle trigger, as a second sink that
+  runs with no recording and past its quota, at most once a second and only
+  when it changed; and once more as the session stops.
+- At startup, after the control plane's migration and before sessions
+  auto-start, each live file is re-created under its id, definition and
+  recording instance (its recording is kept), and its first connector is
+  painted with the saved screen, CRLF for LF, which also stands in for the
+  output since the last clear on a resize. The screen stays pending until a
+  start succeeds, so a first start that fails leaves it for the retry. The
+  scrollback kept so far carries over every start, a stop and start in this
+  process as much as a restart. Its socket must pass the
+  confinement PAM's open applies, and its login's pid must still report the
+  start ticks the id names; otherwise it ends.
+- With `previous_keep_days` above 0, a session that ends (PAM close, `DELETE`,
+  or found gone at startup, dated by its last save) is kept with its last
+  screen and up to `previous_scrollback_lines` rows of scrollback, the rows
+  that scrolled off the top of the main screen (none from the alternate
+  screen, or from a region that starts lower down). One that ended longer ago
+  than its days (a login gone during a long downtime) is not written. Pruned
+  past its days at startup and hourly, and past 20 per owner, the newest kept;
+  a definition with no owner counts against the PAM user its id names. With 0
+  the file is deleted.
+- A capture socket takes over only a stale socket at its path: both ports
+  probe it first (`lstat`, then a connect, in Python on a thread so the loop
+  is not held) and remove it only when the connect is refused. One something still listens on, another session's, is left and
+  the bind fails (`capture socket is in use: <path>` in Python, `EADDRINUSE`),
+  as is one that does not say (another error, or no answer in time); a file
+  that is not a socket is left for the bind to refuse.
+- Go's session create ignores `auto_start`, so a Go PAM capture session (kept
+  or not) runs once a client starts it, as before.
+
 ## Health checks
 
 Unauthenticated endpoints for load balancers, orchestrators, and monitoring.
@@ -324,7 +426,7 @@ Unauthenticated endpoints for load balancers, orchestrators, and monitoring.
 | Response: `uptime_s` | seconds since server start | not included |
 | Response: `active_sessions` | count from session registry | not included |
 | Response: `control_plane_backend` | `"memory"` or `"sqlite"` | not included |
-| Response: `features` | `["viewers.revoke.subject"]` when ready (also Go, C#, TS): optional behaviour a client cannot otherwise detect; absent from the 503 answers | not included |
+| Response: `features` | `["viewers.revoke.subject"]` when ready (also Go, C#, TS): optional behaviour a client cannot otherwise detect; absent from the 503 answers. Python and Go add `sessions.capture.persist` when `session_persistence.persist_capture` is on and `sessions.previous` when `session_persistence.previous_keep_days` is above 0 | not included |
 | `GET /healthz` | served (minimal, no deps) | unsupported |
 | Auth required | no | no |
 

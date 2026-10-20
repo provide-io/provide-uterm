@@ -63,6 +63,16 @@ directory = ".uterm-recordings"
 # backend = "memory"            # "memory" (default) or "sqlite"
 # database_url = "~/.uterm/control_plane.db"  # required when backend = "sqlite"
 
+# PAM capture sessions (pam.mode = "capture") kept across a restart, and after
+# they end. state_dir is required when either is on: an absolute path, one per
+# server, made 0700 if missing; the server will not start if it is not a 0700
+# directory its user owns.
+# [session_persistence]
+# state_dir = "/var/lib/uterm/capture-sessions"
+# persist_capture = true         # re-create a live login's session, screen and owner at startup
+# previous_keep_days = 7         # keep an ended session's last screen this many days (0 = none)
+# previous_scrollback_lines = 1000  # rows of scrollback a previous session keeps (at most 10000)
+
 [[sessions]]
 session_id = "provide-shell"
 display_name = "Provide Shell"

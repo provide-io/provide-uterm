@@ -94,6 +94,32 @@ The recording configuration lives under `recording.*` in
 | `webhook_url`                | unset                | Required when `store_type = "webhook"` |
 | `screen_interval_s`          | `0` (off)            | Also record the screen of a session nobody is reading (a PAM capture) once its output settles, at most every N s; 0, or >= 0.25. Each is a whole rendered screen (`screen`, `raw`, `raw_bytes_b64`, about 18 KB at 80x24 in truecolor) and counts toward `max_bytes` |
 
+### Capture sessions across a restart (`[session_persistence]`)
+
+PAM capture sessions (`pam.mode = "capture"`) can be kept on disk too. A
+table of its own rather than `[sessions]`, which is the list of static session
+definitions:
+
+| Knob                         | Default              | Notes                          |
+| ---------------------------- | -------------------- | ------------------------------ |
+| `state_dir`                  | none                 | Where the files go. Required when either feature below is on, and absolute; created `0700` at startup if missing (its parent must exist), and the server does not start if it is not a `0700` directory its user owns. Name one per server: two servers sharing it would adopt each other's sessions. Put it inside the unit's writable state, for example `/var/lib/uterm/capture-sessions` |
+| `persist_capture`            | `false`              | Keep each PAM capture session (an id `pam-<user>-capture-<pid>-<start ticks>`) in `<state_dir>/live/<id>.json`: its definition, written on create, update and mode change, and its last rendered screen, written once output settles (at most once a second, only when it changed, with no recording or past the quota too) and once more as it stops. At startup each is re-created under its id, owner, visibility and recording instance while its socket passes PAM's confinement and its login's pid still reports the start ticks its id names; any other ends |
+| `previous_keep_days`         | `0` (off)            | 0 to 3650. Keep a session that ends (PAM close, `DELETE`, or found gone at startup) as a read-only previous session in `.../previous/<id>.json`, read through `GET /api/previous-sessions[/{id}]` by its owner, an admin, or an operator unless it was private (never a share viewer, nor anyone for a public session alone); one that ended longer ago than its days is not kept; pruned past its days at startup and hourly, and past 20 per owner (by the PAM user in the id when it has no owner) |
+| `previous_scrollback_lines`  | `1000`               | 0 to 10000. The rows that scrolled off the top of the screen a previous session keeps, as plain text |
+
+These files hold the screen **unredacted**: redaction is for text a reader is
+shown, and a redacted screen painted back is a different screen. A previous
+session's screen and scrollback are redacted when they are read, by the policy
+the live screen is redacted by, and withheld (`503`) when that policy cannot
+answer. The files are as private as the terminal state the server holds in
+memory: `0600` files in `0700` directories, written to a synced temporary file
+renamed into place. One is read back only if it is a regular file this user
+owns, no larger than 16 MiB, of a format this build reads, and of the shape
+and JSON types the server writes, a definition key another build of the same
+format added or dropped aside (`docs/protocol-matrix.md`, "Capture sessions
+across a restart"); any other file, or a directory that is not `0700` and this
+user's, is skipped with a warning.
+
 `session_retention_s` lives at the top level of `UtermServerConfig` and applies
 to stopped session definitions in the in-memory registry; recording file TTL is
 controlled separately by `recording.retention_s`.
