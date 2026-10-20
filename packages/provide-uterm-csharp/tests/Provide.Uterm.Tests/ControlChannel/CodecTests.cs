@@ -32,6 +32,21 @@ public class CodecTests
         Assert.Equal("plain", ControlChannelCodec.EncodeTerminalData("plain"));
     }
 
+    // A stream that stops right after a DLE cannot say whether it was an escaped DLE or a frame start, so
+    // Finish must reject it. The garbage property test reaches this only when its random input happens to
+    // end in a lone DLE, which left the line's coverage to chance.
+    [Fact]
+    public void Finish_RejectsTrailingLoneDle()
+    {
+        var decoder = new global::Provide.Uterm.ControlChannel.Decoder();
+        var data = Assert.IsType<DataChunk>(Assert.Single(decoder.Feed("ab\u0010")));
+        Assert.Equal("ab", data.Data);
+
+        var error = Assert.Throws<ProtocolException>(() => decoder.Finish());
+
+        Assert.Equal("truncated control frame", error.Message);
+    }
+
     [Fact]
     public void EncodeControlFrame_Shape()
     {

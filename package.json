@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "json-schema-to-typescript": "^16.0.0",
-    "wrangler": "4.149.0"
+    "wrangler": "4.151.1"
   },
   "allowScripts": {
     "node-pty@1.1.0": true
