@@ -6,6 +6,7 @@
 package serverconfig
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -300,6 +301,58 @@ func validateAudit(a *AuditConfig) error {
 		return fmt.Errorf("audit.chain_enabled requires audit.chain_file (the append-only WORM log path)")
 	}
 	return nil
+}
+
+// validateSessionPersistence is SessionPersistenceConfig's two bounds, in the
+// reference's words.
+func validateSessionPersistence(p *SessionPersistenceConfig) error {
+	if p.PreviousKeepDays < 0 || p.PreviousKeepDays > MaxPreviousKeepDays {
+		return fmt.Errorf(
+			"session_persistence.previous_keep_days must be between 0 (keep no previous sessions) and %d, got: %d",
+			MaxPreviousKeepDays, p.PreviousKeepDays)
+	}
+	if p.PreviousScrollbackLines < 0 || p.PreviousScrollbackLines > MaxPreviousScrollbackLines {
+		return fmt.Errorf("session_persistence.previous_scrollback_lines must be between 0 and %d, got: %d",
+			MaxPreviousScrollbackLines, p.PreviousScrollbackLines)
+	}
+	if p.StateDir != nil {
+		dir := pyPath(*p.StateDir)
+		if !strings.HasPrefix(dir, "/") {
+			return fmt.Errorf("session_persistence.state_dir must be an absolute path, got: %s", dir)
+		}
+		p.StateDir = &dir
+	}
+	if p.StateDir == nil && (p.PersistCapture || p.PreviousKeepDays > 0) {
+		return errors.New(StateDirRequired)
+	}
+	return nil
+}
+
+// StateDirRequired is the reference's refusal of a config that turns either
+// [session_persistence] feature on without naming its state_dir. One literal:
+// a constant joined with + is a mutant no test can reach, constants having no
+// coverage block.
+const StateDirRequired = "session_persistence.state_dir is required when session_persistence.persist_capture is on or session_persistence.previous_keep_days is above 0"
+
+// pyPath is a path as Python's pathlib.Path writes it: duplicate and trailing
+// separators and bare "." components gone, ".." kept, and an empty relative
+// path written ".". The reference normalises state_dir so, and its refusals
+// quote it so.
+func pyPath(path string) string {
+	var parts []string
+	for _, part := range strings.Split(path, "/") {
+		if part != "" && part != "." {
+			parts = append(parts, part)
+		}
+	}
+	joined := strings.Join(parts, "/")
+	if strings.HasPrefix(path, "/") {
+		return "/" + joined
+	}
+	if joined == "" {
+		return "."
+	}
+	return joined
 }
 
 // validateScreenInterval is RecordingConfig._validate_screen_interval_s:

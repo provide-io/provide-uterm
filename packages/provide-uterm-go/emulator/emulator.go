@@ -185,6 +185,15 @@ func (e *TerminalEmulator) ANSIScreen() string {
 	return render.ScreenStatePrefix(e.screen) + rows + render.ScreenStateSuffix(e.screen, !e.stream.UseUTF8)
 }
 
+// SetScrollbackSink hands sink each row that scrolls off the top of the main
+// screen, as plain text. This emulator keeps only the visible screen; whoever
+// wants the history a terminal would let its user scroll back through keeps
+// it, from these rows. nil stops it; a Reset leaves it in place. Port of
+// TerminalEmulator.set_scrollback_sink.
+func (e *TerminalEmulator) SetScrollbackSink(sink func(line string)) {
+	e.screen.ScrolledOff = sink
+}
+
 // Screen exposes the backing vt.Screen.
 func (e *TerminalEmulator) Screen() *vt.Screen {
 	return e.screen

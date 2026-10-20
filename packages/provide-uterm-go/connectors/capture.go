@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,7 +49,7 @@ const captureReplayMax = 512 * 1024
 //
 // pty imports only screen from this module, which imports nothing from it, so
 // importing pty here closes no cycle and needs no registration hook.
-func newCapture(sessionID, displayName string, config map[string]any) (*transportConnector, error) {
+func newCapture(sessionID, displayName string, config map[string]any) (*captureConnector, error) {
 	// Validation (allowed keys, required socket_path) is the pty connector's
 	// own, so the two cannot drift apart.
 	capture, err := uptty.NewCaptureConnector(sessionID, displayName, config)
@@ -56,6 +57,7 @@ func newCapture(sessionID, displayName string, config map[string]any) (*transpor
 		return nil, err
 	}
 	inputMode := configStr(config, "input_mode", "open")
+	c := &captureConnector{capture: capture}
 
 	build := func() *termsession.TransportSession {
 		// The size the capture side holds, not the configured one: after a
@@ -74,13 +76,166 @@ func newCapture(sessionID, displayName string, config map[string]any) (*transpor
 			SendEncoding:    termsession.EncodingUTF8,
 			ReceiveEncoding: emulator.UTF8,
 		})
+		// Painted before the session connects, so no output can reach the
+		// emulator first; and kept as the output since the last clear, so a
+		// resize before the program clears again redraws it.
+		if painted := c.takeRestore(); painted != nil {
+			sess.Emulator().Process(painted)
+			tr.seedRedraw(painted)
+		}
+		c.watchScrollback(sess.Emulator())
 		// A geometry frame on the capture wire resizes the session viewers
-		// see, redrawn from what was drawn since the last clear.
-		tr.OnResize(sess.Resize)
+		// see, redrawn from what was drawn since the last clear. The redraw
+		// builds a new emulator, which scrolls off the rows the old one
+		// already handed over; it is watched only once it holds them.
+		tr.OnResize(func(cols, rows int, redraw []byte) {
+			sess.Resize(cols, rows, redraw)
+			c.watchScrollback(sess.Emulator())
+		})
 		return sess
 	}
 	upstream := fmt.Sprintf("unix:%v", config["socket_path"])
-	return newTransportConnector(sessionID, displayName, "pty_capture", upstream, inputMode, build), nil
+	c.transportConnector = newTransportConnector(sessionID, displayName, "pty_capture", upstream, inputMode, build)
+	return c, nil
+}
+
+// CaptureState is what a "pty_capture" connector offers the server that keeps
+// its session across a restart (capturestate): the rows that scrolled off its
+// screen, and a screen to start from when the session is re-created.
+type CaptureState interface {
+	// KeepScrollback keeps up to lines rows of scrollback, the newest, starting
+	// from rows: the scrollback the session had kept before this connector
+	// started. 0 keeps none.
+	KeepScrollback(lines int, rows []string)
+	// Scrollback returns the rows that scrolled off the top of the screen,
+	// as plain text, oldest first.
+	Scrollback() []string
+	// RestoreScreen has the next Start begin from screen (an ANSIScreen) at
+	// cols x rows.
+	RestoreScreen(screen string, cols, rows int)
+}
+
+// captureConnector is the "pty_capture" connector: the shared transport
+// connector, plus the scrollback and restored screen a capture session
+// carries across a restart. Port of the reference CaptureConnector's
+// keep_scrollback, scrollback and restore_screen.
+type captureConnector struct {
+	*transportConnector
+	capture *uptty.CaptureConnector
+
+	mu sync.Mutex
+	// scrollback holds the rows scrolled off the top. It is here rather than
+	// in the emulator, which a resize replaces and replays into: a replay
+	// scrolls the same rows off again.
+	scrollback scrollbackRing
+	// restore is the painted screen the next build starts from, if any.
+	restore []byte
+}
+
+var (
+	_ Connector    = (*captureConnector)(nil)
+	_ CaptureState = (*captureConnector)(nil)
+)
+
+// KeepScrollback starts the scrollback from rows, at most lines of them.
+func (c *captureConnector) KeepScrollback(lines int, rows []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.scrollback = newScrollbackRing(lines)
+	for _, row := range rows {
+		c.scrollback.push(row)
+	}
+}
+
+// Scrollback returns a copy of the rows kept, oldest first.
+func (c *captureConnector) Scrollback() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.scrollback.rows()
+}
+
+// RestoreScreen takes the screen's size now and paints it at the next build.
+// Its rows are joined with LF, which a terminal reads as a line feed alone, so
+// they are painted with CRLF.
+func (c *captureConnector) RestoreScreen(screen string, cols, rows int) {
+	c.capture.SetSize(cols, rows)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.restore = []byte(strings.ReplaceAll(screen, "\n", "\r\n"))
+}
+
+// Clear clears the screen and the scrollback above it, as the reference's
+// clear does.
+func (c *captureConnector) Clear() error {
+	c.mu.Lock()
+	c.scrollback = newScrollbackRing(c.scrollback.capacity())
+	c.mu.Unlock()
+	return c.transportConnector.Clear()
+}
+
+// takeRestore returns the screen to paint, once.
+func (c *captureConnector) takeRestore() []byte {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	painted := c.restore
+	c.restore = nil
+	return painted
+}
+
+// watchScrollback has emu hand the rows it scrolls off to the scrollback, or
+// nothing when none is kept: a row is not rendered only to be dropped.
+func (c *captureConnector) watchScrollback(emu *emulator.TerminalEmulator) {
+	c.mu.Lock()
+	keeps := c.scrollback.capacity() > 0
+	c.mu.Unlock()
+	if keeps {
+		emu.SetScrollbackSink(c.scrolledOff)
+	} else {
+		emu.SetScrollbackSink(nil)
+	}
+}
+
+func (c *captureConnector) scrolledOff(line string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.scrollback.push(line)
+}
+
+// scrollbackRing keeps the newest rows up to its capacity in a fixed buffer:
+// a row pushed onto a full ring overwrites the oldest, so a long-running
+// session that scrolls a million rows allocates nothing per row. Port of the
+// reference's deque(maxlen=...).
+type scrollbackRing struct {
+	buf   []string
+	start int // index of the oldest row
+	n     int // rows held
+}
+
+func newScrollbackRing(capacity int) scrollbackRing {
+	return scrollbackRing{buf: make([]string, max(0, capacity))}
+}
+
+func (r *scrollbackRing) capacity() int { return len(r.buf) }
+
+func (r *scrollbackRing) push(row string) {
+	if len(r.buf) == 0 {
+		return
+	}
+	if r.n < len(r.buf) {
+		r.buf[(r.start+r.n)%len(r.buf)] = row
+		r.n++
+		return
+	}
+	r.buf[r.start] = row
+	r.start = (r.start + 1) % len(r.buf)
+}
+
+func (r *scrollbackRing) rows() []string {
+	out := make([]string, r.n)
+	for i := range out {
+		out[i] = r.buf[(r.start+i)%len(r.buf)]
+	}
+	return out
 }
 
 // CaptureTransport adapts a pty.CaptureConnector to transports.ConnectionTransport.
@@ -191,6 +346,14 @@ func (t *CaptureTransport) Receive(ctx context.Context, maxBytes int, timeout ti
 		case <-time.After(min(remaining, capturePollInterval)):
 		}
 	}
+}
+
+// seedRedraw starts the output since the last clear from a restored screen,
+// so a resize before the program next clears redraws it.
+func (t *CaptureTransport) seedRedraw(painted []byte) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.noteOutput(painted)
 }
 
 // noteOutput keeps sinceClear: the output after the last full clear, bounded.

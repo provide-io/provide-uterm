@@ -19,6 +19,7 @@ import (
 	ptel "github.com/provide-io/provide-telemetry/go"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/capturestate"
 	cp "github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/controlplane/bootstrap"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
@@ -237,6 +238,21 @@ func buildServerFromConfig(
 	// the same PatternDetector, which is stateless.
 	recordings := buildRecordingStore(cfg)
 	registry.SetRecording(recordings, annotation.NewPatternDetector(nil))
+	// PAM capture sessions kept across a restart ([session_persistence]):
+	// re-created now, after the migration and before the auto_start sessions
+	// come up with them, each socket confined as PAM confines it.
+	captureState, err := capturestate.Build(cfg, ptel.GetLogger(ctx, "provide.uterm.server.capture_state"))
+	if err != nil {
+		_ = engine.Close(ctx)
+		return nil, err
+	}
+	registry.SetCaptureState(captureState)
+	registry.RestoreCaptureSessions(ctx, func(socket string) bool {
+		return server.CaptureSocketConfined(cfg.Pam, socket, logger)
+	})
+	if captureState != nil {
+		go captureState.PruneLoop(ctx, capturestate.PruneInterval)
+	}
 
 	// Runtime graphical targets live in the control plane, so a sqlite backend
 	// keeps them across restarts. A memory backend behaves as before.
@@ -263,6 +279,7 @@ func buildServerFromConfig(
 		Version:          Version,
 		Logger:           logger,
 		Recording:        recordings,
+		CaptureState:     captureState,
 		FrontendDir:      frontendDir,
 		// The one boot step: bring up the auto_start sessions once the socket is
 		// bound. Every way of starting this server goes through Serve, so no
@@ -350,7 +367,7 @@ func buildRecordingStore(cfg *serverconfig.UtermServerConfig) recording.Store {
 	switch {
 	case rc.StoreType == "webhook" && rc.WebhookURL != nil && *rc.WebhookURL != "":
 		secret := ""
-		if rc.WebhookSecret != nil {
+		if rc.WebhookSecret != nil { // pragma: allowlist secret
 			secret = *rc.WebhookSecret
 		}
 		timeout := time.Duration(rc.WebhookTimeoutS * float64(time.Second))

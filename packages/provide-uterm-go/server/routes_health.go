@@ -19,6 +19,29 @@ import (
 // every share viewer of the session, so a caller must not send one blind.
 var serverFeatures = []string{"viewers.revoke.subject"}
 
+// The features listed only when configured, since a server can have either
+// switched off. "sessions.capture.persist": PAM capture sessions are
+// re-created under their ids after a restart
+// (session_persistence.persist_capture). "sessions.previous": an ended
+// capture session can be read at GET /api/previous-sessions
+// (session_persistence.previous_keep_days). Port of server_features.
+const (
+	persistCaptureFeature   = "sessions.capture.persist"
+	previousSessionsFeature = "sessions.previous"
+)
+
+// features is what /api/health lists, given the config.
+func (s *Server) features() []string {
+	out := append([]string(nil), serverFeatures...)
+	if s.cfg.SessionPersistence.PersistCapture {
+		out = append(out, persistCaptureFeature)
+	}
+	if s.cfg.SessionPersistence.PreviousKeepDays > 0 {
+		out = append(out, previousSessionsFeature)
+	}
+	return out
+}
+
 // registerHealthRoutes wires the anonymous liveness/readiness/health routes and
 // the authenticated security-posture route. Port of create_health_router.
 func (s *Server) registerHealthRoutes(mux *http.ServeMux) {
@@ -55,7 +78,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"uptime_s":              uptime,
 		"active_sessions":       active,
 		"control_plane_backend": backend,
-		"features":              serverFeatures,
+		"features":              s.features(),
 	})
 }
 

@@ -42,7 +42,7 @@ func TestACaptureSessionDecodesUTF8(t *testing.T) {
 	// Split inside the first character, as two frames on one connection: the
 	// connector's own decoder joins it.
 	sendCapture(t, sock, payload[:2], payload[2:])
-	waitForScreenText(t, conn, payload)
+	waitForScreenText(t, conn.transportConnector, payload)
 }
 
 func TestAShellSessionDecodesUTF8(t *testing.T) {

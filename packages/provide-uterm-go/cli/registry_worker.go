@@ -66,16 +66,38 @@ func (r *SessionRegistryImpl) newWorkerBridge(e *sessionEntry) *bridge.TermBridg
 		// bytes through byte-faithfully rather than decoding them twice.
 		Encoding: "latin-1",
 	}
-	// Assigned only when there is one: a nil *sessionRecorder in the
+	cfg.Observer, cfg.RecordScreens = r.observerFor(e)
+	return bridge.New(cfg)
+}
+
+// observerFor returns what watches a session's bridge, nil for nothing, and
+// whether the bridge runs a settle loop. Caller holds r.mu.
+func (r *SessionRegistryImpl) observerFor(e *sessionEntry) (bridge.Observer, bool) {
+	var observers multiObserver
+	settles := false
+	// Appended only when there is one: a nil *sessionRecorder in the
 	// interface would be a non-nil Observer.
 	if rec := r.recorderFor(e); rec != nil {
-		cfg.Observer = rec
+		observers = append(observers, rec)
 		// The settle loop runs only for a session that records its own
 		// screen (recording.screen_interval_s): one that does not gets no
 		// ticker at all.
-		cfg.RecordScreens = rec.recordsScreens()
+		settles = rec.recordsScreens()
 	}
-	return bridge.New(cfg)
+	if keeper := r.keeperFor(e); keeper != nil {
+		// A kept capture session's screen is saved on the same trigger,
+		// recorded or not.
+		observers = append(observers, keeper)
+		settles = true
+	}
+	switch len(observers) {
+	case 0:
+		return nil, false
+	case 1:
+		return observers[0], settles
+	default:
+		return observers, settles
+	}
 }
 
 // startWorkerBridge attaches a started session to the hub. Caller holds r.mu:

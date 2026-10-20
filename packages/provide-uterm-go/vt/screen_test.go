@@ -522,3 +522,31 @@ func TestBellIsANoop(t *testing.T) {
 	s.Bell() // Direct call is a noop too.
 	wantCursor(t, s, 2, 0)
 }
+
+// Index hands the row scrolling off the top of the main screen to
+// ScrolledOff, without its trailing blanks; never on the alternate screen, in
+// a region that starts lower down, or above the bottom row.
+func TestIndexHandsTheTopRowToScrolledOff(t *testing.T) {
+	s := NewScreen(6, 3)
+	var got []string
+	s.ScrolledOff = func(line string) { got = append(got, line) }
+	s.Draw("ab")
+	s.Index() // above the bottom row: nothing scrolls
+	s.Index()
+	s.Index()
+	if len(got) != 1 || got[0] != "ab" {
+		t.Fatalf("scrolled off %q", got)
+	}
+	s.SetMode(true, 1049)
+	s.Index()
+	if len(got) != 1 {
+		t.Fatalf("the alternate screen handed over %q", got)
+	}
+	s.ResetMode(true, 1049)
+	s.SetMargins(2, 3)
+	s.cursor.Y = 2
+	s.Index()
+	if len(got) != 1 {
+		t.Fatalf("a lower region handed over %q", got)
+	}
+}

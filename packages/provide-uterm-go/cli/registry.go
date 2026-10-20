@@ -16,6 +16,7 @@ import (
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/annotation"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/bridge"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/capturestate"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
@@ -45,6 +46,9 @@ type sessionEntry struct {
 	// session first starts with a recording store wired). Kept across
 	// restarts, as the reference keeps its runtime. See session_recording.go.
 	recorder *sessionRecorder
+	// keeper keeps a PAM capture session's screen in the capture-state store
+	// (nil for any other session, or with no store). See capture_keeper.go.
+	keeper *captureKeeper
 }
 
 // connectFn opens a live connector for a session definition. It returns
@@ -76,6 +80,10 @@ type SessionRegistryImpl struct {
 	recCfg    serverconfig.RecordingConfig
 	recording recording.Store
 	detector  *annotation.PatternDetector
+	// capture is where PAM capture sessions are kept across a restart and
+	// after they end ([session_persistence]); nil keeps none. Wired by
+	// SetCaptureState.
+	capture *capturestate.Store
 	// connect builds the live connector; overridable in tests with a fake.
 	connect connectFn
 	// egress is the SSRF / connector-target guard; blockPrivate carries
@@ -108,9 +116,11 @@ func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImp
 		retiring:     map[string]chan struct{}{},
 		recDeflt:     cfg.Recording.EnabledByDefault,
 		recCfg:       cfg.Recording,
-		connect:      defaultConnect,
 		egress:       server.NewEgressGuard(nil, nil),
 		blockPrivate: cfg.Security.BlockPrivateConnectorTargets,
+	}
+	r.connect = func(ctx context.Context, def serverconfig.SessionDefinition) (connectors.Connector, error) {
+		return connectPrepared(ctx, def, r.prepareCapture)
 	}
 	for _, def := range cfg.Sessions {
 		r.seed(def)
@@ -274,6 +284,13 @@ func (r *SessionRegistryImpl) createSession(
 	// a store kept) is not this new session's: retire it before the session
 	// becomes visible, so nothing can read it as this one's.
 	retireErr := retireIn(store, def.SessionID)
+	var flush func()
+	// Deferred first, so it runs once r.mu is released: no disk under the lock.
+	defer func() {
+		if flush != nil {
+			flush()
+		}
+	}()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	// Released and inserted in one step: no other create can slip in.
@@ -283,7 +300,9 @@ func (r *SessionRegistryImpl) createSession(
 		return nil, retireErr
 	}
 	r.seed(def)
-	return r.snapshotStatus(r.entries[def.SessionID]), nil
+	e := r.entries[def.SessionID]
+	flush = r.setDefinitionLocked(e)
+	return r.snapshotStatus(e), nil
 }
 
 // reservedIDWait is how long a create waits for a teardown holding its id.
@@ -362,6 +381,13 @@ func retireIn(store recording.Store, id string) error {
 // UpdateSession applies a partial update (display_name, input_mode, visibility,
 // tags). Unknown id → 404.
 func (r *SessionRegistryImpl) UpdateSession(_ context.Context, id string, payload map[string]any) (*server.SessionStatus, error) {
+	var flush func()
+	// Deferred first, so it runs once r.mu is released: no disk under the lock.
+	defer func() {
+		if flush != nil {
+			flush()
+		}
+	}()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	e, ok := r.entries[id]
@@ -384,6 +410,7 @@ func (r *SessionRegistryImpl) UpdateSession(_ context.Context, id string, payloa
 	if v, ok := payload["tags"].([]string); ok {
 		e.def.Tags = v
 	}
+	flush = r.setDefinitionLocked(e)
 	return r.snapshotStatus(e), nil
 }
 
@@ -412,9 +439,10 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 	var br *bridge.TermBridge
 	var conn connectors.Connector
 	var rec *sessionRecorder
+	var keeper *captureKeeper
 	if ok {
 		br = takeBridge(e)
-		conn, rec = e.conn, e.recorder
+		conn, rec, keeper = e.conn, e.recorder, e.keeper
 		delete(r.entries, id)
 		for i, oid := range r.order {
 			if oid == id {
@@ -423,9 +451,14 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 			}
 		}
 	}
+	capture := r.capture
 	locked = false
 	r.mu.Unlock()
-	stopRemoved(ctx, id, br, rec, conn)
+	stopRemoved(ctx, id, br, rec, keeper, conn)
+	if capture != nil {
+		// After the stop, whose last screen this keeps.
+		capture.End(id)
+	}
 	// Only now, with the recording closed and its last writes in it (or the
 	// stop given up on), is it retired; the deferred release frees the id.
 	return retireIn(store, id)
@@ -435,7 +468,10 @@ func (r *SessionRegistryImpl) DeleteSession(ctx context.Context, id string) erro
 // a stop that hangs must not hold the id forever, so past the timeout it is
 // logged and left running, and the delete goes on to retire and release. A
 // panic in it is recovered and logged for the same reason.
-func stopRemoved(ctx context.Context, id string, br *bridge.TermBridge, rec *sessionRecorder, conn connectors.Connector) {
+func stopRemoved(
+	ctx context.Context, id string, br *bridge.TermBridge, rec *sessionRecorder, keeper *captureKeeper,
+	conn connectors.Connector,
+) {
 	logger := registryLogger(ctx)
 	timeout := removalStopTimeout // read once: the goroutine may outlive this call
 	done := make(chan struct{})
@@ -451,6 +487,7 @@ func stopRemoved(ctx context.Context, id string, br *bridge.TermBridge, rec *ses
 		// reconnecting against a session id the registry can no longer list.
 		stopBridge(br)
 		settleRecording(rec)
+		saveLastScreen(keeper)
 		if conn != nil {
 			stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 			defer cancel()
@@ -515,6 +552,10 @@ func definitionFromPayload(payload map[string]any) (serverconfig.SessionDefiniti
 		Visibility:      visibility,
 		Tags:            []string{},
 		CreatedAt:       time.Now().UTC(),
+		// The model's defaults, which a kept capture session's file carries
+		// and its reader requires.
+		AutoTransferIdleS: 30,
+		KeystrokeQueue:    "display",
 	}
 	// Per-session override of recording.enabled_by_default; absent means
 	// "use the default", as the reference's recording_enabled: bool | None.

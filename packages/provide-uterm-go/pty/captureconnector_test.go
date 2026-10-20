@@ -359,3 +359,16 @@ func TestCaptureConnectorSizeFollowsGeometry(t *testing.T) {
 		t.Fatalf("Size = %dx%d, want 132x50", cols, rows)
 	}
 }
+
+// SetSize puts the connector at a size, as a geometry frame does, without a
+// snapshot.
+func TestCaptureConnectorSetSize(t *testing.T) {
+	c, err := NewCaptureConnector("s", "n", map[string]any{"socket_path": "/tmp/x.sock"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.SetSize(120, 40)
+	if cols, rows := c.Size(); cols != 120 || rows != 40 {
+		t.Fatalf("size %dx%d", cols, rows)
+	}
+}

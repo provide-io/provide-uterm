@@ -249,6 +249,14 @@ func (c *CaptureConnector) Size() (cols, rows int) {
 	return c.cols, c.rows
 }
 
+// SetSize puts the terminal at cols x rows, as a geometry frame does, without
+// a snapshot: for a session re-created after a restart at the size it had.
+func (c *CaptureConnector) SetSize(cols, rows int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cols, c.rows = cols, rows
+}
+
 // GetSnapshot returns a fresh snapshot frame. Port of CaptureConnector.get_snapshot.
 func (c *CaptureConnector) GetSnapshot() Frame {
 	c.mu.Lock()

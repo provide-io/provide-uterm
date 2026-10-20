@@ -45,6 +45,14 @@ func (h *TermHub) GetLastSnapshot(ctx context.Context, workerID string, recipien
 	return h.Router.GetLastSnapshot(ctx, workerID, recipient)
 }
 
+// RedactTextsForRecipient returns texts as the output policy lets recipient
+// read them. See MessageRouter.RedactTextsForRecipient.
+func (h *TermHub) RedactTextsForRecipient(
+	ctx context.Context, workerID string, texts []string, recipient BrowserConn,
+) ([]string, error) {
+	return h.Router.RedactTextsForRecipient(ctx, workerID, texts, recipient)
+}
+
 // GetRecentEvents returns up to limit recent events for workerID.
 func (h *TermHub) GetRecentEvents(ctx context.Context, workerID string, limit int) []map[string]any {
 	return h.Router.GetRecentEvents(ctx, workerID, limit)

@@ -224,6 +224,34 @@ type WebhooksConfig struct {
 	AllowLoopbackDestinations bool `json:"allow_loopback_destinations" toml:"allow_loopback_destinations"`
 }
 
+// SessionPersistenceConfig ports config_schema.SessionPersistenceConfig:
+// PAM capture sessions kept across a restart, and after they end
+// ([session_persistence]). A table of its own rather than [sessions], which
+// is the list of static session definitions.
+type SessionPersistenceConfig struct {
+	// PersistCapture keeps each PAM capture session's definition and screen
+	// in a file, and re-creates it at startup while its login is alive.
+	PersistCapture bool `json:"persist_capture" toml:"persist_capture"`
+	// PreviousKeepDays keeps an ended capture session's last screen,
+	// read-only, for this many days (0 keeps none).
+	PreviousKeepDays int `json:"previous_keep_days" toml:"previous_keep_days"`
+	// PreviousScrollbackLines is the most rows of scrollback a previous
+	// session keeps.
+	PreviousScrollbackLines int `json:"previous_scrollback_lines" toml:"previous_scrollback_lines"`
+	// StateDir is where the files go: an absolute path to a directory this
+	// server's user owns, mode 0700 (created so if it is missing). Named
+	// outright rather than derived from another setting, so two servers never
+	// share one by accident. Required when either feature above is on.
+	StateDir *string `json:"state_dir" toml:"state_dir"`
+}
+
+// MaxPreviousKeepDays and MaxPreviousScrollbackLines bound
+// [session_persistence], as the reference does.
+const (
+	MaxPreviousKeepDays        = 3650
+	MaxPreviousScrollbackLines = 10000
+)
+
 // ProfileStoreConfig ports config_schema.ProfileStoreConfig.
 type ProfileStoreConfig struct {
 	Directory string `json:"directory" toml:"directory"`
@@ -336,9 +364,11 @@ type UtermServerConfig struct {
 	Security     SecurityConfig     `json:"security" toml:"security"`
 	Tunnel       TunnelConfig       `json:"tunnel" toml:"tunnel"`
 	Webhooks     WebhooksConfig     `json:"webhooks" toml:"webhooks"`
-	Pam          PamConfig          `json:"pam" toml:"pam"`
-	Governance   GovernanceConfig   `json:"governance" toml:"governance"`
-	Audit        AuditConfig        `json:"audit" toml:"audit"`
+	// SessionPersistence is [session_persistence].
+	SessionPersistence SessionPersistenceConfig `json:"session_persistence" toml:"session_persistence"`
+	Pam                PamConfig                `json:"pam" toml:"pam"`
+	Governance         GovernanceConfig         `json:"governance" toml:"governance"`
+	Audit              AuditConfig              `json:"audit" toml:"audit"`
 	// FanoutAllowUnknownMembers permits dormant group members at creation.
 	// Send-time session authorization remains mandatory.
 	FanoutAllowUnknownMembers bool                `json:"fanout_allow_unknown_members" toml:"fanout_allow_unknown_members"`
@@ -379,6 +409,7 @@ func DefaultServerConfig() *UtermServerConfig {
 		Security:                   defaultSecurityConfig(),
 		Tunnel:                     defaultTunnelConfig(),
 		Webhooks:                   WebhooksConfig{},
+		SessionPersistence:         SessionPersistenceConfig{PreviousScrollbackLines: 1000},
 		Pam:                        defaultPamConfig(),
 		Governance:                 defaultGovernanceConfig(),
 		Audit:                      AuditConfig{},

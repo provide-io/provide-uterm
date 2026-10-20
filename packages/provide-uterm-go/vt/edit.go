@@ -5,6 +5,11 @@
 
 package vt
 
+import (
+	"strings"
+	"unicode"
+)
+
 // Drawing, scrolling, and line/character insertion, deletion and erasure.
 // Each method mirrors the corresponding pyte.screens.Screen handler,
 // including its sparse-buffer quirks: erase operations rewrite only cells
@@ -79,10 +84,22 @@ func (s *Screen) Draw(data string) {
 	}
 }
 
+// altScreenModes are the private modes that switch to the alternate screen,
+// as the mode map stores them.
+var altScreenModes = [...]int{47 << 5, 1047 << 5, 1049 << 5}
+
 // Index moves the cursor down one line in the same column; at the bottom
 // margin the scrolling region scrolls up.
+//
+// A scroll of a region that starts at the top row hands that row to
+// ScrolledOff, as xterm keeps it: a region lower down scrolls rows that are
+// still on the screen. The alternate screen keeps no history in any
+// terminal, so its scrolls hand nothing over.
 func (s *Screen) Index() {
 	top, bottom := s.marginsOrScreen()
+	if s.cursor.Y == bottom && top == 0 && s.ScrolledOff != nil && !s.onAltScreen() {
+		s.ScrolledOff(strings.TrimRightFunc(s.rowText(0), unicode.IsSpace))
+	}
 	if s.cursor.Y == bottom {
 		for y := top; y < bottom; y++ {
 			if src, ok := s.buffer[y+1]; ok {
@@ -95,6 +112,16 @@ func (s *Screen) Index() {
 	} else {
 		s.CursorDown(0)
 	}
+}
+
+// onAltScreen reports whether an alternate-screen mode is set.
+func (s *Screen) onAltScreen() bool {
+	for _, mode := range altScreenModes {
+		if s.mode[mode] {
+			return true
+		}
+	}
+	return false
 }
 
 // ReverseIndex moves the cursor up one line in the same column; at the

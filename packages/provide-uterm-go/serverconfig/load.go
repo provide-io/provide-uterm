@@ -31,7 +31,7 @@ var knownTopLevel = map[string]struct{}{
 	"environment": {}, "server": {}, "auth": {}, "control_plane": {}, "ui": {},
 	"recording": {}, "profiles": {}, "security": {}, "tunnel": {}, "webhooks": {},
 	"pam": {}, "governance": {}, "audit": {}, "sessions": {}, "graphical_targets": {},
-	"session_idle_timeout_s": {}, "session_retention_s": {}, "browser_rate_limit_per_sec": {},
+	"session_persistence": {}, "session_idle_timeout_s": {}, "session_retention_s": {}, "browser_rate_limit_per_sec": {},
 	"rest_acquire_rate_limit_per_sec": {}, "rest_send_rate_limit_per_sec": {},
 	"worker_frame_on_invalid": {}, "max_connections_per_principal": {}, "max_workers": {},
 	"fanout_allow_unknown_members": {},
@@ -151,6 +151,7 @@ func ConfigFromMapping(data map[string]any) (*UtermServerConfig, error) {
 		{"ui", &cfg.UI}, {"recording", &cfg.Recording}, {"profiles", &cfg.Profiles},
 		{"security", &cfg.Security}, {"tunnel", &cfg.Tunnel}, {"webhooks", &cfg.Webhooks},
 		{"pam", &cfg.Pam}, {"governance", &cfg.Governance}, {"audit", &cfg.Audit},
+		{"session_persistence", &cfg.SessionPersistence},
 	}
 	for _, st := range sectionTargets {
 		if err := decodeSection(st.dst, data[st.key]); err != nil {
@@ -325,6 +326,9 @@ func runValidators(cfg *UtermServerConfig) error {
 		return err
 	}
 	if err := validateAudit(&cfg.Audit); err != nil {
+		return err
+	}
+	if err := validateSessionPersistence(&cfg.SessionPersistence); err != nil {
 		return err
 	}
 	if cfg.MaxWorkers < 1 {

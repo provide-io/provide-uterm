@@ -125,6 +125,9 @@ func (s *CaptureSocket) Path() string { return s.path }
 // Start binds the listening socket (owner-only) and begins accepting. Port of
 // CaptureSocket.start.
 func (s *CaptureSocket) Start() error {
+	// A capture session re-created after a crash binds the path its last
+	// holder never unbound.
+	removeStaleSocket(s.path)
 	// Set a restrictive umask *before* bind so the socket is created 0o600
 	// atomically — a post-bind chmod would leave a window where the socket
 	// exists with default-umask perms that any local user could connect to.

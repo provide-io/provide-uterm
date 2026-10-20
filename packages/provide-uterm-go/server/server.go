@@ -21,6 +21,7 @@ import (
 	ptel "github.com/provide-io/provide-telemetry/go"
 
 	uterm "github.com/provide-io/provide-uterm/packages/provide-uterm-go"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/capturestate"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
@@ -74,6 +75,9 @@ type Deps struct {
 	// Recording backs the /api/sessions/{id}/recording routes (meta, entries,
 	// download). nil → a NullStore (recording reported unavailable/empty).
 	Recording recording.Store
+	// CaptureState backs /api/previous-sessions ([session_persistence]). nil
+	// → none are kept, and the routes list none.
+	CaptureState *capturestate.Store
 	// Metrics is the shared counter map. nil → a fresh one. For hub counters to
 	// appear in /api/metrics, the CLI must pass this same instance as the hub's
 	// OnMetric sink.

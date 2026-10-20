@@ -21,6 +21,11 @@ type Screen struct {
 	// would write back to the attached process (DA / DSR reports).
 	WriteProcessInput func(data string)
 
+	// ScrolledOff, when non-nil, is handed each row, as plain text without
+	// its trailing blanks, that scrolls off the top of the main screen: the
+	// rows a terminal would keep in its scrollback. See Index.
+	ScrolledOff func(line string)
+
 	columns, lines int
 	buffer         map[int]map[int]Char
 	mode           map[int]bool
@@ -181,25 +186,30 @@ func (v BufferView) StoredColumns(y int) []int {
 func (s *Screen) Display() []string {
 	out := make([]string, s.lines)
 	for y := 0; y < s.lines; y++ {
-		line := s.line(y)
-		def := s.defaultChar()
-		var b strings.Builder
-		isWide := false
-		for x := 0; x < s.columns; x++ {
-			if isWide { // Skip the stub cell after a wide character.
-				isWide = false
-				continue
-			}
-			data := cellAt(line, x, def).Data
-			if data != "" {
-				r, _ := utf8.DecodeRuneInString(data)
-				isWide = runeWidth(r) == 2
-			}
-			b.WriteString(data)
-		}
-		out[y] = b.String()
+		out[y] = s.rowText(y)
 	}
 	return out
+}
+
+// rowText is one row as Display renders it.
+func (s *Screen) rowText(y int) string {
+	line := s.line(y)
+	def := s.defaultChar()
+	var b strings.Builder
+	isWide := false
+	for x := 0; x < s.columns; x++ {
+		if isWide { // Skip the stub cell after a wide character.
+			isWide = false
+			continue
+		}
+		data := cellAt(line, x, def).Data
+		if data != "" {
+			r, _ := utf8.DecodeRuneInString(data)
+			isWide = runeWidth(r) == 2
+		}
+		b.WriteString(data)
+	}
+	return b.String()
 }
 
 // Reset restores the initial state: buffer cleared, margins and modes
