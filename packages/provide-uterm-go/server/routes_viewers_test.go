@@ -445,10 +445,8 @@ func TestALongPollInFlightWhenItsViewerIsRevokedAnswers403(t *testing.T) {
 // never reads cannot answer the close handshake; the revoke stops waiting on it
 // after the grace, and the connection is dropped once the handshake times out.
 func TestARevokedSocketThatIgnoresTheCloseIsDroppedAfterTheGrace(t *testing.T) {
-	prev := browserCloseGrace
-	browserCloseGrace = 200 * time.Millisecond
-	defer func() { browserCloseGrace = prev }()
 	ts := newTestServer(t, nil)
+	ts.srv.browserCloseGraceOverride = 200 * time.Millisecond
 	ts.reg.add("bb", "owner1", "public")
 	base, closeFn := wsServer(t, ts)
 	defer closeFn()

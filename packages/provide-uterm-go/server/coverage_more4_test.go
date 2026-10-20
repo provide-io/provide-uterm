@@ -48,19 +48,20 @@ func TestBrowserConnClose(t *testing.T) {
 
 // TestBrowserConnCloseReportsAPeerThatIgnoresTheClose: a peer that never
 // reads cannot answer the close handshake. Close stops waiting after the grace
-// and says so, rather than reporting a clean close. The real grace is used:
-// the handler of the test before this one may still be reading it.
+// and says so, rather than reporting a clean close. The grace is shortened on
+// this connection only, so the test does not wait the production two seconds.
 func TestBrowserConnCloseReportsAPeerThatIgnoresTheClose(t *testing.T) {
+	const grace = 50 * time.Millisecond
 	closed := make(chan error, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 		if err != nil {
 			return
 		}
-		bc := &browserConn{wsBase: wsBase{conn: conn}}
+		bc := &browserConn{wsBase: wsBase{conn: conn}, closeGrace: grace}
 		started := time.Now()
 		err = bc.Close(context.Background(), 4410, "viewer access revoked")
-		if took := time.Since(started); took > browserCloseGrace+time.Second {
+		if took := time.Since(started); took > grace+time.Second {
 			err = fmt.Errorf("close waited %v, past the grace", took)
 		}
 		closed <- err

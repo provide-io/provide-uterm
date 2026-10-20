@@ -105,7 +105,8 @@ func TestWorkerWSReleasesHijackOnDisconnect(t *testing.T) {
 // loop actually runs: an expired dashboard lease is reaped while the worker
 // socket stays open, with no REST call to trigger it. Expiry is driven by a
 // manual clock and the assertion waits on the observable state change, so
-// nothing here depends on how long a tick takes.
+// nothing here depends on how long a tick takes. The tick is shortened on this
+// server so the wait is not the production one second.
 func TestWorkerWSPeriodicCleanupExpiresStaleLease(t *testing.T) {
 	clk := hub.NewManualClock(5000)
 	clk.SetMonotonic(1000)
@@ -115,6 +116,7 @@ func TestWorkerWSPeriodicCleanupExpiresStaleLease(t *testing.T) {
 		})
 	})
 	ts.hub = ts.srv.deps.Hub
+	ts.srv.hijackCleanupInterval = 10 * time.Millisecond
 	ts.srv.MarkReady()
 	ts.reg.add("wk-tick", "admin1", "public")
 	httpSrv := httptest.NewServer(ts.srv.Handler())

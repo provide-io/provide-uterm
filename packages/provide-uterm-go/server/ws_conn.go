@@ -67,29 +67,41 @@ type browserConn struct {
 	wsBase
 	deckmux.AnonConn
 	principal *serverauth.Principal
+	// closeGrace overrides browserCloseGrace for this connection when it is
+	// non-zero. It is a field rather than a package variable a test assigns,
+	// because a handler left running by an earlier test reads the grace too, and
+	// a shared variable written under it is a data race.
+	closeGrace time.Duration
 }
 
-// browserCloseGrace is how long a caller waits on a close before moving on. A
-// var so tests can shorten it.
-var browserCloseGrace = 2 * time.Second
+// browserCloseGrace is how long a caller waits on a close before moving on.
+const browserCloseGrace = 2 * time.Second
+
+// grace is how long Close waits on this connection's peer.
+func (c *browserConn) grace() time.Duration {
+	if c.closeGrace > 0 {
+		return c.closeGrace
+	}
+	return browserCloseGrace
+}
 
 // errBrowserCloseTimedOut is what Close returns when the peer has not answered
-// the close handshake within browserCloseGrace. The close is still under way.
+// the close handshake within the grace. The close is still under way.
 var errBrowserCloseTimedOut = errors.New("browser close handshake unanswered after the grace; closing in the background")
 
 // Close closes the browser socket with a WS close code (hub.BrowserCloser). A
-// peer that does not answer the close handshake is not waited on past
-// browserCloseGrace: the close carries on in the background, where
-// coder/websocket drops the connection once its own handshake timeout passes,
-// so the caller (a viewer revoke waits on its closes) is not held by it. That
-// case returns errBrowserCloseTimedOut, not a clean nil.
+// peer that does not answer the close handshake is not waited on past the
+// grace: the close carries on in the background, where coder/websocket drops
+// the connection once its own handshake timeout passes, so the caller (a viewer
+// revoke waits on its closes) is not held by it. That case returns
+// errBrowserCloseTimedOut, not a clean nil.
 func (c *browserConn) Close(_ context.Context, code int, reason string) error {
 	done := make(chan error, 1)
 	go func() { done <- c.conn.Close(websocket.StatusCode(code), reason) }()
 	select {
 	case err := <-done:
 		return err
-	case <-time.After(browserCloseGrace):
+	case <-time.After(c.grace()):
 		return errBrowserCloseTimedOut
 	}
 }

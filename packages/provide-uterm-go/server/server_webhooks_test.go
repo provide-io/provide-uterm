@@ -626,12 +626,14 @@ func TestWebhookDeliveryAutoUnregistersAfterRepeatedGuardBlocks(t *testing.T) {
 func TestWebhookDeliveryGuardPassClearsTheBlockCount(t *testing.T) {
 	e := &webhookEntry{id: "w1", sessionID: "s1", url: "https://hook.example/x", blocked: 2}
 	c := newCounters()
-	// A destination that resolves public and a client that never gets used
-	// (delivery is allowed, and the POST target simply fails) is enough: the
-	// assertion is about the counter, not the POST.
+	// A destination that resolves public and a POST that fails is enough: the
+	// assertion is about the counter, not the POST. The failure is fabricated
+	// by the transport, because a real request to hook.example waits on DNS and
+	// the network for anything up to webhookDeliverTimeout.
 	m := NewWebhookRegistry(WebhookOptions{
 		Guard:       NewEgressGuard(fixedResolver("93.184.216.34"), nil),
 		OnMetric:    c.inc,
+		HTTPClient:  &http.Client{Transport: fixedStatusRoundTripper{status: http.StatusServiceUnavailable}},
 		RetryDelays: []time.Duration{},
 	})
 	m.deliver(e, map[string]any{"type": "output"})

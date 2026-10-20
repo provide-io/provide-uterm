@@ -127,6 +127,16 @@ type Server struct {
 	// viewer revoke ends (routes_sse.go, routes_viewers.go).
 	viewerStreams shareViewerStreams
 
+	// browserCloseGraceOverride, when non-zero, replaces the default grace a
+	// browser socket's Close waits on its peer (ws_conn.go).
+	// hijackCleanupInterval, when non-zero, replaces the one-second period of
+	// periodicHijackCleanup.
+	// Both are zero in production. They let a test shorten a real wait on one
+	// server without writing a package variable that handlers of other servers
+	// still read.
+	browserCloseGraceOverride time.Duration
+	hijackCleanupInterval     time.Duration
+
 	ready     atomic.Bool
 	startTime float64
 
