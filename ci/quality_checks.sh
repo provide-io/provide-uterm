@@ -61,9 +61,7 @@ step "ty"                 ci/typecheck.sh ty
 step "bandit"             uv run bandit -r packages/*/src/ -ll
 step "xenon"              uv run xenon --max-absolute D --max-modules D --max-average A packages/provide-uterm/src/
 step "vulture"            uv run vulture packages/provide-uterm/src/ packages/provide-uterm/tests/ --ignore-names "since,password,kw,exc_type,tb,interval_s,pubkey_blob,username"
-# GHSA-hq85-5cpj-mr62 is ignored only until uv 0.13.4 reaches PyPI; see the
-# matching entry in scripts/release_governance_check.sh for why and when it goes.
-step "pip-audit"          uv run python -m pip_audit --local --ignore-vuln GHSA-hq85-5cpj-mr62
+step "pip-audit"          uv run python -m pip_audit --local
 step "licenses"           uv run python scripts/check_licenses.py
 step "performance-smoke"  uv run python scripts/run_performance_smoke.py --iterations 100000 --enforce
 step "cf-vendor-tree"     bash .ci/check_cf_vendor_tree.sh

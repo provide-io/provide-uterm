@@ -28,11 +28,6 @@ echo "[1/4] dependency vulnerability scan"
 # - PYSEC-2025-183 (pyjwt): disputed by upstream — "the key length is
 #   chosen by the application that uses the library". Library users
 #   pick the HMAC key length, so this isn't a pyjwt-side fix.
-# - GHSA-hq85-5cpj-mr62 (uv < 0.13.4 bundles the emSign roots whose intermediate
-#   keys are compromised): TEMPORARY, added 2026-10-20. 0.13.4 is released on
-#   GitHub but not yet on PyPI, so the lock cannot move past 0.13.3. uv is a dev
-#   and CI tool here, not shipped. Remove this entry, and the matching one in
-#   ci/quality_checks.sh, in the commit that bumps uv to >=0.13.4.
 #
 # A full mktemp template rather than `-t <prefix>`: GNU mktemp requires the
 # trailing X's that BSD mktemp does not, so the short form runs on macOS and
@@ -47,7 +42,6 @@ uv export --no-emit-workspace --format requirements-txt > "${REQUIREMENTS}"
 uvx pip-audit --desc --no-deps --disable-pip \
     --requirement "${REQUIREMENTS}" \
     --ignore-vuln PYSEC-2025-183 \
-    --ignore-vuln GHSA-hq85-5cpj-mr62 \
     > "${OUT_DIR}/pip-audit.txt" 2>&1
 
 echo "[2/4] build artifacts"
