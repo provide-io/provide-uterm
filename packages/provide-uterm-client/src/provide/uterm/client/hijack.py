@@ -416,6 +416,19 @@ class HijackClient:
         """Get terminal snapshot for a session."""
         return await self._request("GET", f"{self._sp(session_id)}/snapshot")
 
+    async def list_previous_sessions(self) -> tuple[bool, Any]:
+        """List the ended capture sessions this caller may read, newest first.
+
+        ``{"sessions": [...]}``, each with ``id``, ``display_name``, ``owner``,
+        ``ended_at``, ``cols`` and ``rows``. A server lists ``sessions.previous``
+        in its health ``features`` when it keeps them.
+        """
+        return await self._request("GET", "/api/previous-sessions")
+
+    async def get_previous_session(self, session_id: str) -> tuple[bool, Any]:
+        """Read one ended capture session: its listing fields, last ``screen`` and ``scrollback``."""
+        return await self._request("GET", f"/api/previous-sessions/{_safe_id(session_id, 'session_id')}")
+
     async def session_events(
         self,
         session_id: str,

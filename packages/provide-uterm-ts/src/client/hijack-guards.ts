@@ -103,6 +103,11 @@ export function sessionPath(sessionId: string): string {
   return `/api/sessions/${safeId(sessionId, "session_id")}`;
 }
 
+/** Where an ended capture session lives. */
+export function previousSessionPath(sessionId: string): string {
+  return `/api/previous-sessions/${safeId(sessionId, "session_id")}`;
+}
+
 /** Drop trailing slashes, so a prefix given either way builds one path. */
 function trimSlashes(prefix: string): string {
   return prefix.replace(/\/+$/, "");

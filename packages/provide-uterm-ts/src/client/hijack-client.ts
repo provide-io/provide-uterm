@@ -22,7 +22,7 @@
  *   it to somebody.
  */
 
-import { hijackPath, sanitize, sessionPath, workerPath } from "./hijack-guards.ts";
+import { hijackPath, previousSessionPath, sanitize, sessionPath, workerPath } from "./hijack-guards.ts";
 
 /** What the client got back. */
 export interface HijackAnswer {
@@ -299,6 +299,21 @@ export class HijackClient {
   /** What one session's terminal shows. */
   async sessionSnapshot(sessionId: string): Promise<HijackAnswer> {
     return this.request("GET", `${sessionPath(sessionId)}/snapshot`);
+  }
+
+  /**
+   * The ended capture sessions this caller may read, newest first:
+   * `{"sessions": [...]}`, each with `id`, `display_name`, `owner`,
+   * `ended_at`, `cols` and `rows`. A server lists `sessions.previous` in its
+   * health `features` when it keeps them.
+   */
+  async listPreviousSessions(): Promise<HijackAnswer> {
+    return this.request("GET", "/api/previous-sessions");
+  }
+
+  /** One ended capture session: its listing fields, last `screen` and `scrollback`. */
+  async getPreviousSession(sessionId: string): Promise<HijackAnswer> {
+    return this.request("GET", previousSessionPath(sessionId));
   }
 
   /** What has lately happened in one session. */

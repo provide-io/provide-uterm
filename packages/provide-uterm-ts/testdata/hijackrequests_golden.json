@@ -559,6 +559,40 @@
       "no_json": false
     },
     {
+      "name": "listing previous sessions",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/previous-sessions",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "one previous session",
+      "calls": [
+        {
+          "method": "GET",
+          "path": "/api/previous-sessions/sess-1",
+          "json": null,
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
       "name": "a refusal",
       "calls": [
         {

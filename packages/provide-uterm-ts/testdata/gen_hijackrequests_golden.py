@@ -140,6 +140,8 @@ async def main_async() -> None:
         await _call("a session's events", lambda c: c.session_events("sess-1")),
         await _call("a session's events with a limit", lambda c: c.session_events("sess-1", limit=5)),
         await _call("setting a session's mode", lambda c: c.set_session_mode("sess-1", "hijack")),
+        await _call("listing previous sessions", lambda c: c.list_previous_sessions()),
+        await _call("one previous session", lambda c: c.get_previous_session("sess-1")),
         # Outcomes
         await _call("a refusal", lambda c: c.step("w1", "h1"), status=409, body={"error": "held by somebody else"}),
         await _call("a server fault", lambda c: c.step("w1", "h1"), status=500, body={"error": "broken"}),
