@@ -50,13 +50,43 @@ DEFAULT_MUTATION_ROOTS: Final[tuple[str, ...]] = (
     "packages/provide-uterm-server/src/provide/uterm/",
     "src/provide/uterm/",
 )
+#: Files that define what the gate runs or how its verdict is reached. A change
+#: to any of them invalidates every earlier result, so it widens the run to the
+#: whole perimeter. The CI side belongs here as much as the scripts: the
+#: per-target command lives in mutation-shards.yml, and a PR that only edited it
+#: (dropping --min-mutation-score 100, say) used to change no target and pass
+#: with nothing run. tests/scripts/test_mutation_gate_scope.py checks that
+#: every file the gate's command path reaches is listed.
+#:
+#: Two entries are shared with unrelated content and only count as support
+#: when the part the gate reads changed: pyproject.toml ([tool.mutmut]) and
+#: ci.yml (the MUTATION_GATE_JOBS below and its workflow-level keys). See
+#: run_mutation_gate._changed_mutation_support_paths. The rest of them is still
+#: classified by scripts/mutation_change_scope.py: a dependency change in
+#: pyproject.toml runs the whole perimeter anyway, and an edit to another
+#: ci.yml job runs nothing.
 MUTATION_SUPPORT_FILES: Final[tuple[str, ...]] = (
     DEFAULT_EQUIVALENTS_FILE,
     "pyproject.toml",
+    # The root conftest orders kill suites first under MUTANT_UNDER_TEST and
+    # sets no_proxy on Darwin, so it shapes every target's result.
+    "conftest.py",
+    # Loaded by path from the root conftest and packages/provide-uterm/conftest.py
+    # in every test run, so it is part of the pytest bootstrap too.
+    "hypothesis_profiles.py",
+    ".github/workflows/ci.yml",
+    ".github/workflows/mutation-shards.yml",
     "ci/prepare_mutation_args.sh",
+    "ci/mutation_full_matrix.py",
+    "ci/mutation_gate_verdict.sh",
     "scripts/run_mutation_gate.py",
     "scripts/mutation_gate_config.py",
+    "scripts/mutation_change_scope.py",
 )
+#: The ci.yml jobs that make up the Python gate: the target list, the per-target
+#: shards (their retries and skip condition) and the verdict.
+MUTATION_GATE_JOBS: Final[tuple[str, ...]] = ("mutation-targets", "mutation-shards", "mutation-gate")
+CI_WORKFLOW: Final[str] = ".github/workflows/ci.yml"
 
 PROCESS_MANAGER_SOURCE_PATHS: Final[frozenset[str]] = frozenset(
     {

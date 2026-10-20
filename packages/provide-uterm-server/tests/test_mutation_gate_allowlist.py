@@ -291,8 +291,8 @@ class TestChangedOnlySupportFiles:
         It previously called run_mutation_gate with source_paths=None -- one
         mutmut invocation over all 38 perimeter files. That cannot finish inside
         the job's 90-minute cap and was never a verdict, only a timeout. The gate
-        now prints the marker and returns, and ci/prepare_mutation_args.sh
-        dispatches mutation-full.yml, which fans the same targets across a matrix.
+        now prints the marker and returns, and ci/prepare_mutation_args.sh hands
+        the whole perimeter to the per-target matrix on the same PR.
         """
         calls: list[object] = []
 
@@ -415,11 +415,11 @@ class TestNarrowedResultsAreReadBeforeRestore:
 class TestSupportFileChangeDefersToTheFullWorkflow:
     """A support-file change is a perimeter-wide question this job cannot answer.
 
-    The perimeter is 38 files that mutmut has to be given one at a time, so
-    answering it in the changed-only job means hours against a 90-minute cap --
+    mutmut has to be given the perimeter files one at a time, so answering it
+    in one changed-only invocation means hours against a 90-minute cap --
     what that produced was never a verdict, only a timeout. The gate prints the
-    marker instead, and ci/prepare_mutation_args.sh dispatches mutation-full.yml,
-    where the same 38 targets run across a matrix.
+    marker instead, and ci/prepare_mutation_args.sh gives the per-target matrix
+    the whole perimeter, one job per file, on the same PR.
     """
 
     def _run_main(self, monkeypatch: pytest.MonkeyPatch, support: list[str]) -> tuple[int, bool]:
@@ -465,8 +465,8 @@ class TestSupportFileChangeDefersToTheFullWorkflow:
         had changed, so a commit carrying both a perimeter source file and a gate
         script ran the scoped gate on the source file and dispatched nothing --
         the tooling moved and the other 37 perimeter files were never re-checked.
-        Both have to happen: the scoped run answers the file in hand, the
-        dispatch answers the rest.
+        Both have to happen: the scoped run answers the file in hand, and the
+        marker widens CI's per-target matrix to answer the rest.
         """
         ran_with: list[object] = []
 

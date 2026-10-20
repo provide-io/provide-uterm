@@ -14,16 +14,24 @@ import subprocess  # nosec
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 try:
+    from scripts.mutation_change_scope import Scope
+    from scripts.mutation_change_scope import change_scope as _classify_change
+    from scripts.mutation_change_scope import gate_blocks as _gate_blocks
     from scripts.mutation_gate_config import (
         BAD_MUTANT_STATES,
+        CI_WORKFLOW,
         DEFAULT_EQUIVALENTS_FILE,
         DEFAULT_MUTATION_ROOTS,
         EXCUSABLE_STATES,
+        MUTATION_GATE_JOBS,
         MUTATION_SUPPORT_FILES,
     )
     from scripts.mutation_gate_config import (
@@ -49,11 +57,16 @@ try:
     )
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from mutation_change_scope import Scope
+    from mutation_change_scope import change_scope as _classify_change
+    from mutation_change_scope import gate_blocks as _gate_blocks
     from mutation_gate_config import (  # type: ignore[no-redef]
         BAD_MUTANT_STATES,
+        CI_WORKFLOW,
         DEFAULT_EQUIVALENTS_FILE,
         DEFAULT_MUTATION_ROOTS,
         EXCUSABLE_STATES,
+        MUTATION_GATE_JOBS,
         MUTATION_SUPPORT_FILES,
     )
     from mutation_gate_config import (
@@ -172,8 +185,17 @@ def _changed_paths(base_ref: str, staged_only: bool) -> list[str]:
     diff_cmd.append("--")
     result = subprocess.run(diff_cmd, capture_output=True, text=True, check=False)
     if result.returncode != 0:
-        return []
+        # This used to answer [] -- "nothing changed" -- which the sharded gate
+        # passes. A force-push leaves `before` on a commit no fetch reaches, so
+        # not knowing what changed has to fail, never read as an empty change.
+        raise ChangedPathsError(
+            f"`{' '.join(diff_cmd)}` failed (exit {result.returncode}): {result.stderr.strip() or 'no stderr'}"
+        )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+class ChangedPathsError(RuntimeError):
+    """git could not say what changed, so no target list can be trusted."""
 
 
 def _changed_python_paths(base_ref: str, staged_only: bool, roots: tuple[str, ...]) -> list[str]:
@@ -205,12 +227,14 @@ def _looks_like_test_path(value: str) -> bool:
     return value == "tests" or value.endswith("/tests") or "/tests/" in value or value.startswith("tests/")
 
 
-# Printed when a support-file change makes the question perimeter-wide and this
-# job cannot answer it. ci/prepare_mutation_args.sh greps for this exact line and
-# dispatches mutation-full.yml, which fans the perimeter across a matrix instead
-# of running it end to end in one job. Keep the literal stable: it is a contract
-# between the two, not a log message.
+# Printed when a support-file change makes the question perimeter-wide. With
+# --emit-targets, ci/prepare_mutation_args.sh greps for this exact line and hands
+# the whole perimeter to the per-target matrix instead of the changed files alone.
+# Keep the literal stable: it is a contract between the two, not a log message.
 FULL_PERIMETER_REQUIRED_MARKER = "MUTATION_FULL_PERIMETER_REQUIRED"
+
+# Prefixes --emit-targets' JSON array, which ci/prepare_mutation_args.sh greps for.
+TARGETS_LINE_PREFIX = "MUTATION_TARGETS="
 
 
 def _git_show(spec: str) -> str | None:
@@ -252,15 +276,18 @@ def _mutmut_config_changed(base_ref: str, staged_only: bool) -> bool:
     treatment stands, because a gate that under-reports a config change is the
     failure that matters.
     """
+    return _section_changed("pyproject.toml", _mutmut_table, base_ref, staged_only)
+
+
+def _section_changed(
+    path: str, section: Callable[[str | None], object | None], base_ref: str, staged_only: bool
+) -> bool:
+    """Whether *section* of *path* differs across this diff; an unreadable side counts as changed."""
     base_rev = "HEAD" if staged_only else base_ref
-    before = _mutmut_table(_git_show(f"{base_rev}:pyproject.toml"))
+    before = section(_git_show(f"{base_rev}:{path}"))
     # Staged-only compares the INDEX; otherwise the working tree is what runs.
-    after = _mutmut_table(
-        _git_show(":pyproject.toml") if staged_only else _read_text_or_none(REPOSITORY_ROOT / "pyproject.toml")
-    )
-    if before is None or after is None:
-        return True
-    return before != after
+    after = section(_git_show(f":{path}") if staged_only else _read_text_or_none(REPOSITORY_ROOT / path))
+    return before is None or after is None or before != after
 
 
 def _read_text_or_none(path: Path) -> str | None:
@@ -268,6 +295,19 @@ def _read_text_or_none(path: Path) -> str | None:
         return path.read_text(encoding="utf-8")
     except OSError:
         return None
+
+
+def _gate_config_changed(base_ref: str, staged_only: bool) -> bool:
+    """Whether this diff touches the parts of ci.yml that shape the Python gate.
+
+    ci.yml carries every other job in CI too, so the whole file counting as a
+    support file would run the full perimeter for an unrelated lint change.
+    Only the three gate jobs and the workflow-level keys (``on:``,
+    ``permissions:`` and the like, which apply to those jobs) decide what runs
+    and what passes. Fails safe in the same way as _mutmut_config_changed: an
+    unreadable side counts as a change.
+    """
+    return _section_changed(CI_WORKFLOW, lambda text: _gate_blocks(text, MUTATION_GATE_JOBS), base_ref, staged_only)
 
 
 def _changed_mutation_support_paths(
@@ -284,11 +324,28 @@ def _changed_mutation_support_paths(
             # table; only the latter makes the question perimeter-wide.
             if path == "pyproject.toml" and not _mutmut_config_changed(base_ref, staged_only):
                 continue
+            # Likewise ci.yml holds all of CI; only the parts shaping the gate count.
+            if path == CI_WORKFLOW and not _gate_config_changed(base_ref, staged_only):
+                continue
             support.append(path)
             continue
         if any(path == test_path or path.startswith(test_path + "/") for test_path in configured_tests):
             support.append(path)
     return sorted(set(support))
+
+
+def _change_scope(changed_paths: list[str], base_ref: str, staged_only: bool) -> Scope:
+    """Every changed path classified, and what it runs; see scripts/mutation_change_scope.py."""
+
+    def source_target(path: str) -> str | None:
+        on_roots = path.endswith(".py") and path.startswith(DEFAULT_MUTATION_ROOTS) and Path(path).exists()
+        return _resolve_to_mutmut_path(path) if on_roots else None
+
+    return _classify_change(
+        changed_paths,
+        is_support=lambda path: bool(_changed_mutation_support_paths([path], base_ref, staged_only)),
+        source_target=source_target,
+    )
 
 
 def _mutation_environment() -> dict[str, str]:
@@ -602,7 +659,20 @@ def main() -> int:
             "Mutually exclusive with --changed-only."
         ),
     )
+    parser.add_argument(
+        "--emit-targets",
+        action="store_true",
+        help=f"With --changed-only, print the targets as {TARGETS_LINE_PREFIX}<json> and exit without mutmut.",
+    )
     args = parser.parse_args()
+    # In CI stdout is a pipe, which Python block-buffers: the 2026-10-18
+    # polling_service.py leg printed "Running mutation attempt 1/1" only after
+    # mutmut's whole run. A replaced stdout (a test capture) may lack reconfigure.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(line_buffering=True)
+    if args.emit_targets and not args.changed_only:
+        parser.error("--emit-targets needs --changed-only: it reports what a change touched")
     half_cpus = _half_cpu_count()
     requested_children = args.max_children if args.max_children is not None else half_cpus
     max_children = min(max(1, requested_children), half_cpus)
@@ -610,45 +680,58 @@ def main() -> int:
     source_paths: list[str] | None = None
     changed_support_paths: list[str] = []
     if args.changed_only:
-        source_paths = _changed_python_paths(args.base_ref, args.staged_only, DEFAULT_MUTATION_ROOTS)
+        try:
+            source_paths = _changed_python_paths(args.base_ref, args.staged_only, DEFAULT_MUTATION_ROOTS)
+            changed = _changed_paths(args.base_ref, args.staged_only)
+        except ChangedPathsError as exc:
+            # No targets line is printed, so ci/prepare_mutation_args.sh fails
+            # the step rather than reading the silence as an empty list.
+            print(f"mutation gate: FAIL -- cannot tell what changed against {args.base_ref}: {exc}")
+            return 1
         # Asked regardless of whether source also changed. This used to sit under
         # `if not source_paths:`, so a commit touching BOTH a perimeter source
         # file and the tooling ran the scoped gate on the source file and never
         # asked the perimeter question at all -- the tooling moved and nothing
-        # re-checked the other 37 files. That is exactly backwards: a support
+        # re-checked the rest of the perimeter. That is exactly backwards: a support
         # change invalidates prior results for every perimeter file, and whether
         # some unrelated source file rode along in the same commit says nothing
         # about that. Caught on 491a4c67, which changed this very file plus
         # control_channel.py and dispatched nothing.
-        changed_support_paths = _changed_mutation_support_paths(
-            _changed_paths(args.base_ref, args.staged_only), args.base_ref, args.staged_only
-        )
+        scope = _change_scope(changed, args.base_ref, args.staged_only)
+        source_paths = sorted(set(source_paths) | set(scope.targets))
+        for path, reason in scope.full:
+            print(f"whole perimeter for {path}: {reason}")
+        changed_support_paths = sorted({path for path, _reason in scope.full})
         if changed_support_paths:
             # With source changes present, the scoped run below is still worth
             # doing -- it is the fast answer for the file in hand -- so print the
-            # marker (ci/prepare_mutation_args.sh dispatches on it) and carry on
-            # rather than returning. Only a support-ONLY change returns early,
-            # because there is nothing else for this job to run.
+            # marker (ci/prepare_mutation_args.sh widens the CI matrix to the
+            # whole perimeter on it) and carry on rather than returning. Only a
+            # support-ONLY change returns early, because there is nothing else
+            # for this invocation to run.
             print(
                 "mutation gate full-perimeter trigger: changed mutation allowlist/config/tests: "
                 f"{changed_support_paths}"
             )
             print(FULL_PERIMETER_REQUIRED_MARKER)
+        if args.emit_targets:
+            print(f"{TARGETS_LINE_PREFIX}{json.dumps(source_paths, separators=(',', ':'))}")
+            return 0
         if not source_paths:
             if changed_support_paths:
                 # A support-file change is a perimeter-wide question: the tooling
                 # moved, so nothing about the previous result carries over. It is
-                # NOT answerable here. The perimeter is 38 files and mutmut has to
-                # be given them one at a time (a single run over all of them trips
-                # the fork-loop child-reaping crash), so answering it in this job
-                # means 38 sequential runs -- hours against a 90-minute cap. What
-                # that produced was never a verdict, only a timeout.
+                # NOT answerable in one invocation. mutmut has to be given the
+                # perimeter files one at a time (a single run over all of them
+                # trips the fork-loop child-reaping crash), so answering it here
+                # means one sequential run per perimeter file -- hours, and in CI
+                # never a verdict, only a timeout.
                 #
-                # So the job says what it cannot answer and names who can:
-                # mutation-full.yml already fans the same 38 targets across a
-                # matrix. ci/prepare_mutation_args.sh reads the marker below and
-                # dispatches it on this SHA.
-                print("no changed source mutants: the dispatched full-perimeter run is the whole answer")
+                # So this says what it cannot answer and leaves it to what can: in
+                # CI, ci/prepare_mutation_args.sh reads the marker above and gives
+                # the per-target matrix the whole perimeter, one job per file.
+                # Locally, run the files you care about with --paths.
+                print("no changed source mutants: the full perimeter has to be run per target (--paths)")
                 return 0
             print("mutation gate skipped: no changed Python files under mutation roots")
             return 0

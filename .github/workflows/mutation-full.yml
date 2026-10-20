@@ -10,14 +10,18 @@ name: "🧬 Mutation Gate (full perimeter)"
 # It does NOT run one mutmut invocation over the whole perimeter: a single ~6k-mutant
 # run trips mutmut's fork-loop child-reaping crash on a 2-worker runner and mass-reports
 # "not checked" (observed dying at ~1540/6227). Instead it FANS OUT one matrix job per
-# perimeter file (each <=~700 mutants — the stable batch size the --changed-only gate
-# already runs cleanly). The file list comes from ci/mutation_full_matrix.py (reads
+# perimeter file (each <=~700 mutants) through mutation-shards.yml, the same per-target
+# job ci.yml's gate uses. The file list comes from ci/mutation_full_matrix.py (reads
 # pyproject), so there is no duplicated perimeter list to drift (the generator's
 # _CI_EXCLUDE set, currently empty, can drop any file mutmut can't run here). Files
 # with no mutable surface (Pydantic models, shims, constant tables) pass via the
 # gate's --paths "no mutable surface" path. pty/connector.py's real-fork tests are
 # skipped during mutation by the pty conftest (test_connector_mutation_mocked.py
 # carries its coverage fork-free), so it runs here without leaking children.
+#
+# ci.yml no longer dispatches this workflow. A support-file change used to be deferred
+# here after merge; the PR gate is sharded now and runs the whole perimeter itself. This
+# stays as the weekly sweep for drift that no change touched, and for manual runs.
 #
 # Script policy: run: blocks stay <= 3 lines (each is a single command), so no extra
 # ci/ wrapper is needed beyond the matrix generator.
@@ -68,42 +72,17 @@ jobs:
       - id: gen
         run: echo "paths=$(python3 ci/mutation_full_matrix.py)" >> "$GITHUB_OUTPUT"
 
+  # The per-target job lives in mutation-shards.yml, shared with ci.yml's
+  # changed-only gate, so the weekly run and the PR gate run the same command.
+  # --retries 0 here: a single parallel pass, so a survivor is reported without
+  # the slow single-worker retry. The PR gate retries once, because a failure
+  # there fails the PR's check and a flaky stats run should not.
   mutation-gate-full:
     needs: perimeter-matrix
-    runs-on: ubuntu-latest
-    # Per-file: setup (~5 min) + one perimeter file (<=~700 mutants, ~10-20 min).
-    timeout-minutes: 90
-    strategy:
-      # Run every chunk so ALL drift is reported in one pass, not just the first failure.
-      fail-fast: false
-      # Cap concurrent runners to keep weekly CI cost bounded.
-      max-parallel: 8
-      matrix:
-        path: ${{ fromJson(needs.perimeter-matrix.outputs.paths) }}
-    steps:
-      # Full history so mutmut/git operations have the complete tree.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          fetch-depth: 0
-      # uv drives the gate (uv run) and the workspace install.
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
-      # Pin the gate's interpreter to match scripts/run_mutation_gate.py default.
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
-        with:
-          python-version: "3.11"
-      # Frontend assets: mutmut's stats run executes the full tests_dir, which includes
-      # full-app integration tests that abort without built assets (mirrors ci.yml).
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
-        with:
-          node-version-file: ".nvmrc"
-      - run: npm ci
-      - run: npm run build:frontend
-      # Install the workspace + dev tooling (mutmut, pytest, ...).
-      - run: uv sync --frozen --group dev
-      # Mutate just this one perimeter file. --retries 0 = a single parallel pass (a
-      # survivor is reported without the slow single-worker retry).
-      - name: "Mutation gate: ${{ matrix.path }}"
-        run: uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries 0 --min-mutation-score 100 --paths "${{ matrix.path }}"
+    uses: ./.github/workflows/mutation-shards.yml
+    with:
+      paths: ${{ needs.perimeter-matrix.outputs.paths }}
+      retries: 0
 
   # Name the failing legs in the run summary. A scheduled workflow that is
   # simply red reports nothing useful: this one caught the routes/ regression on
