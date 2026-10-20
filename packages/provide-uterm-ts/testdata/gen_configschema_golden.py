@@ -64,6 +64,7 @@ MODELS: dict[str, type[BaseModel]] = {
     "ServerBindConfig": schema.ServerBindConfig,
     "PamConfig": schema.PamConfig,
     "GovernanceConfig": schema.GovernanceConfig,
+    "SessionPersistenceConfig": schema.SessionPersistenceConfig,
     "GraphicalTargetConfig": schema.GraphicalTargetConfig,
     "SessionDefinition": schema.SessionDefinition,
 }
@@ -269,6 +270,24 @@ CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("GraphicalTargetConfig", "parameters given a list", {"config": []}),
     ("GraphicalTargetConfig", "parameters given null", {"config": None}),
     ("GraphicalTargetConfig", "a size that is not a number", {"width": "wide"}),
+    (
+        "SessionPersistenceConfig",
+        "capture sessions kept",
+        {"persist_capture": True, "previous_keep_days": 7, "state_dir": "/var/lib/uterm/capture-sessions/"},
+    ),
+    ("SessionPersistenceConfig", "capture sessions kept with nowhere to keep them", {"persist_capture": True}),
+    ("SessionPersistenceConfig", "a relative state directory", {"state_dir": "./state"}),
+    ("SessionPersistenceConfig", "a state directory given null", {"state_dir": None}),
+    ("SessionPersistenceConfig", "a state directory given a number", {"state_dir": 5}),
+    ("SessionPersistenceConfig", "previous days below zero", {"previous_keep_days": -1}),
+    ("SessionPersistenceConfig", "scrollback past its bound", {"previous_scrollback_lines": 10001}),
+    (
+        "SessionPersistenceConfig",
+        "both bounds broken at once",
+        {"previous_keep_days": 3651, "previous_scrollback_lines": -1},
+    ),
+    ("SessionPersistenceConfig", "previous days written as a word", {"previous_keep_days": "week"}),
+    ("SessionPersistenceConfig", "a field nobody defined", {"persist_captures": True}),
 ]
 
 TOP_LEVEL_CASES: list[tuple[str, dict[str, Any]]] = [

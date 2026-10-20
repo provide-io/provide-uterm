@@ -44,6 +44,7 @@ from provide.uterm.server.config_schema import (
     PamConfig,
     RecordingConfig,
     ServerBindConfig,
+    SessionPersistenceConfig,
     UiConfig,
     _clean_path,
     _require_secure_url,
@@ -150,6 +151,35 @@ MODEL_CASES: list[tuple[str, Any, dict[str, Any]]] = [
     ("sqlite with no database url", ControlPlaneConfig, {"backend": "sqlite"}),
     ("a pam relay over cleartext", PamConfig, {"relay_url": "http://relay.example.org/notify"}),
     ("a pam relay over tls", PamConfig, {"relay_url": "https://relay.example.org/notify"}),
+    ("session persistence off", SessionPersistenceConfig, {}),
+    (
+        "session persistence at its bounds",
+        SessionPersistenceConfig,
+        {
+            "persist_capture": True,
+            "previous_keep_days": 3650,
+            "previous_scrollback_lines": 10000,
+            "state_dir": "/var/lib/uterm/capture-sessions",
+        },
+    ),
+    (
+        "no previous sessions and no scrollback",
+        SessionPersistenceConfig,
+        {"previous_keep_days": 0, "previous_scrollback_lines": 0},
+    ),
+    ("negative previous days", SessionPersistenceConfig, {"previous_keep_days": -1}),
+    ("previous days past their bound", SessionPersistenceConfig, {"previous_keep_days": 3651}),
+    ("negative scrollback", SessionPersistenceConfig, {"previous_scrollback_lines": -1}),
+    ("scrollback past its bound", SessionPersistenceConfig, {"previous_scrollback_lines": 10001}),
+    ("capture sessions kept with nowhere to keep them", SessionPersistenceConfig, {"persist_capture": True}),
+    ("previous sessions kept with nowhere to keep them", SessionPersistenceConfig, {"previous_keep_days": 1}),
+    ("a relative state directory", SessionPersistenceConfig, {"state_dir": "state/"}),
+    ("an empty state directory", SessionPersistenceConfig, {"state_dir": ""}),
+    (
+        "a state directory written with a trailing slash",
+        SessionPersistenceConfig,
+        {"persist_capture": True, "state_dir": "/var/lib/uterm/capture-sessions/"},
+    ),
 ]
 
 

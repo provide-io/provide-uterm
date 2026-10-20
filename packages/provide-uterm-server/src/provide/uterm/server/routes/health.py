@@ -50,6 +50,25 @@ if TYPE_CHECKING:
 # every share viewer of the session, so a caller must not send one blind.
 SERVER_FEATURES = ("viewers.revoke.subject",)
 
+# Listed only when configured, since a server can have either switched off:
+# ``sessions.capture.persist``: PAM capture sessions are re-created under their
+# ids after a restart (``session_persistence.persist_capture``).
+# ``sessions.previous``: an ended capture session can be read at
+# ``GET /api/previous-sessions`` (``session_persistence.previous_keep_days``).
+PERSIST_CAPTURE_FEATURE = "sessions.capture.persist"
+PREVIOUS_SESSIONS_FEATURE = "sessions.previous"
+
+
+def server_features(config: object) -> list[str]:
+    """The features this server lists in ``/api/health``, given its config."""
+    features = list(SERVER_FEATURES)
+    settings = getattr(config, "session_persistence", None)
+    if settings is not None and settings.persist_capture:
+        features.append(PERSIST_CAPTURE_FEATURE)
+    if settings is not None and settings.previous_keep_days > 0:
+        features.append(PREVIOUS_SESSIONS_FEATURE)
+    return features
+
 
 def create_health_router(
     require_authenticated: Callable[[HTTPConnection], Awaitable[None]] | None = None,
@@ -102,7 +121,7 @@ def create_health_router(
             "uptime_s": uptime_s,
             "active_sessions": active_sessions,
             "control_plane_backend": backend,
-            "features": list(SERVER_FEATURES),
+            "features": server_features(config),
         }
 
     @router.get("/healthz")

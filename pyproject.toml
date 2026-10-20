@@ -390,6 +390,19 @@ source_paths = [
     #   set, always-present pop) excused via mutation_equivalents.toml. The fragile
     #   existing test_registry.py/test_runtime.py suites stay UNWIRED.
     "src/provide/uterm/server/registry.py",
+    # capture_record.py / capture_state.py / runtime_connection.py — the PAM
+    #   capture sessions kept across a restart (the session_persistence table). The
+    #   record parser decides which file on disk becomes a live session and who
+    #   reads an ended one's unredacted screen, and the store decides what is
+    #   written, kept and pruned: security-relevant decisions line coverage
+    #   cannot see. runtime_connection.py is runtime.py's connection-recording
+    #   half, split out for the line cap. Bound by test_capture_record.py,
+    #   test_capture_state.py, test_capture_state_config.py and
+    #   test_capture_restore.py (tmp-dir stores, mocked connectors, nothing
+    #   external), wired into the pytest selection below.
+    "src/provide/uterm/server/capture_record.py",
+    "src/provide/uterm/server/capture_state.py",
+    "src/provide/uterm/server/runtime_connection.py",
     # config_schema.py — RE-ENABLED at killed==100 (2026-06-02). The prior "baseline
     # aborts / @model_validator trips the trampoline" deferral was WRONG: a measured
     # run produces a clean 34-mutant baseline with ZERO no_tests. mutmut SKIPS every
@@ -713,6 +726,20 @@ pytest_add_cli_args_test_selection = [
     # _finish_removal, _release_mine). In-memory and tmp-dir stores, a real
     # TermHub and auto_start=False runtimes: no streaming, nothing external.
     "packages/provide-uterm-server/tests/server/test_registry_recording_retire.py",
+    # The capture-session hooks (_save_definition, adopt_restored, ending a kept
+    # session in _finish_removal). Tmp-dir stores, a real TermHub and
+    # auto_start=False runtimes, as above.
+    "packages/provide-uterm-server/tests/server/test_capture_restore.py",
+    # capture_record.py / capture_state.py: the record format and its refusals
+    # (with the corpus both ports read), the store's writes, prunes and reads,
+    # and the [session_persistence] store construction. Tmp-dir stores only.
+    "packages/provide-uterm-server/tests/server/test_capture_record.py",
+    "packages/provide-uterm-server/tests/server/test_capture_state.py",
+    "packages/provide-uterm-server/tests/server/test_capture_state_config.py",
+    "packages/provide-uterm-server/tests/server/test_capture_record_kill.py",
+    "packages/provide-uterm-server/tests/server/test_capture_state_kill.py",
+    # runtime_connection.py: a bare mixin host with mocked recording calls.
+    "packages/provide-uterm-server/tests/server/test_runtime_connection.py",
     # routes/ self-contained mocked kill-suite (mutmut skips the @router.* handlers;
     # this binds the undecorated helpers + create_*_router bodies via router-endpoint
     # extraction with mocked Request — no TestClient/full-app lifespan).
@@ -760,6 +787,9 @@ pytest_add_cli_args_test_selection = [
     "packages/provide-uterm-server/tests/server/test_viewer_revocation.py",
     # The per-subject revoke ({"subject": ...}): its body refusals and caps.
     "packages/provide-uterm-server/tests/server/test_viewer_subject_revocation.py",
+    # routes/previous_sessions.py — GET /api/previous-sessions[/{id}] through the
+    # real app: who may list and read which, and the exact 403 and 404.
+    "packages/provide-uterm-server/tests/server/test_previous_sessions.py",
     # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the
@@ -850,6 +880,8 @@ pytest_add_cli_args_test_selection = [
     #   which the coverage suite can see. See the suite docstring.
     "packages/provide-uterm-server/tests/bridge/test_snapshot_redaction.py",
     "packages/provide-uterm-server/tests/bridge/hub/test_router_redaction_kill.py",
+    # router_impl.redact_texts_for_recipient: what the previous-session read asks the output policy.
+    "packages/provide-uterm-server/tests/bridge/hub/test_router_redact_texts_kill.py",
     # router_broadcast.py — fan-out, failure handling, startup buffer, hijack-state
     # payload + its second pass, and the role-scoped policy resolution.
     "packages/provide-uterm-server/tests/bridge/hub/test_router_broadcast_send_worker_kill.py",
@@ -1059,6 +1091,9 @@ also_copy = [
     # (in the selection above). Without it the stats run errors on that test
     # and every mutant reports "not checked".
     "conformance/snapshot",
+    # The capture-record corpus both ports read, which test_capture_record.py
+    # (in the selection above) reads from the Go package's testdata.
+    "packages/provide-uterm-go/capturestate/testdata",
     "conftest.py",
 ]
 pytest_add_cli_args = [

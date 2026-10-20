@@ -5,7 +5,10 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
+import socket
+import stat
 import struct
 from dataclasses import dataclass
 from pathlib import Path
@@ -75,6 +78,40 @@ _SOCKET_MODE = 0o600
 _BIND_UMASK = 0o177
 
 
+# How long a probe of a socket already at the path may take to be answered.
+_PROBE_TIMEOUT_S = 0.1
+
+
+def _refuse_live_socket(path: str) -> None:
+    """Refuse a socket at *path* that something still listens on.
+
+    asyncio's ``create_unix_server`` removes any socket at its path before it
+    binds, which is right for one a crashed server left behind and wrong for
+    one another session is serving: that session would lose its producer to
+    this one. Only a socket whose connect is refused is stale, so anything
+    else there is left alone and the bind fails as ``EADDRINUSE``, as the Go
+    port's does. Not a socket at all, the bind fails on it by itself.
+    """
+    try:
+        mode = os.lstat(path).st_mode
+    except FileNotFoundError:
+        return
+    if not stat.S_ISSOCK(mode):
+        return
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    probe.settimeout(_PROBE_TIMEOUT_S)
+    try:
+        probe.connect(path)
+    except ConnectionRefusedError:
+        return
+    except OSError:
+        # A listener too busy to answer in time is still a listener.
+        pass
+    finally:
+        probe.close()
+    raise OSError(errno.EADDRINUSE, f"capture socket is in use: {path}")
+
+
 @dataclass
 class CaptureFrame:
     channel: int
@@ -107,6 +144,8 @@ class CaptureSocket:
         # happens.
         # NOTE: os.umask is process-global and not async-safe — keep the
         # set→bind→restore window as tight as possible (only the bind call).
+        # Off the loop: a busy listener holds the probe up to its timeout.
+        await asyncio.to_thread(_refuse_live_socket, self._path)
         prev_umask = os.umask(_BIND_UMASK)
         try:
             self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)

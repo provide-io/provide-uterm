@@ -14,7 +14,10 @@ from __future__ import annotations
 import codecs
 import hashlib
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # wcwidth is the width function pyte draws with; _unicode pins the Unicode data it composes with.
 try:
@@ -31,6 +34,10 @@ except ImportError as _e:  # pragma: no cover
     ) from _e
 
 _CP437 = "cp437"
+
+# The private modes that switch to the alternate screen, as pyte stores them.
+# Rows a full-screen program scrolls there are its own redraws, not history.
+_ALT_SCREEN_MODES = tuple(mode << 5 for mode in (47, 1047, 1049))
 
 # Bounded rolling raw-output tail (decoded chars, ANSI/control intact). pyte's
 # Screen keeps only the 25-row viewport, so output that scrolls off within a
@@ -152,6 +159,10 @@ class _TolerantScreen(pyte.Screen):
         the screen. Here an empty cell is drawn as nothing, as in the Go, C#
         and TypeScript ports; everything else is as pyte renders it.
         """
+        return [self.row_text(y) for y in range(self.lines)]
+
+    def row_text(self, y: int) -> str:
+        """One row as :attr:`display` renders it."""
 
         def render(line: Any) -> Any:
             after_wide = False
@@ -163,7 +174,29 @@ class _TolerantScreen(pyte.Screen):
                 after_wide = bool(data) and _wcwidth(data[0]) == 2
                 yield data
 
-        return ["".join(render(self.buffer[y])) for y in range(self.lines)]
+        return "".join(render(self.buffer[y]))
+
+    #: Handed each row, as plain text, that scrolls off the top of the main
+    #: screen; see :meth:`TerminalEmulator.set_scrollback_sink`.
+    scrolled_off: Callable[[str], None] | None = None
+
+    def index(self) -> None:
+        """IND, handing the top row to :attr:`scrolled_off` when it scrolls away.
+
+        Only a scroll of a region that starts at the top row loses that row, as
+        xterm keeps it: a region lower down scrolls lines that are still on the
+        screen. The alternate screen keeps no history in any terminal, so its
+        scrolls hand nothing over.
+        """
+        top, bottom = self.margins or (0, self.lines - 1)
+        if (
+            self.scrolled_off is not None
+            and top == 0
+            and self.cursor.y == bottom
+            and not any(mode in self.mode for mode in _ALT_SCREEN_MODES)
+        ):
+            self.scrolled_off(self.row_text(0).rstrip())
+        super().index()
 
 
 for _name in (
@@ -365,6 +398,15 @@ class TerminalEmulator:
         # see the use_utf8 note in __init__.
         suffix = screen_state_suffix(screen, charsets=not self._stream.use_utf8)
         return f"{screen_state_prefix(screen)}{rows}{suffix}"
+
+    def set_scrollback_sink(self, sink: Callable[[str], None] | None) -> None:
+        """Hand *sink* each row that scrolls off the top of the main screen.
+
+        This emulator keeps only the visible screen; whoever wants the history
+        a terminal would let its user scroll back through keeps it, from these
+        rows, as plain text. ``None`` stops it. A reset leaves it in place.
+        """
+        self._screen.scrolled_off = sink
 
     def reset(self) -> None:
         """Reset terminal to its initial state."""

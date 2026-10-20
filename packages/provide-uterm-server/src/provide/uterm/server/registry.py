@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     from provide.uterm.annotation import PatternDetector
     from provide.uterm.recording import RecordingStore
     from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.capture_state import CaptureRecord, CaptureStateStore
 
 
 class SessionValidationError(ValueError):
@@ -86,8 +87,12 @@ class SessionRegistry:
         tunnel_tokens: dict[str, dict[str, object]] | None = None,
         block_private_connector_targets: bool = False,
         default_visibility: Visibility = "public",
+        capture_state: CaptureStateStore | None = None,
     ) -> None:
         self._hub = hub
+        # Where PAM capture sessions are kept across a restart and after they
+        # end (session_persistence); None when neither is configured.
+        self._capture_state = capture_state
         self._recording = recording
         # Egress SSRF posture for connector targets.  Cloud-metadata IPs are
         # ALWAYS blocked at the chokepoint below; private/internal hosts are
@@ -228,6 +233,9 @@ class SessionRegistry:
         finally:
             reservation = self._retiring.get(session_id)
             try:
+                if self._capture_state is not None:
+                    # After the stop, whose last screen this keeps.
+                    await self._capture_state.end(session_id)
                 await retire_recording(self._recording_store, session_id)
             finally:
                 if reservation is not None:
@@ -256,9 +264,39 @@ class SessionRegistry:
                 hub=self._hub,
                 detector=self._detector,
                 block_private_connector_targets=self._block_private,
+                screen_keeper=self._capture_state.keeper(session) if self._capture_state is not None else None,
             )
             self._runtimes[session.session_id] = runtime
         return runtime
+
+    async def _save_definition(self, session: SessionDefinition) -> None:
+        """Write a kept capture session's definition as it now stands; a no-op for any other."""
+        if self._capture_state is not None and self._capture_state.tracks(session):
+            await self._capture_state.save_definition(session.session_id)
+
+    async def adopt_restored(self, record: CaptureRecord) -> bool:
+        """Re-create a capture session from its file after a restart; False when it cannot be.
+
+        Unlike :meth:`create_session` the recording under the id is kept: it is
+        this session's, and the runtime carries on recording under the same
+        instance. A session that exists already, or a full registry, keeps the
+        record where it is for the next start; a registry that keeps no capture
+        sessions adopts none.
+        """
+        definition = record.definition
+        store = self._capture_state
+        async with self._lock:
+            if store is None or definition.session_id in self._sessions or definition.session_id in self._retiring:
+                return False
+            if self._max_sessions is not None and len(self._sessions) >= self._max_sessions:
+                logger.warning(
+                    "capture_state_restore_skipped session_id=%s reason=session_limit", definition.session_id
+                )
+                return False
+            store.adopt(record)
+            self._sessions[definition.session_id] = definition
+            self._runtime_for(definition)
+        return True
 
     async def _force_release_hijack(self, session_id: str) -> bool:
         return await self._hub.force_release_hijack(session_id)
@@ -393,6 +431,7 @@ class SessionRegistry:
             # However this ended -- cancelled while waiting for the lock
             # included -- the reservation is not left behind.
             self._release_mine(session.session_id, reservation)
+        await self._save_definition(session)
         if session.auto_start:
             await runtime.start()
         return runtime.status()
@@ -460,6 +499,7 @@ class SessionRegistry:
         if "input_mode" in updates:
             await runtime.set_mode(validated.input_mode)
             await self._hub.set_input_mode(session_id, validated.input_mode)
+        await self._save_definition(session)
         return runtime.status()
 
     async def delete_session(self, session_id: str) -> None:
@@ -507,6 +547,7 @@ class SessionRegistry:
         # SessionDefinition.model_validate above already enforced the
         # ``Literal['hijack', 'open']`` shape — cast tells mypy that.
         await self._hub.set_input_mode(session_id, mode)  # type: ignore[arg-type]  # ty:ignore[invalid-argument-type]
+        await self._save_definition(session)
         return runtime.status()
 
     async def clear_session(self, session_id: str) -> SessionRuntimeStatus:

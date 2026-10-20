@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from provide.uterm.control.plane import ControlPlane as SharedControlPlane
     from provide.uterm.server.audit_chain import AuditChain
     from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.capture_state import CaptureStateStore
     from provide.uterm.server.models import ServerConfig
     from provide.uterm.server.registry import SessionRegistry
 
@@ -153,6 +154,20 @@ async def sweep_expired_recordings(*, config: ServerConfig) -> None:
                     )
             except Exception:
                 logger.exception("recording_retention_sweep_error path=%s", str(path))
+
+
+async def sweep_previous_sessions(*, store: CaptureStateStore | None) -> None:
+    """Remove previous capture sessions past session_persistence.previous_keep_days, hourly.
+
+    Startup prunes them too (``restore_capture_sessions``); this keeps a server
+    that runs for weeks from holding them past their days.
+    """
+    from provide.uterm.server.capture_state import PRUNE_INTERVAL_S
+
+    while True:
+        await asyncio.sleep(PRUNE_INTERVAL_S)
+        if store is not None and store.keeps_previous:
+            store.prune()
 
 
 async def sweep_expired_tunnel_tokens(

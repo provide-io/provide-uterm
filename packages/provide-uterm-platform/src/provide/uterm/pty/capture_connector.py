@@ -32,7 +32,8 @@ import codecs
 import hashlib
 import re
 import time
-from typing import Any
+from collections import deque
+from typing import TYPE_CHECKING, Any
 
 from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
@@ -43,6 +44,9 @@ from provide.uterm.pty.capture import (
     CaptureSocket,
     parse_geometry,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 _VALID_CONFIG_KEYS = frozenset(
     {
@@ -132,6 +136,12 @@ class CaptureConnector:
         # Output since the last full clear, replayed into a new emulator when the
         # size changes: see reconfigure.
         self._since_clear = ""
+        # The rows that scrolled off the top of the screen, as plain text, for a
+        # terminal's scrollback. Kept here rather than in the emulator, which a
+        # resize replaces and replays into: a replay scrolls the same rows off
+        # again. Empty until keep_scrollback asks for some.
+        self._scrollback: deque[str] = deque(maxlen=0)
+        self._watch_scrollback()
         # One decoder for the session's whole output stream: the shim sends each
         # write() as it happens, so a multibyte character can be split across two
         # frames. Decoding each frame on its own would turn both halves into
@@ -252,6 +262,48 @@ class CaptureConnector:
             # the program never drew for.
             self._emulator = _make_emulator(cols, rows)
             self._emulator.process(self._since_clear.encode("utf-8"))
+            self._watch_scrollback()
+
+    def _watch_scrollback(self) -> None:
+        """Take the rows the live stream scrolls away into the scrollback.
+
+        Called once the emulator holds what it was replayed, never before: the
+        rows a replay scrolls off are in the scrollback already.
+        """
+        if self._emulator is not None:
+            # None when none is kept: a row is not rendered only to be dropped.
+            self._emulator.set_scrollback_sink(self._scrollback.append if self._scrollback.maxlen else None)
+
+    def keep_scrollback(self, lines: int, rows: Iterable[str] = ()) -> None:
+        """Keep up to *lines* rows of scrollback (0 keeps none), starting from *rows*, the newest kept.
+
+        *rows* is the scrollback this session had kept before this connector
+        started: a connector started again, or after a restart, carries it on.
+        """
+        self._scrollback = deque(rows, maxlen=lines)
+        self._watch_scrollback()
+
+    def scrollback(self) -> list[str]:
+        """The rows that scrolled off the top of the screen, oldest first."""
+        return list(self._scrollback)
+
+    def restore_screen(self, screen: str, cols: int, rows: int) -> None:
+        """Start from a screen this session showed before the server restarted.
+
+        *screen* is a snapshot's ``screen`` (``ansi_screen()``), which a fresh
+        emulator of its size paints back exactly; its rows are joined with LF,
+        which a terminal reads as a line feed alone, so they are painted with
+        CRLF. The painted text also stands in for the output since the last
+        clear, so a resize before the program next clears redraws it.
+        """
+        painted = screen.replace("\n", "\r\n")
+        self._cols, self._rows = cols, rows
+        self._buffer = painted[-65536:]
+        self._since_clear = painted[-_REPLAY_MAX:]
+        self._emulator = _make_emulator(cols, rows)
+        if self._emulator is not None:
+            self._emulator.process(painted.encode("utf-8"))
+        self._watch_scrollback()
 
     def _ingest_stdout(self, data: bytes) -> str:
         """Take one chunk of captured output into the screen; return it for streaming."""
@@ -327,6 +379,7 @@ class CaptureConnector:
         self._buffer = ""
         self._pending = ""
         self._since_clear = ""
+        self._scrollback.clear()
         if self._emulator is not None:
             self._emulator.reset()
         return [{"type": "term", "data": ""}]

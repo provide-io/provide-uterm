@@ -20,9 +20,9 @@ from provide.uterm.control_channel import (
     ControlFrameProtocolError,
     DataChunk,
 )
-from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.server.connectors import SessionConnector, build_connector
 from provide.uterm.server.models import RecordingConfig, SessionDefinition, SessionLifecycle, SessionRuntimeStatus
+from provide.uterm.server.runtime_connection import ConnectionRecordingMixin
 
 # Re-exported so the public import surface of ``runtime`` is unchanged: tests
 # and callers import these helpers directly from ``provide.uterm.server.runtime``.
@@ -36,6 +36,7 @@ from provide.uterm.server.runtime_helpers import (
     _classify_run_error,
     _encode_runtime_frame,
     _read_annotation_key,
+    settled_screen_due,
 )
 from provide.uterm.session_logger import SessionLogger
 
@@ -45,11 +46,12 @@ if TYPE_CHECKING:
     from provide.uterm.annotation import PatternDetector, StreamingDetector
     from provide.uterm.recording import RecordingStore
     from provide.uterm.server.bridge.hub import TermHub
+    from provide.uterm.server.capture_state import ScreenKeeper
 
 logger = get_logger(__name__)
 
 
-class HostedSessionRuntime:
+class HostedSessionRuntime(ConnectionRecordingMixin):
     """Long-lived worker runtime for one named hosted session."""
 
     def __init__(
@@ -64,6 +66,7 @@ class HostedSessionRuntime:
         detector: PatternDetector | None = None,
         max_buffer_bytes: int = 1_048_576,  # 1MB default
         block_private_connector_targets: bool = False,
+        screen_keeper: ScreenKeeper | None = None,
     ) -> None:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
@@ -103,8 +106,10 @@ class HostedSessionRuntime:
         # Names this runtime's recording to the store. A session id outlives the
         # session it names -- a PAM capture id is a pid, and pids are reused --
         # so a reconnect continues the recording only under the same instance,
-        # and a later session reusing the id starts its own.
-        self._recording_instance = uuid.uuid4().hex
+        # and a later session reusing the id starts its own. A capture session
+        # re-created after a restart is the same session, and keeps its own.
+        self._screen_keeper = screen_keeper
+        self._recording_instance = screen_keeper.recording_instance if screen_keeper else uuid.uuid4().hex
         self._logger: SessionLogger | None = None
         self._detector = detector
         # Per-session streaming wrapper for the *send* path only: keystroke
@@ -237,6 +242,10 @@ class HostedSessionRuntime:
         except Exception as exc:
             failure = failure or exc
         self._task = None
+        if self._screen_keeper is not None and self._connector is not None:
+            # The last screen, taken before the connector goes: what a restart
+            # paints back, or what the session leaves as its previous one.
+            await self._screen_keeper.save_now(self._connector)
         await self._discard_connector()
         self._state = "stopped"
         self._stopped_at = time.time()
@@ -372,6 +381,8 @@ class HostedSessionRuntime:
         # Built from the stored definition, so nothing it holds is owed.
         self._config_pending_restart = False
         await connector.start()
+        if self._screen_keeper is not None:
+            self._screen_keeper.attach(connector)
         if connector.is_connected():
             self._connected = True
         return connector
@@ -419,59 +430,6 @@ class HostedSessionRuntime:
             self._read_annotation_keys.clear()
             self._snapshot_only_keys.clear()
 
-    async def _end_connection_recording(self, connection_error: str | None = None) -> None:
-        """Close the recording at the end of one worker connection, never raising.
-
-        A failed final flush here used to escape ``_run``'s ``finally`` and end
-        the task: the session died silently and its connector stayed alive with
-        nobody to stop it. Now the loop always carries on -- reconnecting, or,
-        when stopping, falling through to cleanup -- and the failure is:
-
-        * logged (``hosted_session_recording_close_failed``);
-        * recorded in ``_last_error`` WITHOUT losing the error that ended the
-          connection: *connection_error* (``str`` of it, or None after a clean
-          end) is kept first and the close failure appended as
-          ``"<connection error>; recording close failed: <close error>"``, or
-          ``"recording close failed: <close error>"`` alone;
-        * when the loop is being stopped (``_stop`` set), also kept in
-          ``_pending_close_failure`` for ``stop()`` to raise after cleanup. A
-          close failure on an ordinary reconnect is not raised anywhere.
-
-        No ``runtime_error`` event is written: the recording it would go to is
-        the one that just failed to close (``_stop_recording`` has dropped it).
-        """
-
-        try:
-            await self._stop_recording()
-        except Exception as exc:
-            logger.warning(
-                "hosted_session_recording_close_failed session_id=%s error=%s",
-                self.definition.session_id,
-                exc,
-            )
-            close_error = f"recording close failed: {exc}"
-            self._last_error = f"{connection_error}; {close_error}" if connection_error else close_error
-            if self._stop.is_set():
-                self._pending_close_failure = exc
-
-    async def _log_runtime_error(self, payload: dict[str, Any]) -> None:
-        """Write a ``runtime_error`` event to the recording, best-effort.
-
-        The recording is often the very thing that failed (a store that keeps
-        failing re-raises on every write, since the logger keeps the unflushed
-        batch). A failure here must never escape the run loop's error handler,
-        or ``_run`` dies without reconnecting or releasing the connector.
-        """
-
-        try:
-            await self._log_event("runtime_error", payload)
-        except Exception as exc:
-            logger.warning(
-                "hosted_session_runtime_error_log_failed session_id=%s error=%s",
-                self.definition.session_id,
-                exc,
-            )
-
     async def _discard_connector(self) -> None:
         """Drop the connector alone, leaving the recording where it is.
 
@@ -497,6 +455,8 @@ class HostedSessionRuntime:
         self._last_output_at = now
         if self._unrecorded_since is None:
             self._unrecorded_since = now
+        if self._screen_keeper is not None:
+            self._screen_keeper.note_output(now)
 
     async def _record_settled_screen(self, connector: Any) -> None:
         """Record the session's screen as it changes, at recording.screen_interval_s.
@@ -511,17 +471,20 @@ class HostedSessionRuntime:
         """
 
         interval = self._recording_cfg.screen_interval_s
-        if interval <= 0 or self._logger is None or self._unrecorded_since is None:
+        if interval <= 0 or self._logger is None:
             return
         # Past its quota the recording drops every write: a screen built for
         # it would be rendered only to be thrown away.
         if self._logger.quota_reached:
             return
         now = time.monotonic()
-        if now - self._last_screen_recorded_at < interval:
-            return
-        quiet = now - self._last_output_at >= TerminalDefaults.RECORDED_SCREEN_SETTLE_S
-        if not quiet and now - self._unrecorded_since < interval:
+        if not settled_screen_due(
+            now,
+            pending_since=self._unrecorded_since,
+            last_output_at=self._last_output_at,
+            last_taken_at=self._last_screen_recorded_at,
+            interval=interval,
+        ):
             return
         try:
             snapshot = await connector.get_snapshot()
@@ -721,6 +684,8 @@ class HostedSessionRuntime:
         try:
             while not self._stop.is_set():
                 await self._record_settled_screen(connector)
+                if self._screen_keeper is not None:
+                    await self._screen_keeper.save_if_due(connector, time.monotonic())
                 if self._queue is not None and not self._queue.empty():
                     outbound = await self._queue.get()
                     encoded = _encode_runtime_frame(outbound)

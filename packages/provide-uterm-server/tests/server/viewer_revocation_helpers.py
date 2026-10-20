@@ -25,8 +25,8 @@ JWT_KEY = "uterm-test-secret-32-byte-minimum-key"
 SESSION = "provide-shell"
 
 
-def mint_token(sub: str, roles: list[str], *, iat: int | None = None, exp_in: int = 600) -> str:
-    """An HS256 token the app built by ``make_app`` accepts."""
+def mint_token(sub: str, roles: list[str], *, iat: int | None = None, exp_in: int = 600, **claims: Any) -> str:
+    """An HS256 token the app built by ``make_app`` accepts, with any further *claims*."""
     issued = int(time.time()) if iat is None else iat
     return jwt.encode(
         {
@@ -36,6 +36,7 @@ def mint_token(sub: str, roles: list[str], *, iat: int | None = None, exp_in: in
             "aud": "provide-uterm-server",
             "iat": issued,
             "exp": issued + exp_in,
+            **claims,
         },
         key=JWT_KEY,
         algorithm="HS256",

@@ -281,6 +281,105 @@
       },
       "model": "PamConfig",
       "name": "a pam relay over tls"
+    },
+    {
+      "error": null,
+      "kwargs": {},
+      "model": "SessionPersistenceConfig",
+      "name": "session persistence off"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "persist_capture": true,
+        "previous_keep_days": 3650,
+        "previous_scrollback_lines": 10000,
+        "state_dir": "/var/lib/uterm/capture-sessions"
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "session persistence at its bounds"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "previous_keep_days": 0,
+        "previous_scrollback_lines": 0
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "no previous sessions and no scrollback"
+    },
+    {
+      "error": "session_persistence.previous_keep_days must be between 0 (keep no previous sessions) and 3650, got: -1",
+      "kwargs": {
+        "previous_keep_days": -1
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "negative previous days"
+    },
+    {
+      "error": "session_persistence.previous_keep_days must be between 0 (keep no previous sessions) and 3650, got: 3651",
+      "kwargs": {
+        "previous_keep_days": 3651
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "previous days past their bound"
+    },
+    {
+      "error": "session_persistence.previous_scrollback_lines must be between 0 and 10000, got: -1",
+      "kwargs": {
+        "previous_scrollback_lines": -1
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "negative scrollback"
+    },
+    {
+      "error": "session_persistence.previous_scrollback_lines must be between 0 and 10000, got: 10001",
+      "kwargs": {
+        "previous_scrollback_lines": 10001
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "scrollback past its bound"
+    },
+    {
+      "error": "session_persistence.state_dir is required when session_persistence.persist_capture is on or session_persistence.previous_keep_days is above 0",
+      "kwargs": {
+        "persist_capture": true
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "capture sessions kept with nowhere to keep them"
+    },
+    {
+      "error": "session_persistence.state_dir is required when session_persistence.persist_capture is on or session_persistence.previous_keep_days is above 0",
+      "kwargs": {
+        "previous_keep_days": 1
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "previous sessions kept with nowhere to keep them"
+    },
+    {
+      "error": "session_persistence.state_dir must be an absolute path, got: state",
+      "kwargs": {
+        "state_dir": "state/"
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "a relative state directory"
+    },
+    {
+      "error": "session_persistence.state_dir must be an absolute path, got: .",
+      "kwargs": {
+        "state_dir": ""
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "an empty state directory"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "persist_capture": true,
+        "state_dir": "/var/lib/uterm/capture-sessions/"
+      },
+      "model": "SessionPersistenceConfig",
+      "name": "a state directory written with a trailing slash"
     }
   ],
   "paths": [

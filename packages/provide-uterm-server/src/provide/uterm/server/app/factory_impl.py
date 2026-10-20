@@ -46,6 +46,7 @@ from provide.uterm.server.app.factory_sweeps import (
     sweep_expired_sessions,
     sweep_expired_tunnel_tokens,
     sweep_idle_sessions,
+    sweep_previous_sessions,
 )
 from provide.uterm.server.app.factory_tunnel_auth import (
     resolve_tunnel_share_principal,
@@ -68,7 +69,9 @@ from provide.uterm.server.auth import (
 )
 from provide.uterm.server.bridge.hub import ControlPlaneResumeStore, EventBus, ResumeSession, TermHub
 from provide.uterm.server.bridge.identity import Principal
+from provide.uterm.server.capture_state import build_capture_state, restore_capture_sessions
 from provide.uterm.server.graphical_routes import seed_graphical_targets
+from provide.uterm.server.pam_integration import capture_socket_allowed
 from provide.uterm.server.policy import SessionPolicyResolver
 from provide.uterm.server.profiles import FileProfileStore
 from provide.uterm.server.registry import SessionRegistry
@@ -476,6 +479,7 @@ def create_server_app(
         ) from exc
 
     recording_store = build_recording_store(config)
+    capture_state = build_capture_state(config)
 
     detector = PatternDetector()
     registry = SessionRegistry(
@@ -490,6 +494,7 @@ def create_server_app(
         tunnel_tokens=tunnel_tokens,
         block_private_connector_targets=config.security.block_private_connector_targets,
         default_visibility=config.security.default_session_visibility,
+        capture_state=capture_state,
     )
     profile_store = FileProfileStore(config.profiles.directory)
     # Seed the tenant-scoped graphical-target registry from config. Enabled
@@ -509,6 +514,11 @@ def create_server_app(
             await registry.start_auto_start_sessions()
 
         await control_plane.migrate()
+        # Before the sessions auto-start, so a capture session re-created from
+        # its file starts with them, its socket bound once the server listens.
+        await restore_capture_sessions(
+            registry, capture_state, lambda socket_path: capture_socket_allowed(socket_path, config.pam)
+        )
 
         # WORM audit chain (opt-in): resume+verify the chain, then start the
         # periodic head checkpoint.  ``audit_event`` is threaded so the resume
@@ -536,6 +546,7 @@ def create_server_app(
         idle_sweep_task = asyncio.create_task(sweep_idle_sessions(config=config, hub=hub))
         retention_sweep_task = asyncio.create_task(sweep_expired_sessions(config=config, registry=registry))
         recording_retention_sweep_task = asyncio.create_task(sweep_expired_recordings(config=config))
+        previous_sessions_sweep_task = asyncio.create_task(sweep_previous_sessions(store=capture_state))
         heartbeat_task = asyncio.create_task(node_registry_heartbeat(config=config, hub=hub))
         # Both backends soft-delete (set deleted_at/revoked_at/resolved_at and
         # leave expired rows in place), so both need the reaper to physically
@@ -577,6 +588,7 @@ def create_server_app(
             await cancel_and_drain(
                 reap_task,
                 heartbeat_task,
+                previous_sessions_sweep_task,
                 recording_retention_sweep_task,
                 retention_sweep_task,
                 idle_sweep_task,
@@ -604,6 +616,7 @@ def create_server_app(
     app.state.uterm_authz = authz
     app.state.uterm_hub = hub
     app.state.uterm_registry = registry
+    app.state.uterm_capture_state = capture_state
     # Readiness flag — False until the lifespan finishes migrate() + task creation.
     # /readyz and /api/health gate on this so a half-initialized pod never passes
     # a Kubernetes readinessProbe.

@@ -675,6 +675,28 @@
         "required": false
       }
     },
+    "SessionPersistenceConfig": {
+      "persist_capture": {
+        "kind": "bool",
+        "optional": false,
+        "required": false
+      },
+      "previous_keep_days": {
+        "kind": "int",
+        "optional": false,
+        "required": false
+      },
+      "previous_scrollback_lines": {
+        "kind": "int",
+        "optional": false,
+        "required": false
+      },
+      "state_dir": {
+        "kind": "path",
+        "optional": true,
+        "required": false
+      }
+    },
     "GraphicalTargetConfig": {
       "target_id": {
         "kind": "str",
@@ -892,6 +914,12 @@
     "webhooks": {
       "kind": "model",
       "name": "WebhooksConfig",
+      "optional": false,
+      "required": false
+    },
+    "session_persistence": {
+      "kind": "model",
+      "name": "SessionPersistenceConfig",
       "optional": false,
       "required": false
     },
@@ -3430,6 +3458,168 @@
           "msg": "Input should be a valid integer, unable to parse string as an integer"
         }
       ]
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "capture sessions kept",
+      "kwargs": {
+        "persist_capture": true,
+        "previous_keep_days": 7,
+        "state_dir": "/var/lib/uterm/capture-sessions/"
+      },
+      "accepted": {
+        "persist_capture": true,
+        "previous_keep_days": 7,
+        "previous_scrollback_lines": 1000,
+        "state_dir": "/var/lib/uterm/capture-sessions"
+      }
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "capture sessions kept with nowhere to keep them",
+      "kwargs": {
+        "persist_capture": true
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, session_persistence.state_dir is required when session_persistence.persist_capture is on or session_persistence.previous_keep_days is above 0"
+        }
+      ]
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "a relative state directory",
+      "kwargs": {
+        "state_dir": "./state"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "state_dir"
+          ],
+          "msg": "Value error, session_persistence.state_dir must be an absolute path, got: state"
+        }
+      ]
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "a state directory given null",
+      "kwargs": {
+        "state_dir": null
+      },
+      "accepted": {
+        "persist_capture": false,
+        "previous_keep_days": 0,
+        "previous_scrollback_lines": 1000,
+        "state_dir": null
+      }
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "a state directory given a number",
+      "kwargs": {
+        "state_dir": 5
+      },
+      "errors": [
+        {
+          "type": "path_type",
+          "loc": [
+            "state_dir"
+          ],
+          "msg": "Input is not a valid path for <class 'pathlib._local.Path'>"
+        }
+      ]
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "previous days below zero",
+      "kwargs": {
+        "previous_keep_days": -1
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "previous_keep_days"
+          ],
+          "msg": "Value error, session_persistence.previous_keep_days must be between 0 (keep no previous sessions) and 3650, got: -1"
+        }
+      ]
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "scrollback past its bound",
+      "kwargs": {
+        "previous_scrollback_lines": 10001
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "previous_scrollback_lines"
+          ],
+          "msg": "Value error, session_persistence.previous_scrollback_lines must be between 0 and 10000, got: 10001"
+        }
+      ]
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "both bounds broken at once",
+      "kwargs": {
+        "previous_keep_days": 3651,
+        "previous_scrollback_lines": -1
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "previous_keep_days"
+          ],
+          "msg": "Value error, session_persistence.previous_keep_days must be between 0 (keep no previous sessions) and 3650, got: 3651"
+        },
+        {
+          "type": "value_error",
+          "loc": [
+            "previous_scrollback_lines"
+          ],
+          "msg": "Value error, session_persistence.previous_scrollback_lines must be between 0 and 10000, got: -1"
+        }
+      ]
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "previous days written as a word",
+      "kwargs": {
+        "previous_keep_days": "week"
+      },
+      "errors": [
+        {
+          "type": "int_parsing",
+          "loc": [
+            "previous_keep_days"
+          ],
+          "msg": "Input should be a valid integer, unable to parse string as an integer"
+        }
+      ]
+    },
+    {
+      "model": "SessionPersistenceConfig",
+      "name": "a field nobody defined",
+      "kwargs": {
+        "persist_captures": true
+      },
+      "errors": [
+        {
+          "type": "extra_forbidden",
+          "loc": [
+            "persist_captures"
+          ],
+          "msg": "Extra inputs are not permitted"
+        }
+      ]
     }
   ],
   "top_level_cases": [
@@ -3576,6 +3766,12 @@
         },
         "webhooks": {
           "allow_loopback_destinations": false
+        },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
         },
         "pam": {
           "notify_socket": null,
@@ -3776,6 +3972,12 @@
         "webhooks": {
           "allow_loopback_destinations": false
         },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
+        },
         "pam": {
           "notify_socket": null,
           "mode": "notify",
@@ -3975,6 +4177,12 @@
         "webhooks": {
           "allow_loopback_destinations": false
         },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
+        },
         "pam": {
           "notify_socket": null,
           "mode": "notify",
@@ -4158,6 +4366,12 @@
         },
         "webhooks": {
           "allow_loopback_destinations": false
+        },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
         },
         "pam": {
           "notify_socket": null,
@@ -4343,6 +4557,12 @@
         "webhooks": {
           "allow_loopback_destinations": false
         },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
+        },
         "pam": {
           "notify_socket": null,
           "mode": "notify",
@@ -4526,6 +4746,12 @@
         },
         "webhooks": {
           "allow_loopback_destinations": false
+        },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
         },
         "pam": {
           "notify_socket": null,
@@ -4711,6 +4937,12 @@
         "webhooks": {
           "allow_loopback_destinations": false
         },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
+        },
         "pam": {
           "notify_socket": null,
           "mode": "notify",
@@ -4894,6 +5126,12 @@
         },
         "webhooks": {
           "allow_loopback_destinations": false
+        },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
         },
         "pam": {
           "notify_socket": null,
@@ -5286,6 +5524,12 @@
         "webhooks": {
           "allow_loopback_destinations": false
         },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
+        },
         "pam": {
           "notify_socket": null,
           "mode": "notify",
@@ -5511,6 +5755,12 @@
         },
         "webhooks": {
           "allow_loopback_destinations": false
+        },
+        "session_persistence": {
+          "persist_capture": false,
+          "previous_keep_days": 0,
+          "previous_scrollback_lines": 1000,
+          "state_dir": null
         },
         "pam": {
           "notify_socket": null,

@@ -467,6 +467,9 @@ class TermHub:
     ) -> dict[str, Any]:
         return await self.router.redact_snapshot_for_recipient(worker_id, snapshot, recipient)
 
+    async def redact_texts_for_recipient(self, worker_id: str, texts: list[str], recipient: Any) -> list[str]:
+        return await self.router.redact_texts_for_recipient(worker_id, texts, recipient)
+
     async def browser_count(self, worker_id: str) -> int:
         return await self.router.browser_count(worker_id)
 
