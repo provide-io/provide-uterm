@@ -139,6 +139,36 @@ class TestDecoded:
         assert gate._decoded(b"ok\xff") == "ok�"
 
 
+class TestGremlinsEnv:
+    def test_vet_is_switched_off(self, gate: Any) -> None:
+        # A vet finding exits 1, which gremlins records as KILLED: a mutant must
+        # be caught by a test, not by vet.
+        assert "-vet=off" in gate.gremlins_env({})["GOFLAGS"].split()
+
+    def test_test_results_are_not_cached(self, gate: Any) -> None:
+        # gremlins derives every mutant's timeout from how long its coverage
+        # run took. A cached result takes well under a second, which leaves a
+        # slow mutant build a leash it cannot meet.
+        assert "-count=1" in gate.gremlins_env({})["GOFLAGS"].split()
+
+    def test_goflags_already_set_are_kept(self, gate: Any) -> None:
+        env = gate.gremlins_env({"GOFLAGS": "-mod=mod", "PATH": "/bin"})
+        assert env["GOFLAGS"] == f"-mod=mod {gate.GO_TEST_FLAGS}"
+        assert env["PATH"] == "/bin"
+
+    def test_gremlins_is_run_with_it(self, gate: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: dict[str, Any] = {}
+
+        def capture(*_args: object, **kwargs: object) -> None:
+            seen.update(kwargs)
+            raise subprocess.TimeoutExpired(cmd="gremlins", timeout=1.0)
+
+        monkeypatch.setattr(gate.subprocess, "run", capture)
+        with pytest.raises(gate.GateTimeoutError):
+            gate.run_gremlins("colors", coefficient=100, timeout_s=1.0)
+        assert "-vet=off" in seen["env"]["GOFLAGS"]
+
+
 class TestBudgetIsBelowTheJobTimeout:
     def test_the_default_budget_leaves_the_job_room_to_report(self, gate: Any) -> None:
         # The job is configured at timeout-minutes: 20. If the gate's budget

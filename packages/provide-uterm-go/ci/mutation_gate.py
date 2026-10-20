@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess  # nosec
 import sys
@@ -95,7 +96,16 @@ PERIMETER: tuple[str | ScopedPackage, ...] = (
     # delivery loop, retry ladder, HMAC signing, tunnel-share guard): pure
     # classification/business logic, already unit-tested with injected
     # resolver/clock/HTTP-client seams, no real network needed.
-    ScopedPackage("server", ("server_egress.go", "server_egress_webhook.go", "server_webhooks.go")),
+    #
+    # They run as two entries, the classifier and the webhook stack, so that
+    # each gets its own package timeout. Every mutant recompiles and relinks
+    # the whole `server` package with its ~80 test files, about nine
+    # CPU-seconds on a developer machine whatever file was mutated, so on a
+    # four-core runner the 98 mutants of all three files came to 220-290 s of
+    # the 300 s timeout and crossed it on a slow runner. Split, each entry
+    # carries roughly half of that. The mutated files and the bar are unchanged.
+    ScopedPackage("server", ("server_egress.go",)),
+    ScopedPackage("server", ("server_egress_webhook.go", "server_webhooks.go")),
     # `serverconfig` also has file-based config loading (load.go) and a file-
     # backed profile store (profiles.go) that don't belong here; validate.go
     # (incl. IsLoopbackHost, the §3 webhook-loopback permission source) is pure
@@ -135,6 +145,33 @@ DEFAULT_COEFFICIENT = 100
 # the mechanism.
 DEFAULT_PACKAGE_TIMEOUT_S = 300
 DEFAULT_BUDGET_S = 900
+
+# gremlins runs a plain `go test` per mutant, and `go test` runs a subset of
+# `go vet` first. That is wrong for a mutation gate twice over. A vet finding
+# exits 1, which gremlins records as KILLED, so a mutant vet happens to dislike
+# would count as caught without any test catching it. And vet is paid on every
+# mutant: on the `server` entries it was about 5% of each mutant's CPU time.
+# Vet already runs over the whole module in go-quality, so nothing is lost by
+# switching it off here.
+#
+# -count=1 is there for the leash. gremlins times its coverage run and gives
+# every mutant that duration times --timeout-coefficient. `go test` caches
+# that run's result, so a second entry over the same package (both `server`
+# entries below) is handed a cached answer in about 0.6 s, and its mutants get
+# a 60 s leash instead of the many minutes a real run implies. On CI that timed
+# out a mutant whose build was simply slow, which the gate reports as a
+# failure. Disabling the cache makes every entry time a real run.
+#
+# gremlins passes its environment through to `go test`, and GOFLAGS is the
+# only way in, since gremlins has no flag for either.
+GO_TEST_FLAGS = "-vet=off -count=1"
+
+
+def gremlins_env(environ: dict[str, str]) -> dict[str, str]:
+    """`environ` with GO_TEST_FLAGS appended to any GOFLAGS already set."""
+    goflags = f"{environ.get('GOFLAGS', '')} {GO_TEST_FLAGS}".strip()
+    return {**environ, "GOFLAGS": goflags}
+
 
 MODULE_ROOT = Path(__file__).resolve().parent.parent
 ALLOWLIST_FILE = MODULE_ROOT / "mutation_equivalents.toml"
@@ -295,7 +332,13 @@ def run_gremlins(
         ]
         try:
             proc = subprocess.run(  # nosec
-                cmd, cwd=MODULE_ROOT, capture_output=True, text=True, check=False, timeout=timeout_s
+                cmd,
+                cwd=MODULE_ROOT,
+                env=gremlins_env(dict(os.environ)),
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout_s,
             )
         except subprocess.TimeoutExpired as expired:
             # Surface whatever gremlins managed to say. Captured output is lost
