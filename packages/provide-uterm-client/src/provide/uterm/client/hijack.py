@@ -429,6 +429,29 @@ class HijackClient:
         """Read one ended capture session: its listing fields, last ``screen`` and ``scrollback``."""
         return await self._request("GET", f"/api/previous-sessions/{_safe_id(session_id, 'session_id')}")
 
+    async def update_previous_session(
+        self,
+        session_id: str,
+        *,
+        owner: str | None = None,
+        visibility: str | None = None,
+    ) -> tuple[bool, Any]:
+        """Set an ended capture session's ``owner`` and/or ``visibility``; admins only.
+
+        Only the fields given are sent, so the other keeps its value. Answers
+        the session's listing fields, as :meth:`list_previous_sessions` lists
+        them. A server lists ``sessions.previous.owner`` in its health
+        ``features`` when it takes this.
+        """
+        payload: dict[str, Any] = {}
+        if owner is not None:
+            payload["owner"] = owner
+        if visibility is not None:
+            payload["visibility"] = visibility
+        return await self._request(
+            "PATCH", f"/api/previous-sessions/{_safe_id(session_id, 'session_id')}", json=payload
+        )
+
     async def session_events(
         self,
         session_id: str,
