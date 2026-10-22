@@ -316,6 +316,27 @@ export class HijackClient {
     return this.request("GET", previousSessionPath(sessionId));
   }
 
+  /**
+   * Set an ended capture session's `owner` and/or `visibility` (`"public"`,
+   * `"operator"` or `"private"`); admins only.
+   *
+   * Only the fields given are sent, so the other keeps its value. Answers the
+   * session's listing fields, as {@link listPreviousSessions} lists them. A
+   * server lists `sessions.previous.owner` in its health `features` when it
+   * takes this. It answers 404 for a session that is unknown, gone, or pushed
+   * out by the per-owner cap, 403 for a caller who is not an admin, 422 for a
+   * body it cannot read and 500 when it could not save the change.
+   */
+  async updatePreviousSession(
+    sessionId: string,
+    // Spelt with `undefined` so a caller may pass a field explicitly unset.
+    options: { owner?: string | undefined; visibility?: string | undefined } = {},
+  ): Promise<HijackAnswer> {
+    return this.request("PATCH", previousSessionPath(sessionId), {
+      json: present({ owner: options.owner, visibility: options.visibility }),
+    });
+  }
+
   /** What has lately happened in one session. */
   async sessionEvents(sessionId: string, options: { limit?: number | undefined } = {}): Promise<HijackAnswer> {
     return this.request("GET", `${sessionPath(sessionId)}/events`, {

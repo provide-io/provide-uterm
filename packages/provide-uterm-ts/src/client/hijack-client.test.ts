@@ -91,6 +91,10 @@ const INVOKE: Record<string, (client: HijackClient) => Promise<unknown>> = {
   "setting a session's mode": (c) => c.setSessionMode("sess-1", "hijack"),
   "listing previous sessions": (c) => c.listPreviousSessions(),
   "one previous session": (c) => c.getPreviousSession("sess-1"),
+  "setting a previous session's owner": (c) => c.updatePreviousSession("sess-1", { owner: "blackbetty:7" }),
+  "setting a previous session's visibility": (c) => c.updatePreviousSession("sess-1", { visibility: "private" }),
+  "setting a previous session's owner and visibility": (c) =>
+    c.updatePreviousSession("sess-1", { owner: "blackbetty:7", visibility: "operator" }),
   "a refusal": (c) => c.step("w1", "h1"),
   "a server fault": (c) => c.step("w1", "h1"),
   "an answer that is not json": (c) => c.step("w1", "h1"),
@@ -165,6 +169,7 @@ describe("what the client asks for", () => {
     await expect(client.step("w1", "../h")).rejects.toThrow("invalid hijack_id");
     await expect(client.getSession("../workers")).rejects.toThrow("invalid session_id");
     await expect(client.getPreviousSession("../health")).rejects.toThrow("invalid session_id");
+    await expect(client.updatePreviousSession("../health", { owner: "x" })).rejects.toThrow("invalid session_id");
     expect(calls).toEqual([]);
   });
 });

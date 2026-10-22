@@ -593,6 +593,64 @@
       "no_json": false
     },
     {
+      "name": "setting a previous session's owner",
+      "calls": [
+        {
+          "method": "PATCH",
+          "path": "/api/previous-sessions/sess-1",
+          "json": {
+            "owner": "blackbetty:7"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "setting a previous session's visibility",
+      "calls": [
+        {
+          "method": "PATCH",
+          "path": "/api/previous-sessions/sess-1",
+          "json": {
+            "visibility": "private"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
+      "name": "setting a previous session's owner and visibility",
+      "calls": [
+        {
+          "method": "PATCH",
+          "path": "/api/previous-sessions/sess-1",
+          "json": {
+            "owner": "blackbetty:7",
+            "visibility": "operator"
+          },
+          "params": null
+        }
+      ],
+      "ok": true,
+      "answer": {
+        "ok": true
+      },
+      "status": 200,
+      "no_json": false
+    },
+    {
       "name": "a refusal",
       "calls": [
         {
