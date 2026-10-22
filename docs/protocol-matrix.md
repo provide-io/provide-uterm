@@ -271,7 +271,46 @@ and pinned as row 11 of
 
 What a `pty_capture` session reads from its Unix socket: traffic captured from
 a program by `libuterm_capture` (the LD_PRELOAD/DYLD shim), plus what the pty's
-owner adds. Owner-only socket (`0600`, bound under umask `0177`).
+owner adds. Owner-only socket (`0600`, bound under umask `0177`) unless
+`[pam] capture_socket_mode` says otherwise (below).
+
+### Capture socket mode
+
+`[pam] capture_socket_mode` (Python and Go; TypeScript and C# accept and check
+the key, and bind nothing) is the permission every capture socket the server
+binds for a `pty_capture` session gets: the ones PAM asks for in
+`capture_socket_dir`, the ones a sessions API create names in its
+`connector_config.socket_path` (a play mirror beside them, say), and the ones
+re-bound for a session kept across a restart. Connecting to a Unix socket needs
+write permission on it, so the mode says who may produce into the socket, and
+so read and type into the terminal.
+
+- A TOML integer, `0o600` (the default: only the server's user) or `0o660`
+  (the socket directory's group too). It is for a server that runs as a user
+  of its own while the producers (the shim, a session supervisor) run as
+  another. The group comes from the directory, made setgid, so the server
+  needs no chown and no group name.
+- Anything else is refused at load, naming the key: another mode
+  `pam.capture_socket_mode must be 0o600 or 0o660, got: 0o644` (written as
+  Python's `oct()` writes it, `-0o1` for a negative one), and a value that is
+  not an integer (a string such as `"0o660"` or `"432"`, a float, a bool)
+  `pam.capture_socket_mode must be an integer: 0o600 or 0o660`. Python prefixes
+  its config errors `Value error, `, as for every field. JavaScript has one
+  number type, so TypeScript reads `432.0` as 432 and accepts it.
+- The socket is bound under the umask that leaves exactly the mode (`0177`
+  for `0600`, `0117` for `0660`) and chmod'd to it after, as before.
+- The mode is the server's, never the session's: the runtime adds it to the
+  config a capture connector is given (`socket_mode`), over anything the
+  stored `connector_config` says, and it is never stored, so a kept session's
+  file does not carry it. A capture connector built directly accepts
+  `socket_mode` (`0o600` or `0o660`, refused otherwise as
+  `capture socket mode must be ...`); a different mode for a running one is
+  left for a restart, as a different socket is.
+- Not the PAM notify socket: `pam_uterm` writes that one as root, and it stays
+  owner-only.
+- `/api/health` lists `capture.socket_mode` in `features` when the mode is
+  `0o660` (Python and Go), so a producer running as another user can tell
+  that it will be able to connect.
 
 `[1 byte channel][4 bytes length, big-endian][N bytes payload]`, `N` at most
 16 MiB; a larger claim drops the connection before the body is read.
@@ -426,7 +465,7 @@ Unauthenticated endpoints for load balancers, orchestrators, and monitoring.
 | Response: `uptime_s` | seconds since server start | not included |
 | Response: `active_sessions` | count from session registry | not included |
 | Response: `control_plane_backend` | `"memory"` or `"sqlite"` | not included |
-| Response: `features` | `["viewers.revoke.subject"]` when ready (also Go, C#, TS): optional behaviour a client cannot otherwise detect; absent from the 503 answers. Python and Go add `sessions.capture.persist` when `session_persistence.persist_capture` is on and `sessions.previous` when `session_persistence.previous_keep_days` is above 0 | not included |
+| Response: `features` | `["viewers.revoke.subject"]` when ready (also Go, C#, TS): optional behaviour a client cannot otherwise detect; absent from the 503 answers. Python and Go add `sessions.capture.persist` when `session_persistence.persist_capture` is on, `sessions.previous` when `session_persistence.previous_keep_days` is above 0, and `capture.socket_mode` when `pam.capture_socket_mode` is `0o660` | not included |
 | `GET /healthz` | served (minimal, no deps) | unsupported |
 | Auth required | no | no |
 
