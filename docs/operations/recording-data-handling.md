@@ -113,10 +113,13 @@ session's screen and scrollback are redacted when they are read, by the policy
 the live screen is redacted by, and withheld (`503`) when that policy cannot
 answer. Who can read a previous session is not fixed when it ends: an admin
 can change its `owner` and `visibility` with `PATCH
-/api/previous-sessions/{id}` (never a share viewer, nor an admin scoped to one
-session), which widens or narrows the readers by the rule above and rewrites
-the file with the same permissions. A record moved to an owner who already has
-20 newer ones is deleted by the move, and the request answers `404`. Each
+/api/previous-sessions/{id}` (a global admin with the take-over capability
+whom the live `PATCH` would also allow `session.control.update`, so never a
+share viewer, an admin scoped to one session, or an admin token whose scopes
+leave either capability out), which widens or narrows the readers by the rule
+above and rewrites the file with the same permissions. A record moved to an
+owner who already has 20 newer ones is deleted by the move, and the request
+answers `404`. Each
 successful change is written to the audit log as `previous_session.update`,
 with the new values as its detail. The files are as private as the terminal
 state the server holds in memory: `0600` files in `0700` directories, written
