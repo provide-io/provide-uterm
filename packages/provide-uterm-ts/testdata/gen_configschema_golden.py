@@ -265,6 +265,20 @@ CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("PamConfig", "a peer uid list", {"require_peer_uids": [0, 1000]}),
     ("PamConfig", "a peer uid list with a string in it", {"require_peer_uids": ["root"]}),
     ("PamConfig", "no peer uid list at all", {"require_peer_uids": None}),
+    # Who may connect to a capture socket: the owner, or the owner and the
+    # directory's group. Anything wider hands the terminal to more users, and a
+    # string or a bool is refused before it could be read as a number.
+    ("PamConfig", "capture sockets owner-only", {"capture_socket_mode": 0o600}),
+    ("PamConfig", "capture sockets shared with the group", {"capture_socket_mode": 0o660}),
+    ("PamConfig", "capture sockets anyone may connect to", {"capture_socket_mode": 0o666}),
+    ("PamConfig", "capture sockets the group may only read", {"capture_socket_mode": 0o640}),
+    ("PamConfig", "capture sockets with the owner's exec bit", {"capture_socket_mode": 0o700}),
+    ("PamConfig", "capture sockets with no permissions", {"capture_socket_mode": 0}),
+    ("PamConfig", "a negative capture socket mode", {"capture_socket_mode": -0o600}),
+    ("PamConfig", "a capture socket mode written as a string", {"capture_socket_mode": "0o660"}),
+    ("PamConfig", "a capture socket mode written in decimal digits", {"capture_socket_mode": "432"}),
+    ("PamConfig", "a capture socket mode given a bool", {"capture_socket_mode": True}),
+    ("PamConfig", "a capture socket mode given null", {"capture_socket_mode": None}),
     ("GraphicalTargetConfig", "a seeded target", {"target_id": "vm-1", "target_address": "10.0.0.5:5900"}),
     ("GraphicalTargetConfig", "protocol-specific parameters", {"config": {"vm_name": "win11"}}),
     ("GraphicalTargetConfig", "parameters given a list", {"config": []}),

@@ -34,6 +34,10 @@ SERVER_BUILTIN_CONNECTOR_TYPES = frozenset({"shell", "ssh", "telnet", "websocket
 # well inside the size it may be read back at.
 MAX_PREVIOUS_KEEP_DAYS = 3650
 MAX_PREVIOUS_SCROLLBACK_LINES = 10000
+# The modes pam.capture_socket_mode may name: owner-only, or owner and group.
+# The platform's CaptureSocket accepts the same two; this package cannot import
+# it, since the platform package is optional.
+CAPTURE_SOCKET_MODES = (0o600, 0o660)
 
 
 def _clean_path(value: str, fallback: str) -> str:
@@ -506,6 +510,25 @@ class PamConfig(ServerBaseModel):
     capture_socket_dir: str | None = None
     # Opt-in: only these peer euids may send notify events (None → don't enforce, log only)
     require_peer_uids: list[int] | None = None
+    # The permissions of every capture socket this server binds for a
+    # pty_capture session: those PAM asks for, those the sessions API names,
+    # and those re-bound for a session kept across a restart. 0o600 lets only
+    # this server's user connect; 0o660 lets the socket directory's group in
+    # too, for producers (the shim, a session supervisor) that run as another
+    # user. The group comes from the directory (setgid), so nothing is
+    # chowned. Not the notify socket: pam_uterm writes that one as root.
+    capture_socket_mode: int = 0o600
+
+    @field_validator("capture_socket_mode", mode="before")
+    @classmethod
+    def _validate_capture_socket_mode(cls, value: object) -> object:
+        # Before Pydantic's own int parsing, which would take "432" or True as
+        # a mode: a string or a bool here is a mistake, not a number.
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError("pam.capture_socket_mode must be an integer: 0o600 or 0o660")
+        if value not in CAPTURE_SOCKET_MODES:
+            raise ValueError(f"pam.capture_socket_mode must be 0o600 or 0o660, got: {oct(value)}")
+        return value
 
     @model_validator(mode="after")
     def _validate_outbound_url_schemes(self) -> PamConfig:

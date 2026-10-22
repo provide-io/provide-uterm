@@ -495,6 +495,7 @@ def create_server_app(
         block_private_connector_targets=config.security.block_private_connector_targets,
         default_visibility=config.security.default_session_visibility,
         capture_state=capture_state,
+        capture_socket_mode=config.pam.capture_socket_mode,
     )
     profile_store = FileProfileStore(config.profiles.directory)
     # Seed the tenant-scoped graphical-target registry from config. Enabled

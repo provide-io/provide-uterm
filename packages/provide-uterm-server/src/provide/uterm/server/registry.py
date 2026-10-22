@@ -88,11 +88,15 @@ class SessionRegistry:
         block_private_connector_targets: bool = False,
         default_visibility: Visibility = "public",
         capture_state: CaptureStateStore | None = None,
+        capture_socket_mode: int = 0o600,
     ) -> None:
         self._hub = hub
         # Where PAM capture sessions are kept across a restart and after they
         # end (session_persistence); None when neither is configured.
         self._capture_state = capture_state
+        # pam.capture_socket_mode: the permissions every capture session's
+        # socket is bound with, however the session was made.
+        self._capture_socket_mode = capture_socket_mode
         self._recording = recording
         # Egress SSRF posture for connector targets.  Cloud-metadata IPs are
         # ALWAYS blocked at the chokepoint below; private/internal hosts are
@@ -265,6 +269,7 @@ class SessionRegistry:
                 detector=self._detector,
                 block_private_connector_targets=self._block_private,
                 screen_keeper=self._capture_state.keeper(session) if self._capture_state is not None else None,
+                capture_socket_mode=self._capture_socket_mode,
             )
             self._runtimes[session.session_id] = runtime
         return runtime

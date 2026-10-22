@@ -568,6 +568,11 @@
         },
         "optional": true,
         "required": false
+      },
+      "capture_socket_mode": {
+        "kind": "int",
+        "optional": false,
+        "required": false
       }
     },
     "GovernanceConfig": {
@@ -3302,7 +3307,8 @@
         "relay_url": null,
         "relay_token": null,
         "capture_socket_dir": null,
-        "require_peer_uids": null
+        "require_peer_uids": null,
+        "capture_socket_mode": 384
       }
     },
     {
@@ -3325,7 +3331,8 @@
         "require_peer_uids": [
           0,
           1000
-        ]
+        ],
+        "capture_socket_mode": 384
       }
     },
     {
@@ -3361,8 +3368,189 @@
         "relay_url": null,
         "relay_token": null,
         "capture_socket_dir": null,
-        "require_peer_uids": null
+        "require_peer_uids": null,
+        "capture_socket_mode": 384
       }
+    },
+    {
+      "model": "PamConfig",
+      "name": "capture sockets owner-only",
+      "kwargs": {
+        "capture_socket_mode": 384
+      },
+      "accepted": {
+        "notify_socket": null,
+        "mode": "notify",
+        "auto_session": false,
+        "auto_session_command": "/bin/bash",
+        "relay_url": null,
+        "relay_token": null,
+        "capture_socket_dir": null,
+        "require_peer_uids": null,
+        "capture_socket_mode": 384
+      }
+    },
+    {
+      "model": "PamConfig",
+      "name": "capture sockets shared with the group",
+      "kwargs": {
+        "capture_socket_mode": 432
+      },
+      "accepted": {
+        "notify_socket": null,
+        "mode": "notify",
+        "auto_session": false,
+        "auto_session_command": "/bin/bash",
+        "relay_url": null,
+        "relay_token": null,
+        "capture_socket_dir": null,
+        "require_peer_uids": null,
+        "capture_socket_mode": 432
+      }
+    },
+    {
+      "model": "PamConfig",
+      "name": "capture sockets anyone may connect to",
+      "kwargs": {
+        "capture_socket_mode": 438
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be 0o600 or 0o660, got: 0o666"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "capture sockets the group may only read",
+      "kwargs": {
+        "capture_socket_mode": 416
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be 0o600 or 0o660, got: 0o640"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "capture sockets with the owner's exec bit",
+      "kwargs": {
+        "capture_socket_mode": 448
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be 0o600 or 0o660, got: 0o700"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "capture sockets with no permissions",
+      "kwargs": {
+        "capture_socket_mode": 0
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be 0o600 or 0o660, got: 0o0"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "a negative capture socket mode",
+      "kwargs": {
+        "capture_socket_mode": -384
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be 0o600 or 0o660, got: -0o600"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "a capture socket mode written as a string",
+      "kwargs": {
+        "capture_socket_mode": "0o660"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be an integer: 0o600 or 0o660"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "a capture socket mode written in decimal digits",
+      "kwargs": {
+        "capture_socket_mode": "432"
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be an integer: 0o600 or 0o660"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "a capture socket mode given a bool",
+      "kwargs": {
+        "capture_socket_mode": true
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be an integer: 0o600 or 0o660"
+        }
+      ]
+    },
+    {
+      "model": "PamConfig",
+      "name": "a capture socket mode given null",
+      "kwargs": {
+        "capture_socket_mode": null
+      },
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [
+            "capture_socket_mode"
+          ],
+          "msg": "Value error, pam.capture_socket_mode must be an integer: 0o600 or 0o660"
+        }
+      ]
     },
     {
       "model": "GraphicalTargetConfig",
@@ -3781,7 +3969,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -3986,7 +4175,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -4191,7 +4381,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -4381,7 +4572,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -4571,7 +4763,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -4761,7 +4954,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -4951,7 +5145,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -5141,7 +5336,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -5538,7 +5734,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,
@@ -5770,7 +5967,8 @@
           "relay_url": null,
           "relay_token": null,
           "capture_socket_dir": null,
-          "require_peer_uids": null
+          "require_peer_uids": null,
+          "capture_socket_mode": 384
         },
         "governance": {
           "policy_webhook_url": null,

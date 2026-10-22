@@ -85,6 +85,7 @@
       "auto_session": false,
       "auto_session_command": "/bin/bash",
       "capture_socket_dir": null,
+      "capture_socket_mode": 384,
       "mode": "notify",
       "notify_socket": null,
       "relay_token": null,

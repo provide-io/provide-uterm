@@ -71,11 +71,34 @@ _QUEUE_MAXSIZE = 4096
 # over-cap length as a framing violation: drop the connection (PLAT-cap).
 _MAX_FRAME_BYTES = 16 * 1024 * 1024  # 16 MiB
 
-# Owner-only permissions for the listening Unix socket.
-_SOCKET_MODE = 0o600
-# umask that yields 0o600 at file creation (0o777 & ~0o177 == 0o600). Set around
-# the bind so the socket is owner-only the instant it appears — see start().
-_BIND_UMASK = 0o177
+# The permissions a listening capture socket may have. Connecting to a Unix
+# socket needs write permission on it, so these say who may produce into it and
+# so read and type into the captured terminal. Owner-only is the default. Owner
+# and group is for a server that runs as a user of its own while the producers
+# (the shim, a session supervisor) run as another: the group comes from a
+# setgid directory, so nothing here chowns. No other mode is accepted, since a
+# world bit would hand the terminal to every local user.
+OWNER_ONLY_SOCKET_MODE = 0o600
+OWNER_AND_GROUP_SOCKET_MODE = 0o660
+_SOCKET_MODES = (OWNER_ONLY_SOCKET_MODE, OWNER_AND_GROUP_SOCKET_MODE)
+
+
+def check_socket_mode(mode: object) -> int:
+    """*mode*, if it is one a capture socket may be bound with; else ValueError.
+
+    A bool is refused although it is an int to Python: ``True`` is not a mode
+    anyone meant to write.
+    """
+    if not isinstance(mode, int) or isinstance(mode, bool):
+        raise ValueError("capture socket mode must be an integer: 0o600 or 0o660")
+    if mode not in _SOCKET_MODES:
+        raise ValueError(f"capture socket mode must be 0o600 or 0o660, got: {oct(mode)}")
+    return mode
+
+
+def _bind_umask(mode: int) -> int:
+    """The umask that leaves exactly *mode*'s bits on a file it creates (0o177 for 0o600)."""
+    return 0o777 & ~mode
 
 
 # How long a probe of a socket already at the path may take to be answered.
@@ -125,9 +148,10 @@ class CaptureSocket:
     Frame wire format: [1B channel][4B length big-endian][N bytes payload]
     """
 
-    def __init__(self, socket_path: str) -> None:
+    def __init__(self, socket_path: str, mode: int = OWNER_ONLY_SOCKET_MODE) -> None:
         validate_socket_path(socket_path)
         self._path = socket_path
+        self._mode = check_socket_mode(mode)
         self._server: asyncio.Server | None = None
         self._queue: asyncio.Queue[CaptureFrame] = asyncio.Queue(maxsize=_QUEUE_MAXSIZE)
         # Live producer connections. ``Server.close()`` stops accepting new ones
@@ -135,25 +159,26 @@ class CaptureSocket:
         self._connections: set[asyncio.StreamWriter] = set()
 
     async def start(self) -> None:
-        # Restrict the listening socket to the owner so other local users can't
-        # connect and inject/observe captured terminal traffic. Set the umask
-        # *before* the bind so the socket is created 0o600 atomically: a
-        # post-bind chmod would leave a window where the socket exists with
-        # default-umask perms (e.g. srwxr-xr-x) that any local user could
-        # connect to. Restore the previous umask in finally so it always
-        # happens.
+        # Restrict the listening socket to its mode (the owner, or the owner
+        # and the directory's group) so no other local user can connect and
+        # inject/observe captured terminal traffic. Set the umask that leaves
+        # exactly the mode's bits *before* the bind so the socket is created
+        # with them atomically: a post-bind chmod would leave a window where
+        # the socket exists with default-umask perms (e.g. srwxr-xr-x) that any
+        # local user could connect to. Restore the previous umask in finally so
+        # it always happens.
         # NOTE: os.umask is process-global and not async-safe — keep the
         # set→bind→restore window as tight as possible (only the bind call).
         # Off the loop: a busy listener holds the probe up to its timeout.
         await asyncio.to_thread(_refuse_live_socket, self._path)
-        prev_umask = os.umask(_BIND_UMASK)
+        prev_umask = os.umask(_bind_umask(self._mode))
         try:
             self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
         finally:
             os.umask(prev_umask)
-        # Belt-and-suspenders: enforce 0o600 even if the platform ignored the
+        # Belt-and-suspenders: enforce the mode even if the platform ignored the
         # umask for AF_UNIX sockets. With the umask in place this is a no-op.
-        os.chmod(self._path, _SOCKET_MODE)  # noqa: PTH101 — chmod the just-bound socket fd path
+        os.chmod(self._path, self._mode)  # noqa: PTH101 — chmod the just-bound socket fd path
 
     async def stop(self) -> None:
         if self._server is None:

@@ -157,8 +157,9 @@ async def main_async() -> None:
         },
         "max_frame_bytes": capture._MAX_FRAME_BYTES,
         "queue_maxsize": capture._QUEUE_MAXSIZE,
-        "socket_mode": capture._SOCKET_MODE,
-        "bind_umask": capture._BIND_UMASK,
+        "socket_mode": capture.OWNER_ONLY_SOCKET_MODE,
+        "bind_umask": capture._bind_umask(capture.OWNER_ONLY_SOCKET_MODE),
+        "socket_modes": list(capture._SOCKET_MODES),
         "header_size": capture._HEADER.size,
         "streams": [
             {"name": name, "stream": stream.decode("latin-1"), **await _drive(stream)} for name, stream in STREAMS

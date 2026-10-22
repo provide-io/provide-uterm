@@ -67,6 +67,7 @@ class HostedSessionRuntime(ConnectionRecordingMixin):
         max_buffer_bytes: int = 1_048_576,  # 1MB default
         block_private_connector_targets: bool = False,
         screen_keeper: ScreenKeeper | None = None,
+        capture_socket_mode: int = 0o600,
     ) -> None:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")
@@ -93,6 +94,8 @@ class HostedSessionRuntime(ConnectionRecordingMixin):
         self._queue_bytes = 0
         self._max_buffer_bytes = max_buffer_bytes
         self._block_private_connector_targets = block_private_connector_targets
+        # pam.capture_socket_mode, for a pty_capture connector's socket.
+        self._capture_socket_mode = capture_socket_mode
         self._stop = asyncio.Event()
         self._connected = False
         self._state: SessionLifecycle = "stopped"
@@ -349,6 +352,10 @@ class HostedSessionRuntime(ConnectionRecordingMixin):
         effective = {**connector_config, "input_mode": self.definition.input_mode}
         if self.definition.connector_type in {"ssh", "telnet", "websocket"}:
             effective["block_private_connector_targets"] = self._block_private_connector_targets
+        if self.definition.connector_type == "pty_capture":
+            # The server's, over anything the stored config says: who may
+            # connect to a socket this server binds is not a session's to widen.
+            effective["socket_mode"] = self._capture_socket_mode
         return effective
 
     async def reconfigure(self, connector_config: dict[str, Any]) -> None:

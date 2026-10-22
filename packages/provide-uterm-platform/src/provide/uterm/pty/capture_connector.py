@@ -23,6 +23,9 @@ Config keys accepted in connector_config:
   stdin_socket_path str    optional — Unix socket path to forward browser keystrokes
                            to.  When set, handle_input() writes typed bytes there so
                            a listener can pipe them into the captured process's stdin.
+  socket_mode       int    permissions socket_path is bound with: 0o600 (default) or
+                           0o660.  The server sets it from pam.capture_socket_mode on
+                           every capture session, over anything the stored config says.
 """
 
 from __future__ import annotations
@@ -41,7 +44,9 @@ from provide.uterm.pty.capture import (
     CHANNEL_STATS,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
+    OWNER_ONLY_SOCKET_MODE,
     CaptureSocket,
+    check_socket_mode,
     parse_geometry,
 )
 
@@ -56,6 +61,7 @@ _VALID_CONFIG_KEYS = frozenset(
         "connect_timeout_s",
         "input_mode",
         "stdin_socket_path",
+        "socket_mode",
     }
 )
 
@@ -114,6 +120,7 @@ class CaptureConnector:
         self._session_id = session_id
         self._display_name = display_name
         self._socket_path: str = str(config["socket_path"])
+        self._socket_mode = check_socket_mode(config.get("socket_mode", OWNER_ONLY_SOCKET_MODE))
         self._cols: int = int(config.get("cols", 80))
         self._rows: int = int(config.get("rows", 24))
         # The size the config last named. A PATCH that names it again is not
@@ -156,7 +163,7 @@ class CaptureConnector:
         self._stdin_writer: asyncio.StreamWriter | None = None
 
     async def start(self) -> None:
-        self._capture = CaptureSocket(self._socket_path)
+        self._capture = CaptureSocket(self._socket_path, mode=self._socket_mode)
         await self._capture.start()
         self._connected = True
 
@@ -224,7 +231,8 @@ class CaptureConnector:
         writes to; the keystroke socket and the terminal size arrive later, from
         whoever owns the session. Those apply in place. A different capture
         socket cannot: the program is writing to the one already bound, so that
-        answers False and is left for a restart.
+        answers False and is left for a restart. So does a different mode for
+        it, which only a rebind can give the socket.
         """
 
         # Everything that can reject the config runs before anything changes:
@@ -235,7 +243,8 @@ class CaptureConnector:
         _validate_config(config)
         cols, rows = int(config.get("cols", self._cols)), int(config.get("rows", self._rows))
         float(config.get("connect_timeout_s", self._connect_timeout))
-        if str(config["socket_path"]) != self._socket_path:
+        socket_mode = check_socket_mode(config.get("socket_mode", OWNER_ONLY_SOCKET_MODE))
+        if str(config["socket_path"]) != self._socket_path or socket_mode != self._socket_mode:
             return False
         stdin_socket_path = str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
         if stdin_socket_path != self._stdin_socket_path:
