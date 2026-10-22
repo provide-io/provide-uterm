@@ -441,6 +441,9 @@ func validatePam(p *PamConfig) error {
 	if !inSet(p.Mode, "notify", "capture") {
 		return literalError("pam.mode", "notify", "capture")
 	}
+	if err := validateCaptureSocketMode(p.CaptureSocketMode); err != nil {
+		return err
+	}
 	return requireSecureURL(p.RelayURL, "pam.relay_url")
 }
 

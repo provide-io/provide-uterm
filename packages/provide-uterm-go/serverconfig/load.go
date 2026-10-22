@@ -140,6 +140,9 @@ func ConfigFromMapping(data map[string]any) (*UtermServerConfig, error) {
 	if err := refuseNonFiniteScreenInterval(data); err != nil {
 		return nil, err
 	}
+	if err := refuseCaptureSocketModeType(data); err != nil {
+		return nil, err
+	}
 
 	cfg := DefaultServerConfig()
 

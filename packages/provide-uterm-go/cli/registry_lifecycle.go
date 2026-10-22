@@ -8,6 +8,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
@@ -439,6 +440,25 @@ func (r *SessionRegistryImpl) AnnotateSession(_ context.Context, id string, ann 
 // or a dial error surfaces to StartSession as last_error.
 func defaultConnect(ctx context.Context, def serverconfig.SessionDefinition) (connectors.Connector, error) {
 	return connectPrepared(ctx, def, nil)
+}
+
+// withCaptureSocketMode is def with the server's capture socket mode in the
+// config a pty_capture connector is built from, over anything the stored
+// config says: who may connect to a socket this server binds is not a
+// session's to widen. The stored definition is left as it is, so the mode is
+// never written to a kept session's file. Any other connector is given def
+// unchanged. Port of the reference runtime's _effective_connector_config.
+func withCaptureSocketMode(def serverconfig.SessionDefinition, mode int) serverconfig.SessionDefinition {
+	if def.ConnectorType != "pty_capture" {
+		return def
+	}
+	config := maps.Clone(def.ConnectorConfig)
+	if config == nil {
+		config = map[string]any{}
+	}
+	config["socket_mode"] = mode
+	def.ConnectorConfig = config
+	return def
 }
 
 // connectPrepared is defaultConnect with prepare, when given, run on the

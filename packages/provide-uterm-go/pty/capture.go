@@ -9,9 +9,13 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	ptel "github.com/provide-io/provide-telemetry/go"
@@ -67,11 +71,61 @@ const (
 	// maxFrameBytes caps a single frame's payload (framing-violation past this).
 	// Port of capture.py _MAX_FRAME_BYTES.
 	maxFrameBytes = 16 * 1024 * 1024 // 16 MiB
-	// socketMode is the owner-only permission for the listening socket.
-	socketMode = 0o600
-	// bindUmask yields 0o600 at file creation (0o777 &^ 0o177 == 0o600).
-	bindUmask = 0o177
 )
+
+// The permissions a listening capture socket may have. Connecting to a Unix
+// socket needs write permission on it, so these say who may produce into it,
+// and so read and type into the captured terminal. Owner-only is the default.
+// Owner and group is for a server that runs as a user of its own while the
+// producers (the shim, a session supervisor) run as another: the group comes
+// from a setgid directory, so nothing here chowns. No other mode is accepted,
+// since a world bit would hand the terminal to every local user. Port of
+// capture.py OWNER_ONLY_SOCKET_MODE / OWNER_AND_GROUP_SOCKET_MODE.
+const (
+	OwnerOnlySocketMode     = 0o600
+	OwnerAndGroupSocketMode = 0o660
+)
+
+// CheckSocketMode is mode as an int, if it is one a capture socket may be
+// bound with. It takes any integer a config map holds: an int from the server,
+// an int64 from TOML, or a whole float64 from JSON, which has no other number.
+// Anything else is refused rather than read as a number. Port of
+// capture.check_socket_mode, in its words.
+func CheckSocketMode(mode any) (int, error) {
+	var m int
+	switch t := mode.(type) {
+	case int:
+		m = t
+	case int64:
+		m = int(t)
+	case float64:
+		if t != math.Trunc(t) {
+			return 0, errors.New("capture socket mode must be an integer: 0o600 or 0o660")
+		}
+		m = int(t)
+	default:
+		return 0, errors.New("capture socket mode must be an integer: 0o600 or 0o660")
+	}
+	if m != OwnerOnlySocketMode && m != OwnerAndGroupSocketMode {
+		return 0, fmt.Errorf("capture socket mode must be 0o600 or 0o660, got: %s", pyOct(m))
+	}
+	return m, nil
+}
+
+// pyOct is v as Python's oct() writes it: the sign ahead of the 0o prefix.
+func pyOct(v int) string {
+	digits := strconv.FormatInt(int64(v), 8)
+	if digits, negative := strings.CutPrefix(digits, "-"); negative {
+		return "-0o" + digits
+	}
+	return "0o" + digits
+}
+
+// captureBindUmask is the umask that leaves exactly mode's bits on a file it
+// creates (0o177 for 0o600). Port of capture._bind_umask.
+func captureBindUmask(mode int) int {
+	return 0o777 &^ mode
+}
 
 // CaptureFrame is one decoded capture frame. Port of capture.CaptureFrame.
 type CaptureFrame struct {
@@ -85,6 +139,7 @@ type CaptureFrame struct {
 // Wire format: [1B channel][4B length big-endian][N bytes payload].
 type CaptureSocket struct {
 	path     string
+	mode     int
 	queueCap int
 
 	mu       sync.Mutex
@@ -100,19 +155,30 @@ type CaptureSocket struct {
 	enqMu sync.Mutex
 }
 
-// NewCaptureSocket builds a CaptureSocket bound (on Start) to socketPath.
+// NewCaptureSocket builds a CaptureSocket bound (on Start) to socketPath,
+// owner-only.
 func NewCaptureSocket(socketPath string) (*CaptureSocket, error) {
-	return newCaptureSocketWithQueue(socketPath, queueMaxSize)
+	return newCaptureSocketWithQueue(socketPath, OwnerOnlySocketMode, queueMaxSize)
+}
+
+// NewCaptureSocketWithMode is NewCaptureSocket bound with mode instead, which
+// must be OwnerOnlySocketMode or OwnerAndGroupSocketMode.
+func NewCaptureSocketWithMode(socketPath string, mode int) (*CaptureSocket, error) {
+	return newCaptureSocketWithQueue(socketPath, mode, queueMaxSize)
 }
 
 // newCaptureSocketWithQueue is the queue-size-parameterized constructor used by
 // tests to force overflow deterministically.
-func newCaptureSocketWithQueue(socketPath string, queueCap int) (*CaptureSocket, error) {
+func newCaptureSocketWithQueue(socketPath string, mode, queueCap int) (*CaptureSocket, error) {
 	if err := ValidateSocketPath(socketPath); err != nil {
+		return nil, err
+	}
+	if _, err := CheckSocketMode(mode); err != nil {
 		return nil, err
 	}
 	return &CaptureSocket{
 		path:     socketPath,
+		mode:     mode,
 		queueCap: queueCap,
 		conns:    make(map[net.Conn]struct{}),
 		queue:    make(chan CaptureFrame, queueCap),
@@ -122,23 +188,24 @@ func newCaptureSocketWithQueue(socketPath string, queueCap int) (*CaptureSocket,
 // Path returns the socket path.
 func (s *CaptureSocket) Path() string { return s.path }
 
-// Start binds the listening socket (owner-only) and begins accepting. Port of
+// Start binds the listening socket with its mode and begins accepting. Port of
 // CaptureSocket.start.
 func (s *CaptureSocket) Start() error {
 	// A capture session re-created after a crash binds the path its last
 	// holder never unbound.
 	removeStaleSocket(s.path)
-	// Set a restrictive umask *before* bind so the socket is created 0o600
-	// atomically — a post-bind chmod would leave a window where the socket
-	// exists with default-umask perms that any local user could connect to.
-	prev := umaskSet(bindUmask)
+	// Set the umask that leaves exactly the mode's bits *before* bind so the
+	// socket is created with them atomically — a post-bind chmod would leave a
+	// window where the socket exists with default-umask perms that any local
+	// user could connect to.
+	prev := umaskSet(captureBindUmask(s.mode))
 	ln, err := net.Listen("unix", s.path)
 	umaskSet(prev)
 	if err != nil {
 		return err
 	}
-	// Belt-and-suspenders: enforce 0o600 even if the platform ignored the umask.
-	if err := chmodSocket(s.path, socketMode); err != nil {
+	// Belt-and-suspenders: enforce the mode even if the platform ignored the umask.
+	if err := chmodSocket(s.path, os.FileMode(s.mode)); err != nil {
 		_ = ln.Close()
 		return err
 	}

@@ -30,6 +30,13 @@ const (
 	previousSessionsFeature = "sessions.previous"
 )
 
+// captureSocketModeFeature: the capture sockets this server binds let the
+// socket directory's group connect, not only this server's user
+// (pam.capture_socket_mode = 0o660). Listed only then, so a producer running as
+// another user can tell that it will be able to connect. Port of
+// CAPTURE_SOCKET_MODE_FEATURE.
+const captureSocketModeFeature = "capture.socket_mode"
+
 // features is what /api/health lists, given the config.
 func (s *Server) features() []string {
 	out := append([]string(nil), serverFeatures...)
@@ -38,6 +45,9 @@ func (s *Server) features() []string {
 	}
 	if s.cfg.SessionPersistence.PreviousKeepDays > 0 {
 		out = append(out, previousSessionsFeature)
+	}
+	if s.cfg.Pam.CaptureSocketMode == 0o660 {
+		out = append(out, captureSocketModeFeature)
 	}
 	return out
 }

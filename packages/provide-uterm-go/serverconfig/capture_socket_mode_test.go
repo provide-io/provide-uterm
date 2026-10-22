@@ -1,0 +1,73 @@
+//
+// SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+
+package serverconfig
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+const (
+	captureModeNotAnInteger = "pam.capture_socket_mode must be an integer: 0o600 or 0o660"
+	captureModeRefused      = "pam.capture_socket_mode must be 0o600 or 0o660, got: "
+)
+
+// The mode is owner-only by default; owner-only and owner-and-group are read
+// from a mapping and from TOML written in octal.
+func TestCaptureSocketModeDefaultsAndIsRead(t *testing.T) {
+	if got := DefaultServerConfig().Pam.CaptureSocketMode; got != 0o600 {
+		t.Fatalf("default = %o", got)
+	}
+	for _, mode := range []any{int64(0o600), int64(0o660), 0o660} {
+		cfg, err := ConfigFromMapping(map[string]any{"pam": map[string]any{"capture_socket_mode": mode}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Pam.CaptureSocketMode != 0o600 && cfg.Pam.CaptureSocketMode != 0o660 {
+			t.Fatalf("%v read as %o", mode, cfg.Pam.CaptureSocketMode)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "server.toml")
+	if err := os.WriteFile(path, []byte("[pam]\ncapture_socket_mode = 0o660\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadServerConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Pam.CaptureSocketMode != 0o660 {
+		t.Fatalf("loaded %o", cfg.Pam.CaptureSocketMode)
+	}
+}
+
+// Any other mode is refused, quoted as Python's oct() writes it.
+func TestCaptureSocketModeRefusesAnyOtherMode(t *testing.T) {
+	for _, tc := range []struct {
+		mode  any
+		shown string
+	}{
+		{int64(0o666), "0o666"}, {int64(0o664), "0o664"}, {int64(0o640), "0o640"}, {int64(0o700), "0o700"},
+		{int64(0o770), "0o770"}, {int64(0o2660), "0o2660"}, {int64(0), "0o0"}, {int64(-1), "-0o1"},
+		{-0o600, "-0o600"},
+	} {
+		_, err := ConfigFromMapping(map[string]any{"pam": map[string]any{"capture_socket_mode": tc.mode}})
+		if err == nil || err.Error() != captureModeRefused+tc.shown {
+			t.Fatalf("%v: err = %v, want %q", tc.mode, err, captureModeRefused+tc.shown)
+		}
+	}
+}
+
+// A value that is not an integer is refused before it is decoded, so neither
+// a string nor a float nor a bool is read as a number.
+func TestCaptureSocketModeRefusesWhatIsNotAnInteger(t *testing.T) {
+	for _, mode := range []any{"0o660", "432", 432.0, true, nil, []any{int64(432)}} {
+		_, err := ConfigFromMapping(map[string]any{"pam": map[string]any{"capture_socket_mode": mode}})
+		if err == nil || err.Error() != captureModeNotAnInteger {
+			t.Fatalf("%#v: err = %v, want %q", mode, err, captureModeNotAnInteger)
+		}
+	}
+}

@@ -289,10 +289,19 @@ type PamConfig struct {
 	RelayToken         *string `json:"relay_token" toml:"relay_token"`
 	CaptureSocketDir   *string `json:"capture_socket_dir" toml:"capture_socket_dir"`
 	RequirePeerUIDs    *[]int  `json:"require_peer_uids" toml:"require_peer_uids"`
+	// CaptureSocketMode is the permissions of every capture socket this
+	// server binds for a pty_capture session: those PAM asks for, those the
+	// sessions API names, and those re-bound for a session kept across a
+	// restart. 0o600 lets only this server's user connect; 0o660 lets the
+	// socket directory's group in too, for producers (the shim, a session
+	// supervisor) that run as another user. The group comes from the
+	// directory (setgid), so nothing is chowned. Not the notify socket:
+	// pam_uterm writes that one as root.
+	CaptureSocketMode int `json:"capture_socket_mode" toml:"capture_socket_mode"`
 }
 
 func defaultPamConfig() PamConfig {
-	return PamConfig{Mode: "notify", AutoSessionCommand: "/bin/bash"}
+	return PamConfig{Mode: "notify", AutoSessionCommand: "/bin/bash", CaptureSocketMode: ownerOnlyCaptureSocketMode}
 }
 
 // GovernanceConfig ports config_schema.GovernanceConfig.

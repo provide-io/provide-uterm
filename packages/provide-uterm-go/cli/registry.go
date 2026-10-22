@@ -6,6 +6,7 @@
 package cli
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/capturestate"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/hub"
+	uptty "github.com/provide-io/provide-uterm/packages/provide-uterm-go/pty"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/recording"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/server"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
@@ -91,6 +93,9 @@ type SessionRegistryImpl struct {
 	// policy at the CreateSession chokepoint (port of assert_session_egress_allowed).
 	egress       *server.EgressGuard
 	blockPrivate bool
+	// captureSocketMode is pam.capture_socket_mode: the permissions every
+	// capture session's socket is bound with, however the session was made.
+	captureSocketMode int
 	// eventBus is the hub EventBus for long-poll events/watch (optional).
 	eventBus *hub.EventBus
 	// hub, managerURL and workerToken are the hub link a started session
@@ -118,9 +123,12 @@ func NewSessionRegistry(cfg *serverconfig.UtermServerConfig) *SessionRegistryImp
 		recCfg:       cfg.Recording,
 		egress:       server.NewEgressGuard(nil, nil),
 		blockPrivate: cfg.Security.BlockPrivateConnectorTargets,
+		// A config built in code rather than loaded leaves it zero, which is
+		// the reference's default: owner-only.
+		captureSocketMode: cmp.Or(cfg.Pam.CaptureSocketMode, uptty.OwnerOnlySocketMode),
 	}
 	r.connect = func(ctx context.Context, def serverconfig.SessionDefinition) (connectors.Connector, error) {
-		return connectPrepared(ctx, def, r.prepareCapture)
+		return connectPrepared(ctx, withCaptureSocketMode(def, r.captureSocketMode), r.prepareCapture)
 	}
 	for _, def := range cfg.Sessions {
 		r.seed(def)

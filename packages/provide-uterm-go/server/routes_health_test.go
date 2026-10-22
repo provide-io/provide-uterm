@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
 // decode unmarshals a JSON response body into a map.
@@ -87,5 +89,26 @@ func TestSecurityPosture(t *testing.T) {
 	}
 	if body["environment"] == nil || body["secure"] == nil {
 		t.Fatalf("viewer posture missing coarse fields: %v", body)
+	}
+}
+
+// "capture.socket_mode" is listed when the capture sockets let the socket
+// directory's group connect, and not for owner-only ones, so a producer running
+// as another user can tell whether it will be able to connect.
+func TestHealthListsTheCaptureSocketModeOnlyWhenItIsOwnerAndGroup(t *testing.T) {
+	for _, tc := range []struct {
+		mode int
+		want []any
+	}{
+		{0o600, []any{"viewers.revoke.subject"}},
+		{0o660, []any{"viewers.revoke.subject", "capture.socket_mode"}},
+	} {
+		ts := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) {
+			cfg.Pam.CaptureSocketMode = tc.mode
+		})
+		ts.srv.MarkReady()
+		if got := decode(t, ts.do("GET", "/api/health", "", nil).Body.Bytes())["features"]; !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("mode %o: features %v", tc.mode, got)
+		}
 	}
 }

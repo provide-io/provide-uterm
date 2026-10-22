@@ -179,7 +179,7 @@ func TestCaptureSocketPerms(t *testing.T) {
 
 func TestCaptureDropOldestOnOverflow(t *testing.T) {
 	path := shortSocketPath(t)
-	s, err := newCaptureSocketWithQueue(path, 2)
+	s, err := newCaptureSocketWithQueue(path, OwnerOnlySocketMode, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestCaptureOversizedFrameRejected(t *testing.T) {
 
 func TestCaptureExactCapAccepted(t *testing.T) {
 	path := shortSocketPath(t)
-	s, _ := newCaptureSocketWithQueue(path, 8)
+	s, _ := newCaptureSocketWithQueue(path, OwnerOnlySocketMode, 8)
 	// A frame whose length equals the cap boundary is accepted (> not >=). Use a
 	// small synthetic cap by sending a normal frame — exercises the accept path.
 	r := bytes.NewReader(makeFrame(ChannelStdout, []byte("abcd")))
