@@ -2,8 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Mutation-enforced with the rest of routes/ ([tool.mutmut]); bound suite:
-#   tests/server/test_previous_sessions.py   the routes end to end, and the store behind them
+# Mutation-enforced with the rest of routes/ ([tool.mutmut]); bound suites:
+#   tests/server/test_previous_sessions.py          the reads end to end, and the store behind them
+#   tests/server/test_previous_sessions_update.py   the PATCH end to end, and the store's rewrite
 """Read the capture sessions that have ended (``session_persistence.previous_keep_days``), and set their owner.
 
 Exposes:

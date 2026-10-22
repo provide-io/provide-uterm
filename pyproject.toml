@@ -788,8 +788,12 @@ pytest_add_cli_args_test_selection = [
     # The per-subject revoke ({"subject": ...}): its body refusals and caps.
     "packages/provide-uterm-server/tests/server/test_viewer_subject_revocation.py",
     # routes/previous_sessions.py — GET /api/previous-sessions[/{id}] through the
-    # real app: who may list and read which, and the exact 403 and 404.
+    # real app: who may list and read which, and the exact 403 and 404; and the
+    # PATCH of an ended session's owner: who may, the 401/404/403/422 order, and
+    # the store's rewrite (split for the line cap; previous_sessions_helpers.py
+    # seeds both).
     "packages/provide-uterm-server/tests/server/test_previous_sessions.py",
+    "packages/provide-uterm-server/tests/server/test_previous_sessions_update.py",
     # test_process.py (manager process supervisor) — REMOVED from pytest selection
     # (2026-06-02). It exercises process_impl.py, but process_impl.py is NOT in the
     # perimeter (and the listed manager/process.py + config.py are 0-mutant, see the
