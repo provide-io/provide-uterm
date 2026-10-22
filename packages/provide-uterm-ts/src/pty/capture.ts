@@ -85,8 +85,16 @@ export const MAX_CAPTURE_FRAME_BYTES = 16 * 1024 * 1024;
 /** How many frames are held for a reader that has fallen behind. */
 export const CAPTURE_QUEUE_MAXSIZE = 4096;
 
-/** The mode the capture socket is created with, and nothing wider. */
+/** The mode the capture socket is created with by default, and nothing wider. */
 export const CAPTURE_SOCKET_MODE = 0o600;
+
+/**
+ * Every mode a capture socket may be created with: owner-only, or owner and
+ * group, for a server that shares its capture sockets with producers running
+ * as another user through a setgid directory's group. A world bit would hand
+ * the terminal to every local user, so no wider mode is ever accepted.
+ */
+export const CAPTURE_SOCKET_MODES: readonly number[] = [CAPTURE_SOCKET_MODE, 0o660];
 
 /**
  * The umask the socket is bound under.

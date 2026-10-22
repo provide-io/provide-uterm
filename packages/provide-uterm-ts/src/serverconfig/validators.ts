@@ -13,6 +13,7 @@
  * operator without telling them.
  */
 
+import { CAPTURE_SOCKET_MODES } from "../pty/capture.ts";
 import { floatRepr } from "../pycompat/index.ts";
 import { AUTH_DEFAULTS, AUTH_FIELDS } from "./defaults.ts";
 
@@ -253,6 +254,30 @@ export function validateControlPlaneConfig(input: Record<string, unknown>): void
  */
 export function validatePamConfig(input: Record<string, unknown>): void {
   requireSecureUrl(input.relay_url as string | undefined, "pam.relay_url");
+}
+
+/**
+ * The reference's refusal of a `pam.capture_socket_mode` it would not bind
+ * with, or nothing for 0o600 and 0o660.
+ *
+ * Run on the value as written, before the field's own integer coercion, as the
+ * reference's before-validator is: that coercion would read `"432"` or `true`
+ * as a mode. This port has no capture connector, so nothing binds with the
+ * mode; one server.toml is still meant to load on any port, and to be refused
+ * by each in the same words. A divergence it cannot close: JavaScript has one
+ * number type, so `432.0`, which the reference refuses as a float, reads here
+ * as the integer 432.
+ */
+export function captureSocketModeComplaint(value: unknown): string | undefined {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    return "pam.capture_socket_mode must be an integer: 0o600 or 0o660";
+  }
+  if (CAPTURE_SOCKET_MODES.includes(value)) {
+    return undefined;
+  }
+  // As Python's oct() writes it: the sign ahead of the prefix.
+  const sign = value < 0 ? "-" : "";
+  return `pam.capture_socket_mode must be 0o600 or 0o660, got: ${sign}0o${Math.abs(value).toString(8)}`;
 }
 
 /**

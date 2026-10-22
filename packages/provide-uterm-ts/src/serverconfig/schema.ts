@@ -22,6 +22,7 @@ import { pyRepr as pyStrRepr } from "../pycompat/index.ts";
 import { MIN_RATE_PER_SEC } from "../ratelimit/index.ts";
 import { SECTION_FIELD_SPECS, TOP_LEVEL_FIELD_SPEC } from "./schema-fields.ts";
 import {
+  captureSocketModeComplaint,
   cleanPath,
   keepDaysComplaint,
   normalizePath,
@@ -315,6 +316,9 @@ const FIELD_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
  * session — rather than by the generic complaint about a closed set.
  */
 const BEFORE_RULES: Readonly<Record<string, Record<string, FieldRule>>> = {
+  PamConfig: {
+    capture_socket_mode: (value) => captureSocketModeComplaint(value),
+  },
   SessionDefinition: {
     input_mode: (value, accepted) =>
       value === "hijack" || value === "open"

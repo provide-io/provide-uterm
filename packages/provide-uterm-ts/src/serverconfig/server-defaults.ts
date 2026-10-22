@@ -109,6 +109,7 @@ export const SERVER_CONFIG_DEFAULTS: ServerConfigDocument = deepFreeze({
     auto_session: false,
     auto_session_command: "/bin/bash",
     capture_socket_dir: null,
+    capture_socket_mode: 0o600,
     mode: "notify",
     notify_socket: null,
     relay_token: null,

@@ -140,6 +140,7 @@ export const SECTION_FIELD_SPECS = {
     relay_token: "str?", // pragma: allowlist secret
     capture_socket_dir: "str?",
     require_peer_uids: "int[]?",
+    capture_socket_mode: "int",
   },
   GovernanceConfig: {
     policy_webhook_url: "str?",

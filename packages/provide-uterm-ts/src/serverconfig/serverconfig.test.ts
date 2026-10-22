@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
 import {
   AUTH_DEFAULTS,
+  captureSocketModeComplaint,
   cleanPath,
+  coerceSection,
   derivePublicBaseUrl,
   LOOPBACK_HOSTS,
   pyFloat,
@@ -18,8 +20,10 @@ import {
   validateControlPlaneConfig,
   validatePamConfig,
   validateRecordingConfig,
+  validateSection,
   validateSessionPersistenceConfig,
 } from "./index.ts";
+import { parseTomlDocument } from "./loader.ts";
 
 interface ServerConfigGolden {
   urls: Array<{ name: string; url: string | null; error: string | null }>;
@@ -402,6 +406,49 @@ describe("the other configurations", () => {
       );
     },
   );
+
+  it.each([0o600, 0o660])("accepts a capture socket mode of %o", (mode) => {
+    expect(captureSocketModeComplaint(mode)).toBeUndefined();
+  });
+
+  it.each([
+    [0o666, "0o666"],
+    [0o664, "0o664"],
+    [0o640, "0o640"],
+    [0o700, "0o700"],
+    [0o770, "0o770"],
+    [0o2660, "0o2660"],
+    [0, "0o0"],
+    [-1, "-0o1"],
+    [-0o600, "-0o600"],
+  ])("refuses a capture socket mode of %o, quoting it as Python's oct() does: %s", (mode, shown) => {
+    expect(captureSocketModeComplaint(mode)).toBe(`pam.capture_socket_mode must be 0o600 or 0o660, got: ${shown}`);
+  });
+
+  it.each(["0o660", "432", 432.5, true, null, [432], {}])(
+    "refuses a capture socket mode of %o that is not an integer",
+    (mode) => {
+      expect(captureSocketModeComplaint(mode)).toBe("pam.capture_socket_mode must be an integer: 0o600 or 0o660");
+    },
+  );
+
+  it("reads a capture socket mode written in octal in a server.toml", () => {
+    const pam = parseTomlDocument("[pam]\ncapture_socket_mode = 0o660\n").pam as Record<string, unknown>;
+    expect(validateSection("PamConfig", pam)).toEqual([]);
+    expect(coerceSection("PamConfig", pam)).toEqual({ capture_socket_mode: 0o660 });
+  });
+
+  it("refuses a capture socket mode before reading it as an integer", () => {
+    // The field's own coercion would take "432" as 432; the refusal is the
+    // reference's before-validator's, placed on the field.
+    expect(validateSection("PamConfig", { capture_socket_mode: "432" })).toEqual([
+      {
+        type: "value_error",
+        loc: ["capture_socket_mode"],
+        msg: "Value error, pam.capture_socket_mode must be an integer: 0o600 or 0o660",
+      },
+    ]);
+  });
 
   it("names the recording webhook url specifically", () => {
     expect(() => validateRecordingConfig({ webhook_url: "http://evil.example" })).toThrow("recording.webhook_url");

@@ -229,7 +229,7 @@ public static class ConfigLoader
         },
         ["pam"] = new(StringComparer.Ordinal)
         {
-            "auto_session", "auto_session_command", "capture_socket_dir", "mode",
+            "auto_session", "auto_session_command", "capture_socket_dir", "capture_socket_mode", "mode",
             "notify_socket", "relay_token", "relay_url", "require_peer_uids"
         },
         ["governance"] = new(StringComparer.Ordinal)
@@ -449,6 +449,11 @@ public static class ConfigLoader
         if (root.TryGetValue("session_persistence", out var spObj) && spObj is TomlTable sp)
         {
             SessionPersistenceLoader.Apply(cfg.SessionPersistence, sp);
+        }
+
+        if (root.TryGetValue("pam", out var pamObj) && pamObj is TomlTable pam)
+        {
+            PamLoader.Apply(pam);
         }
 
         if (root.TryGetValue("sessions", out var sessObj) && sessObj is TomlTableArray sessions)
