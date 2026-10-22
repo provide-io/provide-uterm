@@ -269,15 +269,22 @@ export function validatePamConfig(input: Record<string, unknown>): void {
  * as the integer 432.
  */
 export function captureSocketModeComplaint(value: unknown): string | undefined {
-  if (typeof value !== "number" || !Number.isInteger(value)) {
+  // Number.isInteger is false for anything that is not a number, so this one
+  // test refuses a string, a bool and a fraction alike. A `typeof` test in
+  // front of it would test nothing more, and a mutation run reports a test
+  // that cannot change the answer as a survivor no test can kill.
+  if (!Number.isInteger(value)) {
     return "pam.capture_socket_mode must be an integer: 0o600 or 0o660";
   }
-  if (CAPTURE_SOCKET_MODES.includes(value)) {
+  // TypeScript does not narrow on Number.isInteger, so the type it has just
+  // established is written out here.
+  const mode = value as number;
+  if (CAPTURE_SOCKET_MODES.includes(mode)) {
     return undefined;
   }
   // As Python's oct() writes it: the sign ahead of the prefix.
-  const sign = value < 0 ? "-" : "";
-  return `pam.capture_socket_mode must be 0o600 or 0o660, got: ${sign}0o${Math.abs(value).toString(8)}`;
+  const sign = mode < 0 ? "-" : "";
+  return `pam.capture_socket_mode must be 0o600 or 0o660, got: ${sign}0o${Math.abs(mode).toString(8)}`;
 }
 
 /**
