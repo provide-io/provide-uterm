@@ -4,11 +4,12 @@
 #
 # Mutation-enforced with the rest of routes/ ([tool.mutmut]); bound suite:
 #   tests/server/test_previous_sessions.py   the routes end to end, and the store behind them
-"""Read the capture sessions that have ended (``session_persistence.previous_keep_days``).
+"""Read the capture sessions that have ended (``session_persistence.previous_keep_days``), and set their owner.
 
 Exposes:
-  GET /api/previous-sessions               -- the previous sessions the caller may read, newest first
-  GET /api/previous-sessions/{session_id}  -- one of them, with its last screen and scrollback
+  GET   /api/previous-sessions               -- the previous sessions the caller may read, newest first
+  GET   /api/previous-sessions/{session_id}  -- one of them, with its last screen and scrollback
+  PATCH /api/previous-sessions/{session_id}  -- set its ``owner`` and/or ``visibility`` (admins only)
 
 A previous session is history, so it is read by fewer people than the live
 session was: its owner, an admin, and an operator unless it was private. A
@@ -18,6 +19,12 @@ is answered as the live read answers a caller it refuses: an id nobody kept
 is 404, and one the caller may not read is 403. What is returned passes
 through the output-redaction policy, as the live screen does.
 
+PAM creates a capture session with no owner, and whoever runs the login sets
+one on the live session afterwards. A login that ends first leaves a previous
+session nobody but an admin can read, so an admin may set its owner, and its
+visibility with it, once it has ended: the live session's rule for an owner
+change, which only an admin may make. A share viewer never, whatever its roles.
+
 A runtime-native route rather than a shared ``RouteDef``: it reads files this
 server keeps for its own PAM capture sessions, which the Cloudflare Worker has
 neither of.
@@ -26,16 +33,24 @@ neither of.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Request
+from pydantic import ValidationError
 
-from provide.uterm.server.routes._helpers import SessionId, authz, principal
+from provide.uterm.server.audit import audit_event
+from provide.uterm.server.capture_record import RecordError
+from provide.uterm.server.config_schema_session import SessionDefinition
+from provide.uterm.server.models import validation_error_message
+from provide.uterm.server.routes._helpers import SessionId, authz, principal, source_ip
 
 if TYPE_CHECKING:
     from provide.uterm.server.auth import Principal
     from provide.uterm.server.authorization import AuthorizationService
     from provide.uterm.server.capture_state import CaptureRecord, CaptureStateStore
+
+#: The fields a PATCH may set: who owns the ended session, and who else may read it.
+UPDATABLE_FIELDS = frozenset({"owner", "visibility"})
 
 PREVIOUS_SESSIONS_PATH = "/previous-sessions"
 PREVIOUS_SESSION_PATH = "/previous-sessions/{session_id}"
@@ -138,9 +153,61 @@ async def get_previous_session(request: Request, session_id: SessionId) -> dict[
     return {**record.summary(), "screen": screen, "scrollback": scrollback}
 
 
+def _changes(definition: SessionDefinition, payload: dict[str, Any]) -> dict[str, Any]:
+    """*payload* once it is known to hold only an owner and a visibility the live session would take.
+
+    The values are judged by the live session's own model, so a previous
+    session takes exactly what a live one does. Its owner must be a string,
+    though: one with none counts against the PAM user it names, which is where
+    it started, so there is nothing to set it back to.
+    """
+    if not payload or not payload.keys() <= UPDATABLE_FIELDS:
+        raise HTTPException(status_code=422, detail="a previous session takes owner and/or visibility, nothing else")
+    if "owner" in payload and not isinstance(payload["owner"], str):
+        raise HTTPException(status_code=422, detail="owner must be a string")
+    try:
+        SessionDefinition.model_validate({**definition.model_dump(mode="python"), **payload})
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=validation_error_message(exc)) from None
+    return payload
+
+
+async def update_previous_session(
+    request: Request, session_id: SessionId, payload: Annotated[dict[str, Any], Body(...)]
+) -> dict[str, Any]:
+    p = principal(request)
+    az = authz(request)
+    store = _store(request)
+    kept = store.previous_summary(session_id) if store is not None else None
+    if store is None or kept is None:
+        raise _unknown(session_id)
+    # Before the body is judged, as the live PATCH refuses before it validates.
+    if p.subject_id.startswith("share:") or not await az.is_admin(p):
+        raise HTTPException(status_code=403, detail="admin privileges required")
+    changes = _changes(kept.definition, payload)
+    try:
+        record = await store.update_previous(session_id, changes)
+    except RecordError:
+        # The store has logged why; the old file and the listing are unchanged.
+        raise HTTPException(status_code=500, detail="previous session not saved") from None
+    if record is None:
+        raise _unknown(session_id)
+    audit_event(
+        "previous_session.update",
+        principal=p.subject_id,
+        session_id=session_id,
+        source_ip=source_ip(request),
+        detail=changes,
+    )
+    return record.summary()
+
+
 def register_previous_session_routes(router: APIRouter) -> None:
-    """Bind the two previous-session reads."""
+    """Bind the two previous-session reads and the owner change."""
     # No methods argument: add_api_route's own default is GET, so any value
     # written here that means GET (or none at all) would be an equivalent mutant.
     router.add_api_route(PREVIOUS_SESSIONS_PATH, list_previous_sessions, name="previous_sessions.list")
     router.add_api_route(PREVIOUS_SESSION_PATH, get_previous_session, name="previous_sessions.get")
+    router.add_api_route(
+        PREVIOUS_SESSION_PATH, update_previous_session, methods=["PATCH"], name="previous_sessions.update"
+    )

@@ -2,25 +2,30 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 provide.io llc. All rights reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-"""GET /api/previous-sessions[/{id}]: the capture sessions that have ended, read-only.
+"""GET /api/previous-sessions[/{id}]: the capture sessions that have ended, and PATCH of their owner.
 
 A previous session is history, read by fewer than the live one was: its owner
 and admins always, operators unless it was private, and nobody else, a share
 viewer least of all. An id nobody kept is 404, and one the caller may not read
 is 403, as the live session's read answers. What is returned is redacted by
 the output policy, as the live screen is.
+
+Only an admin may change who owns one, or its visibility: the live session's
+rule for an owner change, since a login that ended before its owner was set
+is otherwise read by nobody but an admin.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import APIRouter
@@ -33,7 +38,12 @@ from provide.uterm.server.bridge.hub.ext import RedactionRule
 from provide.uterm.server.capture_state import CaptureStateStore
 from provide.uterm.server.config_schema_session import SessionDefinition
 from provide.uterm.server.models import AuthConfig
-from provide.uterm.server.routes.health import PERSIST_CAPTURE_FEATURE, PREVIOUS_SESSIONS_FEATURE, server_features
+from provide.uterm.server.routes.health import (
+    PERSIST_CAPTURE_FEATURE,
+    PREVIOUS_OWNER_FEATURE,
+    PREVIOUS_SESSIONS_FEATURE,
+    server_features,
+)
 from provide.uterm.server.routes.previous_sessions import register_previous_session_routes
 
 from .viewer_revocation_helpers import JWT_KEY, bearer, mint_token
@@ -287,21 +297,24 @@ def test_a_scoped_admin_that_may_not_take_over_is_no_admin(client: TestClient) -
     assert client.get(f"/api/previous-sessions/{PRIVATE}", headers=headers).status_code == 200
 
 
-def test_the_routes_are_named_gets(client: TestClient) -> None:
+def test_the_routes_are_named_gets_and_a_patch(client: TestClient) -> None:
     app = cast("Any", client.app)
     assert app.url_path_for("previous_sessions.list") == "/api/previous-sessions"
     assert app.url_path_for("previous_sessions.get", session_id=PRIVATE) == f"/api/previous-sessions/{PRIVATE}"
     router = APIRouter()
     register_previous_session_routes(router)
+    assert app.url_path_for("previous_sessions.update", session_id=PRIVATE) == f"/api/previous-sessions/{PRIVATE}"
     assert [(route.name, route.methods) for route in cast("Any", router.routes)] == [
         ("previous_sessions.list", {"GET"}),
         ("previous_sessions.get", {"GET"}),
+        ("previous_sessions.update", {"PATCH"}),
     ]
 
 
 def test_one_kept_day_is_a_previous_sessions_feature() -> None:
     config = SimpleNamespace(session_persistence=SimpleNamespace(persist_capture=False, previous_keep_days=1))
     assert PREVIOUS_SESSIONS_FEATURE in server_features(config)
+    assert PREVIOUS_OWNER_FEATURE in server_features(config)
 
 
 def test_an_unknown_id_is_404(client: TestClient) -> None:
@@ -349,8 +362,12 @@ def test_neither_feature_lists_none(tmp_path: Path) -> None:
     [
         (False, 0, ["viewers.revoke.subject"]),
         (True, 0, ["viewers.revoke.subject", PERSIST_CAPTURE_FEATURE]),
-        (False, 7, ["viewers.revoke.subject", PREVIOUS_SESSIONS_FEATURE]),
-        (True, 7, ["viewers.revoke.subject", PERSIST_CAPTURE_FEATURE, PREVIOUS_SESSIONS_FEATURE]),
+        (False, 7, ["viewers.revoke.subject", PREVIOUS_SESSIONS_FEATURE, PREVIOUS_OWNER_FEATURE]),
+        (
+            True,
+            7,
+            ["viewers.revoke.subject", PERSIST_CAPTURE_FEATURE, PREVIOUS_SESSIONS_FEATURE, PREVIOUS_OWNER_FEATURE],
+        ),
     ],
 )
 def test_health_lists_each_feature_only_when_it_is_on(
@@ -361,7 +378,11 @@ def test_health_lists_each_feature_only_when_it_is_on(
 
 
 def test_the_feature_names_are_pinned() -> None:
-    assert (PERSIST_CAPTURE_FEATURE, PREVIOUS_SESSIONS_FEATURE) == ("sessions.capture.persist", "sessions.previous")
+    assert (PERSIST_CAPTURE_FEATURE, PREVIOUS_SESSIONS_FEATURE, PREVIOUS_OWNER_FEATURE) == (
+        "sessions.capture.persist",
+        "sessions.previous",
+        "sessions.previous.owner",
+    )
 
 
 def test_features_are_the_base_ones_without_a_config() -> None:
@@ -432,3 +453,226 @@ def test_a_policy_that_cannot_answer_withholds_the_screen(tmp_path: Path) -> Non
     for client in _gated(tmp_path, _Gate(fail=True)):
         response = client.get(f"/api/previous-sessions/{PRIVATE}", headers=_as("alice"))
     assert (response.status_code, response.json()) == (503, {"detail": "output policy unavailable"})
+
+
+# PATCH /api/previous-sessions/{id}: who owns an ended session, and who else may read it.
+
+
+def _patch(client: TestClient, session_id: str, body: Any, headers: dict[str, str]) -> Any:
+    return client.patch(f"/api/previous-sessions/{session_id}", json=body, headers=headers)
+
+
+def _on_disk(tmp_path: Path, session_id: str) -> dict[str, Any]:
+    data: dict[str, Any] = json.loads((tmp_path / "capture-sessions" / "previous" / f"{session_id}.json").read_bytes())
+    return data
+
+
+def _reloaded(tmp_path: Path) -> CaptureStateStore:
+    store = CaptureStateStore(tmp_path / "capture-sessions", persist=False, keep_days=7, scrollback_lines=100)
+    store.load_previous()
+    return store
+
+
+def test_an_admin_sets_the_owner_and_visibility(client: TestClient, tmp_path: Path) -> None:
+    listed = {e["id"]: e for e in client.get("/api/previous-sessions", headers=_as("root", "admin")).json()["sessions"]}
+    response = _patch(client, PUBLIC, {"owner": "blackbetty:7", "visibility": "private"}, _as("root", "admin"))
+    assert response.status_code == 200
+    # The listing's entry, as GET of the list returns it: no screen.
+    assert response.json() == {**listed[PUBLIC], "owner": "blackbetty:7"}
+    on_disk = _on_disk(tmp_path, PUBLIC)
+    assert (on_disk["session"]["owner"], on_disk["session"]["visibility"]) == ("blackbetty:7", "private")
+    # Everything else is kept, the screen and when it ended above all.
+    assert (on_disk["screen"]["ansi"], on_disk["scrollback"]) == ("bob's public screen", ["one", "two"])
+    assert on_disk["ended_at"] == listed[PUBLIC]["ended_at"]
+    # The new owner reads it; its old owner, and an operator now that it is private, do not.
+    assert _listed(client, _as("blackbetty:7")) == [PUBLIC]
+    read = client.get(f"/api/previous-sessions/{PUBLIC}", headers=_as("blackbetty:7"))
+    assert (read.status_code, read.json()["screen"]) == (200, "bob's public screen")
+    assert _listed(client, _as("bob")) == [BOBS]
+    assert _listed(client, _as("carol", "operator")) == [OPERATOR]
+
+
+def test_an_owner_set_survives_a_restart(client: TestClient, tmp_path: Path) -> None:
+    assert _patch(client, PRIVATE, {"owner": "blackbetty:7"}, _as("root", "admin")).status_code == 200
+    store = _reloaded(tmp_path)
+    kept = store.previous_summary(PRIVATE)
+    assert kept is not None
+    assert (kept.definition.owner, kept.definition.visibility) == ("blackbetty:7", "private")
+    record = asyncio.run(store.previous_session(PRIVATE))
+    assert record is not None
+    assert record.screen == "alice's private screen"
+
+
+def test_one_field_leaves_the_other_as_it_was(client: TestClient, tmp_path: Path) -> None:
+    assert _patch(client, OPERATOR, {"visibility": "public"}, _as("root", "admin")).status_code == 200
+    assert _on_disk(tmp_path, OPERATOR)["session"]["owner"] == "alice"
+    assert _on_disk(tmp_path, OPERATOR)["session"]["visibility"] == "public"
+    assert _listed(client, _as("carol", "operator")) == [PUBLIC, OPERATOR]
+    response = _patch(client, OPERATOR, {"owner": "blackbetty:7"}, _as("root", "admin"))
+    assert response.json()["owner"] == "blackbetty:7"
+    assert _on_disk(tmp_path, OPERATOR)["session"]["visibility"] == "public"
+
+
+def test_a_change_is_audited(client: TestClient) -> None:
+    audit = MagicMock()
+    with patch("provide.uterm.server.routes.previous_sessions.audit_event", audit):
+        _patch(client, PRIVATE, {"owner": "blackbetty:7", "visibility": "operator"}, _as("root", "admin"))
+        # A refused one is not.
+        _patch(client, PRIVATE, {"owner": "blackbetty:7"}, _as("alice"))
+    audit.assert_called_once_with(
+        "previous_session.update",
+        principal="root",
+        session_id=PRIVATE,
+        source_ip="testclient",
+        detail={"owner": "blackbetty:7", "visibility": "operator"},
+    )
+
+
+# As (subject, roles), minted in the test.
+@pytest.mark.parametrize(
+    "caller",
+    [("alice",), ("carol", "operator"), ("dave",)],
+)
+@pytest.mark.parametrize("body", [{"owner": "alice"}, {"visibility": "public"}, {"owner": "x", "visibility": "public"}])
+def test_anyone_but_an_admin_is_refused_and_nothing_changes(
+    client: TestClient, tmp_path: Path, caller: tuple[str, ...], body: dict[str, str]
+) -> None:
+    before = _on_disk(tmp_path, PRIVATE)
+    response = _patch(client, PRIVATE, body, _as(*caller))
+    assert (response.status_code, response.json()) == (403, {"detail": "admin privileges required"})
+    assert _on_disk(tmp_path, PRIVATE) == before
+    assert _listed(client, _as("alice")) == [OPERATOR, PRIVATE]
+
+
+@pytest.mark.parametrize("subject", [f"share:{PRIVATE}:blackbetty:7", f"share:{PRIVATE}:viewer"])
+def test_a_share_viewer_is_refused_whatever_its_roles(client: TestClient, tmp_path: Path, subject: str) -> None:
+    before = _on_disk(tmp_path, PRIVATE)
+    for roles in (["viewer"], ["operator"], ["admin"]):
+        response = _patch(client, PRIVATE, {"owner": "blackbetty:7"}, bearer(mint_token(subject, roles)))
+        assert (response.status_code, response.json()) == (403, {"detail": "admin privileges required"})
+    assert _on_disk(tmp_path, PRIVATE) == before
+
+
+def test_a_session_scoped_admin_is_refused(client: TestClient) -> None:
+    headers = bearer(mint_token("scoped", ["admin"], admin_session_scope=PRIVATE))
+    assert _patch(client, PRIVATE, {"owner": "scoped"}, headers).status_code == 403
+
+
+def test_the_admin_is_the_one_the_provider_names(client: TestClient) -> None:
+    cast("Any", client.app).state.uterm_authz._provider = _PolicyRoles()
+    assert _patch(client, PRIVATE, {"owner": "x"}, _as("root", "admin")).status_code == 403
+    assert _patch(client, PRIVATE, {"owner": "x"}, _as("policy-admin")).status_code == 200
+
+
+def test_patching_an_unknown_id_is_404(client: TestClient) -> None:
+    response = _patch(client, "pam-alice-capture-9-9", {"owner": "x"}, _as("root", "admin"))
+    assert (response.status_code, response.json()) == (
+        404,
+        {"detail": "unknown previous session: pam-alice-capture-9-9"},
+    )
+
+
+@pytest.mark.parametrize(("persist", "keep_days"), [(False, 0), (True, 0)])
+def test_patching_with_previous_sessions_off_is_404(tmp_path: Path, persist: bool, keep_days: int) -> None:
+    with TestClient(_app(tmp_path, keep_days=keep_days, persist=persist)) as off:
+        response = _patch(off, PRIVATE, {"owner": "x"}, _as("root", "admin"))
+    assert (response.status_code, response.json()) == (404, {"detail": f"unknown previous session: {PRIVATE}"})
+
+
+def test_patching_unauthenticated_is_refused(client: TestClient) -> None:
+    assert client.patch(f"/api/previous-sessions/{PRIVATE}", json={"owner": "x"}).status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("body", "detail"),
+    [
+        ({}, "a previous session takes owner and/or visibility, nothing else"),
+        ({"owner": "x", "display_name": "y"}, "a previous session takes owner and/or visibility, nothing else"),
+        ({"ended_at": 1.0}, "a previous session takes owner and/or visibility, nothing else"),
+        ({"owner": None}, "owner must be a string"),
+        ({"owner": 7}, "owner must be a string"),
+        ({"owner": "x", "visibility": "secret"}, None),
+        ({"visibility": None}, None),
+    ],
+)
+def test_a_body_that_is_not_an_owner_or_visibility_is_422(
+    client: TestClient, tmp_path: Path, body: dict[str, Any], detail: str | None
+) -> None:
+    before = _on_disk(tmp_path, PRIVATE)
+    response = _patch(client, PRIVATE, body, _as("root", "admin"))
+    assert response.status_code == 422
+    if detail is not None:
+        assert response.json() == {"detail": detail}
+    else:
+        # The live session's own refusal of the value.
+        assert "invalid visibility" in response.json()["detail"]
+    assert _on_disk(tmp_path, PRIVATE) == before
+
+
+def test_a_body_that_is_not_an_object_is_422(client: TestClient) -> None:
+    assert _patch(client, PRIVATE, ["owner"], _as("root", "admin")).status_code == 422
+
+
+def test_a_non_admin_is_refused_before_its_body_is_judged(client: TestClient) -> None:
+    assert _patch(client, PRIVATE, {"colour": "red"}, _as("alice")).status_code == 403
+
+
+@pytest.mark.parametrize("damage", ["unlink", "garble"])
+def test_a_file_gone_or_unreadable_since_listing_is_404_and_unlisted(
+    client: TestClient, tmp_path: Path, damage: str
+) -> None:
+    path = tmp_path / "capture-sessions" / "previous" / f"{PRIVATE}.json"
+    if damage == "unlink":
+        path.unlink()
+    else:
+        path.write_bytes(b"{not json")
+    response = _patch(client, PRIVATE, {"owner": "blackbetty:7"}, _as("root", "admin"))
+    assert (response.status_code, response.json()) == (404, {"detail": f"unknown previous session: {PRIVATE}"})
+    assert PRIVATE not in _listed(client, _as("root", "admin"))
+    # Nothing is written in its place.
+    assert path.exists() is (damage == "garble")
+
+
+def test_a_write_that_fails_is_500_and_changes_nothing(client: TestClient, tmp_path: Path) -> None:
+    previous = tmp_path / "capture-sessions" / "previous"
+    before = _on_disk(tmp_path, PRIVATE)
+    previous.chmod(0o500)
+    try:
+        response = _patch(client, PRIVATE, {"owner": "blackbetty:7"}, _as("root", "admin"))
+    finally:
+        previous.chmod(0o700)
+    assert (response.status_code, response.json()) == (500, {"detail": "previous session not saved"})
+    assert _on_disk(tmp_path, PRIVATE) == before
+    assert _listed(client, _as("alice")) == [OPERATOR, PRIVATE]
+
+
+def _crowded(tmp_path: Path, mine_ended_at: float) -> Iterator[TestClient]:
+    """PRIVATE (alice's), ended at *mine_ended_at*, and twenty of blackbetty:7's, ended 100-119 s ago."""
+    store = CaptureStateStore(tmp_path / "capture-sessions", persist=False, keep_days=7, scrollback_lines=100)
+    now = time.time()
+
+    async def seed() -> None:
+        await _end(store, _definition(PRIVATE, "alice", "private"), "alice's screen", now + mine_ended_at)
+        for i in range(20):
+            await _end(store, _definition(f"pam-carl-capture-{i}-10", "blackbetty:7", "private"), "s", now - 100 - i)
+
+    asyncio.run(seed())
+    with TestClient(_app(tmp_path)) as test_client:
+        yield test_client
+
+
+def test_the_new_owners_cap_drops_its_oldest(tmp_path: Path) -> None:
+    for client in _crowded(tmp_path, -5):
+        response = _patch(client, PRIVATE, {"owner": "blackbetty:7"}, _as("root", "admin"))
+        assert response.status_code == 200
+        listed = _listed(client, _as("blackbetty:7"))
+    assert listed == [PRIVATE, *(f"pam-carl-capture-{i}-10" for i in range(19))]
+    assert not (tmp_path / "capture-sessions" / "previous" / "pam-carl-capture-19-10.json").exists()
+
+
+def test_one_the_new_owners_cap_drops_is_404(tmp_path: Path) -> None:
+    for client in _crowded(tmp_path, -1000):
+        response = _patch(client, PRIVATE, {"owner": "blackbetty:7"}, _as("root", "admin"))
+        assert (response.status_code, response.json()) == (404, {"detail": f"unknown previous session: {PRIVATE}"})
+        assert len(_listed(client, _as("blackbetty:7"))) == 20
+    assert not (tmp_path / "capture-sessions" / "previous" / f"{PRIVATE}.json").exists()

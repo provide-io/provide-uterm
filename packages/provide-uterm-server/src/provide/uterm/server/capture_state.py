@@ -385,6 +385,29 @@ class CaptureStateStore:
             return None
         return read
 
+    async def update_previous(self, session_id: str, changes: dict[str, Any]) -> CaptureRecord | None:
+        """Set *changes* (already-validated definition fields) on a previous record; its listing copy, or None.
+
+        The file is read, changed and rewritten whole, under the session's
+        lock, so the screen it holds is kept. None when the record is not
+        listed, when its file has gone or turned unreadable since (its listing
+        entry is dropped, since nobody can read it any more), or when the new
+        owner's cap removed it. Raises :class:`RecordError` when the new file
+        could not be written, which leaves the old one and the listing as they
+        were.
+        """
+        async with self._lock(session_id):
+            record = await self.previous_session(session_id)
+            if record is None:
+                self._previous.pop(session_id, None)
+                return None
+            changed = dataclasses.replace(record, definition=record.definition.model_copy(update=changes))
+            if not await self._guarded(changed, self._write(self._previous_dir, changed)):
+                raise RecordError(f"previous session {session_id} not saved")
+            self._previous[session_id] = _without_screen(changed)
+            self._prune_owner(_owner_key(changed))
+            return self._previous.get(session_id)
+
 
 class ScreenKeeper:
     """Keeps one capture session's screen in its store record, as the screen changes.

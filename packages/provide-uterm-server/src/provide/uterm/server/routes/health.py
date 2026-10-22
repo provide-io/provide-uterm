@@ -56,8 +56,12 @@ SERVER_FEATURES = ("viewers.revoke.subject",)
 # ids after a restart (``session_persistence.persist_capture``).
 # ``sessions.previous``: an ended capture session can be read at
 # ``GET /api/previous-sessions`` (``session_persistence.previous_keep_days``).
+# ``sessions.previous.owner``: an admin can set an ended capture session's
+# owner and visibility (``PATCH /api/previous-sessions/{id}``), listed with
+# ``sessions.previous`` since it has nothing to change without it.
 PERSIST_CAPTURE_FEATURE = "sessions.capture.persist"
 PREVIOUS_SESSIONS_FEATURE = "sessions.previous"
+PREVIOUS_OWNER_FEATURE = "sessions.previous.owner"
 # ``capture.socket_mode``: the sockets this server binds for pty_capture
 # sessions let the socket directory's group connect, not only this server's
 # user (``pam.capture_socket_mode = 0o660``). Listed only then, so a capture
@@ -74,7 +78,7 @@ def server_features(config: object) -> list[str]:
     if settings is not None and settings.persist_capture:
         features.append(PERSIST_CAPTURE_FEATURE)
     if settings is not None and settings.previous_keep_days > 0:
-        features.append(PREVIOUS_SESSIONS_FEATURE)
+        features.extend((PREVIOUS_SESSIONS_FEATURE, PREVIOUS_OWNER_FEATURE))
     pam = getattr(config, "pam", None)
     if pam is not None and pam.capture_socket_mode == OWNER_AND_GROUP_CAPTURE_SOCKET_MODE:
         features.append(CAPTURE_SOCKET_MODE_FEATURE)
