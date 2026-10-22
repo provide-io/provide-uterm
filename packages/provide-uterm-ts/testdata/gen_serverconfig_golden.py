@@ -151,6 +151,21 @@ MODEL_CASES: list[tuple[str, Any, dict[str, Any]]] = [
     ("sqlite with no database url", ControlPlaneConfig, {"backend": "sqlite"}),
     ("a pam relay over cleartext", PamConfig, {"relay_url": "http://relay.example.org/notify"}),
     ("a pam relay over tls", PamConfig, {"relay_url": "https://relay.example.org/notify"}),
+    # Who may connect to a pty_capture socket. Every port binding one (Python,
+    # Go) or reading the key (TypeScript, C#) replays these, so a change to the
+    # allowed set or to the words fails them all.
+    ("capture sockets owner-only", PamConfig, {"capture_socket_mode": 0o600}),
+    ("capture sockets shared with the group", PamConfig, {"capture_socket_mode": 0o660}),
+    ("capture sockets anyone may connect to", PamConfig, {"capture_socket_mode": 0o666}),
+    ("capture sockets the group may only read", PamConfig, {"capture_socket_mode": 0o640}),
+    ("capture sockets with the setgid bit", PamConfig, {"capture_socket_mode": 0o2660}),
+    ("capture sockets with no permissions", PamConfig, {"capture_socket_mode": 0}),
+    ("a negative capture socket mode", PamConfig, {"capture_socket_mode": -0o600}),
+    ("a capture socket mode written as a string", PamConfig, {"capture_socket_mode": "0o660"}),
+    ("a capture socket mode written in decimal digits", PamConfig, {"capture_socket_mode": "432"}),
+    ("a capture socket mode written as a float", PamConfig, {"capture_socket_mode": 432.0}),
+    ("a capture socket mode given a bool", PamConfig, {"capture_socket_mode": True}),
+    ("a capture socket mode given a list", PamConfig, {"capture_socket_mode": [432]}),
     ("session persistence off", SessionPersistenceConfig, {}),
     (
         "session persistence at its bounds",

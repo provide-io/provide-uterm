@@ -18,7 +18,6 @@ import {
   validateAuditConfig,
   validateAuthConfig,
   validateControlPlaneConfig,
-  validatePamConfig,
   validateRecordingConfig,
   validateSection,
   validateSessionPersistenceConfig,
@@ -48,14 +47,36 @@ function refused(call: () => void): string | null {
   return null;
 }
 
+/**
+ * A whole section's checks as one validator: the field rules (where
+ * `capture_socket_mode` is refused, before any coercion, as the reference's
+ * before-validator refuses it) and then the section's own. The corpus records
+ * the reference's message without Pydantic's `Value error, ` prefix.
+ */
+function sectionValidator(section: string): (input: Record<string, unknown>) => void {
+  return (input) => {
+    const [first] = validateSection(section, input);
+    if (first !== undefined) {
+      throw new Error(first.msg.replace(/^Value error, /, ""));
+    }
+  };
+}
+
 /** The validator each recorded model case belongs to. */
 const VALIDATORS: Record<string, (input: Record<string, unknown>) => void> = {
   AuditConfig: validateAuditConfig,
   RecordingConfig: validateRecordingConfig,
   ControlPlaneConfig: validateControlPlaneConfig,
-  PamConfig: validatePamConfig,
+  PamConfig: sectionValidator("PamConfig"),
   SessionPersistenceConfig: validateSessionPersistenceConfig,
 };
+
+/**
+ * Recorded cases this port cannot replay. JavaScript has one number type, so
+ * the reference's float `432.0` arrives here as the integer 432, and is
+ * accepted; the divergence is documented on `captureSocketModeComplaint`.
+ */
+const UNREPLAYABLE = new Set(["a capture socket mode written as a float"]);
 
 describe("requireSecureUrl", () => {
   it.each(golden.urls)("$name", (record) => {
@@ -267,7 +288,7 @@ describe("the auth configuration", () => {
 });
 
 describe("the other configurations", () => {
-  it.each(golden.models)("$name", (record) => {
+  it.each(golden.models.filter((record) => !UNREPLAYABLE.has(record.name)))("$name", (record) => {
     const validate = VALIDATORS[record.model] as (input: Record<string, unknown>) => void;
     expect(refused(() => validate(record.kwargs))).toBe(record.error);
   });
@@ -448,6 +469,14 @@ describe("the other configurations", () => {
         msg: "Value error, pam.capture_socket_mode must be an integer: 0o600 or 0o660",
       },
     ]);
+  });
+
+  it("reads the reference's refused float 432.0 as the integer it equals", () => {
+    // The one recorded case this port cannot replay, pinned so the skip above
+    // cannot hide a change in what it does.
+    const float = golden.models.find((record) => UNREPLAYABLE.has(record.name));
+    expect(float?.error).toBe("pam.capture_socket_mode must be an integer: 0o600 or 0o660");
+    expect(captureSocketModeComplaint(float?.kwargs.capture_socket_mode)).toBeUndefined();
   });
 
   it("names the recording webhook url specifically", () => {

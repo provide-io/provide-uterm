@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 
+using System.Text.Json;
 using Provide.Uterm.ServerConfig;
 
 namespace Provide.Uterm.Tests;
@@ -67,5 +68,67 @@ public sealed class ServerConfigPamTests
     {
         var error = Assert.Throws<ArgumentException>(() => Load("capture_socket_mode = " + written));
         Assert.Equal("pam.capture_socket_mode must be an integer: 0o600 or 0o660", error.Message);
+    }
+
+    private static string CorpusPath()
+    {
+        var parts = new[] { "packages", "provide-uterm-ts", "testdata", "serverconfig_golden.json" };
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(new[] { dir.FullName }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        throw new FileNotFoundException("serverconfig_golden.json not found above " + AppContext.BaseDirectory);
+    }
+
+    /// <summary>
+    /// The <c>capture_socket_mode</c> cases of the shared corpus
+    /// (<c>gen_serverconfig_golden.py</c>) are accepted or refused with the
+    /// reference's text. The corpus's other PamConfig cases are the relay URL
+    /// rule, which this port, carrying no PAM model, does not check.
+    /// </summary>
+    [Fact]
+    public void TheCaptureSocketModeMatchesTheReferenceCorpus()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(CorpusPath()));
+        var failures = new List<string>();
+        var count = 0;
+        foreach (var record in document.RootElement.GetProperty("models").EnumerateArray())
+        {
+            if (record.GetProperty("model").GetString() != "PamConfig"
+                || !record.GetProperty("kwargs").TryGetProperty("capture_socket_mode", out var value))
+            {
+                continue;
+            }
+
+            count++;
+            var want = record.GetProperty("error").ValueKind == JsonValueKind.Null
+                ? null
+                : record.GetProperty("error").GetString();
+            string? got = null;
+            try
+            {
+                // The recorded JSON is already a TOML literal, as the reference
+                // wrote it: 432.0 stays a float and 432 an integer, a number list
+                // is an array, and a plain recorded string a basic string.
+                Load("capture_socket_mode = " + value.GetRawText());
+            }
+            catch (ArgumentException error)
+            {
+                got = error.Message;
+            }
+
+            if (got != want)
+            {
+                failures.Add($"{record.GetProperty("name").GetString()}: got {got}, want {want}");
+            }
+        }
+
+        Assert.True(count > 0, "the corpus recorded no capture_socket_mode cases");
+        Assert.Empty(failures);
     }
 }

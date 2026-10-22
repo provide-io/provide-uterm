@@ -284,6 +284,104 @@
     },
     {
       "error": null,
+      "kwargs": {
+        "capture_socket_mode": 384
+      },
+      "model": "PamConfig",
+      "name": "capture sockets owner-only"
+    },
+    {
+      "error": null,
+      "kwargs": {
+        "capture_socket_mode": 432
+      },
+      "model": "PamConfig",
+      "name": "capture sockets shared with the group"
+    },
+    {
+      "error": "pam.capture_socket_mode must be 0o600 or 0o660, got: 0o666",
+      "kwargs": {
+        "capture_socket_mode": 438
+      },
+      "model": "PamConfig",
+      "name": "capture sockets anyone may connect to"
+    },
+    {
+      "error": "pam.capture_socket_mode must be 0o600 or 0o660, got: 0o640",
+      "kwargs": {
+        "capture_socket_mode": 416
+      },
+      "model": "PamConfig",
+      "name": "capture sockets the group may only read"
+    },
+    {
+      "error": "pam.capture_socket_mode must be 0o600 or 0o660, got: 0o2660",
+      "kwargs": {
+        "capture_socket_mode": 1456
+      },
+      "model": "PamConfig",
+      "name": "capture sockets with the setgid bit"
+    },
+    {
+      "error": "pam.capture_socket_mode must be 0o600 or 0o660, got: 0o0",
+      "kwargs": {
+        "capture_socket_mode": 0
+      },
+      "model": "PamConfig",
+      "name": "capture sockets with no permissions"
+    },
+    {
+      "error": "pam.capture_socket_mode must be 0o600 or 0o660, got: -0o600",
+      "kwargs": {
+        "capture_socket_mode": -384
+      },
+      "model": "PamConfig",
+      "name": "a negative capture socket mode"
+    },
+    {
+      "error": "pam.capture_socket_mode must be an integer: 0o600 or 0o660",
+      "kwargs": {
+        "capture_socket_mode": "0o660"
+      },
+      "model": "PamConfig",
+      "name": "a capture socket mode written as a string"
+    },
+    {
+      "error": "pam.capture_socket_mode must be an integer: 0o600 or 0o660",
+      "kwargs": {
+        "capture_socket_mode": "432"
+      },
+      "model": "PamConfig",
+      "name": "a capture socket mode written in decimal digits"
+    },
+    {
+      "error": "pam.capture_socket_mode must be an integer: 0o600 or 0o660",
+      "kwargs": {
+        "capture_socket_mode": 432.0
+      },
+      "model": "PamConfig",
+      "name": "a capture socket mode written as a float"
+    },
+    {
+      "error": "pam.capture_socket_mode must be an integer: 0o600 or 0o660",
+      "kwargs": {
+        "capture_socket_mode": true
+      },
+      "model": "PamConfig",
+      "name": "a capture socket mode given a bool"
+    },
+    {
+      "error": "pam.capture_socket_mode must be an integer: 0o600 or 0o660",
+      "kwargs": {
+        "capture_socket_mode": [
+          432
+        ]
+      },
+      "model": "PamConfig",
+      "name": "a capture socket mode given a list"
+    },
+    {
+      "error": null,
       "kwargs": {},
       "model": "SessionPersistenceConfig",
       "name": "session persistence off"
