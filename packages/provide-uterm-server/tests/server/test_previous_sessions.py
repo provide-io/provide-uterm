@@ -558,10 +558,82 @@ def test_a_session_scoped_admin_is_refused(client: TestClient) -> None:
     assert _patch(client, PRIVATE, {"owner": "scoped"}, headers).status_code == 403
 
 
+class _PolicyMutator(_PolicyRoles):
+    """_PolicyRoles whose live-PATCH rule admits "policy-admin" alone, recording what it is asked."""
+
+    def __init__(self) -> None:
+        self.asked: list[tuple[str, str, str]] = []
+
+    async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: str) -> bool:
+        self.asked.append((principal.subject_id, session.session_id, action))
+        return principal.subject_id == "policy-admin"
+
+
 def test_the_admin_is_the_one_the_provider_names(client: TestClient) -> None:
-    cast("Any", client.app).state.uterm_authz._provider = _PolicyRoles()
+    provider = _PolicyMutator()
+    cast("Any", client.app).state.uterm_authz._provider = provider
     assert _patch(client, PRIVATE, {"owner": "x"}, _as("root", "admin")).status_code == 403
     assert _patch(client, PRIVATE, {"owner": "x"}, _as("policy-admin")).status_code == 200
+    # The live PATCH's own question, about the definition the session ended with.
+    assert ("policy-admin", PRIVATE, "session.control.update") in provider.asked
+
+
+class _NoMutation(LocalAuthorizationProvider):
+    """A provider whose live-PATCH rule refuses everyone, admins included."""
+
+    async def can_mutate_session(self, principal: Principal, session: SessionDefinition, action: str) -> bool:
+        return False
+
+
+def test_an_admin_the_live_patch_would_refuse_is_refused(client: TestClient, tmp_path: Path) -> None:
+    cast("Any", client.app).state.uterm_authz._provider = _NoMutation()
+    before = _on_disk(tmp_path, BOBS)
+    response = _patch(client, BOBS, {"owner": "eve"}, _as("root", "admin"))
+    assert (response.status_code, response.json()) == (403, {"detail": "admin privileges required"})
+    assert _on_disk(tmp_path, BOBS) == before
+
+
+def test_an_admin_token_narrowed_to_reading_cannot_take_a_session_over(client: TestClient, tmp_path: Path) -> None:
+    # The review's reproduction: an admin whose token's scopes leave it only
+    # session.read may not read bob's private history, so it may not make
+    # itself (or anyone) its owner either.
+    headers = bearer(mint_token("eve", ["admin"], scope="session.read"))
+    before = _on_disk(tmp_path, BOBS)
+    assert client.get(f"/api/previous-sessions/{BOBS}", headers=headers).status_code == 403
+    response = _patch(client, BOBS, {"owner": "eve"}, headers)
+    assert (response.status_code, response.json()) == (403, {"detail": "admin privileges required"})
+    assert _on_disk(tmp_path, BOBS) == before
+    assert client.get(f"/api/previous-sessions/{BOBS}", headers=headers).status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("scopes", "status"),
+    [
+        # Take-over without the live PATCH's capability, and the reverse.
+        (["session.control.hijack"], 403),
+        (["session.control.update"], 403),
+        (["graphical.target.read"], 403),
+        (["session.control.hijack", "session.control.update"], 200),
+        (["*"], 200),
+    ],
+)
+def test_an_admin_needs_take_over_and_update_in_its_scopes(client: TestClient, scopes: list[str], status: int) -> None:
+    headers = bearer(mint_token("root", ["admin"], scope=scopes))
+    assert _patch(client, BOBS, {"owner": "blackbetty:7"}, headers).status_code == status
+
+
+def test_an_admin_of_another_session_is_refused(client: TestClient, tmp_path: Path) -> None:
+    before = _on_disk(tmp_path, PRIVATE)
+    headers = bearer(mint_token("scoped", ["admin"], admin_session_scope=BOBS))
+    assert _patch(client, PRIVATE, {"owner": "scoped"}, headers).status_code == 403
+    assert _on_disk(tmp_path, PRIVATE) == before
+
+
+def test_an_unscoped_admin_token_like_black_bettys_is_admitted(client: TestClient) -> None:
+    # No scope claim at all: every capability its roles give.
+    headers = bearer(mint_token("blackbetty-gateway", ["admin"]))
+    response = _patch(client, BOBS, {"owner": "blackbetty:7", "visibility": "private"}, headers)
+    assert (response.status_code, response.json()["owner"]) == (200, "blackbetty:7")
 
 
 def test_patching_an_unknown_id_is_404(client: TestClient) -> None:
@@ -609,12 +681,32 @@ def test_a_body_that_is_not_an_owner_or_visibility_is_422(
     assert _on_disk(tmp_path, PRIVATE) == before
 
 
-def test_a_body_that_is_not_an_object_is_422(client: TestClient) -> None:
-    assert _patch(client, PRIVATE, ["owner"], _as("root", "admin")).status_code == 422
+def _raw_patch(client: TestClient, session_id: str, content: bytes | None, headers: dict[str, str]) -> Any:
+    return client.request("PATCH", f"/api/previous-sessions/{session_id}", content=content, headers=headers)
 
 
-def test_a_non_admin_is_refused_before_its_body_is_judged(client: TestClient) -> None:
-    assert _patch(client, PRIVATE, {"colour": "red"}, _as("alice")).status_code == 403
+# Bodies no object can be read from: none at all, malformed JSON, bytes that
+# are not UTF-8, and JSON that is not an object.
+_UNREADABLE = [None, b"", b"{not json", b"\xff\xfe", b"[1]", b'"owner"', b"null", b"7"]
+
+
+@pytest.mark.parametrize("content", _UNREADABLE)
+def test_a_body_that_is_not_an_object_is_422(client: TestClient, tmp_path: Path, content: bytes | None) -> None:
+    before = _on_disk(tmp_path, PRIVATE)
+    response = _raw_patch(client, PRIVATE, content, _as("root", "admin"))
+    assert (response.status_code, response.json()) == (422, {"detail": "invalid request body"})
+    assert _on_disk(tmp_path, PRIVATE) == before
+
+
+# 401, then 404, then 403, then 422, whatever the body: a caller learns
+# nothing about the body's handling it could not learn without one.
+@pytest.mark.parametrize("content", [*_UNREADABLE, b'{"colour": "red"}'])
+def test_a_body_is_judged_only_after_the_caller_and_the_session(client: TestClient, content: bytes | None) -> None:
+    assert _raw_patch(client, PRIVATE, content, {}).status_code == 401
+    unknown = _raw_patch(client, "pam-alice-capture-9-9", content, _as("root", "admin"))
+    assert unknown.status_code == 404
+    refused = _raw_patch(client, PRIVATE, content, _as("alice"))
+    assert (refused.status_code, refused.json()) == (403, {"detail": "admin privileges required"})
 
 
 @pytest.mark.parametrize("damage", ["unlink", "garble"])

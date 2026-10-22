@@ -22,8 +22,10 @@ through the output-redaction policy, as the live screen does.
 PAM creates a capture session with no owner, and whoever runs the login sets
 one on the live session afterwards. A login that ends first leaves a previous
 session nobody but an admin can read, so an admin may set its owner, and its
-visibility with it, once it has ended: the live session's rule for an owner
-change, which only an admin may make. A share viewer never, whatever its roles.
+visibility with it, once it has ended. That admin is one the listing counts as
+an admin (globally, with the take-over capability) whom the live PATCH would
+also let change the session (``session.control.update``); a share viewer never
+is. The body is judged only after that, so 401, 404 and 403 come before 422.
 
 A runtime-native route rather than a shared ``RouteDef``: it reads files this
 server keeps for its own PAM capture sessions, which the Cloudflare Worker has
@@ -32,10 +34,11 @@ neither of.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import ValidationError
 
 from provide.uterm.server.audit import audit_event
@@ -68,6 +71,10 @@ def _store(request: Request) -> CaptureStateStore | None:
 
 def _unknown(session_id: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"unknown previous session: {session_id}")
+
+
+def _invalid_body() -> HTTPException:
+    return HTTPException(status_code=422, detail="invalid request body")
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,19 +179,46 @@ def _changes(definition: SessionDefinition, payload: dict[str, Any]) -> dict[str
     return payload
 
 
-async def update_previous_session(
-    request: Request, session_id: SessionId, payload: Annotated[dict[str, Any], Body(...)]
-) -> dict[str, Any]:
+async def may_update_previous(p: Principal, az: AuthorizationService, record: CaptureRecord) -> bool:
+    """Whether *p* may set an ended session's owner and visibility.
+
+    An admin in the listing's sense, globally (:func:`caller_standing`: the
+    provider's ``is_admin`` with the take-over capability), so a token whose
+    scopes would keep it from reading the session cannot make itself its
+    owner and then read it; and allowed the live PATCH by
+    ``can_mutate_session`` with ``session.control.update``, as the live owner
+    change is. Never a share viewer.
+    """
+    if p.subject_id.startswith("share:") or not (await caller_standing(p, az)).admin:
+        return False
+    return await az.can_mutate_session(p, record.definition, "session.control.update")
+
+
+async def _body_object(request: Request) -> dict[str, Any]:
+    """The request body as a JSON object, or 422: read here, after the caller and the session are known."""
+    try:
+        payload = json.loads(await request.body())
+    except ValueError:
+        # Malformed JSON, bytes that are not UTF-8, and no body at all.
+        raise _invalid_body() from None
+    if not isinstance(payload, dict):
+        raise _invalid_body()
+    return payload
+
+
+async def update_previous_session(request: Request, session_id: SessionId) -> dict[str, Any]:
+    # The body is read by hand rather than declared: FastAPI would judge a
+    # declared one before this handler runs, so a body that is not an object
+    # would be answered 422 ahead of 401, 404 and 403.
     p = principal(request)
     az = authz(request)
     store = _store(request)
     kept = store.previous_summary(session_id) if store is not None else None
     if store is None or kept is None:
         raise _unknown(session_id)
-    # Before the body is judged, as the live PATCH refuses before it validates.
-    if p.subject_id.startswith("share:") or not await az.is_admin(p):
+    if not await may_update_previous(p, az, kept):
         raise HTTPException(status_code=403, detail="admin privileges required")
-    changes = _changes(kept.definition, payload)
+    changes = _changes(kept.definition, await _body_object(request))
     try:
         record = await store.update_previous(session_id, changes)
     except RecordError:
