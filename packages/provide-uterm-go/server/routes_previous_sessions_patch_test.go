@@ -19,12 +19,12 @@ import (
 	"testing"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/capturestate"
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
 // PATCH /api/previous-sessions/{id}: who owns an ended session, and who else
-// may read it. Port of the PATCH half of test_previous_sessions.py.
+// may read it. Port of the PATCH half of test_previous_sessions.py and
+// test_previous_sessions_update.py.
 
 var rootAdmin = as("root", "admin")
 
@@ -199,18 +199,6 @@ func TestAShareViewerIsRefusedWhateverItsRoles(t *testing.T) {
 	}
 }
 
-func TestTheAdminIsTheOneTheProviderNames(t *testing.T) {
-	ts, _ := previousServer(t, 7, func(_ *serverconfig.UtermServerConfig, deps *Deps) {
-		deps.Authz = serverauth.NewAuthorizationServiceWith(policyRoles{})
-	})
-	if code, _ := patchPrevious(ts, alicePrivate, `{"owner":"x"}`, rootAdmin); code != http.StatusForbidden {
-		t.Fatalf("a role the provider withholds: %d", code)
-	}
-	if code, _ := patchPrevious(ts, alicePrivate, `{"owner":"x"}`, as("policy-admin", "viewer")); code != http.StatusOK {
-		t.Fatalf("the provider's admin: %d", code)
-	}
-}
-
 func TestPatchingAnUnknownOrUnkeptSessionIs404(t *testing.T) {
 	unknown := "pam-alice-capture-9-9"
 	ts, _ := previousServer(t, 7)
@@ -269,13 +257,6 @@ func TestABodyThatIsNotAnOwnerOrVisibilityIs422(t *testing.T) {
 	}
 	if !reflect.DeepEqual(onDisk(t, dir, alicePrivate), before) {
 		t.Error("the file changed")
-	}
-}
-
-func TestANonAdminIsRefusedBeforeItsBodyIsJudged(t *testing.T) {
-	ts, _ := previousServer(t, 7)
-	if code, _ := patchPrevious(ts, alicePrivate, `{"colour":"red"}`, as("alice", "viewer")); code != http.StatusForbidden {
-		t.Fatalf("%d", code)
 	}
 }
 

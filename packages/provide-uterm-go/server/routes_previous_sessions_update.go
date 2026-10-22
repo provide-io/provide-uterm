@@ -12,8 +12,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/capturestate"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
 )
 
 // PATCH /api/previous-sessions/{session_id}: set an ended session's owner
@@ -32,22 +34,24 @@ type previousChanges struct {
 }
 
 // decodePreviousBody reads the body as one JSON object, numbers kept as
-// written so a refusal can quote them. ok is false for anything else.
+// written so a refusal can quote them. ok is false for anything else: no
+// body, malformed JSON, bytes that are not UTF-8 (the decoder would swap each
+// for U+FFFD and go on, where the reference refuses them), JSON that is not
+// an object, or anything after the object. net/http never hands a handler a
+// nil body.
 func decodePreviousBody(r *http.Request) (map[string]any, bool) {
-	if r.Body == nil {
+	data, err := io.ReadAll(r.Body)
+	if err != nil || !utf8.Valid(data) {
 		return nil, false
 	}
-	dec := json.NewDecoder(r.Body)
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	var body map[string]any
 	if err := dec.Decode(&body); err != nil || body == nil {
 		return nil, false
 	}
-	// Anything after the object is not a body this route reads.
-	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return nil, false
-	}
-	return body, true
+	_, err = dec.Token()
+	return body, errors.Is(err, io.EOF)
 }
 
 // previousChangesOf judges body for the session id, with the message of the
@@ -83,6 +87,20 @@ func previousChangesOf(id string, body map[string]any) (previousChanges, string)
 	return changes, ""
 }
 
+// mayUpdatePrevious reports whether p may set an ended session's owner and
+// visibility: an admin in the listing's sense, globally (callerStanding: the
+// provider's IsAdmin with the take-over capability), so a token whose scopes
+// would keep it from reading the session cannot make itself its owner and
+// then read it; and allowed the live PATCH by CanMutateSession with
+// session.control.update, as the live owner change is. Never a share viewer.
+func (s *Server) mayUpdatePrevious(p *serverauth.Principal, kept *capturestate.Record) bool {
+	if strings.HasPrefix(p.SubjectID, "share:") || !s.callerStanding(p).admin {
+		return false
+	}
+	def := kept.Definition
+	return s.deps.Authz.CanMutateSession(p, &def, "session.control.update")
+}
+
 func (s *Server) handleUpdatePreviousSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("session_id")
 	if !requireID(w, "session_id", id) {
@@ -94,13 +112,15 @@ func (s *Server) handleUpdatePreviousSession(w http.ResponseWriter, r *http.Requ
 		detailError(w, http.StatusNotFound, unknown)
 		return
 	}
-	if _, listedNow := store.PreviousSummary(id); !listedNow {
+	kept, listedNow := store.PreviousSummary(id)
+	if !listedNow {
 		detailError(w, http.StatusNotFound, unknown)
 		return
 	}
-	// Before the body is judged, as the live PATCH refuses before it validates.
+	// Before the body is judged: a caller learns nothing about its handling
+	// that it could not learn without one.
 	p := principalOf(r)
-	if strings.HasPrefix(p.SubjectID, "share:") || !s.deps.Authz.IsAdmin(p) {
+	if !s.mayUpdatePrevious(p, kept) {
 		detailError(w, http.StatusForbidden, updateAdminOnly)
 		return
 	}
