@@ -37,6 +37,7 @@ from fastapi import APIRouter, Depends, Request, Response
 
 from provide.uterm import __version__
 from provide.uterm.server.app.posture import compute_security_posture
+from provide.uterm.server.config_schema import OWNER_AND_GROUP_CAPTURE_SOCKET_MODE
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -57,10 +58,12 @@ SERVER_FEATURES = ("viewers.revoke.subject",)
 # ``GET /api/previous-sessions`` (``session_persistence.previous_keep_days``).
 PERSIST_CAPTURE_FEATURE = "sessions.capture.persist"
 PREVIOUS_SESSIONS_FEATURE = "sessions.previous"
-# ``capture.socket_mode``: the capture sockets this server binds let the socket
-# directory's group connect, not only this server's user
-# (``pam.capture_socket_mode = 0o660``). Listed only then, so a producer running
-# as another user can tell that it will be able to connect.
+# ``capture.socket_mode``: the sockets this server binds for pty_capture
+# sessions let the socket directory's group connect, not only this server's
+# user (``pam.capture_socket_mode = 0o660``). Listed only then, so a capture
+# producer running as another user can tell that it will be able to connect.
+# Other sockets are not covered: a pty session's injected capture socket stays
+# owner-only in its own private directory.
 CAPTURE_SOCKET_MODE_FEATURE = "capture.socket_mode"
 
 
@@ -73,7 +76,7 @@ def server_features(config: object) -> list[str]:
     if settings is not None and settings.previous_keep_days > 0:
         features.append(PREVIOUS_SESSIONS_FEATURE)
     pam = getattr(config, "pam", None)
-    if pam is not None and pam.capture_socket_mode == 0o660:
+    if pam is not None and pam.capture_socket_mode == OWNER_AND_GROUP_CAPTURE_SOCKET_MODE:
         features.append(CAPTURE_SOCKET_MODE_FEATURE)
     return features
 

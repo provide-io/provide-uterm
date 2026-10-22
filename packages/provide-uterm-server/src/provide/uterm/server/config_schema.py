@@ -34,10 +34,12 @@ SERVER_BUILTIN_CONNECTOR_TYPES = frozenset({"shell", "ssh", "telnet", "websocket
 # well inside the size it may be read back at.
 MAX_PREVIOUS_KEEP_DAYS = 3650
 MAX_PREVIOUS_SCROLLBACK_LINES = 10000
-# The modes pam.capture_socket_mode may name: owner-only, or owner and group.
-# The platform's CaptureSocket accepts the same two; this package cannot import
-# it, since the platform package is optional.
-CAPTURE_SOCKET_MODES = (0o600, 0o660)
+# The modes pam.capture_socket_mode may name: owner-only (the default), or
+# owner and group. The platform's CaptureSocket accepts the same two; this
+# package cannot import it, since the platform package is optional.
+OWNER_ONLY_CAPTURE_SOCKET_MODE = 0o600
+OWNER_AND_GROUP_CAPTURE_SOCKET_MODE = 0o660
+CAPTURE_SOCKET_MODES = (OWNER_ONLY_CAPTURE_SOCKET_MODE, OWNER_AND_GROUP_CAPTURE_SOCKET_MODE)
 
 
 def _clean_path(value: str, fallback: str) -> str:
@@ -517,7 +519,7 @@ class PamConfig(ServerBaseModel):
     # too, for producers (the shim, a session supervisor) that run as another
     # user. The group comes from the directory (setgid), so nothing is
     # chowned. Not the notify socket: pam_uterm writes that one as root.
-    capture_socket_mode: int = 0o600
+    capture_socket_mode: int = OWNER_ONLY_CAPTURE_SOCKET_MODE
 
     @field_validator("capture_socket_mode", mode="before")
     @classmethod

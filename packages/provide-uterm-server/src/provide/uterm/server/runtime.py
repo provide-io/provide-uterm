@@ -20,6 +20,7 @@ from provide.uterm.control_channel import (
     ControlFrameProtocolError,
     DataChunk,
 )
+from provide.uterm.server.config_schema import OWNER_ONLY_CAPTURE_SOCKET_MODE
 from provide.uterm.server.connectors import SessionConnector, build_connector
 from provide.uterm.server.models import RecordingConfig, SessionDefinition, SessionLifecycle, SessionRuntimeStatus
 from provide.uterm.server.runtime_connection import ConnectionRecordingMixin
@@ -67,7 +68,7 @@ class HostedSessionRuntime(ConnectionRecordingMixin):
         max_buffer_bytes: int = 1_048_576,  # 1MB default
         block_private_connector_targets: bool = False,
         screen_keeper: ScreenKeeper | None = None,
-        capture_socket_mode: int = 0o600,
+        capture_socket_mode: int = OWNER_ONLY_CAPTURE_SOCKET_MODE,
     ) -> None:
         self.definition = definition
         self._public_base_url = public_base_url.rstrip("/")

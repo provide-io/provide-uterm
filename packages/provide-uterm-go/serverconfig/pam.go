@@ -12,13 +12,14 @@ import (
 	"strings"
 )
 
-// The modes pam.capture_socket_mode may name: owner-only (the default), or
-// owner and group. The pty package's CheckSocketMode accepts the same two; it
+// OwnerOnlyCaptureSocketMode and OwnerAndGroupCaptureSocketMode are the modes
+// pam.capture_socket_mode may name: owner-only (the default), or owner and
+// group. The pty package's CheckSocketMode accepts the same two; it
 // is not imported here, since a config package has no business pulling in the
 // one that binds sockets.
 const (
-	ownerOnlyCaptureSocketMode     = 0o600
-	ownerAndGroupCaptureSocketMode = 0o660
+	OwnerOnlyCaptureSocketMode     = 0o600
+	OwnerAndGroupCaptureSocketMode = 0o660
 )
 
 // errCaptureSocketModeNotAnInteger is the reference's refusal of a
@@ -47,7 +48,7 @@ func refuseCaptureSocketModeType(data map[string]any) error {
 // validateCaptureSocketMode refuses any mode but the two a capture socket may
 // be bound with, quoted as Python's oct() writes it.
 func validateCaptureSocketMode(mode int) error {
-	if mode == ownerOnlyCaptureSocketMode || mode == ownerAndGroupCaptureSocketMode {
+	if mode == OwnerOnlyCaptureSocketMode || mode == OwnerAndGroupCaptureSocketMode {
 		return nil
 	}
 	digits := strconv.FormatInt(int64(mode), 8)

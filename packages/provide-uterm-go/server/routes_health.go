@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverauth"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
 // serverFeatures is the optional behaviour a client cannot otherwise tell apart
@@ -30,11 +31,12 @@ const (
 	previousSessionsFeature = "sessions.previous"
 )
 
-// captureSocketModeFeature: the capture sockets this server binds let the
-// socket directory's group connect, not only this server's user
-// (pam.capture_socket_mode = 0o660). Listed only then, so a producer running as
-// another user can tell that it will be able to connect. Port of
-// CAPTURE_SOCKET_MODE_FEATURE.
+// captureSocketModeFeature: the sockets this server binds for pty_capture
+// sessions let the socket directory's group connect, not only this server's
+// user (pam.capture_socket_mode = 0o660). Listed only then, so a capture
+// producer running as another user can tell that it will be able to connect.
+// Other sockets are not covered: a pty session's injected capture socket stays
+// owner-only in its own private directory. Port of CAPTURE_SOCKET_MODE_FEATURE.
 const captureSocketModeFeature = "capture.socket_mode"
 
 // features is what /api/health lists, given the config.
@@ -46,7 +48,7 @@ func (s *Server) features() []string {
 	if s.cfg.SessionPersistence.PreviousKeepDays > 0 {
 		out = append(out, previousSessionsFeature)
 	}
-	if s.cfg.Pam.CaptureSocketMode == 0o660 {
+	if s.cfg.Pam.CaptureSocketMode == serverconfig.OwnerAndGroupCaptureSocketMode {
 		out = append(out, captureSocketModeFeature)
 	}
 	return out

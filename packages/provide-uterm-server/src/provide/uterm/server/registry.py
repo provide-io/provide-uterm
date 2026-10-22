@@ -25,6 +25,7 @@ from pydantic import ValidationError
 
 from provide.telemetry import get_logger
 from provide.uterm.recording import retire_recording
+from provide.uterm.server.config_schema import OWNER_ONLY_CAPTURE_SOCKET_MODE
 from provide.uterm.server.config_schema_session import MAX_SESSION_ID_BYTES
 from provide.uterm.server.models import (
     InputMode,
@@ -88,7 +89,7 @@ class SessionRegistry:
         block_private_connector_targets: bool = False,
         default_visibility: Visibility = "public",
         capture_state: CaptureStateStore | None = None,
-        capture_socket_mode: int = 0o600,
+        capture_socket_mode: int = OWNER_ONLY_CAPTURE_SOCKET_MODE,
     ) -> None:
         self._hub = hub
         # Where PAM capture sessions are kept across a restart and after they

@@ -301,7 +301,7 @@ type PamConfig struct {
 }
 
 func defaultPamConfig() PamConfig {
-	return PamConfig{Mode: "notify", AutoSessionCommand: "/bin/bash", CaptureSocketMode: ownerOnlyCaptureSocketMode}
+	return PamConfig{Mode: "notify", AutoSessionCommand: "/bin/bash", CaptureSocketMode: OwnerOnlyCaptureSocketMode}
 }
 
 // GovernanceConfig ports config_schema.GovernanceConfig.
