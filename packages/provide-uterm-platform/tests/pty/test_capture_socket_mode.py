@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import socket
 import stat
 import tempfile
 from pathlib import Path
@@ -80,15 +81,15 @@ def test_a_capture_socket_refuses_a_mode_before_anything_is_bound() -> None:
 async def _bound_under(mode: int | None, monkeypatch: pytest.MonkeyPatch) -> tuple[int, list[int], int]:
     """The socket's mode, the umask its bind ran under, and the umask afterwards."""
     observed: list[int] = []
-    real_bind = asyncio.start_unix_server
+    real_bind = socket.socket.bind
 
-    async def spy_bind(*args: Any, **kwargs: Any) -> asyncio.Server:
+    def spy_bind(self: socket.socket, *args: Any, **kwargs: Any) -> None:
         current = os.umask(0o022)
         os.umask(current)
         observed.append(current)
-        return await real_bind(*args, **kwargs)
+        real_bind(self, *args, **kwargs)
 
-    monkeypatch.setattr(asyncio, "start_unix_server", spy_bind)
+    monkeypatch.setattr(socket.socket, "bind", spy_bind)
     with tempfile.TemporaryDirectory() as td:
         path = str(Path(td) / "cap.sock")
         # The most permissive umask, so any mode the bind did not set shows.
@@ -167,3 +168,22 @@ def test_a_running_connector_refuses_a_mode_it_would_not_bind() -> None:
     connector = CaptureConnector("s1", "name", {"socket_path": "/tmp/x.sock"})
     with pytest.raises(ValueError, match=r"got: 0o666$"):
         connector.reconfigure({"socket_path": "/tmp/x.sock", "socket_mode": 0o666})
+
+
+@pytest.mark.parametrize("mode", [0o600, 0o660])
+async def test_concurrent_starts_leave_the_process_umask_as_it_was(mode: int) -> None:
+    # The umask is process-wide. Held across an await, a second start begun in
+    # that tick reads the first one's bind umask as the one to restore, and
+    # leaves it behind for every file the server creates afterwards: at 0o660
+    # that is 0o117, wider than a service's 0o077 in the group bits.
+    with tempfile.TemporaryDirectory() as td:
+        sockets = [CaptureSocket(str(Path(td) / f"c{i}.sock"), mode=mode) for i in range(8)]
+        prev = os.umask(0o077)
+        try:
+            await asyncio.gather(*(cap.start() for cap in sockets))
+            after = os.umask(0o077)
+            modes = {_mode(cap._path) for cap in sockets}
+            await asyncio.gather(*(cap.stop() for cap in sockets))
+        finally:
+            os.umask(prev)
+    assert (after, modes) == (0o077, {mode})

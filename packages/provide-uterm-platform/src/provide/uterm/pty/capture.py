@@ -105,15 +105,15 @@ def _bind_umask(mode: int) -> int:
 _PROBE_TIMEOUT_S = 0.1
 
 
-def _refuse_live_socket(path: str) -> None:
-    """Refuse a socket at *path* that something still listens on.
+def _clear_stale_socket(path: str) -> None:
+    """Remove a stale socket at *path*, and refuse one something still listens on.
 
-    asyncio's ``create_unix_server`` removes any socket at its path before it
-    binds, which is right for one a crashed server left behind and wrong for
-    one another session is serving: that session would lose its producer to
-    this one. Only a socket whose connect is refused is stale, so anything
-    else there is left alone and the bind fails as ``EADDRINUSE``, as the Go
-    port's does. Not a socket at all, the bind fails on it by itself.
+    A socket a crashed server left behind must go before the bind, and one
+    another session is serving must not: that session would lose its producer
+    to this one. Only a socket whose connect is refused is stale, so it alone
+    is removed; anything else there is left alone and the bind fails as
+    ``EADDRINUSE``, as the Go port's does. Not a socket at all, the bind fails
+    on it by itself.
     """
     try:
         mode = os.lstat(path).st_mode
@@ -126,6 +126,7 @@ def _refuse_live_socket(path: str) -> None:
     try:
         probe.connect(path)
     except ConnectionRefusedError:
+        Path(path).unlink(missing_ok=True)
         return
     except OSError:
         # A listener too busy to answer in time is still a listener.
@@ -165,17 +166,31 @@ class CaptureSocket:
         # exactly the mode's bits *before* the bind so the socket is created
         # with them atomically: a post-bind chmod would leave a window where
         # the socket exists with default-umask perms (e.g. srwxr-xr-x) that any
-        # local user could connect to. Restore the previous umask in finally so
-        # it always happens.
-        # NOTE: os.umask is process-global and not async-safe — keep the
-        # set→bind→restore window as tight as possible (only the bind call).
+        # local user could connect to.
+        #
+        # os.umask is process-global, so it must never be held across an
+        # await: ``start_unix_server(path=...)`` yields after its bind, and a
+        # second start begun in that tick would read this bind's umask as the
+        # one to restore and leave it behind for every file the server creates
+        # afterwards (at 0o660, 0o117: wider than a service's 0o077). So the
+        # socket is bound here, synchronously, as PamNotifyListener binds its
+        # own, and asyncio is handed the bound socket. The event loop runs one
+        # coroutine at a time, so no other start can come between the set and
+        # the restore, and nothing else in the server sets the umask from a
+        # thread.
         # Off the loop: a busy listener holds the probe up to its timeout.
-        await asyncio.to_thread(_refuse_live_socket, self._path)
-        prev_umask = os.umask(_bind_umask(self._mode))
+        await asyncio.to_thread(_clear_stale_socket, self._path)
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            self._server = await asyncio.start_unix_server(self._handle_connection, path=self._path)
-        finally:
-            os.umask(prev_umask)
+            prev_umask = os.umask(_bind_umask(self._mode))
+            try:
+                sock.bind(self._path)
+            finally:
+                os.umask(prev_umask)
+            self._server = await asyncio.start_unix_server(self._handle_connection, sock=sock)
+        except BaseException:
+            sock.close()
+            raise
         # Belt-and-suspenders: enforce the mode even if the platform ignored the
         # umask for AF_UNIX sockets. With the umask in place this is a no-op.
         os.chmod(self._path, self._mode)  # noqa: PTH101 — chmod the just-bound socket fd path

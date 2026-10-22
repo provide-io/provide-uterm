@@ -93,9 +93,7 @@ func (l *PamNotifyListener) Start(ctx context.Context, handler PamEventHandler) 
 
 	l.unlinkStaleSocket()
 	// Bind under a restrictive umask so the socket is created 0o600 atomically.
-	prev := umaskSet(notifyBindUmask)
-	ln, err := net.Listen("unix", l.path)
-	umaskSet(prev)
+	ln, err := listenUnderUmask(l.path, notifyBindUmask)
 	if err != nil {
 		return err
 	}

@@ -88,7 +88,7 @@ async def test_the_probe_does_not_hold_the_event_loop() -> None:
     # loop serves every other terminal meanwhile.
     loop_thread = threading.get_ident()
     probed_on: list[int] = []
-    real = capture._refuse_live_socket
+    real = capture._clear_stale_socket
 
     def probe(path: str) -> None:
         probed_on.append(threading.get_ident())
@@ -98,7 +98,7 @@ async def test_the_probe_does_not_hold_the_event_loop() -> None:
         path = str(Path(td) / "cap.sock")
         _stale(path)
         sock = CaptureSocket(path)
-        with patch.object(capture, "_refuse_live_socket", probe):
+        with patch.object(capture, "_clear_stale_socket", probe):
             await sock.start()
         await sock.stop()
     assert probed_on

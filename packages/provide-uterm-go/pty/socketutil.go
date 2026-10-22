@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -44,7 +45,7 @@ var probeTimeout = 100 * time.Millisecond
 // say (a connect refused for another reason, or not answered in time). Lstat
 // does not follow a symlink at path, and a regular file, directory or link is
 // somebody else's and is left for the bind to fail on. Port of the
-// reference's _refuse_live_socket.
+// reference's _clear_stale_socket.
 func removeStaleSocket(path string) {
 	info, err := os.Lstat(path)
 	if err != nil || info.Mode()&os.ModeSocket == 0 {
@@ -58,4 +59,25 @@ func removeStaleSocket(path string) {
 	if errors.Is(err, syscall.ECONNREFUSED) {
 		_ = os.Remove(path)
 	}
+}
+
+// bindUmaskMu serialises every umask set, bind and restore in this package.
+// The umask is process-wide: two binds running at once interleave, the second
+// reading the first's bind umask as the one to restore, and leave it behind
+// for every file the process creates afterwards. At a capture mode of 0o660
+// that is 0o117, wider than a service's 0o077 in the group bits. Port of the
+// reference's synchronous bind, which its single-threaded event loop makes
+// atomic. A file another goroutine creates inside the window still sees the
+// bind's umask, which is why the window is the bind call alone.
+var bindUmaskMu sync.Mutex
+
+// listenUnderUmask listens on the Unix socket at path, bound under mask and
+// with the previous umask restored before it returns.
+func listenUnderUmask(path string, mask int) (net.Listener, error) {
+	bindUmaskMu.Lock()
+	defer bindUmaskMu.Unlock()
+	prev := umaskSet(mask)
+	ln, err := net.Listen("unix", path)
+	umaskSet(prev)
+	return ln, err
 }

@@ -99,7 +99,11 @@ func CheckSocketMode(mode any) (int, error) {
 	case int64:
 		m = int(t)
 	case float64:
-		if t != math.Trunc(t) {
+		// Whole and inside int64, or it is not an integer: int() of ±Inf,
+		// NaN or a float past int64 is implementation-defined, and Python
+		// calls every float "not an integer" anyway. -2^63 is exact as a
+		// float64; 2^63 is the first float past the top.
+		if t != math.Trunc(t) || t < math.MinInt64 || t >= -math.MinInt64 {
 			return 0, errors.New("capture socket mode must be an integer: 0o600 or 0o660")
 		}
 		m = int(t)
@@ -198,9 +202,7 @@ func (s *CaptureSocket) Start() error {
 	// socket is created with them atomically — a post-bind chmod would leave a
 	// window where the socket exists with default-umask perms that any local
 	// user could connect to.
-	prev := umaskSet(captureBindUmask(s.mode))
-	ln, err := net.Listen("unix", s.path)
-	umaskSet(prev)
+	ln, err := listenUnderUmask(s.path, captureBindUmask(s.mode))
 	if err != nil {
 		return err
 	}
