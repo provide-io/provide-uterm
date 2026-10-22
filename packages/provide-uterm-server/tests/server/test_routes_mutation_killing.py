@@ -319,6 +319,33 @@ class TestHealthRouter:
         authz.has_role.assert_awaited_once_with(req.state.uterm_principal, "operator")
 
 
+class TestServerFeaturesCaptureSocketMode:
+    """``server_features`` and ``pam.capture_socket_mode``.
+
+    test_capture_socket_mode.py asserts the same answers through a real config,
+    but it binds real capture sockets and is not wired into the mutation run, so
+    the routes/ shard needs these to kill the mutants of the ``pam`` lookup and
+    of the feature name it appends.
+    """
+
+    def test_sockets_shared_with_the_group_list_the_feature_after_the_fixed_ones(self) -> None:
+        from provide.uterm.server.routes.health import server_features
+
+        config = SimpleNamespace(pam=SimpleNamespace(capture_socket_mode=0o660))
+        assert server_features(config) == ["viewers.revoke.subject", "capture.socket_mode"]
+
+    def test_owner_only_sockets_do_not_list_the_feature(self) -> None:
+        from provide.uterm.server.routes.health import server_features
+
+        config = SimpleNamespace(pam=SimpleNamespace(capture_socket_mode=0o600))
+        assert server_features(config) == ["viewers.revoke.subject"]
+
+    def test_a_config_with_no_pam_section_does_not_list_the_feature(self) -> None:
+        from provide.uterm.server.routes.health import server_features
+
+        assert server_features(SimpleNamespace()) == ["viewers.revoke.subject"]
+
+
 # ===========================================================================
 # pages.py — module helpers + create_page_router (nested undecorated bodies)
 # ===========================================================================
