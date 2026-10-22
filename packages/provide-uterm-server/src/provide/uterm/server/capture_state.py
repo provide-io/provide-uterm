@@ -403,7 +403,8 @@ class CaptureStateStore:
                 return None
             changed = dataclasses.replace(record, definition=record.definition.model_copy(update=changes))
             if not await self._guarded(changed, self._write(self._previous_dir, changed)):
-                raise RecordError(f"previous session {session_id} not saved")
+                # Bare: _guarded has logged why, and the caller answers for itself.
+                raise RecordError
             self._previous[session_id] = _without_screen(changed)
             self._prune_owner(_owner_key(changed))
             return self._previous.get(session_id)

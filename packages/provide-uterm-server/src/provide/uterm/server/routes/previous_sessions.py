@@ -166,7 +166,7 @@ def _changes(definition: SessionDefinition, payload: dict[str, Any]) -> dict[str
     if "owner" in payload and not isinstance(payload["owner"], str):
         raise HTTPException(status_code=422, detail="owner must be a string")
     try:
-        SessionDefinition.model_validate({**definition.model_dump(mode="python"), **payload})
+        SessionDefinition.model_validate({**definition.model_dump(), **payload})
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=validation_error_message(exc)) from None
     return payload
@@ -208,6 +208,6 @@ def register_previous_session_routes(router: APIRouter) -> None:
     # written here that means GET (or none at all) would be an equivalent mutant.
     router.add_api_route(PREVIOUS_SESSIONS_PATH, list_previous_sessions, name="previous_sessions.list")
     router.add_api_route(PREVIOUS_SESSION_PATH, get_previous_session, name="previous_sessions.get")
-    router.add_api_route(
-        PREVIOUS_SESSION_PATH, update_previous_session, methods=["PATCH"], name="previous_sessions.update"
-    )
+    # router.patch rather than methods=["PATCH"]: Starlette upper-cases the
+    # methods it is given, so a lower-cased literal would be an equivalent mutant.
+    router.patch(PREVIOUS_SESSION_PATH, name="previous_sessions.update")(update_previous_session)

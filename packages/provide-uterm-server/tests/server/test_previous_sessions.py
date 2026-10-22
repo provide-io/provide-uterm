@@ -676,3 +676,28 @@ def test_one_the_new_owners_cap_drops_is_404(tmp_path: Path) -> None:
         assert (response.status_code, response.json()) == (404, {"detail": f"unknown previous session: {PRIVATE}"})
         assert len(_listed(client, _as("blackbetty:7"))) == 20
     assert not (tmp_path / "capture-sessions" / "previous" / f"{PRIVATE}.json").exists()
+
+
+async def _store_with_one(tmp_path: Path) -> CaptureStateStore:
+    store = CaptureStateStore(tmp_path / "capture-sessions", persist=False, keep_days=7, scrollback_lines=100)
+    await _end(store, _definition(PRIVATE, "alice", "private"), "alice's screen", time.time())
+    return store
+
+
+async def test_the_store_answers_none_for_an_id_it_never_listed(tmp_path: Path) -> None:
+    store = await _store_with_one(tmp_path)
+    assert await store.update_previous("pam-alice-capture-9-9", {"owner": "x"}) is None
+    assert [record.session_id for record in store.previous_sessions()] == [PRIVATE]
+
+
+async def test_an_update_waits_for_the_sessions_lock(tmp_path: Path) -> None:
+    # The same lock as every other write of the session's files, so two
+    # updates (or an update and anything else) never interleave their writes.
+    store = await _store_with_one(tmp_path)
+    async with store._lock(PRIVATE):
+        update = asyncio.create_task(store.update_previous(PRIVATE, {"owner": "blackbetty:7"}))
+        await asyncio.sleep(0.05)
+        assert not update.done()
+    record = await update
+    assert record is not None
+    assert record.definition.owner == "blackbetty:7"
