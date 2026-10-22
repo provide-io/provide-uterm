@@ -25,10 +25,14 @@ var serverFeatures = []string{"viewers.revoke.subject"}
 // re-created under their ids after a restart
 // (session_persistence.persist_capture). "sessions.previous": an ended
 // capture session can be read at GET /api/previous-sessions
-// (session_persistence.previous_keep_days). Port of server_features.
+// (session_persistence.previous_keep_days). "sessions.previous.owner": an
+// admin can set an ended capture session's owner and visibility
+// (PATCH /api/previous-sessions/{id}), listed with "sessions.previous" since
+// it has nothing to change without it. Port of server_features.
 const (
 	persistCaptureFeature   = "sessions.capture.persist"
 	previousSessionsFeature = "sessions.previous"
+	previousOwnerFeature    = "sessions.previous.owner"
 )
 
 // captureSocketModeFeature: the sockets this server binds for pty_capture
@@ -46,7 +50,7 @@ func (s *Server) features() []string {
 		out = append(out, persistCaptureFeature)
 	}
 	if s.cfg.SessionPersistence.PreviousKeepDays > 0 {
-		out = append(out, previousSessionsFeature)
+		out = append(out, previousSessionsFeature, previousOwnerFeature)
 	}
 	if s.cfg.Pam.CaptureSocketMode == serverconfig.OwnerAndGroupCaptureSocketMode {
 		out = append(out, captureSocketModeFeature)

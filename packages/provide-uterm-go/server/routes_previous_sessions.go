@@ -19,6 +19,7 @@ import (
 //
 //	GET /api/previous-sessions               the previous sessions the caller may read, newest first
 //	GET /api/previous-sessions/{session_id}  one of them, with its last screen and scrollback
+//	PATCH /api/previous-sessions/{session_id} set its owner and/or visibility (admins only)
 //
 // A previous session is history, so it is read by fewer people than the live
 // session was: its owner, its admin, and an operator unless it was private. A
@@ -28,10 +29,17 @@ import (
 // id nobody kept is 404, and one the caller may not read is 403. What is
 // returned passes through the output-redaction policy, as the live screen
 // does.
+//
+// PAM creates a capture session with no owner, and whoever runs the login sets
+// one on the live session afterwards. A login that ends first leaves a
+// previous session nobody but an admin can read, so an admin may set its owner,
+// and its visibility with it, once it has ended. A share viewer never,
+// whatever its roles.
 
 func (s *Server) registerPreviousSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/previous-sessions", s.authenticated(s.handleListPreviousSessions))
 	mux.HandleFunc("GET /api/previous-sessions/{session_id}", s.authenticated(s.handleGetPreviousSession))
+	mux.HandleFunc("PATCH /api/previous-sessions/{session_id}", s.authenticated(s.handleUpdatePreviousSession))
 }
 
 // previousStore is the store behind these routes, or nil when previous

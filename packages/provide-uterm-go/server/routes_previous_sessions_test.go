@@ -395,8 +395,8 @@ func TestHealthListsEachSessionFeatureOnlyWhenItIsOn(t *testing.T) {
 	}{
 		{false, 0, []any{"viewers.revoke.subject"}},
 		{true, 0, []any{"viewers.revoke.subject", "sessions.capture.persist"}},
-		{false, 7, []any{"viewers.revoke.subject", "sessions.previous"}},
-		{true, 7, []any{"viewers.revoke.subject", "sessions.capture.persist", "sessions.previous"}},
+		{false, 7, []any{"viewers.revoke.subject", "sessions.previous", "sessions.previous.owner"}},
+		{true, 7, []any{"viewers.revoke.subject", "sessions.capture.persist", "sessions.previous", "sessions.previous.owner"}},
 	} {
 		ts := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) {
 			cfg.SessionPersistence.PersistCapture = tc.persist
