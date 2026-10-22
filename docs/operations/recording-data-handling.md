@@ -111,21 +111,22 @@ These files hold the screen **unredacted**: redaction is for text a reader is
 shown, and a redacted screen painted back is a different screen. A previous
 session's screen and scrollback are redacted when they are read, by the policy
 the live screen is redacted by, and withheld (`503`) when that policy cannot
-answer. Who can read a previous session is not fixed when it
-ends: an admin can change its `owner` and `visibility` with
-`PATCH /api/previous-sessions/{id}` (never a share viewer, nor an admin scoped
-to one session), which widens or narrows the readers by the rule above and
-rewrites the file with the same permissions. A record moved to an owner who
-already has 20 newer ones is deleted by the move, and the request answers
-`404`. Each successful change is written to the audit log as
-`previous_session.update`, with the new values as its detail. The files are as private as the terminal state the server holds in
-memory: `0600` files in `0700` directories, written to a synced temporary file
-renamed into place. One is read back only if it is a regular file this user
-owns, no larger than 16 MiB, of a format this build reads, and of the shape
-and JSON types the server writes, a definition key another build of the same
-format added or dropped aside (`docs/protocol-matrix.md`, "Capture sessions
-across a restart"); any other file, or a directory that is not `0700` and this
-user's, is skipped with a warning.
+answer. Who can read a previous session is not fixed when it ends: an admin
+can change its `owner` and `visibility` with `PATCH
+/api/previous-sessions/{id}` (never a share viewer, nor an admin scoped to one
+session), which widens or narrows the readers by the rule above and rewrites
+the file with the same permissions. A record moved to an owner who already has
+20 newer ones is deleted by the move, and the request answers `404`. Each
+successful change is written to the audit log as `previous_session.update`,
+with the new values as its detail. The files are as private as the terminal
+state the server holds in memory: `0600` files in `0700` directories, written
+to a synced temporary file renamed into place. One is read back only if it is
+a regular file this user owns, no larger than 16 MiB, of a format this build
+reads, and of the shape and JSON types the server writes, a definition key
+another build of the same format added or dropped aside
+(`docs/protocol-matrix.md`, "Capture sessions across a restart"); any other
+file, or a directory that is not `0700` and this user's, is skipped with a
+warning.
 
 `session_retention_s` lives at the top level of `UtermServerConfig` and applies
 to stopped session definitions in the in-memory registry; recording file TTL is
