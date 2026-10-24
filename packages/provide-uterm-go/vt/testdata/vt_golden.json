@@ -24116,7 +24116,7 @@
    }
   }
  ],
- "wcwidth_version": "0.8.4",
+ "wcwidth_version": "0.9.2",
  "unicode_version": "18.0.0",
  "wcwidth_ranges": [
   [
