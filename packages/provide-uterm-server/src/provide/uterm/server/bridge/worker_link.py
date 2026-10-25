@@ -118,6 +118,8 @@ class TermBridge:
         worker: Object implementing :class:`Worker` (duck-typed).
         worker_id: Unique worker identifier used in the WebSocket URL.
         manager_url: Base URL of the Swarm Manager (``http://`` or ``https://``).
+        max_event_data_chars: Maximum characters per terminal event; must not
+            exceed the hub's configured ring-event cap.
     """
 
     # Snapshot-push state, declared at CLASS level so an instance built with
@@ -129,6 +131,7 @@ class TermBridge:
     _snapshot_push_task: asyncio.Task[None] | None = None
     _screen_change_seq: int = 0
     _snapshot_push_stopped: bool = False
+    _max_event_data_chars: int = TerminalDefaults.MAX_EVENT_DATA_CHARS
 
     def __init__(
         self,
@@ -139,12 +142,14 @@ class TermBridge:
         max_ws_message_bytes: int = 1_048_576,
         encoding: str = "cp437",
         snapshot_debounce_s: float = TerminalDefaults.SNAPSHOT_PUSH_DEBOUNCE_S,
+        max_event_data_chars: int = TerminalDefaults.MAX_EVENT_DATA_CHARS,
     ) -> None:
         self._worker = worker
         self._worker_id = worker_id
         self._manager_url = manager_url
         self._max_ws_message_bytes = max(1024, int(max_ws_message_bytes))
         self._encoding = encoding
+        self._max_event_data_chars = max(256, int(max_event_data_chars))
         # Debounce state for change-driven snapshot pushes; see _watch.
         self._snapshot_debounce_s = snapshot_debounce_s
         self._snapshot_push_task: asyncio.Task[None] | None = None
@@ -200,10 +205,16 @@ class TermBridge:
             if not raw:
                 return
             text = raw.decode(self._encoding, errors="replace")
-            try:
-                self._send_q.put_nowait({"type": "term", "data": text, "ts": time.time()})
-            except asyncio.QueueFull:
-                logger.debug("term_bridge_drop worker_id=%s queue_full", self._worker_id)
+            # WebSocket reads return whole messages, including ANSI caption
+            # lines larger than the hub's per-event cap. Keep their ordered
+            # pieces below that cap so event-ring recovery retains every cell.
+            cap = self._max_event_data_chars
+            for start in range(0, len(text), cap):
+                try:
+                    self._send_q.put_nowait({"type": "term", "data": text[start : start + cap], "ts": time.time()})
+                except asyncio.QueueFull:
+                    logger.debug("term_bridge_drop worker_id=%s queue_full", self._worker_id)
+                    break
             # Raw bytes stream on every chunk, but a SNAPSHOT — the only frame
             # carrying screen_hash, which is how a client detects that the screen
             # changed — used to go out solely in reply to a snapshot_req. That

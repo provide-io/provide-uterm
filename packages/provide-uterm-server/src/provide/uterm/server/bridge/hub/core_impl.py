@@ -23,6 +23,7 @@ except ImportError as _e:  # pragma: no cover
 import provide.uterm.server.bridge.hub.core_delegates_connection as _conn
 import provide.uterm.server.bridge.hub.core_delegates_lease as _lease_d
 import provide.uterm.server.bridge.hub.core_orchestration as _orch
+from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.server.bridge.hub.approvals import InMemoryApprovalStore
 from provide.uterm.server.bridge.hub.connection import ConnectionManager
 from provide.uterm.server.bridge.hub.event_bus import EventBus
@@ -624,7 +625,7 @@ class TermHub:
         behavioral_audit_interval_s: float = 30.0,
         telemetry_sink: TelemetrySink | None = None,
         max_buffer_chars: int = 40_000,
-        max_event_data_chars: int = 8192,
+        max_event_data_chars: int = TerminalDefaults.MAX_EVENT_DATA_CHARS,
         max_connections_per_principal: int = 25,
         max_workers: int = 10000,
     ) -> None:
