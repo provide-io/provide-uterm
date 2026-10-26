@@ -33,6 +33,7 @@ from provide.uterm.control_channel import (
     DataChunk,
     encode_control_frame,
     encode_terminal_data,
+    terminal_data_chunks,
 )
 from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.server.bridge.models import _safe_int
@@ -208,10 +209,9 @@ class TermBridge:
             # WebSocket reads return whole messages, including ANSI caption
             # lines larger than the hub's per-event cap. Keep their ordered
             # pieces below that cap so event-ring recovery retains every cell.
-            cap = self._max_event_data_chars
-            for start in range(0, len(text), cap):
+            for chunk in terminal_data_chunks(text, max_chars=self._max_event_data_chars):
                 try:
-                    self._send_q.put_nowait({"type": "term", "data": text[start : start + cap], "ts": time.time()})
+                    self._send_q.put_nowait({"type": "term", "data": chunk, "ts": time.time()})
                 except asyncio.QueueFull:
                     logger.debug("term_bridge_drop worker_id=%s queue_full", self._worker_id)
                     break

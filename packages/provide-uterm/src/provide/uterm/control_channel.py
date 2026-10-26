@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from string import hexdigits
 from typing import TYPE_CHECKING, Any, cast
 
+from provide.uterm.defaults import TerminalDefaults
+
 try:
     import orjson  # type: ignore[import-not-found]  # ty:ignore[unresolved-import]
 
@@ -39,7 +41,7 @@ except ImportError:
         _json_loads = json.loads
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
 
 
 DLE = "\x10"
@@ -94,6 +96,18 @@ ControlFrameChunk = DataChunk | ControlChunk
 def encode_terminal_data(data: str) -> str:
     """Encode terminal data for the inline stream."""
     return data.replace(DLE, DLE + DLE)
+
+
+def terminal_data_chunks(data: str, *, max_chars: int = TerminalDefaults.MAX_EVENT_DATA_CHARS) -> Iterator[str]:
+    """Yield ordered decoded text within the hub's per-event character cap.
+
+    Chunk before framing: escaping may expand the wire representation, while
+    the event ring limits the decoded character count.
+    """
+    if max_chars <= 0:
+        raise ValueError("max_chars must be positive")
+    for start in range(0, len(data), max_chars):
+        yield data[start : start + max_chars]
 
 
 def encode_control_frame(payload: Mapping[str, Any]) -> str:
