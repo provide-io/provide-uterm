@@ -272,12 +272,21 @@ def test_an_unreadable_start_time_falls_back_to_a_random_tag(start_ticks: dict[i
     assert first != second
 
 
+@pytest.mark.parametrize("pid", [0, -1])
+def test_process_start_ticks_rejects_invalid_pid_without_reading_proc(
+    monkeypatch: pytest.MonkeyPatch, pid: int
+) -> None:
+    def unexpected_path(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("invalid pid must not read /proc")
+
+    monkeypatch.setattr(pam_integration, "Path", unexpected_path)
+    assert pam_integration._process_start_ticks(pid) is None
+
+
 @pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="needs /proc")
 def test_process_start_ticks_reads_proc_stat() -> None:
     fields = Path(f"/proc/{os.getpid()}/stat").read_text().rpartition(")")[2].split()
     assert pam_integration._process_start_ticks(os.getpid()) == int(fields[19])
-    assert pam_integration._process_start_ticks(0) is None
-    assert pam_integration._process_start_ticks(-1) is None
     assert pam_integration._process_start_ticks(2**22 + 12345) is None  # above any pid_max
 
 
