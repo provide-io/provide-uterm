@@ -229,7 +229,14 @@ static unsigned long _read_start_ticks(int pid) {
  * array elements; the Python side fingerprints them and never receives the
  * raw blob. */
 static char *_read_ssh_auth_info(pam_handle_t *pamh) {
+    /* sshd sets SSH_AUTH_INFO_0 in the child process environment (via
+     * child_set_env in session.c) but NOT in the PAM environment (it never
+     * calls pam_setenv for it). pam_getenv reads only the PAM environment, so
+     * it returns NULL; getenv reads the process environment and finds it. Try
+     * the PAM environment first (a future sshd or a pam_env rule could set it
+     * there), then fall back to the process environment. */
     const char *path = pam_getenv(pamh, "SSH_AUTH_INFO_0");
+    if (!path || !*path) path = getenv("SSH_AUTH_INFO_0");
     if (!path || !*path) return NULL;
     FILE *f = fopen(path, "r");
     if (!f) return NULL;
