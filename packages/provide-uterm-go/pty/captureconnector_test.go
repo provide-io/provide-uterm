@@ -568,3 +568,49 @@ func TestCaptureConnectorInputFrameMalformedPayloadIsIgnored(t *testing.T) {
 		t.Fatalf("stdinSocketPath = %q, want empty (malformed ignored)", c.stdinSocketPath)
 	}
 }
+
+// capture_input_frame in spec/behavior_vectors.json, generated from the Python
+// reference by scripts/generate_behavior_vectors.py; testdata/ holds a
+// byte-identical copy that scripts/check_protocol_drift.py keeps in step.
+func TestCaptureSharedInputVectors(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("testdata", "behavior_vectors.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vectors struct {
+		Input []struct {
+			Name  string  `json:"name"`
+			Frame string  `json:"frame"`
+			Path  *string `json:"path"`
+		} `json:"capture_input_frame"`
+	}
+	if err := json.Unmarshal(raw, &vectors); err != nil {
+		t.Fatal(err)
+	}
+	if len(vectors.Input) == 0 {
+		t.Fatal("no capture_input_frame vectors")
+	}
+	for _, tc := range vectors.Input {
+		t.Run(tc.Name, func(t *testing.T) {
+			// The frame is [1B channel][4B length][payload]; skip the 5-byte
+			// header and parse the payload with ParseInputPath, which is what
+			// the shared vectors hold the parser to.
+			frame, err := hex.DecodeString(tc.Frame)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(frame) < headerSize {
+				t.Fatalf("frame too short: %d bytes", len(frame))
+			}
+			payload := frame[headerSize:]
+			got, _ := ParseInputPath(payload)
+			var want string
+			if tc.Path != nil {
+				want = *tc.Path
+			}
+			if got != want {
+				t.Fatalf("ParseInputPath = %q, want %q", got, want)
+			}
+		})
+	}
+}

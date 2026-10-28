@@ -216,6 +216,39 @@ def build_capture_geometry_cases() -> list[dict]:
     return cases
 
 
+# (name, payload) for the input channel: a UTF-8 absolute path (the keystroke
+# socket's path), an empty payload (withdraw), and the malformed shapes a
+# producer might send. The convention check (.sock -> .stdin.sock) is the
+# connector's job, not the parser's; these vectors test the parser only.
+_INPUT_PAYLOADS: tuple[tuple[str, bytes], ...] = (
+    ("absolute-path", b"/run/uterm-cap-12345.stdin.sock"),
+    ("root-only", b"/"),
+    ("withdraw-empty", b""),
+    ("relative-path", b"relative/path.sock"),
+    ("non-utf8", b"/run/\xff\xfe.sock"),
+    ("over-max-len", b"/" + b"a" * 4096),  # 4097 bytes, one past INPUT_MAX_LEN
+)
+
+
+def build_capture_input_cases() -> list[dict]:
+    """Input frames on the capture wire, and the path the reference reads from each."""
+    import struct
+
+    from provide.uterm.pty.capture import CHANNEL_INPUT, parse_input_path
+
+    cases: list[dict] = []
+    for name, payload in _INPUT_PAYLOADS:
+        path = parse_input_path(payload)
+        cases.append(
+            {
+                "name": name,
+                "frame": (struct.pack(">BI", CHANNEL_INPUT, len(payload)) + payload).hex(),
+                "path": path,
+            }
+        )
+    return cases
+
+
 def build_close_cases() -> dict:
     """Client-side transport close semantics every port is tested against."""
     return {
@@ -268,6 +301,7 @@ def build_vectors(spec: dict) -> dict:
         "policy_cases": cases,
         "close_cases": build_close_cases(),
         "capture_geometry_frame": build_capture_geometry_cases(),
+        "capture_input_frame": build_capture_input_cases(),
     }
 
 

@@ -295,6 +295,17 @@ const geometryVectors = loadSpec<{ capture_geometry_frame: GeometryVector[] }>(
   "behavior_vectors.json",
 ).capture_geometry_frame;
 
+interface InputVector {
+  name: string;
+  frame: string;
+  path: string | null;
+}
+
+/** `capture_input_frame` from spec/behavior_vectors.json, generated from the Python reference. */
+const inputVectors = loadSpec<{ capture_input_frame: InputVector[] }>(
+  "behavior_vectors.json",
+).capture_input_frame;
+
 function fromHex(text: string): Uint8Array {
   return Uint8Array.from(text.match(/../g) ?? [], (pair) => Number.parseInt(pair, 16));
 }
@@ -376,4 +387,20 @@ describe("the producer's keystroke-socket path", () => {
   it("accepts a single '/' as a degenerate absolute path", () => {
     expect(parseInputPath(Uint8Array.of(0x2f))).toBe("/");
   });
+
+  it("has shared vectors to hold it to", () => {
+    expect(inputVectors.length).toBeGreaterThan(0);
+  });
+
+  it.each(inputVectors.map((vector) => [vector.name, vector] as const))(
+    "reads the shared vector %s as the reference does",
+    async (_name, vector) => {
+      const reader = new RecordingReader(fromHex(vector.frame));
+      const frames: CaptureFrame[] = [];
+      expect(await readCaptureFrames(reader, (entry) => frames.push(entry))).toBe("ended");
+      expect(frames).toHaveLength(1);
+      expect(frames[0]?.channel).toBe(CHANNEL_INPUT);
+      expect(parseInputPath(frames[0]?.data ?? new Uint8Array())).toBe(vector.path);
+    },
+  );
 });

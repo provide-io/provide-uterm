@@ -23,6 +23,7 @@ from provide.uterm.pty.capture import (
     GEOMETRY,
     CaptureFrame,
     parse_geometry,
+    parse_input_path,
 )
 from provide.uterm.pty.capture_connector import (
     CaptureConnector,
@@ -1049,3 +1050,24 @@ async def test_input_frame_closes_existing_stdin_writer_when_path_changes() -> N
         await connector.poll_messages()
     assert connector._stdin_socket_path == _PAM_STDIN_SOCKET
     assert connector._stdin_writer is None  # closed and cleared
+
+
+# ── shared vectors for parse_input_path ──────────────────────────────────────
+
+
+def _input_vectors() -> list[dict]:
+    return json.loads(_BEHAVIOR_VECTORS.read_text(encoding="utf-8"))["capture_input_frame"]
+
+
+@pytest.mark.parametrize("case", _input_vectors(), ids=lambda case: case["name"])
+def test_the_shared_input_vectors(case: dict) -> None:
+    """spec/behavior_vectors.json, which Go and TypeScript replay too.
+
+    The vectors hold parse_input_path (the parser) to the same shapes across
+    ports. The connector's convention check and peer-pid check are tested
+    separately above; these vectors test the parser only.
+    """
+    raw = bytes.fromhex(case["frame"])
+    channel, length = struct.unpack(">BI", raw[:5])
+    assert channel == CHANNEL_INPUT and length == len(raw) - 5
+    assert parse_input_path(raw[5:]) == case["path"]
