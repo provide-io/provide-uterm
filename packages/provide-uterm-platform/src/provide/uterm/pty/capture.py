@@ -177,6 +177,12 @@ def _clear_stale_socket(path: str) -> None:
 class CaptureFrame:
     channel: int
     data: bytes
+    # The connecting producer's pid, from SO_PEERCRED on the capture socket.
+    # None on platforms without SO_PEERCRED (macOS) or when the getsockopt
+    # fails. Used by the 0x06 input channel's peer check (the producer must
+    # be the login's pid or a descendant); None means "unverifiable", which
+    # 0x06 refuses. Other channels ignore it.
+    peer_pid: int | None = None
 
 
 class CaptureSocket:
@@ -281,8 +287,33 @@ class CaptureSocket:
             self._queue.put_nowait(frame)
             logger.warning("capture_backpressure_drop_oldest", maxsize=self._queue.maxsize)
 
+    def _peer_pid(self, writer: asyncio.StreamWriter) -> int | None:
+        """Return the connecting producer's pid via SO_PEERCRED, or None.
+
+        None means "unverifiable" — either the platform lacks SO_PEERCRED
+        (macOS) or the getsockopt failed. The 0x06 input channel refuses a
+        frame whose peer_pid is None (capture_input_refused reason=peer_unverifiable).
+        Other channels ignore it.
+        """
+        import socket as _socket
+        import struct as _struct
+
+        so_peercred = getattr(_socket, "SO_PEERCRED", None)
+        if so_peercred is None:
+            return None
+        sock = writer.get_extra_info("socket")
+        if sock is None:
+            return None
+        try:
+            raw = sock.getsockopt(_socket.SOL_SOCKET, so_peercred, _struct.calcsize("3i"))
+            pid, _uid, _gid = _struct.unpack("3i", raw)
+            return int(pid)
+        except Exception:
+            return None
+
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self._connections.add(writer)
+        peer_pid = self._peer_pid(writer)
         try:
             while True:
                 header_bytes = await reader.readexactly(_HEADER.size)
@@ -294,7 +325,7 @@ class CaptureSocket:
                     logger.warning("capture_frame_too_large", length=length, cap=_MAX_FRAME_BYTES)
                     break
                 data = await reader.readexactly(length)
-                self._enqueue(CaptureFrame(channel=channel, data=data))
+                self._enqueue(CaptureFrame(channel=channel, data=data, peer_pid=peer_pid))
         except (asyncio.IncompleteReadError, ConnectionResetError):
             # The capture client disconnected (EOF mid-frame or reset); the finally block drops it.
             pass

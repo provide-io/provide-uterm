@@ -9,10 +9,14 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
+	ptel "github.com/provide-io/provide-telemetry/go"
 )
 
 // captureBufferCap bounds the CaptureConnector rendered buffer. Port of
@@ -24,6 +28,77 @@ const captureBufferCap = 65536
 var captureConnectorKeys = map[string]struct{}{
 	"socket_path": {}, "cols": {}, "rows": {}, "connect_timeout_s": {},
 	"input_mode": {}, "stdin_socket_path": {}, "socket_mode": {},
+}
+
+// loginPidRE matches a capture session's id (pam-<user>-capture-<pid>-<tag>)
+// and captures the pid. The 0x06 input channel's peer check needs it: the
+// producer announcing a keystroke socket must be that pid or a descendant.
+var loginPidRE = regexp.MustCompile(`^pam-[^-]+-capture-(\d+)-`)
+
+// loginPidFromSessionID extracts the login pid a capture session's id names.
+// Port of capture_connector._login_pid_from_session_id.
+func loginPidFromSessionID(sessionID string) (int, bool) {
+	m := loginPidRE.FindStringSubmatch(sessionID)
+	if m == nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return pid, true
+}
+
+// expectedStdinSocketPath returns the keystroke-socket path the convention
+// allows for this capture socket: the capture socket with .sock replaced by
+// .stdin.sock (Black Betty's remote_input_socket_from_capture_socket). Port
+// of capture_connector._expected_stdin_socket_path.
+func expectedStdinSocketPath(captureSocket string) string {
+	if strings.HasSuffix(captureSocket, ".sock") {
+		return captureSocket[:len(captureSocket)-len(".sock")] + ".stdin.sock"
+	}
+	return captureSocket + ".stdin.sock"
+}
+
+// isDescendantOf reports whether pid is ancestor or a descendant of it, walking
+// /proc/<pid>/stat parent links (field 4 is ppid), at most 64 steps. Returns
+// false when /proc is unavailable (e.g. macOS). Port of
+// capture_connector._is_descendant_of. A variable so a test can stub it.
+var isDescendantOf = func(pid, ancestor int) bool {
+	if pid == ancestor {
+		return true
+	}
+	current := pid
+	for i := 0; i < 64; i++ {
+		data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", current))
+		if err != nil {
+			return false
+		}
+		// Field 2 (comm) is in parens and may contain spaces, so split on the
+		// last ')' and parse the rest. rest[0] is state (field 3), rest[1] is
+		// ppid (field 4).
+		s := string(data)
+		idx := strings.LastIndex(s, ")")
+		if idx < 0 {
+			return false
+		}
+		rest := strings.Fields(s[idx+1:])
+		if len(rest) < 2 {
+			return false
+		}
+		ppid, err := strconv.Atoi(rest[1])
+		if err != nil {
+			return false
+		}
+		if ppid == ancestor {
+			return true
+		}
+		if ppid <= 1 {
+			return false
+		}
+		current = ppid
+	}
+	return false
 }
 
 // CaptureConnector observes an LD_PRELOAD/DYLD-captured shell over a Unix socket
@@ -43,6 +118,10 @@ type CaptureConnector struct {
 	rows            int
 	connectTimeout  float64
 	stdinSocketPath string
+	// configStdinSocketPath is the path the config named (at construction or
+	// via reconfigure). An admin-set path wins over a 0x06 announcement: if
+	// this is non-empty, 0x06 frames are a no-op. (Decision 2.)
+	configStdinSocketPath string
 
 	mu          sync.Mutex
 	capture     *CaptureSocket
@@ -91,14 +170,15 @@ func NewCaptureConnector(sessionID, displayName string, config map[string]any) (
 	}
 
 	return &CaptureConnector{
-		sessionID:       sessionID,
-		displayName:     displayName,
-		socketPath:      socketPath,
-		socketMode:      socketMode,
-		cols:            coerceIntOr(config["cols"], 80),
-		rows:            coerceIntOr(config["rows"], 24),
-		connectTimeout:  timeout,
-		stdinSocketPath: stdinPath,
+		sessionID:             sessionID,
+		displayName:           displayName,
+		socketPath:            socketPath,
+		socketMode:            socketMode,
+		cols:                  coerceIntOr(config["cols"], 80),
+		rows:                  coerceIntOr(config["rows"], 24),
+		connectTimeout:        timeout,
+		stdinSocketPath:       stdinPath,
+		configStdinSocketPath: stdinPath,
 	}, nil
 }
 
@@ -152,6 +232,9 @@ func (c *CaptureConnector) PollMessages() []Frame {
 	}
 	changed := false
 	wantCols, wantRows := c.cols, c.rows
+	// newStdinPath tracks a 0x06 input frame's effect. nil = no 0x06 this
+	// drain; empty string = withdraw; non-empty = a path the convention accepts.
+	var newStdinPath *string
 	for {
 		frame, ok := c.capture.ReadNowait()
 		if !ok {
@@ -186,12 +269,69 @@ func (c *CaptureConnector) PollMessages() []Frame {
 			if cols, rows, ok := ParseGeometry(frame.Data); ok {
 				wantCols, wantRows = cols, rows
 			}
+		case ChannelInput:
+			// The producer's keystroke-socket path. An admin-set path in the
+			// config wins over an announcement.
+			if c.configStdinSocketPath != "" {
+				continue
+			}
+			announced, ok := ParseInputPath(frame.Data)
+			if !ok {
+				// Malformed: ignore the frame.
+				continue
+			}
+			if announced == "" {
+				// Withdraw the path.
+				empty := ""
+				newStdinPath = &empty
+				continue
+			}
+			// Validate the path convention: the capture socket with .sock
+			// replaced by .stdin.sock.
+			expected := expectedStdinSocketPath(c.socketPath)
+			if announced != expected {
+				ptel.GetLogger(context.Background(), "provide.uterm.pty").Warn(
+					"capture_input_refused", "reason", "path",
+					"announced", announced, "expected", expected)
+				continue
+			}
+			if frame.PeerPid == 0 {
+				// Platform without SO_PEERCRED (macOS) or getsockopt failed.
+				ptel.GetLogger(context.Background(), "provide.uterm.pty").Warn(
+					"capture_input_refused", "reason", "peer_unverifiable")
+				continue
+			}
+			loginPid, found := loginPidFromSessionID(c.sessionID)
+			if !found || !isDescendantOf(frame.PeerPid, loginPid) {
+				ptel.GetLogger(context.Background(), "provide.uterm.pty").Warn(
+					"capture_input_refused", "reason", "peer_mismatch",
+					"peer_pid", frame.PeerPid, "login_pid", loginPid)
+				continue
+			}
+			p := announced
+			newStdinPath = &p
 		}
 	}
 	// The last valid size of the drain, as Python applies it: once, and only
 	// if it differs from the size the drain started at.
 	resized := wantCols != c.cols || wantRows != c.rows
 	c.cols, c.rows = wantCols, wantRows
+	// Apply the 0x06 announcement, if one arrived and changed the path.
+	if newStdinPath != nil {
+		c.stdinSocketPath = *newStdinPath
+		// The next keystroke connects to the new socket (or no socket, if the
+		// path was withdrawn). Close any open writer so it reconnects. Inlined
+		// (not c.closeStdinWriter()) because we already hold c.mu — calling
+		// closeStdinWriter here would deadlock on the re-entrant Lock.
+		if c.stdinWriter != nil {
+			w := c.stdinWriter
+			c.stdinWriter = nil
+			// Close outside the critical section would need an unlock/relock
+			// dance; Close on a Unix conn is cheap and non-blocking enough to
+			// do under the lock, matching the Python path.
+			_ = w.Close()
+		}
+	}
 	var frames []Frame
 	if changed && c.pending != "" {
 		data := c.pending

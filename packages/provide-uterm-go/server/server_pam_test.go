@@ -153,6 +153,12 @@ func TestPamOnOpenCaptureConfined(t *testing.T) {
 	if p["ephemeral"] != false {
 		t.Fatalf("PAM sessions must outlive their last viewer, got ephemeral=%v", p["ephemeral"])
 	}
+	// PAM capture sessions start in hijack mode, not open: when a keystroke path
+	// arrives (0x06 from a supervisor, or stdin_socket_path PATCHed by an admin),
+	// hijack gives a single viewer the lease. With no input path both are inert.
+	if p["input_mode"] != "hijack" {
+		t.Fatalf("want input_mode=hijack, got %v", p["input_mode"])
+	}
 }
 
 func TestPamCaptureSocketOutsideDirRefused(t *testing.T) {

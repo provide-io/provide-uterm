@@ -33,14 +33,17 @@ from __future__ import annotations
 import asyncio
 import codecs
 import hashlib
+import logging
 import re
 import time
 from collections import deque
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
     CHANNEL_GEOMETRY,
+    CHANNEL_INPUT,
     CHANNEL_STATS,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
@@ -48,10 +51,13 @@ from provide.uterm.pty.capture import (
     CaptureSocket,
     check_socket_mode,
     parse_geometry,
+    parse_input_path,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+logger = logging.getLogger(__name__)
 
 _VALID_CONFIG_KEYS = frozenset(
     {
@@ -97,6 +103,72 @@ def _make_emulator(cols: int, rows: int) -> Any:
     return TerminalEmulator(cols, rows, receive_encoding="utf-8")
 
 
+# A capture session's id is ``pam-<user>-capture-<pid>-<tag>``. The pid is the
+# login's pid — the one pam_uterm.so saw at open_session, which the session id
+# carries so a later login reusing the same pid gets a different id. The 0x06
+# input channel's peer check needs it: the producer announcing a keystroke
+# socket must be that pid or a descendant of it.
+_LOGIN_PID_RE = re.compile(r"pam-[^-]+-capture-(\d+)-")
+
+
+def _login_pid_from_session_id(session_id: str) -> int | None:
+    """Extract the login pid a capture session's id names, or None."""
+    m = _LOGIN_PID_RE.match(session_id)
+    if m is None:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+# The capture socket path is ``<dir>/uterm-cap-<pid>.sock``; the keystroke
+# socket path the convention allows is the same with ``.sock`` replaced by
+# ``.stdin.sock`` (Black Betty's ``remote_input_socket_from_capture_socket``).
+# A producer that announces any other path is refused (capture_input_refused
+# reason=path): the convention keeps the path out of a producer's choosing.
+def _expected_stdin_socket_path(capture_socket: str) -> str:
+    """The keystroke-socket path the convention allows for this capture socket."""
+    if capture_socket.endswith(".sock"):
+        return capture_socket[: -len(".sock")] + ".stdin.sock"
+    return capture_socket + ".stdin.sock"
+
+
+def _is_descendant_of(pid: int, ancestor: int, *, max_steps: int = 64) -> bool:
+    """Whether *pid* is *ancestor* or a descendant of it, walking /proc.
+
+    Walks ``/proc/<pid>/stat`` parent links (field 4 is ppid), at most
+    *max_steps* steps. Returns True if *ancestor* is found in the chain, False
+    otherwise (including when /proc is unavailable, e.g. on macOS).
+    """
+    if pid == ancestor:
+        return True
+    current = pid
+    for _ in range(max_steps):
+        try:
+            with Path(f"/proc/{current}/stat").open() as f:
+                content = f.read()
+            # Field 2 (comm) is in parens and may contain spaces, so split on
+            # the last ')' and parse the rest. rest[0] is state (field 3),
+            # rest[1] is ppid (field 4).
+            after_comm = content.rsplit(")", 1)
+            if len(after_comm) != 2:
+                return False
+            rest = after_comm[1].split()
+            if len(rest) < 2:
+                return False
+            ppid = int(rest[1])
+        except (OSError, IndexError, ValueError):
+            return False
+        if ppid == ancestor:
+            return True
+        if ppid <= 1:
+            # Reached init; no point walking further.
+            return False
+        current = ppid
+    return False
+
+
 def _register() -> None:
     try:
         from provide.uterm.server.connectors.registry import register_connector
@@ -132,6 +204,12 @@ class CaptureConnector:
         self._stdin_socket_path: str | None = (
             str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
         )
+        # The path the config named at construction (or via reconfigure). An
+        # admin-set path wins over a 0x06 announcement: if this is not None,
+        # 0x06 frames are a no-op. (Decision 2: "A stdin_socket_path an admin
+        # sets in the config wins over an announcement, so today's PATCH keeps
+        # working unchanged.")
+        self._config_stdin_socket_path: str | None = self._stdin_socket_path
 
         self._capture: CaptureSocket | None = None
         self._connected = False
@@ -182,6 +260,10 @@ class CaptureConnector:
             return []
         changed = False
         size: tuple[int, int] | None = None
+        # The keystroke-socket path a 0x06 input frame set, if one did.
+        # False = no 0x06 frame this drain; None = withdraw (empty payload);
+        # str = a path the convention accepts.
+        new_stdin_socket_path: str | bool | None = False
         # Drain all immediately available frames without blocking
         while True:
             frame = self._capture.read_nowait()
@@ -206,6 +288,44 @@ class CaptureConnector:
                 # The terminal's size, from whoever owns the pty. Malformed is
                 # ignored: the frame's own length kept the stream in step.
                 size = parse_geometry(frame.data) or size
+            elif frame.channel == CHANNEL_INPUT:
+                # The producer's keystroke-socket path. A stdin_socket_path an
+                # admin set in the config wins over an announcement, so if the
+                # config named one, the frame is a no-op.
+                if self._config_stdin_socket_path is not None:
+                    continue
+                announced = parse_input_path(frame.data)
+                if announced is None:
+                    # Malformed: ignore the frame.
+                    pass
+                elif announced == "":
+                    # Withdraw the path.
+                    new_stdin_socket_path = None
+                else:
+                    # Validate the path convention: the capture socket with
+                    # .sock replaced by .stdin.sock.
+                    expected = _expected_stdin_socket_path(self._socket_path)
+                    if announced != expected:
+                        logger.warning(
+                            "capture_input_refused reason=path announced=%s expected=%s",
+                            announced,
+                            expected,
+                        )
+                    elif frame.peer_pid is None:
+                        # Platform without SO_PEERCRED (macOS) or the getsockopt
+                        # failed. The ARD refuses 0x06 with reason=peer_unverifiable;
+                        # stdin_socket_path set by an admin still works there.
+                        logger.warning("capture_input_refused reason=peer_unverifiable")
+                    else:
+                        login_pid = _login_pid_from_session_id(self._session_id)
+                        if login_pid is None or not _is_descendant_of(frame.peer_pid, login_pid):
+                            logger.warning(
+                                "capture_input_refused reason=peer_mismatch peer_pid=%d login_pid=%s",
+                                frame.peer_pid,
+                                login_pid,
+                            )
+                        else:
+                            new_stdin_socket_path = announced
         # Applied once, after the drain: a resize re-emulates everything since
         # the last clear, and that replay covers output drawn after the frame
         # too, so a burst of sizes costs one replay rather than one each.
@@ -213,6 +333,14 @@ class CaptureConnector:
         if size is not None and size != (self._cols, self._rows):
             self._apply_size(*size)
             resized = True
+        # Apply the 0x06 announcement, if one arrived and changed the path.
+        if new_stdin_socket_path is not False:
+            self._stdin_socket_path = new_stdin_socket_path if isinstance(new_stdin_socket_path, str) else None
+            # The next keystroke connects to the new socket (or no socket, if
+            # the path was withdrawn). Close any open writer so it reconnects.
+            if self._stdin_writer is not None:
+                self._stdin_writer.close()
+                self._stdin_writer = None
         messages: list[dict[str, Any]] = []
         if changed and self._pending:
             data, self._pending = self._pending, ""
@@ -249,6 +377,9 @@ class CaptureConnector:
         stdin_socket_path = str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
         if stdin_socket_path != self._stdin_socket_path:
             self._stdin_socket_path = stdin_socket_path
+            # An admin PATCH that names a path wins over any 0x06 announcement
+            # (and one that clears it lets 0x06 set one again).
+            self._config_stdin_socket_path = stdin_socket_path
             # The next keystroke connects to the new socket.
             if self._stdin_writer is not None:
                 self._stdin_writer.close()

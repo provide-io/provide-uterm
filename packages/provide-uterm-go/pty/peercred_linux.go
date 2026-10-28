@@ -43,3 +43,32 @@ func peerEUID(conn net.Conn) (int, bool) {
 	}
 	return uid, true
 }
+
+// peerPID returns the connecting producer's pid via SO_PEERCRED, or ok=false
+// when unavailable (platform without SO_PEERCRED or getsockopt failure). Used
+// by the 0x06 input channel's peer check (the producer must be the login's
+// pid or a descendant). Port of CaptureSocket._peer_pid.
+func peerPID(conn net.Conn) (int, bool) {
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		return 0, false
+	}
+	raw, err := uc.SyscallConn()
+	if err != nil {
+		return 0, false
+	}
+	var pid int
+	var innerErr error
+	ctrlErr := raw.Control(func(fd uintptr) {
+		cred, e := getsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+		if e != nil {
+			innerErr = e
+			return
+		}
+		pid = int(cred.Pid)
+	})
+	if ctrlErr != nil || innerErr != nil {
+		return 0, false
+	}
+	return pid, true
+}

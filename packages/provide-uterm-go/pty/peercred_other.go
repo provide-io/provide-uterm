@@ -16,3 +16,11 @@ import "net"
 func peerEUID(conn net.Conn) (int, bool) {
 	return 0, false
 }
+
+// peerPID reports that peer-pid retrieval is unavailable on this platform.
+// The 0x06 input channel refuses a frame whose peer_pid is 0 (macOS has no
+// SO_PEERCRED, so 0x06 is refused with reason=peer_unverifiable). Port of
+// CaptureSocket._peer_pid's None path.
+func peerPID(conn net.Conn) (int, bool) {
+	return 0, false
+}

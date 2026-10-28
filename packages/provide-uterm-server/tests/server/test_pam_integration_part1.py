@@ -95,6 +95,11 @@ async def test_on_open_capture_mode_with_socket_creates_capture_session(monkeypa
     assert payload["connector_config"]["socket_path"] == "/run/uterm-cap-1234.sock"
     assert payload["session_id"] == "pam-alice-capture-1234-98765"
     assert payload["ephemeral"] is False
+    # PAM capture sessions start in hijack mode, not open: when a keystroke path
+    # arrives (0x06 from a supervisor, or stdin_socket_path PATCHed by an admin),
+    # hijack is what gives a single viewer the lease. With no input path both
+    # are inert. (Decision 2.)
+    assert payload["input_mode"] == "hijack"
 
 
 async def test_on_open_notify_mode_auto_session_creates_pty_session() -> None:

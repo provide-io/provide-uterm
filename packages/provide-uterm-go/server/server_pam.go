@@ -222,8 +222,12 @@ func (p *PamIntegration) createCaptureSession(ctx context.Context, ev pty.PamEve
 		"display_name":     ev.Username + " (" + ttyOrPam(ev.TTY) + ") [live]",
 		"connector_type":   "pty_capture",
 		"connector_config": map[string]any{"socket_path": ev.CaptureSocket},
-		"input_mode":       "open",
-		"auto_start":       true,
+		// hijack, not open: when a keystroke path arrives (0x06 from a
+		// supervisor, or stdin_socket_path PATCHed by an admin), hijack is
+		// what gives a single viewer the lease — open would open it to every
+		// viewer at once. With no input path both are inert. (Decision 2.)
+		"input_mode": "hijack",
+		"auto_start":  true,
 		// Owned by the PAM login: removed on close, not when the last viewer leaves.
 		"ephemeral":  false,
 		"tags":       []any{"pam", "capture", ev.Username},

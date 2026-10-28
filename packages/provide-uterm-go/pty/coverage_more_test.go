@@ -63,7 +63,7 @@ func TestCaptureHandleConnShortBody(t *testing.T) {
 	// body errors and the connection is dropped with nothing enqueued.
 	frame := makeFrame(ChannelStdout, []byte("12345678"))
 	truncated := frame[:headerSize+3]
-	s.handleConn(bytes.NewReader(truncated))
+	s.handleConn(bytes.NewReader(truncated), 0)
 	if s.QueueLen() != 0 {
 		t.Fatalf("short body should enqueue nothing, got %d", s.QueueLen())
 	}
@@ -124,13 +124,13 @@ func TestCaptureConnectorBufferAndConnectLogCaps(t *testing.T) {
 
 	// One stdout frame larger than the buffer cap → buffer trimmed to the cap.
 	big := bytes.Repeat([]byte("a"), captureBufferCap+2048)
-	c.capture.handleConn(bytes.NewReader(makeFrame(ChannelStdout, big)))
+	c.capture.handleConn(bytes.NewReader(makeFrame(ChannelStdout, big)), 0)
 	// 101 connect frames → connectLog trimmed to the last 100.
 	var connBlob []byte
 	for i := 0; i < 101; i++ {
 		connBlob = append(connBlob, makeFrame(ChannelConnect, []byte("10.0.0.1:1"))...)
 	}
-	c.capture.handleConn(bytes.NewReader(connBlob))
+	c.capture.handleConn(bytes.NewReader(connBlob), 0)
 
 	c.PollMessages() // drains everything and applies both caps
 	c.mu.Lock()

@@ -492,7 +492,11 @@ async def _create_capture_session(
         "connector_config": {
             "socket_path": ev.capture_socket,
         },
-        "input_mode": "open",
+        # hijack, not open: when a keystroke path arrives (0x06 from a
+        # supervisor, or stdin_socket_path PATCHed by an admin), hijack is
+        # what gives a single viewer the lease — open would open it to every
+        # viewer at once. With no input path both are inert. (Decision 2.)
+        "input_mode": "hijack",
         "auto_start": True,
         # A PAM login owns its session: it leaves on PAM close, not when the last viewer leaves.
         "ephemeral": False,

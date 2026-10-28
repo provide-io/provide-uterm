@@ -16,6 +16,7 @@ from provide.uterm import strip_ansi
 from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
     CHANNEL_GEOMETRY,
+    CHANNEL_INPUT,
     CHANNEL_STATS,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
@@ -23,7 +24,13 @@ from provide.uterm.pty.capture import (
     CaptureFrame,
     parse_geometry,
 )
-from provide.uterm.pty.capture_connector import CaptureConnector, _make_emulator
+from provide.uterm.pty.capture_connector import (
+    CaptureConnector,
+    _expected_stdin_socket_path,
+    _is_descendant_of,
+    _login_pid_from_session_id,
+    _make_emulator,
+)
 
 
 def _make_frame(channel: int, data: bytes) -> bytes:
@@ -899,3 +906,146 @@ async def test_a_patch_naming_the_size_geometry_already_set_redraws_nothing() ->
     # And the config now names 100x40, so naming 80x24 again is a real change.
     assert connector.reconfigure({"socket_path": "/tmp/unused.sock", "cols": 80, "rows": 24})
     assert (connector._cols, connector._rows) == (80, 24)
+
+
+# ---------------------------------------------------------------------------
+# The input channel (0x06)
+#
+# A producer that can deliver keystrokes (a supervisor) announces its keystroke
+# socket's path on 0x06. The connector validates the path (convention: the
+# capture socket with .sock replaced by .stdin.sock), the peer (SO_PEERCRED pid
+# must be the login's pid or a descendant), and then sets stdin_socket_path in
+# place, as reconfigure does. An admin-set path in the config wins over any
+# announcement. (Decision 2 of the capture-session-ownership ARD.)
+# ---------------------------------------------------------------------------
+
+# A session id the login-pid parser accepts: pam-alice-capture-<pid>-<tag>.
+_PAM_SESSION_ID = "pam-alice-capture-1234-98765"
+# The capture socket path that matches that session id.
+_PAM_CAP_SOCKET = "/run/uterm-cap-1234.sock"
+# The stdin socket the convention allows for that capture socket.
+_PAM_STDIN_SOCKET = "/run/uterm-cap-1234.stdin.sock"
+
+
+def _fed_input(
+    frames: list[CaptureFrame],
+    *,
+    session_id: str = _PAM_SESSION_ID,
+    socket_path: str = _PAM_CAP_SOCKET,
+    config_stdin_socket_path: str | None = None,
+) -> CaptureConnector:
+    """A connector fed by _FakeCapture, with a PAM-style session id."""
+    cfg: dict[str, object] = {"socket_path": socket_path, "cols": 80, "rows": 24}
+    if config_stdin_socket_path is not None:
+        cfg["stdin_socket_path"] = config_stdin_socket_path
+    connector = CaptureConnector(session_id, "s", cfg)
+    connector._emulator = _make_emulator(80, 24)
+    connector._connected = True
+    connector._capture = _FakeCapture(frames)  # type: ignore[assignment]  # ty:ignore[invalid-assignment]
+    return connector
+
+
+# ── helper functions ─────────────────────────────────────────────────────────
+
+
+def test_login_pid_from_session_id_extracts_pid() -> None:
+    assert _login_pid_from_session_id("pam-alice-capture-1234-98765") == 1234
+
+
+def test_login_pid_from_session_id_returns_none_for_non_pam() -> None:
+    assert _login_pid_from_session_id("scratch-1") is None
+
+
+def test_expected_stdin_socket_path_replaces_sock_suffix() -> None:
+    assert _expected_stdin_socket_path("/run/uterm-cap-12345.sock") == "/run/uterm-cap-12345.stdin.sock"
+
+
+def test_expected_stdin_socket_path_appends_when_no_sock_suffix() -> None:
+    assert _expected_stdin_socket_path("/run/cap") == "/run/cap.stdin.sock"
+
+
+def test_is_descendant_of_self_is_true() -> None:
+    assert _is_descendant_of(1234, 1234) is True
+
+
+def test_is_descendant_of_returns_false_when_proc_unavailable() -> None:
+    # /proc is unavailable on macOS; on Linux we can verify the function returns
+    # False when the stat file is missing (a pid that does not exist).
+    assert _is_descendant_of(99999999, 1234) is False
+
+
+# ── 0x06 handling in poll_messages ───────────────────────────────────────────
+
+
+async def test_input_frame_with_valid_path_sets_stdin_socket_path() -> None:
+    """A 0x06 frame with the right path and a valid peer sets stdin_socket_path."""
+    connector = _fed_input([CaptureFrame(CHANNEL_INPUT, _PAM_STDIN_SOCKET.encode(), peer_pid=1234)])
+    with patch("provide.uterm.pty.capture_connector._is_descendant_of", return_value=True):
+        await connector.poll_messages()
+    assert connector._stdin_socket_path == _PAM_STDIN_SOCKET
+
+
+async def test_input_frame_with_wrong_path_is_refused() -> None:
+    """A 0x06 frame whose path does not match the convention is refused."""
+    connector = _fed_input([CaptureFrame(CHANNEL_INPUT, b"/run/evil.sock", peer_pid=1234)])
+    with patch("provide.uterm.pty.capture_connector._is_descendant_of", return_value=True):
+        await connector.poll_messages()
+    assert connector._stdin_socket_path is None
+
+
+async def test_input_frame_with_empty_payload_withdraws_path() -> None:
+    """An empty 0x06 payload withdraws the path (clears it)."""
+    connector = _fed_input([CaptureFrame(CHANNEL_INPUT, b"", peer_pid=1234)])
+    connector._stdin_socket_path = "/run/old.stdin.sock"
+    with patch("provide.uterm.pty.capture_connector._is_descendant_of", return_value=True):
+        await connector.poll_messages()
+    assert connector._stdin_socket_path is None
+
+
+async def test_input_frame_with_peer_pid_none_is_refused() -> None:
+    """A 0x06 frame with peer_pid=None (macOS, no SO_PEERCRED) is refused."""
+    connector = _fed_input([CaptureFrame(CHANNEL_INPUT, _PAM_STDIN_SOCKET.encode(), peer_pid=None)])
+    with patch("provide.uterm.pty.capture_connector._is_descendant_of", return_value=True):
+        await connector.poll_messages()
+    assert connector._stdin_socket_path is None
+
+
+async def test_input_frame_with_peer_mismatch_is_refused() -> None:
+    """A 0x06 frame whose peer_pid is not the login pid or a descendant is refused."""
+    connector = _fed_input([CaptureFrame(CHANNEL_INPUT, _PAM_STDIN_SOCKET.encode(), peer_pid=9999)])
+    with patch("provide.uterm.pty.capture_connector._is_descendant_of", return_value=False):
+        await connector.poll_messages()
+    assert connector._stdin_socket_path is None
+
+
+async def test_input_frame_admin_set_path_wins_over_announcement() -> None:
+    """A stdin_socket_path set in the config wins over a 0x06 announcement."""
+    admin_path = "/run/admin-set.stdin.sock"
+    connector = _fed_input(
+        [CaptureFrame(CHANNEL_INPUT, _PAM_STDIN_SOCKET.encode(), peer_pid=1234)],
+        config_stdin_socket_path=admin_path,
+    )
+    with patch("provide.uterm.pty.capture_connector._is_descendant_of", return_value=True):
+        await connector.poll_messages()
+    # The admin-set path is unchanged.
+    assert connector._stdin_socket_path == admin_path
+
+
+async def test_input_frame_malformed_payload_is_ignored() -> None:
+    """A 0x06 frame with a relative path is ignored (parse returns None)."""
+    connector = _fed_input([CaptureFrame(CHANNEL_INPUT, b"relative/path", peer_pid=1234)])
+    with patch("provide.uterm.pty.capture_connector._is_descendant_of", return_value=True):
+        await connector.poll_messages()
+    assert connector._stdin_socket_path is None
+
+
+async def test_input_frame_closes_existing_stdin_writer_when_path_changes() -> None:
+    """A 0x06 frame that sets a new path closes the existing stdin writer."""
+    connector = _fed_input([CaptureFrame(CHANNEL_INPUT, _PAM_STDIN_SOCKET.encode(), peer_pid=1234)])
+    # Simulate an open stdin writer from a previous connection.
+    connector._stdin_writer = MagicMock()
+    connector._stdin_writer.close = MagicMock()
+    with patch("provide.uterm.pty.capture_connector._is_descendant_of", return_value=True):
+        await connector.poll_messages()
+    assert connector._stdin_socket_path == _PAM_STDIN_SOCKET
+    assert connector._stdin_writer is None  # closed and cleared

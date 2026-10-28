@@ -190,7 +190,7 @@ func TestCaptureDropOldestOnOverflow(t *testing.T) {
 		makeFrame(ChannelStdout, []byte("b")),
 		makeFrame(ChannelStdout, []byte("c")),
 	}, nil))
-	s.handleConn(r)
+	s.handleConn(r, 0)
 	if s.QueueLen() != 2 {
 		t.Fatalf("queue len = %d, want 2", s.QueueLen())
 	}
@@ -210,7 +210,7 @@ func TestCaptureOversizedFrameRejected(t *testing.T) {
 	hdr[0] = byte(ChannelStdout)
 	binary.BigEndian.PutUint32(hdr[1:], maxFrameBytes+1)
 	r := bytes.NewReader(append(hdr, 0xAA))
-	s.handleConn(r)
+	s.handleConn(r, 0)
 	if s.QueueLen() != 0 {
 		t.Fatalf("nothing should be enqueued, got %d", s.QueueLen())
 	}
@@ -226,7 +226,7 @@ func TestCaptureExactCapAccepted(t *testing.T) {
 	// A frame whose length equals the cap boundary is accepted (> not >=). Use a
 	// small synthetic cap by sending a normal frame — exercises the accept path.
 	r := bytes.NewReader(makeFrame(ChannelStdout, []byte("abcd")))
-	s.handleConn(r)
+	s.handleConn(r, 0)
 	if s.QueueLen() != 1 {
 		t.Fatalf("want 1 enqueued, got %d", s.QueueLen())
 	}
@@ -240,7 +240,7 @@ func TestCaptureHandleConnPartialHeaderDropped(t *testing.T) {
 	path := shortSocketPath(t)
 	s, _ := NewCaptureSocket(path)
 	// Truncated header → io.ReadFull errors → connection dropped, nothing queued.
-	s.handleConn(bytes.NewReader([]byte{0x01, 0x00}))
+	s.handleConn(bytes.NewReader([]byte{0x01, 0x00}), 0)
 	if s.QueueLen() != 0 {
 		t.Fatalf("want empty queue, got %d", s.QueueLen())
 	}

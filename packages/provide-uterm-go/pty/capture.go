@@ -172,6 +172,11 @@ func captureBindUmask(mode int) int {
 type CaptureFrame struct {
 	Channel int
 	Data    []byte
+	// PeerPid is the connecting producer's pid, from SO_PEERCRED on the
+	// capture socket. 0 means "unverifiable" (platform without SO_PEERCRED,
+	// e.g. macOS, or the getsockopt failed). The 0x06 input channel uses it
+	// for its peer check; other channels ignore it.
+	PeerPid int
 }
 
 // CaptureSocket is a Unix-domain socket server that receives length-prefixed
@@ -279,7 +284,8 @@ func (s *CaptureSocket) acceptLoop(ln net.Listener) {
 		go func() {
 			defer s.wg.Done()
 			defer s.removeConn(conn)
-			s.handleConn(conn)
+			pid, _ := peerPID(conn)
+			s.handleConn(conn, pid)
 		}()
 	}
 }
@@ -294,7 +300,11 @@ func (s *CaptureSocket) removeConn(conn net.Conn) {
 // handleConn reads framed data from r until EOF or a framing violation. It is
 // separated from the net.Conn so the framing logic is unit-testable with any
 // io.Reader. Port of CaptureSocket._handle_connection's read loop.
-func (s *CaptureSocket) handleConn(r io.Reader) {
+//
+// peerPid is the connecting producer's pid (from SO_PEERCRED), or 0 when
+// unavailable (macOS). It is recorded on each CaptureFrame for the 0x06 input
+// channel's peer check.
+func (s *CaptureSocket) handleConn(r io.Reader, peerPid int) {
 	header := make([]byte, headerSize)
 	for {
 		if _, err := io.ReadFull(r, header); err != nil {
@@ -314,7 +324,7 @@ func (s *CaptureSocket) handleConn(r io.Reader) {
 		if _, err := io.ReadFull(r, data); err != nil {
 			return
 		}
-		s.enqueue(CaptureFrame{Channel: channel, Data: data})
+		s.enqueue(CaptureFrame{Channel: channel, Data: data, PeerPid: peerPid})
 	}
 }
 

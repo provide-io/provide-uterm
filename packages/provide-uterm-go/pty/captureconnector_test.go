@@ -372,3 +372,199 @@ func TestCaptureConnectorSetSize(t *testing.T) {
 		t.Fatalf("size %dx%d", cols, rows)
 	}
 }
+
+// ─── The input channel (0x06) ──────────────────────────────────────────────
+//
+// A producer that can deliver keystrokes (a supervisor) announces its keystroke
+// socket's path on 0x06. The connector validates the path (convention: the
+// capture socket with .sock replaced by .stdin.sock), the peer (SO_PEERCRED pid
+// must be the login's pid or a descendant), and then sets stdin_socket_path in
+// place. An admin-set path in the config wins over any announcement.
+// (Decision 2 of the capture-session-ownership ARD.)
+
+const (
+	pamSessionID  = "pam-alice-capture-1234-98765"
+	pamCapSocket  = "/run/uterm-cap-1234.sock"
+	pamStdinSock  = "/run/uterm-cap-1234.stdin.sock"
+)
+
+// startedPamCaptureConn creates a connector with a PAM-style session id and a
+// capture socket path the convention check (.sock → .stdin.sock) can run on,
+// WITHOUT binding the socket (mirrors the Python _fed_input helper). Frames are
+// enqueued directly into the capture socket's queue.
+func startedPamCaptureConn(t *testing.T) *CaptureConnector {
+	t.Helper()
+	cfg := map[string]any{"socket_path": pamCapSocket, "cols": 80, "rows": 24}
+	c, err := NewCaptureConnector(pamSessionID, "disp", cfg)
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	// Create the capture socket without starting it (no bind). The queue is
+	// already allocated; tests enqueue frames directly.
+	cs, err := NewCaptureSocket(pamCapSocket)
+	if err != nil {
+		t.Fatalf("capture socket: %v", err)
+	}
+	c.mu.Lock()
+	c.capture = cs
+	c.connected = true
+	c.mu.Unlock()
+	return c
+}
+
+func TestLoginPidFromSessionIDExtractsPid(t *testing.T) {
+	pid, ok := loginPidFromSessionID("pam-alice-capture-1234-98765")
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if pid != 1234 {
+		t.Fatalf("pid = %d, want 1234", pid)
+	}
+}
+
+func TestLoginPidFromSessionIDReturnsFalseForNonPam(t *testing.T) {
+	if _, ok := loginPidFromSessionID("scratch-1"); ok {
+		t.Fatal("expected !ok for non-PAM id")
+	}
+}
+
+func TestExpectedStdinSocketPathReplacesSockSuffix(t *testing.T) {
+	if got := expectedStdinSocketPath("/run/uterm-cap-12345.sock"); got != "/run/uterm-cap-12345.stdin.sock" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestExpectedStdinSocketPathAppendsWhenNoSockSuffix(t *testing.T) {
+	if got := expectedStdinSocketPath("/run/cap"); got != "/run/cap.stdin.sock" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestIsDescendantOfSelfIsTrue(t *testing.T) {
+	if !isDescendantOf(1234, 1234) {
+		t.Fatal("expected self to be a descendant")
+	}
+}
+
+func TestIsDescendantOfReturnsFalseWhenProcUnavailable(t *testing.T) {
+	// A pid that does not exist; the /proc/<pid>/stat read fails.
+	if isDescendantOf(99999999, 1234) {
+		t.Fatal("expected false for nonexistent pid")
+	}
+}
+
+func TestCaptureConnectorInputFrameValidPathSetsStdinSocketPath(t *testing.T) {
+	// A 0x06 frame with the right path and a valid peer sets stdin_socket_path.
+	orig := isDescendantOf
+	isDescendantOf = func(pid, ancestor int) bool { return true }
+	defer func() { isDescendantOf = orig }()
+	c := startedPamCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelInput, Data: []byte(pamStdinSock), PeerPid: 1234})
+	c.PollMessages()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stdinSocketPath != pamStdinSock {
+		t.Fatalf("stdinSocketPath = %q, want %q", c.stdinSocketPath, pamStdinSock)
+	}
+}
+
+func TestCaptureConnectorInputFrameWrongPathIsRefused(t *testing.T) {
+	orig := isDescendantOf
+	isDescendantOf = func(pid, ancestor int) bool { return true }
+	defer func() { isDescendantOf = orig }()
+	c := startedPamCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelInput, Data: []byte("/run/evil.sock"), PeerPid: 1234})
+	c.PollMessages()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stdinSocketPath != "" {
+		t.Fatalf("stdinSocketPath = %q, want empty (refused)", c.stdinSocketPath)
+	}
+}
+
+func TestCaptureConnectorInputFrameEmptyPayloadWithdrawsPath(t *testing.T) {
+	orig := isDescendantOf
+	isDescendantOf = func(pid, ancestor int) bool { return true }
+	defer func() { isDescendantOf = orig }()
+	c := startedPamCaptureConn(t)
+	c.mu.Lock()
+	c.stdinSocketPath = "/run/old.stdin.sock"
+	c.mu.Unlock()
+	c.capture.enqueue(CaptureFrame{Channel: ChannelInput, Data: []byte{}, PeerPid: 1234})
+	c.PollMessages()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stdinSocketPath != "" {
+		t.Fatalf("stdinSocketPath = %q, want empty (withdrawn)", c.stdinSocketPath)
+	}
+}
+
+func TestCaptureConnectorInputFramePeerPidZeroIsRefused(t *testing.T) {
+	// peer_pid=0 means "unverifiable" (macOS, no SO_PEERCRED); 0x06 is refused.
+	orig := isDescendantOf
+	isDescendantOf = func(pid, ancestor int) bool { return true }
+	defer func() { isDescendantOf = orig }()
+	c := startedPamCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelInput, Data: []byte(pamStdinSock), PeerPid: 0})
+	c.PollMessages()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stdinSocketPath != "" {
+		t.Fatalf("stdinSocketPath = %q, want empty (peer unverifiable)", c.stdinSocketPath)
+	}
+}
+
+func TestCaptureConnectorInputFramePeerMismatchIsRefused(t *testing.T) {
+	orig := isDescendantOf
+	isDescendantOf = func(pid, ancestor int) bool { return false }
+	defer func() { isDescendantOf = orig }()
+	c := startedPamCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelInput, Data: []byte(pamStdinSock), PeerPid: 9999})
+	c.PollMessages()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stdinSocketPath != "" {
+		t.Fatalf("stdinSocketPath = %q, want empty (peer mismatch)", c.stdinSocketPath)
+	}
+}
+
+func TestCaptureConnectorInputFrameAdminSetPathWinsOverAnnouncement(t *testing.T) {
+	orig := isDescendantOf
+	isDescendantOf = func(pid, ancestor int) bool { return true }
+	defer func() { isDescendantOf = orig }()
+	adminPath := "/run/admin-set.stdin.sock"
+	cfg := map[string]any{"socket_path": pamCapSocket, "stdin_socket_path": adminPath}
+	c, err := NewCaptureConnector(pamSessionID, "disp", cfg)
+	if err != nil {
+		t.Fatalf("new: %v", err)
+	}
+	cs, err := NewCaptureSocket(pamCapSocket)
+	if err != nil {
+		t.Fatalf("capture socket: %v", err)
+	}
+	c.mu.Lock()
+	c.capture = cs
+	c.connected = true
+	c.mu.Unlock()
+	c.capture.enqueue(CaptureFrame{Channel: ChannelInput, Data: []byte(pamStdinSock), PeerPid: 1234})
+	c.PollMessages()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stdinSocketPath != adminPath {
+		t.Fatalf("stdinSocketPath = %q, want admin path %q (admin wins)", c.stdinSocketPath, adminPath)
+	}
+}
+
+func TestCaptureConnectorInputFrameMalformedPayloadIsIgnored(t *testing.T) {
+	orig := isDescendantOf
+	isDescendantOf = func(pid, ancestor int) bool { return true }
+	defer func() { isDescendantOf = orig }()
+	c := startedPamCaptureConn(t)
+	c.capture.enqueue(CaptureFrame{Channel: ChannelInput, Data: []byte("relative/path"), PeerPid: 1234})
+	c.PollMessages()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.stdinSocketPath != "" {
+		t.Fatalf("stdinSocketPath = %q, want empty (malformed ignored)", c.stdinSocketPath)
+	}
+}
