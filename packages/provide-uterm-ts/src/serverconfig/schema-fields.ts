@@ -139,6 +139,11 @@ export const SECTION_FIELD_SPECS = {
     relay_url: "str?",
     relay_token: "str?", // pragma: allowlist secret
     capture_socket_dir: "str?",
+    capture_session_dir: "str?",
+    capture_owner: ["pam_user", "hook", "none"],
+    capture_owner_hook_url: "str?",
+    capture_owner_hook_secret: "str?", // pragma: allowlist secret
+    capture_owner_hook_timeout_s: "float",
     require_peer_uids: "int[]?",
     capture_socket_mode: "int",
   },

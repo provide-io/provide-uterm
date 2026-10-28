@@ -561,6 +561,36 @@
         "optional": true,
         "required": false
       },
+      "capture_session_dir": {
+        "kind": "str",
+        "optional": true,
+        "required": false
+      },
+      "capture_owner": {
+        "kind": "literal",
+        "choices": [
+          "pam_user",
+          "hook",
+          "none"
+        ],
+        "optional": false,
+        "required": false
+      },
+      "capture_owner_hook_url": {
+        "kind": "str",
+        "optional": true,
+        "required": false
+      },
+      "capture_owner_hook_secret": {
+        "kind": "str",
+        "optional": true,
+        "required": false
+      },
+      "capture_owner_hook_timeout_s": {
+        "kind": "float",
+        "optional": false,
+        "required": false
+      },
       "require_peer_uids": {
         "kind": "list",
         "item": {

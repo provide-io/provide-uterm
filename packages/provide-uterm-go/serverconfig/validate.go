@@ -444,7 +444,27 @@ func validatePam(p *PamConfig) error {
 	if err := validateCaptureSocketMode(p.CaptureSocketMode); err != nil {
 		return err
 	}
-	return requireSecureURL(p.RelayURL, "pam.relay_url")
+	if !inSet(p.CaptureOwner, "pam_user", "hook", "none") {
+		return literalError("pam.capture_owner", "pam_user", "hook", "none")
+	}
+	if p.CaptureOwnerHookTimeoutS == 0 {
+		p.CaptureOwnerHookTimeoutS = 1.0
+	}
+	if p.CaptureOwnerHookTimeoutS < 0.1 || p.CaptureOwnerHookTimeoutS > 5.0 {
+		return fmt.Errorf("pam.capture_owner_hook_timeout_s must be between 0.1 and 5.0, got: %v", p.CaptureOwnerHookTimeoutS)
+	}
+	if p.CaptureOwner == "hook" {
+		if p.CaptureOwnerHookURL == nil {
+			return fmt.Errorf("pam.capture_owner_hook_url is required when pam.capture_owner is hook")
+		}
+		if p.CaptureOwnerHookSecret == nil { // pragma: allowlist secret
+			return fmt.Errorf("pam.capture_owner_hook_secret is required when pam.capture_owner is hook") // pragma: allowlist secret
+		}
+	}
+	if err := requireSecureURL(p.RelayURL, "pam.relay_url"); err != nil {
+		return err
+	}
+	return requireSecureURL(p.CaptureOwnerHookURL, "pam.capture_owner_hook_url")
 }
 
 func validateGovernance(g *GovernanceConfig) error {

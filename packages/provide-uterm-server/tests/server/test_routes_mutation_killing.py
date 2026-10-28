@@ -254,6 +254,74 @@ class TestHealthRouter:
             "features": ["viewers.revoke.subject"],
         }
 
+    async def test_health_advertises_owner_pam_user_in_capture_mode(self) -> None:
+        """``sessions.capture.owner.pam_user`` is listed when capture_owner is pam_user."""
+        health = _endpoint(self._router(), "/api/health")
+        reg = SimpleNamespace(_sessions={})
+        pam = SimpleNamespace(mode="capture", capture_owner="pam_user", capture_session_dir=None)
+        cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="memory"), pam=pam)
+        resp = MagicMock()
+        out = await health(
+            _request(
+                app_state={
+                    "uterm_registry": reg,
+                    "uterm_ready": True,
+                    "uterm_startup_time": 0.0,
+                    "uterm_config": cfg,
+                }
+            ),
+            resp,
+        )
+        assert "sessions.capture.owner.pam_user" in out["features"]
+        assert "sessions.capture.owner.hook" not in out["features"]
+
+    async def test_health_advertises_owner_hook_when_configured(self) -> None:
+        """``sessions.capture.owner.hook`` is listed when capture_owner is hook."""
+        health = _endpoint(self._router(), "/api/health")
+        reg = SimpleNamespace(_sessions={})
+        pam = SimpleNamespace(
+            mode="capture",
+            capture_owner="hook",
+            capture_session_dir=None,
+            capture_owner_hook_url="http://127.0.0.1:8787/hook",
+        )
+        cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="memory"), pam=pam)
+        resp = MagicMock()
+        out = await health(
+            _request(
+                app_state={
+                    "uterm_registry": reg,
+                    "uterm_ready": True,
+                    "uterm_startup_time": 0.0,
+                    "uterm_config": cfg,
+                }
+            ),
+            resp,
+        )
+        assert "sessions.capture.owner.hook" in out["features"]
+        assert "sessions.capture.owner.pam_user" not in out["features"]
+
+    async def test_health_omits_owner_features_in_notify_mode(self) -> None:
+        """Neither owner feature is listed when PAM is in notify mode."""
+        health = _endpoint(self._router(), "/api/health")
+        reg = SimpleNamespace(_sessions={})
+        pam = SimpleNamespace(mode="notify", capture_owner="pam_user", capture_session_dir=None)
+        cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="memory"), pam=pam)
+        resp = MagicMock()
+        out = await health(
+            _request(
+                app_state={
+                    "uterm_registry": reg,
+                    "uterm_ready": True,
+                    "uterm_startup_time": 0.0,
+                    "uterm_config": cfg,
+                }
+            ),
+            resp,
+        )
+        assert "sessions.capture.owner.pam_user" not in out["features"]
+        assert "sessions.capture.owner.hook" not in out["features"]
+
     async def test_healthz_always_ok(self) -> None:
         healthz = _endpoint(self._router(), "/healthz")
         assert await healthz() == {"status": "ok"}

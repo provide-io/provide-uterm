@@ -254,6 +254,22 @@ export function validateControlPlaneConfig(input: Record<string, unknown>): void
  */
 export function validatePamConfig(input: Record<string, unknown>): void {
   requireSecureUrl(input.relay_url as string | undefined, "pam.relay_url");
+  requireSecureUrl(input.capture_owner_hook_url as string | undefined, "pam.capture_owner_hook_url");
+  const owner = input.capture_owner ?? "pam_user";
+  if (owner === "hook") {
+    if (input.capture_owner_hook_url === undefined || input.capture_owner_hook_url === null) {
+      throw new Error("pam.capture_owner_hook_url is required when pam.capture_owner is hook");
+    }
+    if (input.capture_owner_hook_secret === undefined || input.capture_owner_hook_secret === null) {
+      throw new Error("pam.capture_owner_hook_secret is required when pam.capture_owner is hook");
+    }
+  }
+  const timeout = input.capture_owner_hook_timeout_s as number | undefined ?? 1.0;
+  if (timeout < 0.1 || timeout > 5.0) {
+    throw new Error(
+      `pam.capture_owner_hook_timeout_s must be between 0.1 and 5.0, got: ${timeout}`,
+    );
+  }
 }
 
 /**

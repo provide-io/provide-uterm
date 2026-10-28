@@ -229,8 +229,10 @@ public static class ConfigLoader
         },
         ["pam"] = new(StringComparer.Ordinal)
         {
-            "auto_session", "auto_session_command", "capture_socket_dir", "capture_socket_mode", "mode",
-            "notify_socket", "relay_token", "relay_url", "require_peer_uids"
+            "auto_session", "auto_session_command", "capture_owner", "capture_owner_hook_secret",
+            "capture_owner_hook_timeout_s", "capture_owner_hook_url", "capture_socket_dir",
+            "capture_socket_mode", "mode", "notify_socket", "relay_token", "relay_url",
+            "require_peer_uids"
         },
         ["governance"] = new(StringComparer.Ordinal)
         {

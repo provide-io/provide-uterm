@@ -65,6 +65,13 @@ PREVIOUS_SESSIONS_FEATURE = "sessions.previous"
 # Other sockets are not covered: a pty session's injected capture socket stays
 # owner-only in its own private directory.
 CAPTURE_SOCKET_MODE_FEATURE = "capture.socket_mode"
+# ``sessions.capture.owner.pam_user``: the PAM user is the capture session's
+# owner (``pam.capture_owner = "pam_user"``, the default). Listed when PAM is
+# in capture mode.
+# ``sessions.capture.owner.hook``: uterm asks a configured URL who owns the
+# login (``pam.capture_owner = "hook"``). Listed when PAM is in capture mode.
+CAPTURE_OWNER_PAM_USER_FEATURE = "sessions.capture.owner.pam_user"
+CAPTURE_OWNER_HOOK_FEATURE = "sessions.capture.owner.hook"
 
 
 def server_features(config: object) -> list[str]:
@@ -78,6 +85,12 @@ def server_features(config: object) -> list[str]:
     pam = getattr(config, "pam", None)
     if pam is not None and pam.capture_socket_mode == OWNER_AND_GROUP_CAPTURE_SOCKET_MODE:
         features.append(CAPTURE_SOCKET_MODE_FEATURE)
+    if pam is not None and getattr(pam, "mode", None) == "capture":
+        owner = getattr(pam, "capture_owner", "pam_user")
+        if owner == "pam_user":
+            features.append(CAPTURE_OWNER_PAM_USER_FEATURE)
+        elif owner == "hook":
+            features.append(CAPTURE_OWNER_HOOK_FEATURE)
     return features
 
 

@@ -510,6 +510,23 @@ class PamConfig(ServerBaseModel):
     relay_token: str | None = None
     # Confine capture sockets to this dir (None → derive from notify_socket's parent dir)
     capture_socket_dir: str | None = None
+    # How a capture session's owner is set when it is created. "pam_user"
+    # (default): owner is the PAM login name, verbatim, as the relay path
+    # already sets it; visibility stays "operator". "hook": uterm asks a
+    # configured URL who owns the login and uses the answer. "none": today's
+    # behaviour, no owner.
+    capture_owner: Literal["pam_user", "hook", "none"] = "pam_user"
+    # The URL uterm POSTs to under capture_owner = "hook". Required when
+    # capture_owner is "hook". Held to https:// or http:// to a loopback host.
+    capture_owner_hook_url: str | None = None
+    # The HMAC-SHA256 secret signing the hook request and its response.
+    # Required when capture_owner is "hook".
+    capture_owner_hook_secret: str | None = None
+    # How long the hook call has to return a verified, valid answer
+    # (0.1 .. 5.0 seconds). A failure is anything else: refused connection,
+    # timeout, non-200, bad or missing signature, stale timestamp, nonce
+    # mismatch, replay, unparseable body, owner or visibility refused.
+    capture_owner_hook_timeout_s: float = 1.0
     # Opt-in: only these peer euids may send notify events (None → don't enforce, log only)
     require_peer_uids: list[int] | None = None
     # The permissions of every capture socket this server binds for a
@@ -535,6 +552,24 @@ class PamConfig(ServerBaseModel):
     @model_validator(mode="after")
     def _validate_outbound_url_schemes(self) -> PamConfig:
         _require_secure_url(self.relay_url, "pam.relay_url")
+        _require_secure_url(self.capture_owner_hook_url, "pam.capture_owner_hook_url")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_hook_owner_requires_url_and_secret(self) -> PamConfig:
+        if self.capture_owner == "hook":
+            if self.capture_owner_hook_url is None:
+                raise ValueError("pam.capture_owner_hook_url is required when pam.capture_owner is hook")
+            if self.capture_owner_hook_secret is None:
+                raise ValueError("pam.capture_owner_hook_secret is required when pam.capture_owner is hook")
+        return self
+
+    @model_validator(mode="after")
+    def _validate_hook_timeout_bounds(self) -> PamConfig:
+        if not (0.1 <= self.capture_owner_hook_timeout_s <= 5.0):
+            raise ValueError(
+                f"pam.capture_owner_hook_timeout_s must be between 0.1 and 5.0, got: {self.capture_owner_hook_timeout_s}"
+            )
         return self
 
 
