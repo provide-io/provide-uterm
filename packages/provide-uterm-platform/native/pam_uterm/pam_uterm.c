@@ -26,13 +26,21 @@
  * JSON payloads sent to the notify socket (newline-terminated):
  *
  *   notify mode:
- *     open:  {"event":"open",  "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"notify"}
+ *     open:  {"event":"open",  "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"notify",
+ *             "start_ticks":1234567890}
  *     close: {"event":"close", "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"notify"}
  *
- *   capture mode (open adds capture_socket and publishes it via pam_putenv):
+ *   capture mode (open adds capture_socket, start_ticks, and ssh_auth_info):
  *     open:  {"event":"open",  "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"capture",
- *             "capture_socket":"/run/uterm-cap-12345.sock"}
+ *             "capture_socket":"/run/uterm-cap-12345.sock",
+ *             "ssh_auth_info":["publickey ssh-ed25519 AAAA...","publickey ssh-rsa AAAA..."],
+ *             "start_ticks":1234567890}
  *     close: {"event":"close", "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"capture"}
+ *
+ *   ssh_auth_info is present only when sshd sets SSH_AUTH_INFO_0 (ExposeAuthInfo
+ *   yes); the Python side fingerprints the keys and never receives the raw blob.
+ *   start_ticks is field 22 of /proc/<pid>/stat (clock ticks since boot); it
+ *   disambiguates pids (a pid can be reused after a process exits).
  *
  * Non-fatal: PAM_SUCCESS is always returned so the session proceeds normally
  * even if the provide-uterm daemon is not running.
@@ -56,7 +64,6 @@
 /* Escaped-JSON field buffer: a username/tty (<= 256 bytes) where every byte
  * expands to a 6-char \uXXXX escape, plus the trailing NUL. */
 #define MAX_JSON_FIELD  (6 * 256 + 1)
-
 /* ── arg parsing ────────────────────────────────────────────────────────── */
 
 static const char *_get_arg(int argc, const char **argv, const char *key, const char *def) {
@@ -173,6 +180,106 @@ static void _set_capture_environment(pam_handle_t *pamh,
     }
 }
 
+/* Read the process start time (field 22 of /proc/<pid>/stat, in clock ticks
+ * since boot). Used to disambiguate pids: a pid can be reused after a process
+ * exits, but (pid, start_ticks) is unique for a live login. Returns 0 on
+ * failure (the Python side treats 0 as "unknown" and reads /proc itself). */
+static unsigned long _read_start_ticks(int pid) {
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    char buf[4096];
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    if (n == 0) return 0;
+    buf[n] = '\0';
+    /* Field 2 (comm) is in parentheses and may contain spaces and even ')'.
+     * Skip past the LAST ')' to reach the remaining space-separated fields. */
+    char *p = strrchr(buf, ')');
+    if (!p) return 0;
+    p++;  /* now points to " state ppid pgrp ..." (field 3 onward) */
+    /* Field 22 (starttime) is 20 spaces past ')': fields 3..21 are 19 fields,
+     * and the 20th space lands us on field 22. */
+    for (int i = 0; i < 20; i++) {
+        p = strchr(p, ' ');
+        if (!p) return 0;
+        p++;
+    }
+    unsigned long ticks = 0;
+    sscanf(p, "%lu", &ticks);
+    return ticks;
+}
+
+/* Read SSH_AUTH_INFO_0 (a temp-file path set by sshd when ExposeAuthInfo=yes),
+ * read the file, and return its lines as a JSON array string (malloc'd, or
+ * NULL when the env var is absent or the file cannot be read). The file
+ * contains lines like "publickey ssh-ed25519 AAAA..."; at most a handful
+ * (sshd caps the number). Each line is JSON-escaped into a dynamic buffer so
+ * no key is truncated. The raw keys leave this function only as JSON-escaped
+ * array elements; the Python side fingerprints them and never receives the
+ * raw blob. */
+static char *_read_ssh_auth_info(pam_handle_t *pamh) {
+    const char *path = pam_getenv(pamh, "SSH_AUTH_INFO_0");
+    if (!path || !*path) return NULL;
+    FILE *f = fopen(path, "r");
+    if (!f) return NULL;
+
+    size_t cap = 4096;
+    char *buf = malloc(cap);
+    if (!buf) { fclose(f); return NULL; }
+    size_t len = 0;
+    buf[len++] = '[';
+    int first = 1;
+
+    char line[8192];
+    while (fgets(line, sizeof(line), f)) {
+        /* Strip trailing newline / carriage return. */
+        size_t l = strlen(line);
+        while (l > 0 && (line[l-1] == '\n' || line[l-1] == '\r')) line[--l] = '\0';
+        if (l == 0) continue;
+
+        /* Ensure capacity: comma + quotes + escaped line (6x worst case) + 1. */
+        size_t need = (first ? 0 : 1) + 2 + l * 6 + 1;
+        if (len + need + 1 > cap) {
+            cap = (len + need + 1) * 2;
+            char *nb = realloc(buf, cap);
+            if (!nb) { free(buf); fclose(f); return NULL; }
+            buf = nb;
+        }
+
+        if (!first) buf[len++] = ',';
+        first = 0;
+        buf[len++] = '"';
+        /* JSON-escape the line (same rules as _json_escape, inlined for the
+         * dynamic buffer: base64 key data has no special chars, but a
+         * crafted line must not break out of its string). */
+        for (size_t i = 0; i < l; i++) {
+            unsigned char c = (unsigned char)line[i];
+            switch (c) {
+                case '"':  buf[len++] = '\\'; buf[len++] = '"'; break;
+                case '\\': buf[len++] = '\\'; buf[len++] = '\\'; break;
+                case '\b': buf[len++] = '\\'; buf[len++] = 'b'; break;
+                case '\f': buf[len++] = '\\'; buf[len++] = 'f'; break;
+                case '\n': buf[len++] = '\\'; buf[len++] = 'n'; break;
+                case '\r': buf[len++] = '\\'; buf[len++] = 'r'; break;
+                case '\t': buf[len++] = '\\'; buf[len++] = 't'; break;
+                default:
+                    if (c < 0x20) {
+                        len += (size_t)snprintf(buf + len, cap - len, "\\u%04x", c);
+                    } else {
+                        buf[len++] = (char)c;
+                    }
+            }
+        }
+        buf[len++] = '"';
+    }
+    fclose(f);
+    buf[len++] = ']';
+    buf[len] = '\0';
+    return buf;
+}
+
 /* ── open session ────────────────────────────────────────────────────────── */
 
 PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((unused)),
@@ -205,17 +312,35 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
         char cap_sock[MAX_PATH];
         snprintf(cap_sock, sizeof(cap_sock), "%s/uterm-cap-%d.sock", cap_dir, pid);
 
-        json = _build_json(
-                 "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
-                 "\"pid\":%d,\"mode\":\"capture\",\"capture_socket\":\"%s\"}",
-                 user_esc, tty_esc, pid, cap_sock);
+        unsigned long start_ticks = _read_start_ticks(pid);
+        char *auth_info = _read_ssh_auth_info(pamh);
+
+        /* When ssh_auth_info is present, include it; otherwise omit the field
+         * (the Python side treats absence as "no keys offered"). start_ticks is
+         * always sent so the Python side can build the session id without a
+         * separate /proc read. */
+        if (auth_info) {
+            json = _build_json(
+                     "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
+                     "\"pid\":%d,\"mode\":\"capture\",\"capture_socket\":\"%s\","
+                     "\"ssh_auth_info\":%s,\"start_ticks\":%lu}",
+                     user_esc, tty_esc, pid, cap_sock, auth_info, start_ticks);
+            free(auth_info);
+        } else {
+            json = _build_json(
+                     "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
+                     "\"pid\":%d,\"mode\":\"capture\",\"capture_socket\":\"%s\","
+                     "\"start_ticks\":%lu}",
+                     user_esc, tty_esc, pid, cap_sock, start_ticks);
+        }
 
         _set_capture_environment(pamh, lib_path, cap_sock);
     } else {
+        unsigned long start_ticks = _read_start_ticks(pid);
         json = _build_json(
                  "{\"event\":\"open\",\"username\":\"%s\",\"tty\":\"%s\","
-                 "\"pid\":%d,\"mode\":\"notify\"}",
-                 user_esc, tty_esc, pid);
+                 "\"pid\":%d,\"mode\":\"notify\",\"start_ticks\":%lu}",
+                 user_esc, tty_esc, pid, start_ticks);
     }
 
     if (json) {

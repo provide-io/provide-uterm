@@ -41,7 +41,8 @@ from provide.uterm.pty.socket_utils import validate_socket_path
 
 logger = logging.getLogger(__name__)
 
-_MAX_LINE = 4096  # bytes — guard against runaway senders
+_MAX_LINE = 16384  # bytes — must hold SSH_AUTH_INFO_0 key lines (up to 4 keys,
+# each ~8KB base64 for RSA-4096) in the capture open event.
 _NOTIFY_SOCKET_MODE = 0o600
 # umask that yields 0o600 at file creation (0o777 & ~0o177 == 0o600). Set around
 # the bind so the socket is owner-only the instant it appears — see start().
@@ -58,6 +59,14 @@ class PamEvent:
     pid: int
     mode: Literal["notify", "capture"] = "notify"
     capture_socket: str | None = None  # set when mode="capture"
+    # SSH public-key lines from SSH_AUTH_INFO_0 (ExposeAuthInfo=yes). Present
+    # only in capture open events when sshd offered keys. The Python side
+    # fingerprints these; the raw blob never reaches the hook.
+    ssh_auth_info: list[str] | None = None
+    # Field 22 of /proc/<pid>/stat (clock ticks since boot). Disambiguates pids:
+    # a pid can be reused after a process exits, but (pid, start_ticks) is
+    # unique for a live login. 0 when the proc read failed.
+    start_ticks: int | None = None
     timestamp: float = field(default_factory=time.time)
 
 
@@ -268,6 +277,23 @@ def _parse_event(line: bytes) -> PamEvent | None:
     mode: Literal["notify", "capture"] = "capture" if raw_mode == "capture" else "notify"
     capture_socket: str | None = str(data["capture_socket"]) if data.get("capture_socket") else None
 
+    # SSH_AUTH_INFO_0 key lines (only in capture open events, only when sshd
+    # offered keys). Each line is "publickey <type> <base64 blob>".
+    raw_keys = data.get("ssh_auth_info")
+    ssh_auth_info: list[str] | None = None
+    if isinstance(raw_keys, list) and raw_keys:
+        ssh_auth_info = [str(k) for k in raw_keys if isinstance(k, str) and k]
+        if not ssh_auth_info:
+            ssh_auth_info = None
+
+    # Process start time in clock ticks (field 22 of /proc/<pid>/stat).
+    try:
+        start_ticks = int(data.get("start_ticks") or 0)
+        if start_ticks == 0:
+            start_ticks = None
+    except (TypeError, ValueError):
+        start_ticks = None
+
     return PamEvent(
         event=ev,
         username=username,
@@ -275,4 +301,6 @@ def _parse_event(line: bytes) -> PamEvent | None:
         pid=pid,
         mode=mode,
         capture_socket=capture_socket,
+        ssh_auth_info=ssh_auth_info,
+        start_ticks=start_ticks,
     )

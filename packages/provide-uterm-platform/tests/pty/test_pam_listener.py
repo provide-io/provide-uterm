@@ -85,6 +85,81 @@ def test_parse_event_timestamp_set() -> None:
     assert ev.timestamp >= t0
 
 
+def test_parse_capture_open_with_ssh_auth_info_and_start_ticks() -> None:
+    line = (
+        b'{"event":"open","username":"alice","tty":"/dev/pts/3","pid":12345,'
+        b'"mode":"capture","capture_socket":"/run/uterm-cap-12345.sock",'
+        b'"ssh_auth_info":["publickey ssh-ed25519 AAAA...","publickey ssh-rsa BBBB..."],'
+        b'"start_ticks":987654321}\n'
+    )
+    ev = _parse_event(line)
+    assert ev is not None
+    assert ev.mode == "capture"
+    assert ev.capture_socket == "/run/uterm-cap-12345.sock"
+    assert ev.ssh_auth_info == ["publickey ssh-ed25519 AAAA...", "publickey ssh-rsa BBBB..."]
+    assert ev.start_ticks == 987654321
+
+
+def test_parse_capture_open_without_ssh_auth_info() -> None:
+    """When sshd did not set SSH_AUTH_INFO_0, the field is absent and None."""
+    line = (
+        b'{"event":"open","username":"alice","tty":"/dev/pts/3","pid":12345,'
+        b'"mode":"capture","capture_socket":"/run/uterm-cap-12345.sock",'
+        b'"start_ticks":987654321}\n'
+    )
+    ev = _parse_event(line)
+    assert ev is not None
+    assert ev.ssh_auth_info is None
+    assert ev.start_ticks == 987654321
+
+
+def test_parse_notify_open_with_start_ticks() -> None:
+    """start_ticks is sent in both notify and capture mode."""
+    line = (
+        b'{"event":"open","username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"notify","start_ticks":987654321}\n'
+    )
+    ev = _parse_event(line)
+    assert ev is not None
+    assert ev.mode == "notify"
+    assert ev.start_ticks == 987654321
+
+
+def test_parse_start_ticks_absent_is_none() -> None:
+    """An older pam_uterm.so without start_ticks yields None (not 0)."""
+    line = b'{"event":"open","username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"notify"}\n'
+    ev = _parse_event(line)
+    assert ev is not None
+    assert ev.start_ticks is None
+
+
+def test_parse_start_ticks_zero_is_none() -> None:
+    """A failed /proc read yields 0 in the C module; the parser treats it as None."""
+    line = b'{"event":"open","username":"alice","tty":"","pid":1,"mode":"notify","start_ticks":0}\n'
+    ev = _parse_event(line)
+    assert ev is not None
+    assert ev.start_ticks is None
+
+
+def test_parse_ssh_auth_info_non_string_entries_are_filtered() -> None:
+    line = (
+        b'{"event":"open","username":"alice","tty":"","pid":1,"mode":"capture",'
+        b'"capture_socket":"/run/x.sock","ssh_auth_info":["valid line", 42, null, ""]}\n'
+    )
+    ev = _parse_event(line)
+    assert ev is not None
+    assert ev.ssh_auth_info == ["valid line"]
+
+
+def test_parse_ssh_auth_info_empty_list_is_none() -> None:
+    line = (
+        b'{"event":"open","username":"alice","tty":"","pid":1,"mode":"capture",'
+        b'"capture_socket":"/run/x.sock","ssh_auth_info":[]}\n'
+    )
+    ev = _parse_event(line)
+    assert ev is not None
+    assert ev.ssh_auth_info is None
+
+
 # ── PamNotifyListener ────────────────────────────────────────────────────────
 
 
