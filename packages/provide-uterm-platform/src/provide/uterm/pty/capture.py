@@ -27,7 +27,8 @@ CHANNEL_CONNECT = 0x03
 # failed to deliver, which is otherwise invisible from this side.
 CHANNEL_STATS = 0x04
 # The terminal's size, from whoever owns the pty (a supervisor), as >HH: cols,
-# rows. The LD_PRELOAD shim never sends it: it cannot see a resize. A reader
+# rows. The LD_PRELOAD shim sends it too — from TIOCGWINSZ, on connect and at
+# most once per 250 ms on the write path, when the size changed. A reader
 # that predates it ignores it, as it does any channel it does not know, so a
 # producer can send it unconditionally.
 CHANNEL_GEOMETRY = 0x05

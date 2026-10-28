@@ -35,8 +35,9 @@ export const CHANNEL_CONNECT = 0x03;
 export const CHANNEL_STATS = 0x04;
 /**
  * The terminal's size, from whoever owns the pty (a supervisor): cols then
- * rows, each a big-endian `uint16`. The LD_PRELOAD shim never sends it: it
- * cannot see a resize.
+ * rows, each a big-endian `uint16`. The LD_PRELOAD shim sends it too — from
+ * TIOCGWINSZ, on connect and at most once per 250 ms on the write path, when
+ * the size changed.
  */
 export const CHANNEL_GEOMETRY = 0x05;
 /**

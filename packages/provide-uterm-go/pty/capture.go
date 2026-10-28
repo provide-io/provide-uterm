@@ -33,8 +33,9 @@ const (
 	// line. The Go connector does not report them; it ignores the channel.
 	ChannelStats = 0x04
 	// ChannelGeometry is the terminal's size, from whoever owns the pty (a
-	// supervisor), as >HH: cols, rows. The LD_PRELOAD shim never sends it: it
-	// cannot see a resize.
+	// supervisor), as >HH: cols, rows. The LD_PRELOAD shim sends it too — from
+	// TIOCGWINSZ, on connect and at most once per 250 ms on the write path,
+	// when the size changed.
 	ChannelGeometry = 0x05
 	// ChannelInput is the producer's keystroke-socket path, as a UTF-8 absolute
 	// path. An empty payload withdraws the path. Sent only by a producer that

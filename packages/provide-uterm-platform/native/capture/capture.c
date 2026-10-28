@@ -33,10 +33,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <signal.h>
 #include <sys/un.h>
 #include <sys/syscall.h>
+#include <time.h>
 #include <unistd.h>
 
 #define CHANNEL_STDOUT  0x01
@@ -48,8 +50,10 @@
  * exactly like a terminal that had gone quiet. */
 #define CHANNEL_STATS   0x04
 /* The terminal's size, as >HH: cols, rows, each 1..1000. A pty owner (a
- * supervisor) sends it; this shim never does -- it cannot see a resize, which
- * reaches whoever owns the pty master, not the program writing to the slave.
+ * supervisor) sends it; this shim sends it too — from TIOCGWINSZ on the first
+ * of fds 1, 2, 0 that is a tty, on connect and at most once per 250 ms on the
+ * write path, when the size changed. A resize with no output after it is
+ * noticed with the next output, so no SIGWINCH handler is needed.
  * Defined here so the channel bytes stay one set across Python, Go, TypeScript
  * and C (scripts/check_protocol_drift.py holds them together). */
 #define CHANNEL_GEOMETRY 0x05
@@ -113,6 +117,12 @@ static int capture_socket_open(void) {
     return fd;
 }
 
+/* Forward declarations: maybe_send_geometry calls send_frame, and send_frame
+ * calls maybe_send_geometry (on the stdout path). capture_writer_start also
+ * calls maybe_send_geometry to send the initial geometry before any 0x01. */
+static void maybe_send_geometry(void);
+static void send_frame(uint8_t channel, const void *data, size_t len);
+
 static int capture_writer_start(int fd) {
 #ifdef __APPLE__
     const int send_flags = 0;
@@ -127,6 +137,10 @@ static int capture_writer_start(int fd) {
     }
     atomic_store_explicit(&g_capture_fd, fd, memory_order_release);
     atomic_store_explicit(&g_writer_ready, 1, memory_order_release);
+    /* Send the initial geometry before any 0x01: the ARD says "once connected,
+     * the shim takes TIOCGWINSZ from the first of fds 1, 2, 0 that is a tty
+     * and sends 0x05 if both sides are in 1-1000, before any 0x01". */
+    maybe_send_geometry();
     return 0;
 }
 
@@ -196,9 +210,97 @@ static void maybe_send_stats(void) {
     atomic_flag_clear_explicit(&reporting, memory_order_release);
 }
 
+/* ── Geometry (0x05): the terminal's size, from TIOCGWINSZ ───────────────────
+ *
+ * Sent on connect (in capture_writer_start, before any 0x01) and thereafter on
+ * the write path, at most once per 250 ms by CLOCK_MONOTONIC, when the size
+ * changed. No SIGWINCH handler: a program that answers a resize redraws, so
+ * the redraw's first write() is where the new size is noticed; a resize with
+ * no output after it is noticed with the next output. */
+
+#define GEOMETRY_MIN 1
+#define GEOMETRY_MAX 1000
+/* 250 ms in nanoseconds. */
+#define GEOMETRY_COOLDOWN_NS 250000000L
+
+static void maybe_send_geometry(void) {
+    static atomic_int last_cols = ATOMIC_VAR_INIT(0);
+    static atomic_int last_rows = ATOMIC_VAR_INIT(0);
+    static atomic_long last_check_ns = ATOMIC_VAR_INIT(0);
+
+    if (!atomic_load_explicit(&g_writer_ready, memory_order_acquire)) {
+        return;
+    }
+
+    /* Find the first of fds 1, 2, 0 that is a tty. */
+    int tty_fd = -1;
+    if (isatty(STDOUT_FILENO)) {
+        tty_fd = STDOUT_FILENO;
+    } else if (isatty(STDERR_FILENO)) {
+        tty_fd = STDERR_FILENO;
+    } else if (isatty(STDIN_FILENO)) {
+        tty_fd = STDIN_FILENO;
+    }
+    if (tty_fd < 0) {
+        return;
+    }
+
+    /* Rate-limit: at most once per 250 ms. The first call (last_check_ns == 0)
+     * always proceeds, so the initial geometry goes out on connect. */
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) < 0) {
+        return;
+    }
+    long now_ns = (long)now.tv_sec * 1000000000L + (long)now.tv_nsec;
+    long last = atomic_load_explicit(&last_check_ns, memory_order_relaxed);
+    if (last != 0 && (now_ns - last) < GEOMETRY_COOLDOWN_NS) {
+        return;
+    }
+    atomic_store_explicit(&last_check_ns, now_ns, memory_order_relaxed);
+
+    struct winsize ws;
+    memset(&ws, 0, sizeof(ws));
+    if (ioctl(tty_fd, TIOCGWINSZ, &ws) < 0) {
+        return;
+    }
+
+    int cols = (int)ws.ws_col;
+    int rows = (int)ws.ws_row;
+    if (cols < GEOMETRY_MIN || cols > GEOMETRY_MAX) {
+        return;
+    }
+    if (rows < GEOMETRY_MIN || rows > GEOMETRY_MAX) {
+        return;
+    }
+
+    /* Only send when the size changed. */
+    int prev_cols = atomic_load_explicit(&last_cols, memory_order_relaxed);
+    int prev_rows = atomic_load_explicit(&last_rows, memory_order_relaxed);
+    if (cols == prev_cols && rows == prev_rows) {
+        return;
+    }
+    atomic_store_explicit(&last_cols, cols, memory_order_relaxed);
+    atomic_store_explicit(&last_rows, rows, memory_order_relaxed);
+
+    /* Pack as >HH: cols, rows. Kernel struct winsize is {rows, cols, xpix,
+     * ypix} (rows first); the wire is cols-first, so swap. */
+    uint8_t payload[4];
+    payload[0] = (uint8_t)((unsigned int)cols >> 8);
+    payload[1] = (uint8_t)((unsigned int)cols & 0xFF);
+    payload[2] = (uint8_t)((unsigned int)rows >> 8);
+    payload[3] = (uint8_t)((unsigned int)rows & 0xFF);
+    send_frame(CHANNEL_GEOMETRY, payload, sizeof(payload));
+}
+
 static void send_frame(uint8_t channel, const void *data, size_t len) {
     if (!atomic_load_explicit(&g_writer_ready, memory_order_acquire)) {
         return;
+    }
+    /* On the write path: check for a size change before emitting stdout, so
+     * the geometry frame lands before the redraw's output, matching the ARD:
+     * "the redraw's first write() is where the new size is noticed". */
+    if (channel == CHANNEL_STDOUT) {
+        maybe_send_geometry();
     }
     (void)capture_writer_emit(&g_writer, channel, data, len);
     if (channel != CHANNEL_STATS) {
