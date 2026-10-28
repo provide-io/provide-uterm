@@ -601,6 +601,12 @@ source_paths = [
     "src/provide/uterm/bridge/coordinator.py",
     # DeckMux presence service — split out of DeckMuxMixin in #6 follow-up.
     "src/provide/uterm/deckmux/_service.py",
+    # pam_owner_hook.py — the capture-owner hook client (Decision 1 of the
+    #   capture-session-ownership ARD). Security-critical: it signs the hook
+    #   request, verifies the response, fingerprints SSH keys, and validates the
+    #   owner/visibility answer. Every branch is a security boundary. Bound by
+    #   test_pam_owner_hook.py.
+    "src/provide/uterm/server/pam_owner_hook.py",
 ]
 pytest_add_cli_args_test_selection = [
     "packages/provide-uterm/tests/bridge/test_behavior_policy.py",
@@ -1001,6 +1007,10 @@ pytest_add_cli_args_test_selection = [
     # Imports them via the normal `from ...config_schema import ...` path so the
     # mutated trampoline (not the original source) is exercised.
     "packages/provide-uterm-server/tests/server/test_models_mutation_killing.py",
+    # pam_owner_hook.py kill-suite: the capture-owner hook client. Fully
+    # transport-injected (http_post callable) so mutmut's forked workers never
+    # drive real HTTP — the same pattern as test_webhooks_mutation_killing.py.
+    "packages/provide-uterm-server/tests/server/test_pam_owner_hook.py",
     # webhooks.py kill-suite: fully network-mocked (autouse getaddrinfo MagicMock +
     # patched HTTP) so mutmut's forked workers NEVER drive the real C resolver/HTTP
     # — that real-DNS-in-a-forked-child path is what segfaulted 307/406 mutants and
