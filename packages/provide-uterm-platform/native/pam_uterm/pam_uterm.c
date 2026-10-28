@@ -42,6 +42,13 @@
  *   start_ticks is field 22 of /proc/<pid>/stat (clock ticks since boot); it
  *   disambiguates pids (a pid can be reused after a process exits).
  *
+ * Login record (capture mode only): before notifying the open event,
+ * pam_uterm writes the same JSON line to <cap_dir>/uterm-cap-<pid>.login
+ * (O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC, mode 0640, group inherited from the
+ * setgid capture directory). At startup uterm scans these records to adopt
+ * logins that opened while it was down. pam_sm_close_session unlinks it.
+ * Records live in /run and vanish at reboot.
+ *
  * Non-fatal: PAM_SUCCESS is always returned so the session proceeds normally
  * even if the provide-uterm daemon is not running.
  */
@@ -49,11 +56,13 @@
 #include <security/pam_appl.h>
 #include <security/pam_modules.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -280,6 +289,106 @@ static char *_read_ssh_auth_info(pam_handle_t *pamh) {
     return buf;
 }
 
+/* ── login record (Decision 3: adoption) ────────────────────────────────────── */
+
+/* In mode=capture, before notifying, pam_uterm writes the open event's JSON
+ * line (the same bytes, start_ticks and ssh_auth_info included) to
+ * <cap_dir>/uterm-cap-<pid>.login. At startup uterm scans these records to
+ * adopt logins it never heard of (a login that opened while uterm was down).
+ *
+ * The file is created as root with O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC, mode
+ * 0640, its group inherited from the setgid capture directory. A file already
+ * at that path (a pid reused after a crash) is unlinked first. pam_sm_close
+ * unlinks it. Records live in /run and vanish at reboot.
+ *
+ * The record is trusted no further than a PAM event: uterm's scan lstat's it
+ * (regular file, uid 0, not group/world-writable, <=16 KiB) and verifies the
+ * capture_socket and start_ticks against /proc/<pid>/stat before adopting. A
+ * capture-group member can create files in the directory but cannot create one
+ * owned by root, so a forged record needs root.
+ */
+
+/* Build the login-record path for pid in cap_dir. Returns 0 on success, -1 on
+ * overflow. The path is the capture socket's path with .sock replaced by
+ * .login — so the two are name-paired and a scan finds both. */
+static int _login_record_path(char *dst, size_t dstsize,
+                              const char *cap_dir, int pid) {
+    int n = snprintf(dst, dstsize, "%s/uterm-cap-%d.login", cap_dir, pid);
+    return (n < 0 || (size_t)n >= dstsize) ? -1 : 0;
+}
+
+/* Write the open event's JSON line to the login record. json must be the
+ * NUL-terminated, newline-ended string _build_json produces. Best-effort: a
+ * failure is logged to stderr (PAM modules have no other channel) and the
+ * session proceeds — the notify socket is still the primary path. */
+static void _write_login_record(const char *cap_dir, int pid, const char *json) {
+    char path[MAX_PATH];
+    if (_login_record_path(path, sizeof(path), cap_dir, pid) < 0) return;
+
+    /* Stat the capture directory to inherit its group (setgid or otherwise).
+     * The directory may not exist yet (uterm not started); without a group to
+     * inherit we still write the record root-owned, which the scan accepts. */
+    struct stat dir_st;
+    int have_dir_gid = 0;
+    gid_t dir_gid = 0;
+    if (stat(cap_dir, &dir_st) == 0) {
+        dir_gid = dir_st.st_gid;
+        have_dir_gid = 1;
+    }
+
+    /* A file already at that path: a pid reused after a crash. Unlink it first
+     * so O_EXCL succeeds and the record reflects this login, not the old one.
+     * O_NOFOLLOW means a symlink left by an attacker is refused, not followed. */
+    (void)unlink(path);
+
+    int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0640);
+    if (fd < 0) {
+        /* ENOENT: the capture directory does not exist (uterm not started, or
+         * a misconfigured cap_dir). The record is best-effort; the notify
+         * socket is still the primary path. */
+        return;
+    }
+
+    /* Pin the mode to 0640 regardless of umask (root's umask is often 022,
+     * which leaves 0640 intact, but 077 would strip the group read). */
+    (void)fchmod(fd, 0640);
+
+    /* Inherit the directory's group so capture-group members can read the
+     * record (the scan runs as uterm's user, which may be a group member).
+     * Only the group changes; the owner stays root (we are root). */
+    if (have_dir_gid) {
+        if (fchown(fd, (uid_t)-1, dir_gid) != 0) {
+            /* A failure to set the group is not fatal: the record is still
+             * root-owned and readable by root, and the scan can still lstat
+             * it. The setgid directory usually inherits the group via the
+             * kernel anyway, so this is belt-and-braces. */
+        }
+    }
+
+    size_t total = strlen(json);
+    size_t off = 0;
+    while (off < total) {
+        ssize_t n = write(fd, json + off, total - off);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            break;  /* best-effort */
+        }
+        if (n == 0) break;
+        off += (size_t)n;
+    }
+    (void)close(fd);
+}
+
+/* Remove the login record. Called from pam_sm_close_session. Best-effort: a
+ * missing record (never written, or already removed) is a no-op. O_NOFOLLOW is
+ * not needed here — unlink removes any directory entry, including a symlink,
+ * without following it. */
+static void _unlink_login_record(const char *cap_dir, int pid) {
+    char path[MAX_PATH];
+    if (_login_record_path(path, sizeof(path), cap_dir, pid) < 0) return;
+    (void)unlink(path);
+}
+
 /* ── open session ────────────────────────────────────────────────────────── */
 
 PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((unused)),
@@ -344,6 +453,13 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
     }
 
     if (json) {
+        /* In capture mode, write the login record before notifying so uterm
+         * can adopt this login if the notify write fails or uterm was down.
+         * The record is the same JSON line (start_ticks and ssh_auth_info
+         * included), written to <cap_dir>/uterm-cap-<pid>.login. (Decision 3.) */
+        if (capture) {
+            _write_login_record(cap_dir, pid, json);
+        }
         _notify(socket_path, json);
         free(json);
     }
@@ -355,6 +471,7 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh, int flags __attribute__((
 PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh, int flags __attribute__((unused)),
                                      int argc, const char **argv) {
     const char *socket_path = _get_arg(argc, argv, "socket", DEFAULT_SOCKET);
+    const char *cap_dir     = _get_arg(argc, argv, "cap_dir", DEFAULT_CAP_DIR);
     int capture             = _is_capture_mode(argc, argv);
     int pid                 = (int)getpid();
 
@@ -377,6 +494,12 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh, int flags __attribute__(
     if (json) {
         _notify(socket_path, json);
         free(json);
+    }
+
+    /* In capture mode, remove the login record. A missing record (never
+     * written, or already removed) is a no-op. (Decision 3.) */
+    if (capture) {
+        _unlink_login_record(cap_dir, pid);
     }
     return PAM_SUCCESS;
 }

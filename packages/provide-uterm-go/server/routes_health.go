@@ -70,6 +70,10 @@ func (s *Server) features() []string {
 		// supervisor) announces its keystroke-socket path. A client that reads
 		// this feature knows the session's input path may arrive via 0x06.
 		out = append(out, captureInputFeature)
+		// Login adoption: at startup, uterm scans login records pam_uterm left
+		// and adopts logins it never heard of (a login that opened while uterm
+		// was down). A client that reads this feature skips its own restore loop.
+		out = append(out, "sessions.capture.adopt")
 	}
 	return out
 }

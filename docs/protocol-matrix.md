@@ -472,6 +472,71 @@ waited on.
 - Go's session create ignores `auto_start`, so a Go PAM capture session (kept
   or not) runs once a client starts it, as before.
 
+## Login record (adoption)
+
+When uterm restarts, a live SSH login is still alive but uterm's in-memory
+session registry is gone. `restore_capture_sessions` re-creates sessions uterm
+persisted itself; the adoption scan covers logins uterm never heard of — the
+ones that opened while uterm was down.
+
+### The login record file
+
+In `mode=capture`, before notifying, `pam_uterm` writes the open event's JSON
+line (the same bytes, `start_ticks` and `ssh_auth_info` included) to:
+
+```
+<cap_dir>/uterm-cap-<pid>.login
+```
+
+Created as root with `O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC`, mode `0640`, its
+group inherited from the setgid capture directory. A file already at that path
+(a pid reused after a crash) is unlinked first. `pam_sm_close_session` unlinks
+it. Records live in `/run` and vanish at reboot.
+
+The `<pid>` is the PAM process's pid (the process that ran PAM). The JSON line
+is the same one sent to the notify socket — same fields, same escaping, same
+newline terminator.
+
+### The startup scan
+
+At startup, after `restore_capture_sessions` and before sessions auto-start,
+uterm lists `uterm-cap-*.login` in the capture directory
+(`pam.capture_socket_dir`, else the notify socket's directory) when
+`pam.mode = "capture"`. Each record is trusted no further than a PAM event,
+and less than a file uterm wrote itself:
+
+1. `lstat`: a regular file, owned by uid 0, not group- or world-writable, at
+   most 16 KiB. A capture-group member can create files in the directory but
+   cannot create one owned by root.
+2. Parsed as a `PamEvent` with `event: open`, `mode: capture`; its
+   `capture_socket` must be exactly `<dir>/uterm-cap-<pid>.sock` for the pid in
+   its name and must be confined to the capture directory.
+3. Its `start_ticks` must be present and equal what `/proc/<pid>/stat` reports
+   now. No start ticks, no adoption: a random-tag id cannot be proven.
+4. Its id (`pam-<user>-capture-<pid>-<start_ticks>`) must not already be in the
+   registry. A session `persist_capture` restored is left as restored, with its
+   screen, owner and recording.
+
+A record that passes is handled as PAM's open would have been: the same
+`_on_open` path, so the session is created with decision 1's owner (the hook is
+called with `adopted: true`). A record that fails is logged once at debug (a
+dead login's leftover is normal after an sshd crash) or at warning (wrong
+owner, wrong shape, socket not confined) and left alone: uterm cannot remove a
+root-owned file from a sticky directory, and should not.
+
+The scan runs once, at startup. Adoption does not require `persist_capture`:
+without it, adoption alone re-creates every live login's session after a
+restart, without its screen. The `sessions.capture.adopt` feature in
+`/api/health` advertises it is in effect.
+
+### Who reconnects
+
+An adopted session binds the capture socket; a producer has to connect to it.
+A supervisor retries until it can. The shim connects once, at process start, so
+a shim-captured login that opened while uterm was down stays uncaptured:
+adoption makes its session, and the session shows nothing until the login ends.
+That is unchanged from today — the shim has no reconnect logic (C9).
+
 ## Health checks
 
 Unauthenticated endpoints for load balancers, orchestrators, and monitoring.

@@ -97,6 +97,12 @@ def server_features(config: object) -> list[str]:
         # knows the session's input path may arrive via 0x06 (not just an
         # admin PATCH); without it, the client assumes input is admin-set only.
         features.append("capture.input")
+        # Login adoption: at startup, uterm scans login records pam_uterm left
+        # and adopts logins it never heard of (a login that opened while uterm
+        # was down). A client that reads this feature (Black Betty's
+        # keeps_capture_sessions) skips its own restore loop; without it, the
+        # client re-POSTs every live binding after a restart.
+        features.append("sessions.capture.adopt")
     return features
 
 

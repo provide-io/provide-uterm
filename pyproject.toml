@@ -607,6 +607,12 @@ source_paths = [
     #   owner/visibility answer. Every branch is a security boundary. Bound by
     #   test_pam_owner_hook.py.
     "src/provide/uterm/server/pam_owner_hook.py",
+    # capture_adopt.py — the startup login-record scan (Decision 3 of the
+    #   capture-session-ownership ARD). Security-critical: it decides which
+    #   root-owned login records to trust, lstat-checks each one, verifies the
+    #   capture_socket path and start_ticks against /proc, and routes adopted
+    #   logins through _on_open. Bound by test_capture_adopt.py.
+    "src/provide/uterm/server/capture_adopt.py",
 ]
 pytest_add_cli_args_test_selection = [
     "packages/provide-uterm/tests/bridge/test_behavior_policy.py",
@@ -1011,6 +1017,10 @@ pytest_add_cli_args_test_selection = [
     # transport-injected (http_post callable) so mutmut's forked workers never
     # drive real HTTP — the same pattern as test_webhooks_mutation_killing.py.
     "packages/provide-uterm-server/tests/server/test_pam_owner_hook.py",
+    # capture_adopt.py kill-suite: the startup login-record scan. Tmp-dir tests
+    # fake /proc start ticks and file ownership so mutmut's forked workers never
+    # touch real /proc or a real capture directory.
+    "packages/provide-uterm-server/tests/server/test_capture_adopt.py",
     # webhooks.py kill-suite: fully network-mocked (autouse getaddrinfo MagicMock +
     # patched HTTP) so mutmut's forked workers NEVER drive the real C resolver/HTTP
     # — that real-DNS-in-a-forked-child path is what segfaulted 307/406 mutants and

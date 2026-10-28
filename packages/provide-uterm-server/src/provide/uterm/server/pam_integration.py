@@ -331,12 +331,18 @@ async def _on_open(
     instances: dict[tuple[str, int], str] | None = None,
     *,
     on_metric: Callable[[str, int], None] | None = None,
+    adopted: bool = False,
 ) -> None:
     """Create the login's session, then relay the event.
 
     The id is made here, once, and kept in *instances* for :func:`_on_close`:
     it carries the process's start time, which the close may no longer be able
     to read, and, failing that, a random tag no second computation reproduces.
+
+    ``adopted`` is True when this open came from the startup login-record scan
+    (Decision 3), not from a live PAM event. The hook is told (``adopted: true``)
+    so it can distinguish a login uterm saw open from one it discovered after a
+    restart.
     """
     from provide.uterm.server.pam_tunnel import PamTunnelBridge
 
@@ -347,7 +353,7 @@ async def _on_open(
         _remember_login(instances, _login_key(ev), session_id)
 
     if cfg.mode == "capture" and ev.capture_socket:
-        await _create_capture_session(ev, cfg, registry, session_id, on_metric=on_metric)
+        await _create_capture_session(ev, cfg, registry, session_id, on_metric=on_metric, adopted=adopted)
     elif cfg.auto_session:
         await _create_notify_session(ev, cfg, registry, session_id)
 
@@ -462,6 +468,7 @@ async def _create_capture_session(
     session_id: str | None = None,
     *,
     on_metric: Callable[[str, int], None] | None = None,
+    adopted: bool = False,
 ) -> None:
     ev = event
     if ev.capture_socket is None:
@@ -509,7 +516,9 @@ async def _create_capture_session(
 
     # ── hook (capture_owner = "hook") ────────────────────────────────────────
     if pam_cfg.capture_owner == "hook":
-        task = asyncio.create_task(_resolve_owner_via_hook(ev, pam_cfg, registry, session_id, on_metric=on_metric))
+        task = asyncio.create_task(
+            _resolve_owner_via_hook(ev, pam_cfg, registry, session_id, on_metric=on_metric, adopted=adopted)
+        )
         _hook_tasks.add(task)
         task.add_done_callback(_hook_tasks.discard)
 
@@ -524,6 +533,7 @@ async def _resolve_owner_via_hook(
     session_id: str,
     *,
     on_metric: Callable[[str, int], None] | None = None,
+    adopted: bool = False,
 ) -> None:
     """Ask the configured hook who owns a capture session's login.
 
@@ -535,6 +545,10 @@ async def _resolve_owner_via_hook(
     Failures are counted via ``on_metric`` (``pam_capture_owner_hook_failed_total``)
     and logged at warning: ``pam_capture_owner_hook_failed session_id=...
     reason=<one word>``. The reason never quotes the response body.
+
+    ``adopted`` is True when the session was created from the startup
+    login-record scan (Decision 3). The hook is told so it can distinguish a
+    login uterm saw open from one it discovered after a restart.
     """
     from provide.uterm.server.pam_owner_hook import (
         HookError,
@@ -552,6 +566,7 @@ async def _resolve_owner_via_hook(
             pid=ev.pid,
             start_ticks=ev.start_ticks,
             ssh_keys=ssh_keys,
+            adopted=adopted,
         )
     except HookError as exc:
         logger.warning(

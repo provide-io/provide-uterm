@@ -521,6 +521,20 @@ def create_server_app(
             registry, capture_state, lambda socket_path: capture_socket_allowed(socket_path, config.pam)
         )
 
+        # Adopt logins uterm never heard of: a login that opened while uterm
+        # was down left a login record (pam_uterm writes it before notifying).
+        # Runs after restore_capture_sessions (so the two never make the same
+        # session) and before auto-start. Only in capture mode.
+        if config.pam.mode == "capture":
+            try:
+                from provide.uterm.server.capture_adopt import scan_login_records
+
+                adopted, skipped = await scan_login_records(config.pam, registry)
+                if adopted or skipped:
+                    logger.info("capture_sessions_adopted adopted=%s skipped=%s", adopted, skipped)
+            except Exception:
+                logger.error("capture_sessions_adopt_failed", exc_info=True)
+
         # WORM audit chain (opt-in): resume+verify the chain, then start the
         # periodic head checkpoint.  ``audit_event`` is threaded so the resume
         # helper observes any test-time patch of ``factory_impl.audit_event``.

@@ -106,6 +106,95 @@ int main(void) {
     expect_eq("preload second", recorded_env[1],
               "LD_PRELOAD=/opt/uterm/libuterm_capture.so");
 
+    /* ── login record (Decision 3: adoption) ──────────────────────────────── */
+
+    /* _login_record_path builds <cap_dir>/uterm-cap-<pid>.login. */
+    char path_buf[MAX_PATH];
+    expect_true("login_record_path builds",
+                _login_record_path(path_buf, sizeof(path_buf), "/run", 4242) == 0);
+    expect_eq("login_record_path value", path_buf, "/run/uterm-cap-4242.login");
+
+    /* _write_login_record creates a regular file, mode 0640, with the JSON
+     * line as its contents (newline included). _unlink_login_record removes
+     * it. The test runs as a regular user, so the owner check is the current
+     * uid (root-owned is the real-world invariant; the scan checks uid 0). */
+    char tmpl[] = "/tmp/uterm-pam-selftest-XXXXXX";
+    char *tmpdir = mkdtemp(tmpl);
+    expect_true("mkdtemp", tmpdir != NULL);
+
+    char rec_path[MAX_PATH];
+    expect_true("login_record_path in tmpdir",
+                _login_record_path(rec_path, sizeof(rec_path), tmpdir, 4242) == 0);
+
+    const char *rec_json =
+        "{\"event\":\"open\",\"username\":\"alice\",\"tty\":\"/dev/pts/3\","
+        "\"pid\":4242,\"mode\":\"capture\","
+        "\"capture_socket\":\"/tmp/uterm-cap-4242.sock\","
+        "\"start_ticks\":1234567890}\n";
+
+    _write_login_record(tmpdir, 4242, rec_json);
+
+    struct stat rst;
+    expect_true("login record exists", stat(rec_path, &rst) == 0);
+    expect_true("login record is regular file", S_ISREG(rst.st_mode));
+    /* Mode 0640, possibly with the setgid bit inherited from a setgid temp
+     * dir (mkdtemp makes 0700, so no setgid here). Mask the type bits. */
+    expect_true("login record mode 0640",
+                (rst.st_mode & 07777) == 0640);
+    /* Owner is the current uid (root in production; the scan checks uid 0). */
+    expect_true("login record owner is current uid",
+                rst.st_uid == getuid());
+
+    /* Contents are the exact JSON line, newline included. */
+    FILE *rf = fopen(rec_path, "r");
+    expect_true("login record readable", rf != NULL);
+    if (rf) {
+        char contents[1024];
+        size_t nread = fread(contents, 1, sizeof(contents) - 1, rf);
+        contents[nread] = '\0';
+        fclose(rf);
+        expect_eq("login record contents", contents, rec_json);
+    }
+
+    /* O_EXCL replacement: a second write unlinks the first and creates a new
+     * file (a pid reused after a crash). The file should still exist and
+     * contain the new contents. */
+    const char *rec_json2 =
+        "{\"event\":\"open\",\"username\":\"bob\",\"tty\":\"/dev/pts/4\","
+        "\"pid\":4242,\"mode\":\"capture\","
+        "\"capture_socket\":\"/tmp/uterm-cap-4242.sock\","
+        "\"start_ticks\":9876543210}\n";
+    _write_login_record(tmpdir, 4242, rec_json2);
+    expect_true("login record still exists after replace",
+                stat(rec_path, &rst) == 0);
+
+    rf = fopen(rec_path, "r");
+    expect_true("login record readable after replace", rf != NULL);
+    if (rf) {
+        char contents[1024];
+        size_t nread = fread(contents, 1, sizeof(contents) - 1, rf);
+        contents[nread] = '\0';
+        fclose(rf);
+        expect_eq("login record contents after replace", contents, rec_json2);
+    }
+
+    /* unlink on close: _unlink_login_record removes the file. */
+    _unlink_login_record(tmpdir, 4242);
+    expect_true("login record unlinked",
+                stat(rec_path, &rst) != 0 && errno == ENOENT);
+
+    /* _unlink_login_record on a missing record is a no-op (no crash). */
+    _unlink_login_record(tmpdir, 4242);
+    _unlink_login_record(tmpdir, 99999);
+
+    /* _write_login_record into a nonexistent directory is a no-op (the
+     * capture directory may not exist yet — uterm not started). The notify
+     * socket is still the primary path. */
+    _write_login_record("/nonexistent-dir-uterm-test", 4242, rec_json);
+
+    /* Cleanup the temp dir. */
+    rmdir(tmpdir);
+
     if (failures == 0) {
         printf("pam_uterm self-test: all checks passed\n");
         return 0;
