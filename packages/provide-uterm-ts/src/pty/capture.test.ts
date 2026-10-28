@@ -17,12 +17,15 @@ import {
   CaptureShortRead,
   CHANNEL_CONNECT,
   CHANNEL_GEOMETRY,
+  CHANNEL_INPUT,
   CHANNEL_STATS,
   CHANNEL_STDIN,
   CHANNEL_STDOUT,
   GEOMETRY_PAYLOAD_SIZE,
+  INPUT_MAX_LEN,
   MAX_CAPTURE_FRAME_BYTES,
   parseGeometry,
+  parseInputPath,
   readCaptureFrames,
 } from "./index.ts";
 
@@ -330,4 +333,47 @@ describe("the terminal's size, from whoever owns the pty", () => {
       expect(parseGeometry(frames[0]?.data ?? new Uint8Array())).toEqual(vector.size);
     },
   );
+});
+
+describe("the producer's keystroke-socket path", () => {
+  it("is channel 0x06", () => {
+    expect(CHANNEL_INPUT).toBe(0x06);
+  });
+
+  it("reads a UTF-8 absolute path", () => {
+    const path = "/run/uterm-cap-12345.stdin.sock";
+    expect(parseInputPath(Uint8Array.from([...path].map((c) => c.charCodeAt(0))))).toBe(path);
+  });
+
+  it("withdraws the path on an empty payload (returns empty string, not null)", () => {
+    expect(parseInputPath(new Uint8Array())).toBe("");
+  });
+
+  it("ignores non-UTF-8 (returns null)", () => {
+    expect(parseInputPath(Uint8Array.of(0x2f, 0x72, 0x75, 0x6e, 0xff, 0xfe))).toBeNull();
+  });
+
+  it("ignores a path that is not absolute (returns null)", () => {
+    const path = "relative/path.sock";
+    expect(parseInputPath(Uint8Array.from([...path].map((c) => c.charCodeAt(0))))).toBeNull();
+  });
+
+  it("ignores a path over INPUT_MAX_LEN (returns null)", () => {
+    const long = new Uint8Array(INPUT_MAX_LEN + 1);
+    long[0] = 0x2f; // "/"
+    expect(parseInputPath(long)).toBeNull();
+  });
+
+  it("accepts a path of exactly INPUT_MAX_LEN bytes", () => {
+    const exact = new Uint8Array(INPUT_MAX_LEN);
+    exact[0] = 0x2f; // "/"
+    for (let i = 1; i < INPUT_MAX_LEN; i++) {
+      exact[i] = 0x61; // "a"
+    }
+    expect(parseInputPath(exact)).toBe("/" + "a".repeat(INPUT_MAX_LEN - 1));
+  });
+
+  it("accepts a single '/' as a degenerate absolute path", () => {
+    expect(parseInputPath(Uint8Array.of(0x2f))).toBe("/");
+  });
 });

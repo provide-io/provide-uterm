@@ -255,3 +255,78 @@ func TestCaptureReadFrameContextCancel(t *testing.T) {
 		t.Fatal("expected context error")
 	}
 }
+
+// ── ParseInputPath ───────────────────────────────────────────────────────────
+
+func TestParseInputPathAbsolutePath(t *testing.T) {
+	path, ok := ParseInputPath([]byte("/run/uterm-cap-12345.stdin.sock"))
+	if !ok {
+		t.Fatal("expected ok")
+	}
+	if path != "/run/uterm-cap-12345.stdin.sock" {
+		t.Fatalf("got %q", path)
+	}
+}
+
+func TestParseInputPathEmptyWithdraws(t *testing.T) {
+	// An empty payload withdraws the path (path is "", ok is true).
+	path, ok := ParseInputPath([]byte{})
+	if !ok {
+		t.Fatal("expected ok for empty payload")
+	}
+	if path != "" {
+		t.Fatalf("expected empty path, got %q", path)
+	}
+}
+
+func TestParseInputPathNonUTF8ReturnsFalse(t *testing.T) {
+	// Non-UTF-8 is malformed and ignored (ok=false).
+	if _, ok := ParseInputPath([]byte("/run/\xff\xfe.sock")); ok {
+		t.Fatal("expected !ok for non-UTF-8")
+	}
+}
+
+func TestParseInputPathRelativeReturnsFalse(t *testing.T) {
+	// A path that is not absolute is malformed and ignored.
+	if _, ok := ParseInputPath([]byte("relative/path.sock")); ok {
+		t.Fatal("expected !ok for relative path")
+	}
+}
+
+func TestParseInputPathOverMaxLenReturnsFalse(t *testing.T) {
+	// A path over inputMaxLen is malformed and ignored.
+	longPath := bytes.Repeat([]byte("/x"), inputMaxLen/2+1)
+	if len(longPath) <= inputMaxLen {
+		t.Fatalf("test path not over max: %d vs %d", len(longPath), inputMaxLen)
+	}
+	if _, ok := ParseInputPath(longPath); ok {
+		t.Fatal("expected !ok for over-max path")
+	}
+}
+
+func TestParseInputPathExactlyAtMaxLen(t *testing.T) {
+	// A path of exactly inputMaxLen bytes is accepted.
+	path := make([]byte, inputMaxLen)
+	path[0] = '/'
+	for i := 1; i < inputMaxLen; i++ {
+		path[i] = 'a'
+	}
+	got, ok := ParseInputPath(path)
+	if !ok {
+		t.Fatal("expected ok for at-max path")
+	}
+	if got != string(path) {
+		t.Fatal("path mismatch")
+	}
+}
+
+func TestParseInputPathRootOnly(t *testing.T) {
+	// A single '/' is an absolute path (degenerate but valid UTF-8).
+	path, ok := ParseInputPath([]byte("/"))
+	if !ok {
+		t.Fatal("expected ok for root")
+	}
+	if path != "/" {
+		t.Fatalf("got %q", path)
+	}
+}

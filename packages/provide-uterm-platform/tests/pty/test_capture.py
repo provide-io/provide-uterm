@@ -13,10 +13,14 @@ import pytest
 from provide.uterm.pty.capture import (
     _MAX_FRAME_BYTES,
     CHANNEL_CONNECT,
+    CHANNEL_GEOMETRY,
+    CHANNEL_INPUT,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
+    INPUT_MAX_LEN,
     CaptureFrame,
     CaptureSocket,
+    parse_input_path,
 )
 
 
@@ -43,6 +47,50 @@ def test_channel_constants() -> None:
     assert CHANNEL_STDOUT == 0x01
     assert CHANNEL_STDIN == 0x02
     assert CHANNEL_CONNECT == 0x03
+    assert CHANNEL_GEOMETRY == 0x05
+    assert CHANNEL_INPUT == 0x06
+
+
+# ── parse_input_path ──────────────────────────────────────────────────────────
+
+
+def test_parse_input_path_absolute_path() -> None:
+    assert parse_input_path(b"/run/uterm-cap-12345.stdin.sock") == "/run/uterm-cap-12345.stdin.sock"
+
+
+def test_parse_input_path_empty_withdraws() -> None:
+    """An empty payload withdraws the path (returns "", not None)."""
+    assert parse_input_path(b"") == ""
+
+
+def test_parse_input_path_non_utf8_returns_none() -> None:
+    """Non-UTF-8 is malformed and ignored (None), not fatal."""
+    assert parse_input_path(b"/run/\xff\xfe.sock") is None
+
+
+def test_parse_input_path_relative_returns_none() -> None:
+    """A path that is not absolute is malformed and ignored."""
+    assert parse_input_path(b"relative/path.sock") is None
+
+
+def test_parse_input_path_over_max_len_returns_none() -> None:
+    """A path over INPUT_MAX_LEN is malformed and ignored."""
+    long_path = b"/x" * (INPUT_MAX_LEN // 2 + 1)  # > INPUT_MAX_LEN
+    assert len(long_path) > INPUT_MAX_LEN
+    assert parse_input_path(long_path) is None
+
+
+def test_parse_input_path_exactly_at_max_len_is_accepted() -> None:
+    """A path of exactly INPUT_MAX_LEN bytes is accepted."""
+    # Build an absolute path of exactly INPUT_MAX_LEN bytes.
+    path = b"/" + b"a" * (INPUT_MAX_LEN - 1)
+    assert len(path) == INPUT_MAX_LEN
+    assert parse_input_path(path) == path.decode("utf-8")
+
+
+def test_parse_input_path_root_only() -> None:
+    """A single '/' is an absolute path (degenerate but valid UTF-8)."""
+    assert parse_input_path(b"/") == "/"
 
 
 async def test_start_stop() -> None:

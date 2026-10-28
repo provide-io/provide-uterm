@@ -53,6 +53,12 @@
  * Defined here so the channel bytes stay one set across Python, Go, TypeScript
  * and C (scripts/check_protocol_drift.py holds them together). */
 #define CHANNEL_GEOMETRY 0x05
+/* The producer's keystroke-socket path, as a UTF-8 absolute path. An empty
+ * payload withdraws the path. Sent only by a producer that can deliver
+ * keystrokes (a supervisor) — this LD_PRELOAD shim never sends it (it has no
+ * keystroke socket to name). Defined here so the drift check holds four
+ * declarations together; a reader that predates it ignores the channel. */
+#define CHANNEL_INPUT   0x06
 
 /* Reported no more often than this many capture attempts, so a burst of drops
  * cannot itself become a burst of frames. Counted in attempts rather than in

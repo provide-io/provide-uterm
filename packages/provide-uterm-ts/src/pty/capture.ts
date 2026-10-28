@@ -39,12 +39,23 @@ export const CHANNEL_STATS = 0x04;
  * cannot see a resize.
  */
 export const CHANNEL_GEOMETRY = 0x05;
+/**
+ * The producer's keystroke-socket path, as a UTF-8 absolute path. An empty
+ * payload withdraws the path. Sent only by a producer that can deliver
+ * keystrokes (a supervisor) — never the LD_PRELOAD shim, which has no
+ * keystroke socket to name. A reader that predates it ignores it, as it does
+ * any channel it does not know, so a producer may send it unconditionally.
+ */
+export const CHANNEL_INPUT = 0x06;
 
 /** A geometry payload is exactly this long. */
 export const GEOMETRY_PAYLOAD_SIZE = 4;
 /** The smallest and largest cols or rows a geometry frame may name, inclusive. */
 export const GEOMETRY_MIN = 1;
 export const GEOMETRY_MAX = 1000;
+
+/** The largest keystroke-socket path an input frame may carry, in bytes. */
+export const INPUT_MAX_LEN = 4096;
 
 /** A terminal size, as a geometry frame names it. */
 export interface CaptureGeometry {
@@ -69,6 +80,41 @@ export function parseGeometry(payload: Uint8Array): CaptureGeometry | null {
     return null;
   }
   return { cols, rows };
+}
+
+/**
+ * The keystroke-socket path an input payload names, or `null` for anything
+ * malformed.
+ *
+ * An empty payload withdraws the path (returns `""`); a non-empty payload is
+ * a UTF-8 absolute path. Non-UTF-8, a path over `INPUT_MAX_LEN`, or a path that
+ * is not absolute returns `null` — the caller ignores the frame, since the
+ * frame's own length kept the stream in step and only this one is untrustworthy.
+ *
+ * The returned path is **not** validated against the capture-socket convention
+ * (`.sock` → `.stdin.sock`); that is the connector's job, since it depends on
+ * the capture socket the session was created with. This port carries framing
+ * only, as for geometry.
+ */
+export function parseInputPath(payload: Uint8Array): string | null {
+  if (payload.length > INPUT_MAX_LEN) {
+    return null;
+  }
+  if (payload.length === 0) {
+    return "";
+  }
+  // Decode as UTF-8. TextDecoder with fatal: true throws on invalid UTF-8.
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let path: string;
+  try {
+    path = decoder.decode(payload);
+  } catch {
+    return null;
+  }
+  if (!path.startsWith("/")) {
+    return null;
+  }
+  return path;
 }
 
 /** Channel byte plus a four-byte length. */

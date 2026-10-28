@@ -36,6 +36,17 @@ GEOMETRY = struct.Struct(">HH")
 # the emulator would allocate a screen for must not be the producer's choice.
 GEOMETRY_MIN = 1
 GEOMETRY_MAX = 1000
+# The producer's keystroke socket, as a UTF-8 absolute path. An empty payload
+# withdraws the path (closes the keystroke writer, as reconfigure does when
+# stdin_socket_path is cleared). Sent only by a producer that can deliver
+# keystrokes (a supervisor) — never the LD_PRELOAD shim, which has no keystroke
+# socket to name. A reader that predates it ignores it, as it does any channel
+# it does not know, so a producer may send it unconditionally.
+CHANNEL_INPUT = 0x06
+# Upper bound on a keystroke-socket path. Real paths are at most the Unix
+# socket address limit (108 bytes on Linux, 104 on macOS); 4096 is generous and
+# matches the spec's over-length vector. Past this the frame is malformed.
+INPUT_MAX_LEN = 4096
 
 
 def parse_geometry(payload: bytes) -> tuple[int, int] | None:
@@ -52,6 +63,32 @@ def parse_geometry(payload: bytes) -> tuple[int, int] | None:
     if not (GEOMETRY_MIN <= cols <= GEOMETRY_MAX and GEOMETRY_MIN <= rows <= GEOMETRY_MAX):
         return None
     return cols, rows
+
+
+def parse_input_path(payload: bytes) -> str | None:
+    """The keystroke-socket path from an input payload, or None for malformed.
+
+    An empty payload withdraws the path (returns ``""``); a non-empty payload is
+    a UTF-8 absolute path. Non-UTF-8, a path over ``INPUT_MAX_LEN``, or a path
+    that is not absolute returns None — the caller ignores the frame, since the
+    frame's own length kept the stream in step and only this one is untrustworthy.
+
+    The path the function returns is **not** validated against the capture-socket
+    convention (``.sock`` → ``.stdin.sock``); that is the connector's job, since
+    it depends on the capture socket the session was created with.
+    """
+
+    if len(payload) > INPUT_MAX_LEN:
+        return None
+    if len(payload) == 0:
+        return ""
+    try:
+        path = payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if not path.startswith("/"):
+        return None
+    return path
 
 
 _HEADER = struct.Struct(">BI")  # channel (1B) + length (4B big-endian)

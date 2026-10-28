@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	ptel "github.com/provide-io/provide-telemetry/go"
 )
@@ -35,6 +36,11 @@ const (
 	// supervisor), as >HH: cols, rows. The LD_PRELOAD shim never sends it: it
 	// cannot see a resize.
 	ChannelGeometry = 0x05
+	// ChannelInput is the producer's keystroke-socket path, as a UTF-8 absolute
+	// path. An empty payload withdraws the path. Sent only by a producer that
+	// can deliver keystrokes (a supervisor) — never the LD_PRELOAD shim. A
+	// reader that predates it ignores it, as it does any channel it does not know.
+	ChannelInput = 0x06
 )
 
 // geometryPayloadSize, geometryMin and geometryMax bound a geometry payload:
@@ -44,6 +50,10 @@ const (
 	geometryPayloadSize = 4
 	geometryMin         = 1
 	geometryMax         = 1000
+	// inputMaxLen bounds a keystroke-socket path payload. Real paths are at
+	// most the Unix socket address limit; 4096 matches the spec's over-length
+	// vector. Port of capture.py INPUT_MAX_LEN.
+	inputMaxLen = 4096
 )
 
 // ParseGeometry reads (cols, rows) from a geometry payload. ok is false for
@@ -60,6 +70,33 @@ func ParseGeometry(payload []byte) (cols, rows int, ok bool) {
 		return 0, 0, false
 	}
 	return cols, rows, true
+}
+
+// ParseInputPath reads the keystroke-socket path from an input payload. Port of
+// capture.parse_input_path.
+//
+// An empty payload withdraws the path (path is "", ok is true). A non-empty
+// payload is a UTF-8 absolute path. Non-UTF-8, a path over inputMaxLen, or a
+// path that is not absolute returns ok=false — the caller ignores the frame.
+//
+// The returned path is NOT validated against the capture-socket convention
+// (.sock → .stdin.sock); that is the connector's job, since it depends on the
+// capture socket the session was created with.
+func ParseInputPath(payload []byte) (path string, ok bool) {
+	if len(payload) > inputMaxLen {
+		return "", false
+	}
+	if len(payload) == 0 {
+		return "", true
+	}
+	path = string(payload)
+	if !utf8.ValidString(path) {
+		return "", false
+	}
+	if !strings.HasPrefix(path, "/") {
+		return "", false
+	}
+	return path, true
 }
 
 const (
