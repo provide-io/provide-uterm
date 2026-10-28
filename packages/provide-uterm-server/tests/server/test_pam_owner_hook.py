@@ -331,6 +331,43 @@ class TestCallCaptureOwnerHook:
         assert len(nonce_captured) == 1
 
     @pytest.mark.asyncio
+    async def test_a_successful_call_accepts_lowercase_response_headers(self) -> None:
+        """httpx2 normalises response header names to lowercase.
+
+        ``_http_post`` returns ``dict(resp.headers)``, whose keys are
+        ``x-uterm-signature`` / ``x-uterm-timestamp`` -- not the mixed-case
+        names the web service sets. The lookup must be case-insensitive, or a
+        verified 200 response is rejected as ``signature_invalid``.
+        """
+        cfg = _make_config()
+        secret = cfg.capture_owner_hook_secret
+
+        async def http_post(url, headers, body, timeout_s):
+            req = json.loads(body)
+            ts = "1700000000"
+            resp_body = json.dumps(
+                {"nonce": req["nonce"], "owner": "bob", "visibility": "private"},
+                separators=(",", ":"),
+            ).encode("utf-8")
+            sig = build_webhook_signature(secret, resp_body, ts)
+            # httpx2 lowercases header names; this is what the real client sees.
+            return 200, {"x-uterm-signature": sig, "x-uterm-timestamp": ts}, resp_body
+
+        answer = await call_capture_owner_hook(
+            cfg,
+            session_id="s1",
+            username="alice",
+            tty="/dev/pts/0",
+            pid=1234,
+            start_ticks=100,
+            ssh_keys=[],
+            http_post=http_post,
+            clock=lambda: 1700000000.0,
+        )
+        assert answer.owner == "bob"
+        assert answer.visibility == "private"
+
+    @pytest.mark.asyncio
     async def test_a_null_owner_answer_is_returned(self) -> None:
         cfg = _make_config()
         secret = cfg.capture_owner_hook_secret

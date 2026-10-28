@@ -289,9 +289,16 @@ async def call_capture_owner_hook(
     if status_code != 200:
         raise HookError(f"status_{status_code}")
 
-    # The response must be signed the same way and echo the nonce.
-    resp_sig = response_headers.get("X-Uterm-Signature") if response_headers else None
-    resp_ts = response_headers.get("X-Uterm-Timestamp") if response_headers else None
+    # The response must be signed the same way and echo the nonce. httpx2
+    # normalises response header names to lowercase, so the lookup must be
+    # case-insensitive (the web service sets "X-Uterm-Signature", but the
+    # client sees "x-uterm-signature").
+    resp_sig = response_headers.get("x-uterm-signature") or (
+        response_headers.get("X-Uterm-Signature") if response_headers else None
+    )
+    resp_ts = response_headers.get("x-uterm-timestamp") or (
+        response_headers.get("X-Uterm-Timestamp") if response_headers else None
+    )
     if not verify_webhook_signature(
         secret,
         response_body,
