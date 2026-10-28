@@ -154,6 +154,7 @@ async def main_async() -> None:
             "connect": capture.CHANNEL_CONNECT,
             "stats": capture.CHANNEL_STATS,
             "geometry": capture.CHANNEL_GEOMETRY,
+            "input": capture.CHANNEL_INPUT,
         },
         "max_frame_bytes": capture._MAX_FRAME_BYTES,
         "queue_maxsize": capture._QUEUE_MAXSIZE,

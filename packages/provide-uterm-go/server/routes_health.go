@@ -39,6 +39,14 @@ const (
 // owner-only in its own private directory. Port of CAPTURE_SOCKET_MODE_FEATURE.
 const captureSocketModeFeature = "capture.socket_mode"
 
+// captureOwnerPamUserFeature / captureOwnerHookFeature / captureInputFeature:
+// the capture-owner selection (pam.capture_owner) and the 0x06 input channel.
+const (
+	captureOwnerPamUserFeature = "sessions.capture.owner.pam_user"
+	captureOwnerHookFeature    = "sessions.capture.owner.hook"
+	captureInputFeature        = "capture.input"
+)
+
 // features is what /api/health lists, given the config.
 func (s *Server) features() []string {
 	out := append([]string(nil), serverFeatures...)
@@ -50,6 +58,18 @@ func (s *Server) features() []string {
 	}
 	if s.cfg.Pam.CaptureSocketMode == serverconfig.OwnerAndGroupCaptureSocketMode {
 		out = append(out, captureSocketModeFeature)
+	}
+	if s.cfg.Pam.Mode == "capture" {
+		switch s.cfg.Pam.CaptureOwner {
+		case "", "pam_user":
+			out = append(out, captureOwnerPamUserFeature)
+		case "hook":
+			out = append(out, captureOwnerHookFeature)
+		}
+		// The 0x06 input channel: a producer that can deliver keystrokes (a
+		// supervisor) announces its keystroke-socket path. A client that reads
+		// this feature knows the session's input path may arrive via 0x06.
+		out = append(out, captureInputFeature)
 	}
 	return out
 }

@@ -301,7 +301,10 @@ class CaptureSocket:
         so_peercred = getattr(_socket, "SO_PEERCRED", None)
         if so_peercred is None:
             return None
-        sock = writer.get_extra_info("socket")
+        get_extra_info = getattr(writer, "get_extra_info", None)
+        if get_extra_info is None:
+            return None
+        sock = get_extra_info("socket")
         if sock is None:
             return None
         try:

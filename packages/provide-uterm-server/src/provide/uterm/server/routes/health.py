@@ -91,6 +91,12 @@ def server_features(config: object) -> list[str]:
             features.append(CAPTURE_OWNER_PAM_USER_FEATURE)
         elif owner == "hook":
             features.append(CAPTURE_OWNER_HOOK_FEATURE)
+        # The 0x06 input channel: a producer that can deliver keystrokes (a
+        # supervisor) announces its keystroke-socket path, and the connector
+        # sets stdin_socket_path in place. A client that reads this feature
+        # knows the session's input path may arrive via 0x06 (not just an
+        # admin PATCH); without it, the client assumes input is admin-set only.
+        features.append("capture.input")
     return features
 
 

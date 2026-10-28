@@ -62,6 +62,38 @@ func TestHealthLifecycle(t *testing.T) {
 	}
 }
 
+func TestHealthAdvertisesFeatures(t *testing.T) {
+	ts := newTestServer(t, nil)
+	ts.srv.MarkReady()
+
+	rec := ts.do("GET", "/api/health", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health ready: %d", rec.Code)
+	}
+	body := decode(t, rec.Body.Bytes())
+	features, ok := body["features"]
+	if !ok {
+		t.Fatalf("health missing features key: %v", body)
+	}
+	arr, ok := features.([]any)
+	if !ok {
+		t.Fatalf("features not an array: %v", features)
+	}
+	// sessions.previous is always advertised: ended capture sessions are kept
+	// for the owner fallback and the portal's "previous sessions" view.
+	if len(arr) == 0 {
+		t.Fatalf("features empty, expected at least sessions.previous: %v", arr)
+	}
+	hasPrevious := false
+	for _, f := range arr {
+		if f == "sessions.previous" {
+			hasPrevious = true
+		}
+	}
+	if !hasPrevious {
+		t.Fatalf("features missing sessions.previous: %v", arr)
+	}
+}
 func TestSecurityPosture(t *testing.T) {
 	ts := newTestServer(t, nil)
 	ts.srv.MarkReady()

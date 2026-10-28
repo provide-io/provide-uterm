@@ -322,6 +322,7 @@ so read and type into the terminal.
 | `0x03` | connect | Peer address, UTF-8 | shim | Logged for analysis (last 100) | Logged for analysis (last 100) |
 | `0x04` | stats | Shim writer counters, ASCII `key=value` | shim | Reported in analysis | Ignored |
 | `0x05` | geometry | `>HH` cols, rows; each 1-1000 | pty owner (supervisor); never the shim, which cannot see a resize | `CaptureConnector` resizes as `reconfigure` does (re-emulates output since the last clear), and `poll_messages` returns a `snapshot`, which the runtime sends to the hub | `pty.CaptureConnector` takes the size and returns a `snapshot`; `CaptureTransport` turns it into `TransportSession.Resize` (the session's emulator rebuilt at the new size from output since the last clear), and the worker bridge sends the hub a `snapshot` unasked |
+| `0x06` | input | UTF-8 absolute path; the producer's keystroke-socket path. Empty payload withdraws | A producer that can deliver keystrokes (a supervisor); never the shim, which has no keystroke socket to name | `CaptureConnector.poll_messages` validates the path convention (`.sock` → `.stdin.sock`), the peer (`SO_PEERCRED` pid must be the login's pid or a descendant, walking `/proc` parent links), then sets `stdin_socket_path` in place, closing any open writer. An admin-set path in the config wins over an announcement | `pty.CaptureConnector.PollMessages` mirrors the Python logic: convention check, peer-pid check, `stdinSocketPath` set in place. `configStdinSocketPath` field tracks the config-set path so an admin PATCH wins |
 
 - A reader ignores a channel it does not know, so a producer can send a newer
   channel to an older connector unconditionally.
@@ -351,6 +352,24 @@ so read and type into the terminal.
 - `capture_geometry_frame` in `spec/behavior_vectors.json` (generated from the
   Python reference) holds the Python and Go connectors and the TypeScript reader
   to one reading of each frame.
+- `capture_input_frame` in `spec/behavior_vectors.json` holds `parse_input_path`
+  (the parser) to the same shapes across ports: accepted absolute path, root-only,
+  empty (withdraw), relative (rejected), non-UTF-8 (rejected), over-max-len
+  (rejected). The connector's convention check and peer-pid check are tested
+  separately; the vectors test the parser only.
+- The input channel's path convention keeps the path out of a producer's
+  choosing: the connector accepts only the capture socket's path with `.sock`
+  replaced by `.stdin.sock` (Black Betty's `remote_input_socket_from_capture_socket`).
+  A future relaxed rule (any socket in the capture directory) needs no wire change.
+- The peer check (`SO_PEERCRED` pid must be the login's pid or a descendant,
+  walking `/proc/<pid>/stat` parent links, at most 64 steps) is Linux-only.
+  On macOS (no `SO_PEERCRED`), `0x06` is refused with
+  `capture_input_refused reason=peer_unverifiable`; an admin-set
+  `stdin_socket_path` still works there.
+- An empty `0x06` payload withdraws the path: the connector clears
+  `stdin_socket_path` and closes any open writer, as `reconfigure` does when
+  `stdin_socket_path` is cleared. A producer announces the path on every
+  connect, so the first `0x06` wins and subsequent ones are idempotent.
 - C# has no capture connector.
 
 ### Capture sessions across a restart
