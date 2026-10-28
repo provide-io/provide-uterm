@@ -55,11 +55,18 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from provide.uterm.pty.pam_listener import PamEvent
     from provide.uterm.server.models import PamConfig, ServerConfig
     from provide.uterm.server.registry import SessionRegistry
 
 logger = logging.getLogger(__name__)
+
+# Fire-and-forget tasks (the capture-owner hook call). A task that loses all
+# references can be GC'd before it completes, so each is held here until it
+# finishes, then discarded. See _resolve_owner_via_hook.
+_hook_tasks: set[asyncio.Task[None]] = set()
 
 _TTY_SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
 
@@ -259,7 +266,11 @@ def _remember_login(instances: dict[tuple[str, int], str], key: tuple[str, int],
     _prune_logins(instances, keep=key)
 
 
-async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -> None:
+async def run_pam_integration(
+    config: ServerConfig,
+    registry: SessionRegistry,
+    on_metric: Callable[[str, int], None] | None = None,
+) -> None:
     """
     Long-running coroutine: start PamNotifyListener and dispatch events.
 
@@ -290,7 +301,7 @@ async def run_pam_integration(config: ServerConfig, registry: SessionRegistry) -
             ev.mode,
         )
         if ev.event == "open":
-            await _on_open(ev, pam_cfg, registry, _bridges, _instances)
+            await _on_open(ev, pam_cfg, registry, _bridges, _instances, on_metric=on_metric)
         elif ev.event == "close":  # pragma: no branch
             await _on_close(ev, pam_cfg, registry, _bridges, _instances)
 
@@ -318,6 +329,8 @@ async def _on_open(
     registry: SessionRegistry,
     bridges: dict[str, object] | None = None,
     instances: dict[tuple[str, int], str] | None = None,
+    *,
+    on_metric: Callable[[str, int], None] | None = None,
 ) -> None:
     """Create the login's session, then relay the event.
 
@@ -334,7 +347,7 @@ async def _on_open(
         _remember_login(instances, _login_key(ev), session_id)
 
     if cfg.mode == "capture" and ev.capture_socket:
-        await _create_capture_session(ev, cfg, registry, session_id)
+        await _create_capture_session(ev, cfg, registry, session_id, on_metric=on_metric)
     elif cfg.auto_session:
         await _create_notify_session(ev, cfg, registry, session_id)
 
@@ -443,7 +456,12 @@ async def _create_notify_session(
 
 
 async def _create_capture_session(
-    event: PamEvent, pam_cfg: PamConfig, registry: SessionRegistry, session_id: str | None = None
+    event: PamEvent,
+    pam_cfg: PamConfig,
+    registry: SessionRegistry,
+    session_id: str | None = None,
+    *,
+    on_metric: Callable[[str, int], None] | None = None,
 ) -> None:
     ev = event
     if ev.capture_socket is None:
@@ -453,6 +471,19 @@ async def _create_capture_session(
         return
 
     session_id = session_id if session_id is not None else _session_id(ev)
+
+    # ── owner assignment (Decision 1) ───────────────────────────────────────
+    # capture_owner selects how a capture session's owner is set when it is
+    # created. "pam_user" (default): the owner is the PAM login name, verbatim.
+    # "hook": uterm asks a configured URL who owns the login. "none": today's
+    # behaviour, no owner. The session is always created first (its capture
+    # socket is bound); the hook runs as a task beside it, never blocking the
+    # login. On failure the session stays ownerless — the existing admin routes
+    # (PATCH /api/sessions/{id}, PATCH /api/previous-sessions/{id}) are the
+    # fallback, as they are the whole mechanism today.
+    owner: str | None = None
+    if pam_cfg.capture_owner == "pam_user":
+        owner = ev.username
 
     payload: dict[str, object] = {
         "session_id": session_id,
@@ -468,7 +499,107 @@ async def _create_capture_session(
         "tags": ["pam", "capture", ev.username],
         "visibility": "operator",
     }
+    if owner is not None:
+        payload["owner"] = owner
     await _safe_create(registry, payload)
+
+    # ── hook (capture_owner = "hook") ────────────────────────────────────────
+    if pam_cfg.capture_owner == "hook":
+        task = asyncio.create_task(_resolve_owner_via_hook(ev, pam_cfg, registry, session_id, on_metric=on_metric))
+        _hook_tasks.add(task)
+        task.add_done_callback(_hook_tasks.discard)
+
+
+# ── hook (capture_owner = "hook") ────────────────────────────────────────────
+
+
+async def _resolve_owner_via_hook(
+    ev: PamEvent,
+    pam_cfg: PamConfig,
+    registry: SessionRegistry,
+    session_id: str,
+    *,
+    on_metric: Callable[[str, int], None] | None = None,
+) -> None:
+    """Ask the configured hook who owns a capture session's login.
+
+    Runs as a fire-and-forget task beside the session. The session is already
+    created (ownerless) by the time this runs; on success the owner and
+    visibility are patched in-place. On failure the session stays ownerless
+    and the existing admin routes are the fallback.
+
+    Failures are counted via ``on_metric`` (``pam_capture_owner_hook_failed_total``)
+    and logged at warning: ``pam_capture_owner_hook_failed session_id=...
+    reason=<one word>``. The reason never quotes the response body.
+    """
+    from provide.uterm.server.pam_owner_hook import (
+        HookError,
+        call_capture_owner_hook,
+        fingerprint_ssh_keys,
+    )
+
+    ssh_keys = fingerprint_ssh_keys(ev.ssh_auth_info)
+    try:
+        answer = await call_capture_owner_hook(
+            pam_cfg,
+            session_id=session_id,
+            username=ev.username,
+            tty=ev.tty or None,
+            pid=ev.pid,
+            start_ticks=ev.start_ticks,
+            ssh_keys=ssh_keys,
+        )
+    except HookError as exc:
+        logger.warning(
+            "pam_capture_owner_hook_failed session_id=%s reason=%s",
+            session_id,
+            exc.reason,
+        )
+        if on_metric is not None:
+            on_metric("pam_capture_owner_hook_failed_total", 1)
+        return
+    except Exception as exc:
+        # An unexpected error (not a HookError) — log it but don't crash the
+        # task. The session stays ownerless.
+        logger.warning(
+            "pam_capture_owner_hook_failed session_id=%s reason=unexpected error=%s",
+            session_id,
+            exc,
+        )
+        if on_metric is not None:
+            on_metric("pam_capture_owner_hook_failed_total", 1)
+        return
+
+    # The hook answered. Patch the session's owner and visibility in-place.
+    patch: dict[str, object] = {}
+    if answer.owner is not None:
+        patch["owner"] = answer.owner
+    if answer.visibility is not None:
+        patch["visibility"] = answer.visibility
+    if not patch:
+        # A null owner and null visibility is a deliberate "no owner" answer;
+        # nothing to patch.
+        return
+    try:
+        await registry.update_session(session_id, patch, allow_owner_change=True)
+        logger.info(
+            "pam_capture_owner_hook_resolved session_id=%s owner=%s",
+            session_id,
+            answer.owner,
+        )
+        if on_metric is not None:
+            on_metric("pam_capture_owner_hook_success_total", 1)
+    except Exception as exc:
+        # The session may have already closed (the login ended within the
+        # hook's timeout window). PATCH /api/previous-sessions/{id} is the
+        # fallback for that case, but here we just log and move on.
+        logger.warning(
+            "pam_capture_owner_hook_patch_failed session_id=%s error=%s",
+            session_id,
+            exc,
+        )
+        if on_metric is not None:
+            on_metric("pam_capture_owner_hook_failed_total", 1)
 
 
 def capture_socket_allowed(capture_socket: str, pam_cfg: PamConfig) -> bool:

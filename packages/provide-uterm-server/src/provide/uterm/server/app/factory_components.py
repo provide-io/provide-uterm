@@ -80,6 +80,11 @@ def initial_metrics() -> dict[str, int]:
         "webhook_delivery_giving_up_total": 0,
         # Event-bus subscriber drop counter
         "event_bus_subscriber_drop_total": 0,
+        # Capture-owner hook (Decision 1): a capture session's owner is set by
+        # asking a configured URL. These count the failures (session stays
+        # ownerless, admin routes are the fallback) and successes.
+        "pam_capture_owner_hook_failed_total": 0,
+        "pam_capture_owner_hook_success_total": 0,
     }
 
 

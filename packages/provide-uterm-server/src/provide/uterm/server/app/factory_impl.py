@@ -557,7 +557,7 @@ def create_server_app(
         with contextlib.suppress(ImportError):
             from provide.uterm.server.pam_integration import run_pam_integration
 
-            pam_task = asyncio.create_task(run_pam_integration(config, registry))
+            pam_task = asyncio.create_task(run_pam_integration(config, registry, on_metric=_inc_metric))
         # All startup work complete — mark the app as ready so /readyz and
         # /api/health return 200.  If migrate() raised above (before we reach
         # here), uterm_ready stays False for the lifetime of the process.
