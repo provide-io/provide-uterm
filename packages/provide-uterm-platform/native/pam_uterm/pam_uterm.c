@@ -38,7 +38,9 @@
  *     close: {"event":"close", "username":"alice","tty":"/dev/pts/3","pid":12345,"mode":"capture"}
  *
  *   ssh_auth_info is present only when sshd sets SSH_AUTH_INFO_0 (ExposeAuthInfo
- *   yes); the Python side fingerprints the keys and never receives the raw blob.
+ *   yes). The value is either a temp-file path (older sshd) or the auth info
+ *   directly (OpenSSH 10.x+); the Python side fingerprints the keys and never
+ *   receives the raw blob.
  *   start_ticks is field 22 of /proc/<pid>/stat (clock ticks since boot); it
  *   disambiguates pids (a pid can be reused after a process exits).
  *
@@ -234,12 +236,22 @@ static char *_read_ssh_auth_info(pam_handle_t *pamh) {
      * calls pam_setenv for it). pam_getenv reads only the PAM environment, so
      * it returns NULL; getenv reads the process environment and finds it. Try
      * the PAM environment first (a future sshd or a pam_env rule could set it
-     * there), then fall back to the process environment. */
-    const char *path = pam_getenv(pamh, "SSH_AUTH_INFO_0");
-    if (!path || !*path) path = getenv("SSH_AUTH_INFO_0");
-    if (!path || !*path) return NULL;
-    FILE *f = fopen(path, "r");
-    if (!f) return NULL;
+     * there), then fall back to the process environment.
+     *
+     * The value is either a path to a temp file (older sshd with
+     * ExposeAuthInfo=yes) or the auth info directly — one key line per line
+     * (OpenSSH 10.x+). Try fopen first (handles the file-path case); if it
+     * fails, treat the value itself as the auth info via fmemopen (handles
+     * the direct-value case). */
+    const char *val = pam_getenv(pamh, "SSH_AUTH_INFO_0");
+    if (!val || !*val) val = getenv("SSH_AUTH_INFO_0");
+    if (!val || !*val) return NULL;
+    FILE *f = fopen(val, "r");
+    if (!f) {
+        /* Not a readable file path — treat val as the auth info directly. */
+        f = fmemopen((void *)val, strlen(val), "r");
+        if (!f) return NULL;
+    }
 
     size_t cap = 4096;
     char *buf = malloc(cap);
