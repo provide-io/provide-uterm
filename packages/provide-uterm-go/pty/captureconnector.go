@@ -15,8 +15,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 	ptel "github.com/provide-io/provide-telemetry/go"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 )
 
 // captureBufferCap bounds the CaptureConnector rendered buffer. Port of

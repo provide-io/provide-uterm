@@ -258,7 +258,11 @@ class TestHealthRouter:
         """``sessions.capture.owner.pam_user`` is listed when capture_owner is pam_user."""
         health = _endpoint(self._router(), "/api/health")
         reg = SimpleNamespace(_sessions={})
-        pam = SimpleNamespace(mode="capture", capture_owner="pam_user", capture_session_dir=None)
+        pam = SimpleNamespace(
+            mode="capture",
+            capture_owner="pam_user",
+            capture_socket_mode=0o600,
+        )
         cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="memory"), pam=pam)
         resp = MagicMock()
         out = await health(
@@ -282,7 +286,7 @@ class TestHealthRouter:
         pam = SimpleNamespace(
             mode="capture",
             capture_owner="hook",
-            capture_session_dir=None,
+            capture_socket_mode=0o600,
             capture_owner_hook_url="http://127.0.0.1:8787/hook",
         )
         cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="memory"), pam=pam)
@@ -305,7 +309,11 @@ class TestHealthRouter:
         """Neither owner feature is listed when PAM is in notify mode."""
         health = _endpoint(self._router(), "/api/health")
         reg = SimpleNamespace(_sessions={})
-        pam = SimpleNamespace(mode="notify", capture_owner="pam_user", capture_session_dir=None)
+        pam = SimpleNamespace(
+            mode="notify",
+            capture_owner="pam_user",
+            capture_socket_mode=0o600,
+        )
         cfg = SimpleNamespace(control_plane=SimpleNamespace(backend="memory"), pam=pam)
         resp = MagicMock()
         out = await health(

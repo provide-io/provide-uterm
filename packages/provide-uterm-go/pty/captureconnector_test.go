@@ -383,9 +383,9 @@ func TestCaptureConnectorSetSize(t *testing.T) {
 // (Decision 2 of the capture-session-ownership ARD.)
 
 const (
-	pamSessionID  = "pam-alice-capture-1234-98765"
-	pamCapSocket  = "/run/uterm-cap-1234.sock"
-	pamStdinSock  = "/run/uterm-cap-1234.stdin.sock"
+	pamSessionID = "pam-alice-capture-1234-98765"
+	pamCapSocket = "/run/uterm-cap-1234.sock"
+	pamStdinSock = "/run/uterm-cap-1234.stdin.sock"
 )
 
 // startedPamCaptureConn creates a connector with a PAM-style session id and a

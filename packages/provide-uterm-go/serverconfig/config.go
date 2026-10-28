@@ -281,14 +281,14 @@ func defaultServerBindConfig() ServerBindConfig {
 
 // PamConfig ports config_schema.PamConfig.
 type PamConfig struct {
-	NotifySocket             *string `json:"notify_socket" toml:"notify_socket"`
-	Mode                     string  `json:"mode" toml:"mode"`
-	AutoSession              bool    `json:"auto_session" toml:"auto_session"`
-	AutoSessionCommand       string  `json:"auto_session_command" toml:"auto_session_command"`
-	RelayURL                 *string `json:"relay_url" toml:"relay_url"`
-	RelayToken               *string `json:"relay_token" toml:"relay_token"`
-	CaptureSocketDir         *string `json:"capture_socket_dir" toml:"capture_socket_dir"`
-	RequirePeerUIDs          *[]int  `json:"require_peer_uids" toml:"require_peer_uids"`
+	NotifySocket       *string `json:"notify_socket" toml:"notify_socket"`
+	Mode               string  `json:"mode" toml:"mode"`
+	AutoSession        bool    `json:"auto_session" toml:"auto_session"`
+	AutoSessionCommand string  `json:"auto_session_command" toml:"auto_session_command"`
+	RelayURL           *string `json:"relay_url" toml:"relay_url"`
+	RelayToken         *string `json:"relay_token" toml:"relay_token"`
+	CaptureSocketDir   *string `json:"capture_socket_dir" toml:"capture_socket_dir"`
+	RequirePeerUIDs    *[]int  `json:"require_peer_uids" toml:"require_peer_uids"`
 	// CaptureSocketMode is the permissions of every capture socket this
 	// server binds for a pty_capture session: those PAM asks for, those the
 	// sessions API names, and those re-bound for a session kept across a
@@ -310,11 +310,10 @@ func defaultPamConfig() PamConfig {
 	return PamConfig{
 		Mode:                     "notify",
 		AutoSessionCommand:       "/bin/bash",
-		CaptureSocketMode:         OwnerOnlyCaptureSocketMode,
-		CaptureOwner:              "pam_user",
-		CaptureOwnerHookTimeoutS:  1.0,
+		CaptureSocketMode:        OwnerOnlyCaptureSocketMode,
+		CaptureOwner:             "pam_user",
+		CaptureOwnerHookTimeoutS: 1.0,
 	}
-}
 }
 
 // GovernanceConfig ports config_schema.GovernanceConfig.

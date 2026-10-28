@@ -63,7 +63,9 @@ func TestHealthLifecycle(t *testing.T) {
 }
 
 func TestHealthAdvertisesFeatures(t *testing.T) {
-	ts := newTestServer(t, nil)
+	ts := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) {
+		cfg.SessionPersistence.PreviousKeepDays = 7
+	})
 	ts.srv.MarkReady()
 
 	rec := ts.do("GET", "/api/health", "", nil)
