@@ -37,6 +37,8 @@ async def connect_ws(
     *,
     cols: int = 80,
     rows: int = 25,
+    open_timeout: float | None = TerminalDefaults.WS_OPEN_TIMEOUT,
+    follow_redirects: bool = True,
     ping_interval: int = TerminalDefaults.WS_PING_INTERVAL,
     ping_timeout: int = TerminalDefaults.WS_PING_TIMEOUT,
     close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
@@ -52,6 +54,10 @@ async def connect_ws(
         url: Full WebSocket URL (ws:// or wss://).
         cols: Terminal width (default 80).
         rows: Terminal height (default 25).
+        open_timeout: TCP/TLS/HTTP opening deadline in seconds (default 10).
+            ``None`` delegates an unbounded opening to the WebSocket client.
+        follow_redirects: Follow HTTP upgrade redirects (default True).
+            False refuses redirects before contacting another destination.
         receive_encoding: Codec used by the terminal emulator for incoming
             bytes. Defaults to CP437 for BBS compatibility.
         text_frame_encoding: Codec used to convert WebSocket text messages to
@@ -74,6 +80,8 @@ async def connect_ws(
         url,
         cols=cols,
         rows=rows,
+        open_timeout=open_timeout,
+        follow_redirects=follow_redirects,
         ping_interval=ping_interval,
         ping_timeout=ping_timeout,
         close_timeout=close_timeout,
@@ -100,6 +108,8 @@ class WebSocketSession(TransportSession):
         *,
         cols: int = 80,
         rows: int = 25,
+        open_timeout: float | None = TerminalDefaults.WS_OPEN_TIMEOUT,
+        follow_redirects: bool = True,
         ping_interval: int = TerminalDefaults.WS_PING_INTERVAL,
         ping_timeout: int = TerminalDefaults.WS_PING_TIMEOUT,
         close_timeout: int = TerminalDefaults.WS_CLOSE_TIMEOUT,
@@ -110,6 +120,8 @@ class WebSocketSession(TransportSession):
         control_frames: bool = False,
     ) -> None:
         self.url = url
+        self._open_timeout = open_timeout
+        self._follow_redirects = follow_redirects
         self._ping_interval = ping_interval
         self._ping_timeout = ping_timeout
         self._close_timeout = close_timeout
@@ -129,6 +141,12 @@ class WebSocketSession(TransportSession):
         # origin/additional_headers are omitted when None so a worker that gates
         # cross-origin WS upgrades (the 4403 path) gets the bot's allowed Origin.
         extra: dict[str, Any] = {}
+        # Keep ordinary transport calls identical to the cross-language contract.
+        # Explicit nondefault policies still reach the opening client.
+        if self._open_timeout != TerminalDefaults.WS_OPEN_TIMEOUT:
+            extra["open_timeout"] = self._open_timeout
+        if not self._follow_redirects:
+            extra["follow_redirects"] = False
         if self._origin is not None:
             extra["origin"] = self._origin
         if self._additional_headers is not None:

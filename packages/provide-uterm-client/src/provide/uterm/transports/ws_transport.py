@@ -12,7 +12,8 @@ from typing import Any
 
 try:
     import websockets
-    from websockets.exceptions import ConnectionClosed
+    from websockets.asyncio.client import ClientConnection
+    from websockets.exceptions import ConnectionClosed, InvalidStatus, SecurityError
     from websockets.protocol import State
 except ImportError as _e:
     raise ImportError(
@@ -35,6 +36,18 @@ def _close_from_websockets(exc: ConnectionClosed) -> TransportClose:
     if sent is not None:
         return TransportClose(CloseInitiator.LOCAL, code=sent.code, reason=sent.reason, detail=str(exc))
     return TransportClose(CloseInitiator.UNKNOWN, detail=str(exc))
+
+
+class _NoRedirectConnection(ClientConnection):
+    """Stop redirects at the handshake, before the opener can follow them."""
+
+    async def handshake(self, *args: Any, **kwargs: Any) -> None:
+        try:
+            await super().handshake(*args, **kwargs)
+        except InvalidStatus as exc:
+            if 300 <= exc.response.status_code < 400:
+                raise SecurityError("WebSocket upgrade redirect refused") from exc
+            raise
 
 
 class WebSocketTransport(ConnectionTransport):
@@ -69,6 +82,13 @@ class WebSocketTransport(ConnectionTransport):
             value = kwargs.get(key)
             if value is not None:
                 forwarded[key] = value
+
+        # Explicit None disables the opening deadline upstream; omission keeps
+        # websockets' existing default. Keep this separate from nullable headers.
+        if "open_timeout" in kwargs:
+            forwarded["open_timeout"] = kwargs["open_timeout"]
+        if not kwargs.get("follow_redirects", True):
+            forwarded["create_connection"] = _NoRedirectConnection
 
         try:
             self._ws = await websockets.connect(self._url, **forwarded)

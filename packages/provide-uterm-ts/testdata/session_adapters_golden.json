@@ -11,6 +11,8 @@
  "ws_defaults": {
   "cols": 80,
   "rows": 25,
+  "open_timeout": 10.0,
+  "follow_redirects": true,
   "ping_interval": 20,
   "ping_timeout": 20,
   "close_timeout": 10,
@@ -31,6 +33,8 @@
  "ws_session_defaults": {
   "cols": 80,
   "rows": 25,
+  "open_timeout": 10.0,
+  "follow_redirects": true,
   "ping_interval": 20,
   "ping_timeout": 20,
   "close_timeout": 10,

@@ -32,6 +32,7 @@ class TerminalDefaults:
     SSH_REMOTE_PORT: int = 22  # default remote SSH port (connect-to)
     WS_PING_INTERVAL: int = 20  # websocket ping interval (seconds)
     WS_PING_TIMEOUT: int = 20  # websocket ping response timeout (seconds)
+    WS_OPEN_TIMEOUT: float = 10.0  # TCP/TLS/HTTP opening deadline (seconds)
     WS_CLOSE_TIMEOUT: int = 10  # websocket close timeout (seconds)
     RECONNECT_MAX_RETRIES: int = 5  # reconnect attempts before giving up
     RECONNECT_BASE_BACKOFF_S: float = 0.5  # initial reconnect backoff (seconds)
