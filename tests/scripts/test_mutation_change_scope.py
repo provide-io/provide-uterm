@@ -439,11 +439,13 @@ def _points_into_allowlist(path: str, anchored: bool, allowlisted: list[str]) ->
         if "/" not in path:
             return any(entry.prefix == path + "/" for entry in scope.IRRELEVANT)
         return any(f.startswith(path + "/") or f"/{path}/" in f for f in allowlisted)
-    if scope.irrelevant_entry(path) is not None and (_ROOT / path).exists():
-        return True
-    return (_ROOT / path).is_dir() and any(
-        entry.prefix.endswith("/") and (path + "/").startswith(entry.prefix) for entry in scope.IRRELEVANT
-    )
+    # Anchored, the path is exact: it counts if it is an allowlisted tracked
+    # file or a directory holding one. Tracked, not merely on disk: the gate
+    # classifies changed files from a diff, and a gitignored local artifact
+    # (a .dev.vars, a vendored python_modules/) never appears in one, so a
+    # read of it cannot hide a mutation -- and a disk check made this scan
+    # pass in a clean checkout and fail in a provisioned one.
+    return any(f == path or f.startswith(path + "/") for f in allowlisted)
 
 
 def _literal_reads_into_allowlisted_areas() -> frozenset[tuple[str, str]]:
