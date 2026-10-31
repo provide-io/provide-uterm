@@ -6,7 +6,7 @@
 """Unauthenticated health-check endpoints for the hosted terminal server.
 
 ``/api/health`` returns rich diagnostic info (version, uptime, session count,
-control-plane backend).  ``/healthz`` is a minimal liveness probe suitable for
+control-plane backend) and the optional features this server supports.  ``/healthz`` is a minimal liveness probe suitable for
 Kubernetes readiness/liveness checks.
 
 The health/liveness/readiness endpoints are mounted **without** authentication
@@ -37,11 +37,52 @@ from fastapi import APIRouter, Depends, Request, Response
 
 from provide.uterm import __version__
 from provide.uterm.server.app.posture import compute_security_posture
+from provide.uterm.server.config_schema import OWNER_AND_GROUP_CAPTURE_SOCKET_MODE
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from starlette.requests import HTTPConnection
+
+# Optional behaviour a client cannot otherwise tell apart from an older server,
+# listed in a ready ``/api/health`` answer so it can ask before relying on it.
+# ``viewers.revoke.subject``: ``POST /api/sessions/{id}/viewers/revoke`` honours
+# a ``{"subject": ...}`` body. A server without it ignores the body and revokes
+# every share viewer of the session, so a caller must not send one blind.
+SERVER_FEATURES = ("viewers.revoke.subject",)
+
+# Listed only when configured, since a server can have either switched off:
+# ``sessions.capture.persist``: PAM capture sessions are re-created under their
+# ids after a restart (``session_persistence.persist_capture``).
+# ``sessions.previous``: an ended capture session can be read at
+# ``GET /api/previous-sessions`` (``session_persistence.previous_keep_days``).
+# ``sessions.previous.owner``: an admin can set an ended capture session's
+# owner and visibility (``PATCH /api/previous-sessions/{id}``), listed with
+# ``sessions.previous`` since it has nothing to change without it.
+PERSIST_CAPTURE_FEATURE = "sessions.capture.persist"
+PREVIOUS_SESSIONS_FEATURE = "sessions.previous"
+PREVIOUS_OWNER_FEATURE = "sessions.previous.owner"
+# ``capture.socket_mode``: the sockets this server binds for pty_capture
+# sessions let the socket directory's group connect, not only this server's
+# user (``pam.capture_socket_mode = 0o660``). Listed only then, so a capture
+# producer running as another user can tell that it will be able to connect.
+# Other sockets are not covered: a pty session's injected capture socket stays
+# owner-only in its own private directory.
+CAPTURE_SOCKET_MODE_FEATURE = "capture.socket_mode"
+
+
+def server_features(config: object) -> list[str]:
+    """The features this server lists in ``/api/health``, given its config."""
+    features = list(SERVER_FEATURES)
+    settings = getattr(config, "session_persistence", None)
+    if settings is not None and settings.persist_capture:
+        features.append(PERSIST_CAPTURE_FEATURE)
+    if settings is not None and settings.previous_keep_days > 0:
+        features.extend((PREVIOUS_SESSIONS_FEATURE, PREVIOUS_OWNER_FEATURE))
+    pam = getattr(config, "pam", None)
+    if pam is not None and pam.capture_socket_mode == OWNER_AND_GROUP_CAPTURE_SOCKET_MODE:
+        features.append(CAPTURE_SOCKET_MODE_FEATURE)
+    return features
 
 
 def create_health_router(
@@ -95,6 +136,7 @@ def create_health_router(
             "uptime_s": uptime_s,
             "active_sessions": active_sessions,
             "control_plane_backend": backend,
+            "features": server_features(config),
         }
 
     @router.get("/healthz")

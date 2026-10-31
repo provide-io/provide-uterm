@@ -44,6 +44,7 @@ from provide.uterm.server.config_schema import (
     PamConfig,
     RecordingConfig,
     ServerBindConfig,
+    SessionPersistenceConfig,
     UiConfig,
     _clean_path,
     _require_secure_url,
@@ -150,6 +151,50 @@ MODEL_CASES: list[tuple[str, Any, dict[str, Any]]] = [
     ("sqlite with no database url", ControlPlaneConfig, {"backend": "sqlite"}),
     ("a pam relay over cleartext", PamConfig, {"relay_url": "http://relay.example.org/notify"}),
     ("a pam relay over tls", PamConfig, {"relay_url": "https://relay.example.org/notify"}),
+    # Who may connect to a pty_capture socket. Every port binding one (Python,
+    # Go) or reading the key (TypeScript, C#) replays these, so a change to the
+    # allowed set or to the words fails them all.
+    ("capture sockets owner-only", PamConfig, {"capture_socket_mode": 0o600}),
+    ("capture sockets shared with the group", PamConfig, {"capture_socket_mode": 0o660}),
+    ("capture sockets anyone may connect to", PamConfig, {"capture_socket_mode": 0o666}),
+    ("capture sockets the group may only read", PamConfig, {"capture_socket_mode": 0o640}),
+    ("capture sockets with the setgid bit", PamConfig, {"capture_socket_mode": 0o2660}),
+    ("capture sockets with no permissions", PamConfig, {"capture_socket_mode": 0}),
+    ("a negative capture socket mode", PamConfig, {"capture_socket_mode": -0o600}),
+    ("a capture socket mode written as a string", PamConfig, {"capture_socket_mode": "0o660"}),
+    ("a capture socket mode written in decimal digits", PamConfig, {"capture_socket_mode": "432"}),
+    ("a capture socket mode written as a float", PamConfig, {"capture_socket_mode": 432.0}),
+    ("a capture socket mode given a bool", PamConfig, {"capture_socket_mode": True}),
+    ("a capture socket mode given a list", PamConfig, {"capture_socket_mode": [432]}),
+    ("session persistence off", SessionPersistenceConfig, {}),
+    (
+        "session persistence at its bounds",
+        SessionPersistenceConfig,
+        {
+            "persist_capture": True,
+            "previous_keep_days": 3650,
+            "previous_scrollback_lines": 10000,
+            "state_dir": "/var/lib/uterm/capture-sessions",
+        },
+    ),
+    (
+        "no previous sessions and no scrollback",
+        SessionPersistenceConfig,
+        {"previous_keep_days": 0, "previous_scrollback_lines": 0},
+    ),
+    ("negative previous days", SessionPersistenceConfig, {"previous_keep_days": -1}),
+    ("previous days past their bound", SessionPersistenceConfig, {"previous_keep_days": 3651}),
+    ("negative scrollback", SessionPersistenceConfig, {"previous_scrollback_lines": -1}),
+    ("scrollback past its bound", SessionPersistenceConfig, {"previous_scrollback_lines": 10001}),
+    ("capture sessions kept with nowhere to keep them", SessionPersistenceConfig, {"persist_capture": True}),
+    ("previous sessions kept with nowhere to keep them", SessionPersistenceConfig, {"previous_keep_days": 1}),
+    ("a relative state directory", SessionPersistenceConfig, {"state_dir": "state/"}),
+    ("an empty state directory", SessionPersistenceConfig, {"state_dir": ""}),
+    (
+        "a state directory written with a trailing slash",
+        SessionPersistenceConfig,
+        {"persist_capture": True, "state_dir": "/var/lib/uterm/capture-sessions/"},
+    ),
 ]
 
 

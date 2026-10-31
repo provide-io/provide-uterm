@@ -110,7 +110,7 @@ class _SessionRuntimeIoMixin:
         ctx: Any
         meta: Any
         _meta_loaded: bool
-        _deleted_at: float
+        _deleted_at: float | None
         lifecycle_state: str
         hijack: Any
         input_mode: str
@@ -119,6 +119,7 @@ class _SessionRuntimeIoMixin:
         browser_resume_tokens: dict[str, str]
         worker_ws: Any
         _ushell: Any
+        _ushell_started: bool
         raw_sockets: Any
         env: Any
         last_snapshot: Any

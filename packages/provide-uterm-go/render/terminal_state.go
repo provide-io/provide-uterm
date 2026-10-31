@@ -8,6 +8,7 @@ package render
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vt"
 )
@@ -69,24 +70,91 @@ func ScreenStatePrefix(s *vt.Screen) string {
 	return entered.String() + "\x1b[H"
 }
 
+// lastCellRedraw is the column and bytes that redraw row y's last cell,
+// leaving the cursor deferred: "<column>H<pen><text>", for a caller to prefix
+// with ESC [ <row> ;.
+//
+// The cell is drawn again, in its own style, from the column before; a wide
+// character there occupies the last two cells and is redrawn whole. Marks in
+// the cell, or in a wide character's second cell, are written after it with
+// autowrap off: they join the cell before the cursor, which rests past the
+// last column, and the suffix has already turned autowrap on, so they would
+// otherwise wrap to the next row first.
+//
+// A last cell holding a second half whose first half is gone, or the second
+// half of a wide character with marks of its own, cannot be drawn that way:
+// with exact this reports false for it, and otherwise the nearest thing. Port
+// of _last_cell_redraw.
+func lastCellRedraw(s *vt.Screen, y int, exact bool) (string, bool) {
+	x := s.Columns() - 1
+	marks := ""
+	if last := s.At(y, x).Data; x > 0 && isSecondHalf(last) {
+		before := s.At(y, x-1).Data
+		if exact && (utf8.RuneCountInString(before) != 1 || vt.CellWidth(before) != 2) {
+			return "", false
+		}
+		marks = last
+		x--
+	} else if exact && isSecondHalf(last) {
+		return "", false
+	}
+	cell := s.At(y, x)
+	text := cell.Data
+	if text == "" {
+		text = " "
+	}
+	_, size := utf8.DecodeRuneInString(text)
+	redraw := fmt.Sprintf("%dH%s%s", x+1, StyleToSGR(CellStyle(cell)), text[:size])
+	if held := text[size:] + marks; held != "" {
+		return redraw + "\x1b[?7l" + held + "\x1b[?7h", true
+	}
+	return redraw, true
+}
+
 // cursorPlacement moves to the cursor, reproducing the deferred wrap at the
 // last column: a cursor that has just drawn there rests at X == columns,
-// which no CUP can address, so the last cell is drawn again in its own style
-// from the column before. A wide character there is redrawn whole.
+// which no CUP can address, so the row's last cell is drawn again (see
+// lastCellRedraw), which leaves any terminal in the same state.
+//
+// Some last cells cannot be drawn so: a second half whose first half is gone,
+// or one of a wide character with marks of its own. A cursor gets there
+// deferred when CUU, CUD, IND or RI move it from another row, all of which
+// keep the column. So that is done here too: the cursor is left deferred past
+// a neighbouring row's last cell, redrawn as it is, and moved onto this row
+// with CUD from the row above or CUU from the row below. Either must land on
+// this row despite the scrolling region, and in origin mode the neighbour
+// must be inside it. Only with no such neighbour (a one-row screen, or
+// neighbours that cannot be drawn either) is the last cell drawn as nearly as
+// it can be. Port of _cursor_placement.
 func cursorPlacement(s *vt.Screen, row int) string {
 	cursor := s.Cursor()
-	columns := s.Columns()
-	if cursor.X < columns {
+	if cursor.X < s.Columns() {
 		return fmt.Sprintf("\x1b[%d;%dH", row, cursor.X+1)
 	}
-	x := columns - 1
-	if s.At(cursor.Y, x).Data == "" && x > 0 {
-		x--
+	y := cursor.Y
+	if redraw, ok := lastCellRedraw(s, y, true); ok {
+		return fmt.Sprintf("\x1b[%d;%s", row, redraw)
 	}
-	// The cell is never a stub here: a stub only follows a wide character,
-	// and one in the last column has just been stepped back over.
-	cell := s.At(cursor.Y, x)
-	return fmt.Sprintf("\x1b[%d;%dH%s%s", row, x+1, StyleToSGR(CellStyle(cell)), cell.Data)
+	top, bottom := 0, s.Lines()-1
+	if m, ok := s.Margins(); ok {
+		top, bottom = m.Top, m.Bottom
+	}
+	origin := s.HasMode(vt.DECOM)
+	neighbours := []struct {
+		row   int
+		move  string
+		lands bool
+	}{{y - 1, "\x1b[B", y <= bottom}, {y + 1, "\x1b[A", y >= top}}
+	for _, n := range neighbours {
+		if !n.lands || n.row < 0 || n.row >= s.Lines() || (origin && (n.row < top || n.row > bottom)) {
+			continue
+		}
+		if redraw, ok := lastCellRedraw(s, n.row, true); ok {
+			return fmt.Sprintf("\x1b[%d;%s%s", row+n.row-y, redraw, n.move)
+		}
+	}
+	redraw, _ := lastCellRedraw(s, y, false)
+	return fmt.Sprintf("\x1b[%d;%s", row, redraw)
 }
 
 // charsetState is the G0/G1 designations and the shift, unless nothing has

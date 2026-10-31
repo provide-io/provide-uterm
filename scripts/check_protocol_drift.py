@@ -184,6 +184,13 @@ TWINNED_FIXTURES: tuple[tuple[str, ...], ...] = (
         "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/session_logger_golden.json",
         "packages/provide-uterm-go/sessionlogger/testdata/session_logger_golden.json",
     ),
+    # The vt corpus is generated beside the TS port (gen_vt_golden.py); Go and
+    # C# replay it, and its Unicode tables, from their own copies.
+    (
+        "packages/provide-uterm-ts/testdata/vt_golden.json",
+        "packages/provide-uterm-go/vt/testdata/vt_golden.json",
+        "packages/provide-uterm-csharp/tests/Provide.Uterm.Tests/testdata/vt_golden.json",
+    ),
     # spec/ is the source here (scripts/generate_behavior_vectors.py writes all of
     # them); Python, Go and C# each keep a copy next to the tests that replay it.
     # TypeScript reads spec/ directly.

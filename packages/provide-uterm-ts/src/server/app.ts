@@ -44,7 +44,14 @@ import { type RecordingAccess, recordingHandlers } from "./recording-routes.ts";
 import { bindApiRoutes, matchesShape, type RouteHandler } from "./route-binding.ts";
 import type { SessionHub } from "./session-hub.ts";
 import { filterSessions, type SessionListQuery, type SessionRegistry } from "./session-registry.ts";
-import { ShareViewerRevocations, VIEWER_REVOKED_CLOSE_CODE, VIEWER_REVOKED_REASON } from "./viewer-revocation.ts";
+import {
+  isShareSubjectOf,
+  SHARE_VIEWER_REVOKE_BODY_MAX_BYTES,
+  ShareViewerRevocations,
+  ShareViewerSubjectRevocationsFullError,
+  VIEWER_REVOKED_CLOSE_CODE,
+  VIEWER_REVOKED_REASON,
+} from "./viewer-revocation.ts";
 
 /** The refusal every unauthenticated request gets, whatever it asked for. */
 export const UNAUTHENTICATED_DETAIL = "authentication required";
@@ -174,6 +181,108 @@ const SESSION_ID = /^[\w-]+$/;
 /** One refusal, in the shape the reference's framework emits. */
 function refusal(status: number, detail: string, headers: Record<string, string> = {}): Response {
   return Response.json({ detail }, { status, headers });
+}
+
+/** A surrogate that is not half of a pair. */
+const LONE_SURROGATE = /\p{Cs}/u;
+
+/** JSON's own whitespace (RFC 8259), the only blank a revoke body may be. */
+const JSON_WHITESPACE = /^[ \t\r\n]+|[ \t\r\n]+$/g;
+
+/**
+ * The share subject a revoke body names, `undefined` to revoke every share
+ * viewer, or the refusal to answer with.
+ *
+ * No body, a blank one, `null` and `{}` all mean the whole session, as before
+ * the body existed (`null` is "no body" across the ports, as in the reference's
+ * optional bodies). Anything else must be exactly `{"subject": "<string>"}`:
+ * an unknown key (a misspelt `subject`) or a `null` subject is refused rather
+ * than read as "every viewer", which would close sockets the caller meant to
+ * leave open. Invalid UTF-8 and a byte-order mark are refused, as in the other
+ * ports.
+ */
+async function requestedSubject(request: Request, sessionId: string): Promise<string | undefined | Response> {
+  const invalid = (): Response => refusal(422, "invalid request body");
+  const raw = await cappedBody(request);
+  if (raw === undefined) {
+    return invalid();
+  }
+  let body: unknown;
+  try {
+    const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(raw).replace(JSON_WHITESPACE, "");
+    if (text === "") {
+      return undefined;
+    }
+    body = JSON.parse(text);
+  } catch {
+    return invalid();
+  }
+  if (body === null) {
+    return undefined;
+  }
+  if (typeof body !== "object" || Array.isArray(body)) {
+    return invalid();
+  }
+  const keys = Object.keys(body);
+  if (keys.some((key) => key !== "subject")) {
+    return invalid();
+  }
+  if (keys.length === 0) {
+    return undefined;
+  }
+  const subject: unknown = (body as { subject: unknown }).subject;
+  // JSON can spell a lone surrogate, which is not text: in a `u` pattern a
+  // surrogate code point only matches when it is not half of a pair.
+  if (typeof subject !== "string" || LONE_SURROGATE.test(subject)) {
+    return invalid();
+  }
+  return isShareSubjectOf(subject, sessionId)
+    ? subject
+    : refusal(422, "subject must be a share subject of this session");
+}
+
+/**
+ * A request's body, or `undefined` once it runs past
+ * {@link SHARE_VIEWER_REVOKE_BODY_MAX_BYTES}: reading stops at the chunk that
+ * crosses the cap and the rest is never read, since the largest body worth
+ * reading is a 512-byte subject in its envelope.
+ */
+async function cappedBody(request: Request): Promise<Uint8Array | undefined> {
+  if (request.body === null) {
+    return new Uint8Array();
+  }
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    size += chunk.value.length;
+    if (size > SHARE_VIEWER_REVOKE_BODY_MAX_BYTES) {
+      await reader.cancel();
+      return undefined;
+    }
+    chunks.push(chunk.value);
+  }
+  const whole = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    whole.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return whole;
+}
+
+/** A revoke's answer: the cutoff, the close a revoked socket would get, and any subject applied. */
+function revokedResponse(sessionId: string, revokedAt: number, subject?: string): Response {
+  return Response.json({
+    session_id: sessionId,
+    revoked_at: revokedAt,
+    closed: 0,
+    close_code: VIEWER_REVOKED_CLOSE_CODE,
+    close_reason: VIEWER_REVOKED_REASON,
+    // The subject that was applied, so a caller can see its body was honoured.
+    // Absent for a whole-session revoke, whose answer keeps its original shape.
+    ...(subject === undefined ? {} : { subject }),
+  });
 }
 
 /** The one answer both ways of failing to authenticate produce. */
@@ -412,14 +521,22 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
   }
 
   /**
-   * Revoke a session's share viewers: record the cutoff and report it.
+   * Revoke a session's share viewers, or one share subject of it when the
+   * body names one: record the cutoff and report it.
    *
    * The same gate as everything else here — method, credential, grammar,
    * existence, privilege — and the privilege is `session.control.update`, so
-   * the owner, a session-scoped admin or a global admin. No socket can be
-   * open to close, so `closed` is always zero.
+   * the owner, a session-scoped admin or a global admin. The body is judged
+   * after the gate, so a refused caller's body is never read. No socket can
+   * be open to close, so `closed` is always zero.
    */
-  function revokeViewers(method: string, sessionId: string, principal: ServerPrincipal, authenticated: boolean) {
+  async function revokeViewers(
+    request: Request,
+    method: string,
+    sessionId: string,
+    principal: ServerPrincipal,
+    authenticated: boolean,
+  ): Promise<Response> {
     if (method !== "POST") {
       return refusal(405, "Method Not Allowed", { Allow: "POST" });
     }
@@ -436,12 +553,29 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
     if (!canMutateSession(principal, definition, "session.control.update")) {
       return refusal(403, "insufficient privileges");
     }
+    const subject = await requestedSubject(request, sessionId);
+    if (subject instanceof Response) {
+      return subject;
+    }
+    const now = (options.now ?? (() => Date.now() / 1000))();
     let revokedAt: number;
+    if (subject !== undefined) {
+      try {
+        revokedAt = revocations.revokeSubject(sessionId, subject, now);
+      } catch (error) {
+        // The two things revokeSubject throws: this session's cap, or the
+        // whole subject table's (ShareViewerRevocationsFullError).
+        return error instanceof ShareViewerSubjectRevocationsFullError
+          ? refusal(429, "too many viewers of this session revoked one by one; revoke them all instead")
+          : refusal(429, "too many viewers revoked one by one; try again later");
+      }
+      return revokedResponse(sessionId, revokedAt, subject);
+    }
     try {
       // The embedder's service token is a global admin and revokes for
       // everyone, so only other callers are held to a per-principal share.
       const revoker = isAdmin(principal) ? undefined : principal.subject_id;
-      revokedAt = revocations.revoke(sessionId, (options.now ?? (() => Date.now() / 1000))(), revoker, (evicted) => {
+      revokedAt = revocations.revoke(sessionId, now, revoker, (evicted) => {
         // The cap made room by dropping this principal's oldest cutoff, so
         // that session's earlier share tokens are admitted again: say so.
         logger.info(
@@ -458,13 +592,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
       // The one thing revoke throws: ShareViewerRevocationsFullError.
       return refusal(429, "too many sessions with revoked viewers; try again later");
     }
-    return Response.json({
-      session_id: sessionId,
-      revoked_at: revokedAt,
-      closed: 0,
-      close_code: VIEWER_REVOKED_CLOSE_CODE,
-      close_reason: VIEWER_REVOKED_REASON,
-    });
+    return revokedResponse(sessionId, revokedAt);
   }
 
   async function handle(request: Request, clientAddress?: string): Promise<Response> {
@@ -503,7 +631,7 @@ export function createServerApp(options: ServerAppOptions): ServerApp {
 
     const revoke = VIEWERS_REVOKE_PATH.exec(path);
     if (revoke !== null) {
-      return revokeViewers(method, revoke[1] as string, principal, authenticated);
+      return revokeViewers(request, method, revoke[1] as string, principal, authenticated);
     }
 
     // A request for a served route is one whose caller has to have

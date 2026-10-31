@@ -26,7 +26,6 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from provide.uterm.client import connect_test_ws
-from provide.uterm.server import create_server_app, default_server_config
 from provide.uterm.server.authorization import (
     SHARE_VIEWER_REVOCATION_TTL_S,
     SHARE_VIEWER_REVOCATIONS_MAX,
@@ -35,15 +34,13 @@ from provide.uterm.server.authorization import (
     is_share_viewer,
 )
 from provide.uterm.server.bridge.identity import Principal
-from provide.uterm.server.models import AuthConfig
 from provide.uterm.server.viewer_revocation import (
     VIEWER_REVOKED_CLOSE_CODE,
     VIEWER_REVOKED_REASON,
     close_revoked_viewers,
 )
 
-_KEY = "uterm-test-secret-32-byte-minimum-key"
-_SESSION = "provide-shell"
+from .viewer_revocation_helpers import JWT_KEY, SESSION, bearer, close_of, make_app, mint_token, wait_for
 
 
 def _viewer(session_id: str = "s1", *, iat: object = 100, roles: frozenset[str] | None = None) -> Principal:
@@ -407,151 +404,96 @@ def test_the_close_code_is_an_application_code_with_a_generic_reason() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _token(sub: str, roles: list[str], *, iat: int | None = None, exp_in: int = 600) -> str:
-    issued = int(time.time()) if iat is None else iat
-    return jwt.encode(
-        {
-            "sub": sub,
-            "roles": roles,
-            "iss": "provide-uterm",
-            "aud": "provide-uterm-server",
-            "iat": issued,
-            "exp": issued + exp_in,
-        },
-        key=_KEY,
-        algorithm="HS256",
-    )
-
-
-def _bearer(token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
-
-
-def _app() -> Any:
-    config = default_server_config()
-    config.auth = AuthConfig(
-        mode="jwt",
-        jwt_public_key_pem=_KEY,
-        jwt_algorithms=["HS256"],
-        worker_bearer_token=_token("runtime-worker", ["admin"]),
-        clock_skew_seconds=30,
-    )
-    return create_server_app(config, api_only=True)
-
-
-def _wait_for(browser: Any, frame_type: str) -> dict[str, Any]:
-    while True:
-        frame = browser.receive_json()
-        if frame.get("type") == frame_type:
-            return frame
-
-
-def _read_until_closed(browser: Any) -> None:
-    """Read frames until the socket closes; a pong means it was left open."""
-    while True:
-        frame = browser.receive_json()
-        assert frame.get("type") != "pong", "socket was not closed"
-
-
-def _close_of(browser: Any) -> WebSocketDisconnect:
-    # A ping first, so a socket that was wrongly left open answers it and the
-    # test fails on the pong instead of waiting forever for a close.
-    browser.send_json({"type": "ping"})
-    with pytest.raises(WebSocketDisconnect) as caught:
-        _read_until_closed(browser)
-    return caught.value
-
-
 def test_revoking_viewers_closes_share_watchers_and_refuses_their_tokens() -> None:
-    app = _app()
-    watcher_token = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"])
-    admin_token = _token("ops", ["admin"])
-    path = f"/api/sessions/{_SESSION}/viewers/revoke"
+    app = make_app()
+    watcher_token = mint_token(f"share:{SESSION}:blackbetty:7", ["viewer"])
+    admin_token = mint_token("ops", ["admin"])
+    path = f"/api/sessions/{SESSION}/viewers/revoke"
 
     with (
         TestClient(app) as client,
         connect_test_ws(
             client,
-            f"/ws/worker/{_SESSION}/term",
-            headers=_bearer(app.state.uterm_config.auth.worker_bearer_token),
+            f"/ws/worker/{SESSION}/term",
+            headers=bearer(app.state.uterm_config.auth.worker_bearer_token),
         ) as worker,
     ):
         assert worker.receive_json()["type"] == "snapshot_req"
-        assert client.get(f"/api/sessions/{_SESSION}", headers=_bearer(watcher_token)).status_code == 200
+        assert client.get(f"/api/sessions/{SESSION}", headers=bearer(watcher_token)).status_code == 200
 
         with (
-            connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(watcher_token)) as watcher,
-            connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(admin_token)) as admin,
+            connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(watcher_token)) as watcher,
+            connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(admin_token)) as admin,
             connect_test_ws(
-                client, f"/ws/browser/{_SESSION}/term", headers=_bearer(_token("alice", ["viewer"]))
+                client, f"/ws/browser/{SESSION}/term", headers=bearer(mint_token("alice", ["viewer"]))
             ) as plain_viewer,
         ):
-            assert _wait_for(watcher, "hello")["role"] == "viewer"
-            assert _wait_for(admin, "hello")["role"] == "admin"
-            assert _wait_for(plain_viewer, "hello")["role"] == "viewer"
+            assert wait_for(watcher, "hello")["role"] == "viewer"
+            assert wait_for(admin, "hello")["role"] == "admin"
+            assert wait_for(plain_viewer, "hello")["role"] == "viewer"
 
             # A share viewer cannot revoke its own access, nor can a plain viewer.
-            assert client.post(path, headers=_bearer(watcher_token)).status_code == 403
-            assert client.post(path, headers=_bearer(_token("alice", ["viewer"]))).status_code == 403
+            assert client.post(path, headers=bearer(watcher_token)).status_code == 403
+            assert client.post(path, headers=bearer(mint_token("alice", ["viewer"]))).status_code == 403
 
-            response = client.post(path, headers=_bearer(admin_token))
+            response = client.post(path, headers=bearer(admin_token))
             assert response.status_code == 200
             body = response.json()
-            assert body["session_id"] == _SESSION
+            assert body["session_id"] == SESSION
             assert body["closed"] == 1
             assert body["close_code"] == VIEWER_REVOKED_CLOSE_CODE
             assert body["close_reason"] == VIEWER_REVOKED_REASON
             assert isinstance(body["revoked_at"], float)
 
-            closed = _close_of(watcher)
+            closed = close_of(watcher)
             assert closed.code == VIEWER_REVOKED_CLOSE_CODE
             assert closed.reason == VIEWER_REVOKED_REASON
 
             # The admin and the ordinary viewer keep their sockets.
             admin.send_json({"type": "ping"})
-            assert _wait_for(admin, "pong")["type"] == "pong"
+            assert wait_for(admin, "pong")["type"] == "pong"
             plain_viewer.send_json({"type": "ping"})
-            assert _wait_for(plain_viewer, "pong")["type"] == "pong"
+            assert wait_for(plain_viewer, "pong")["type"] == "pong"
 
         # The revoked token can neither reconnect nor read.
         with (
             pytest.raises(WebSocketDisconnect),
-            connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(watcher_token)) as again,
+            connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(watcher_token)) as again,
         ):
             again.receive_json()
-        assert client.get(f"/api/sessions/{_SESSION}", headers=_bearer(watcher_token)).status_code == 403
+        assert client.get(f"/api/sessions/{SESSION}", headers=bearer(watcher_token)).status_code == 403
 
         # A token issued after the cutoff watches again.
-        fresh = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"], iat=int(body["revoked_at"]) + 1)
-        with connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(fresh)) as rewatch:
-            assert _wait_for(rewatch, "hello")["role"] == "viewer"
+        fresh = mint_token(f"share:{SESSION}:blackbetty:7", ["viewer"], iat=int(body["revoked_at"]) + 1)
+        with connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(fresh)) as rewatch:
+            assert wait_for(rewatch, "hello")["role"] == "viewer"
 
 
 def test_an_expired_share_viewer_token_cannot_reconnect() -> None:
-    app = _app()
-    expired = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"], iat=int(time.time()) - 600, exp_in=60)
+    app = make_app()
+    expired = mint_token(f"share:{SESSION}:blackbetty:7", ["viewer"], iat=int(time.time()) - 600, exp_in=60)
     with TestClient(app) as client:
-        assert client.get(f"/api/sessions/{_SESSION}", headers=_bearer(expired)).status_code == 401
+        assert client.get(f"/api/sessions/{SESSION}", headers=bearer(expired)).status_code == 401
         with (
             pytest.raises(WebSocketDisconnect),
-            connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(expired)) as browser,
+            connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(expired)) as browser,
         ):
             browser.receive_json()
 
 
 def test_revoking_viewers_of_an_unknown_session_is_a_404() -> None:
-    app = _app()
+    app = make_app()
     with TestClient(app) as client:
         response = client.post(
-            "/api/sessions/no-such-session/viewers/revoke", headers=_bearer(_token("ops", ["admin"]))
+            "/api/sessions/no-such-session/viewers/revoke", headers=bearer(mint_token("ops", ["admin"]))
         )
         assert response.status_code == 404
 
 
 def test_revoking_viewers_requires_authentication() -> None:
-    app = _app()
+    app = make_app()
     with TestClient(app) as client:
-        assert client.post(f"/api/sessions/{_SESSION}/viewers/revoke").status_code == 401
+        assert client.post(f"/api/sessions/{SESSION}/viewers/revoke").status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -693,8 +635,8 @@ def test_the_app_keeps_one_stream_registry() -> None:
 
 def test_a_socket_registered_after_the_revoke_scan_is_closed_on_registration(monkeypatch: pytest.MonkeyPatch) -> None:
     """The race: role resolved before the cutoff, registration after the revoke's scan."""
-    app = _app()
-    watcher_token = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"])
+    app = make_app()
+    watcher_token = mint_token(f"share:{SESSION}:blackbetty:7", ["viewer"])
     hub = app.state.uterm_hub
     real_register = hub.register_browser
 
@@ -705,15 +647,15 @@ def test_a_socket_registered_after_the_revoke_scan_is_closed_on_registration(mon
     monkeypatch.setattr(hub, "register_browser", register_after_revoke)
     with (
         TestClient(app) as client,
-        connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(watcher_token)) as watcher,
+        connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(watcher_token)) as watcher,
     ):
-        closed = _close_of(watcher)
+        closed = close_of(watcher)
     assert closed.code == VIEWER_REVOKED_CLOSE_CODE
     assert closed.reason == VIEWER_REVOKED_REASON
 
 
 def test_an_admin_registered_after_a_revoke_is_not_closed(monkeypatch: pytest.MonkeyPatch) -> None:
-    app = _app()
+    app = make_app()
     hub = app.state.uterm_hub
     real_register = hub.register_browser
 
@@ -724,19 +666,19 @@ def test_an_admin_registered_after_a_revoke_is_not_closed(monkeypatch: pytest.Mo
     monkeypatch.setattr(hub, "register_browser", register_after_revoke)
     with (
         TestClient(app) as client,
-        connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(_token("ops", ["admin"]))) as admin,
+        connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(mint_token("ops", ["admin"]))) as admin,
     ):
-        assert _wait_for(admin, "hello")["role"] == "admin"
+        assert wait_for(admin, "hello")["role"] == "admin"
 
 
 def test_other_owners_and_admins_scoped_elsewhere_cannot_revoke() -> None:
-    app = _app()
-    path = f"/api/sessions/{_SESSION}/viewers/revoke"
+    app = make_app()
+    path = f"/api/sessions/{SESSION}/viewers/revoke"
     with TestClient(app) as client:
-        admin = _bearer(_token("ops", ["admin"]))
-        patched = client.patch(f"/api/sessions/{_SESSION}", json={"owner": "owner1"}, headers=admin)
+        admin = bearer(mint_token("ops", ["admin"]))
+        patched = client.patch(f"/api/sessions/{SESSION}", json={"owner": "owner1"}, headers=admin)
         assert patched.status_code == 200
-        assert client.post(path, headers=_bearer(_token("owner2", ["operator"]))).status_code == 403
+        assert client.post(path, headers=bearer(mint_token("owner2", ["operator"]))).status_code == 403
         scoped_elsewhere = jwt.encode(
             {
                 "sub": "scoped",
@@ -747,42 +689,42 @@ def test_other_owners_and_admins_scoped_elsewhere_cannot_revoke() -> None:
                 "iat": int(time.time()),
                 "exp": int(time.time()) + 600,
             },
-            key=_KEY,
+            key=JWT_KEY,
             algorithm="HS256",
         )
-        assert client.post(path, headers=_bearer(scoped_elsewhere)).status_code == 403
-        assert client.post(path, headers=_bearer(_token("owner1", ["operator"]))).status_code == 200
+        assert client.post(path, headers=bearer(scoped_elsewhere)).status_code == 403
+        assert client.post(path, headers=bearer(mint_token("owner1", ["operator"]))).status_code == 200
 
 
 def test_the_owner_and_the_hijack_holder_keep_their_sockets_through_a_revoke() -> None:
-    app = _app()
-    path = f"/api/sessions/{_SESSION}/viewers/revoke"
-    admin_token = _token("ops", ["admin"])
-    owner_token = _token("owner1", ["operator"])
+    app = make_app()
+    path = f"/api/sessions/{SESSION}/viewers/revoke"
+    admin_token = mint_token("ops", ["admin"])
+    owner_token = mint_token("owner1", ["operator"])
     with (
         TestClient(app) as client,
         connect_test_ws(
             client,
-            f"/ws/worker/{_SESSION}/term",
-            headers=_bearer(app.state.uterm_config.auth.worker_bearer_token),
+            f"/ws/worker/{SESSION}/term",
+            headers=bearer(app.state.uterm_config.auth.worker_bearer_token),
         ) as worker,
     ):
         assert worker.receive_json()["type"] == "snapshot_req"
-        patched = client.patch(f"/api/sessions/{_SESSION}", json={"owner": "owner1"}, headers=_bearer(admin_token))
+        patched = client.patch(f"/api/sessions/{SESSION}", json={"owner": "owner1"}, headers=bearer(admin_token))
         assert patched.status_code == 200
         with (
-            connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(admin_token)) as holder,
-            connect_test_ws(client, f"/ws/browser/{_SESSION}/term", headers=_bearer(owner_token)) as owner,
+            connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(admin_token)) as holder,
+            connect_test_ws(client, f"/ws/browser/{SESSION}/term", headers=bearer(owner_token)) as owner,
         ):
-            _wait_for(holder, "hello")
-            assert _wait_for(owner, "hello")["role"] == "operator"
+            wait_for(holder, "hello")
+            assert wait_for(owner, "hello")["role"] == "operator"
             holder.send_json({"type": "hijack_request"})
-            while _wait_for(holder, "hijack_state").get("owner") != "me":
+            while wait_for(holder, "hijack_state").get("owner") != "me":
                 pass
-            assert client.post(path, headers=_bearer(owner_token)).json()["closed"] == 0
+            assert client.post(path, headers=bearer(owner_token)).json()["closed"] == 0
             for keeper in (holder, owner):
                 keeper.send_json({"type": "ping"})
-                assert _wait_for(keeper, "pong")["type"] == "pong"
+                assert wait_for(keeper, "pong")["type"] == "pong"
 
 
 async def test_a_revoked_registration_is_released_and_refused() -> None:
@@ -814,9 +756,9 @@ def test_a_live_share_viewer_event_stream_ends_on_revoke() -> None:
 
     from provide.uterm.server.viewer_revocation import share_viewer_streams
 
-    app = _app()
-    watcher_token = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"])
-    admin = _bearer(_token("ops", ["admin"]))
+    app = make_app()
+    watcher_token = mint_token(f"share:{SESSION}:blackbetty:7", ["viewer"])
+    admin = bearer(mint_token("ops", ["admin"]))
     with TestClient(app) as client:
         revoked: list[int] = []
 
@@ -825,19 +767,17 @@ def test_a_live_share_viewer_event_stream_ends_on_revoke() -> None:
             deadline = time.monotonic() + 10
             while not streams._open and time.monotonic() < deadline:
                 time.sleep(0.01)
-            revoked.append(client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin).json()["closed"])
+            revoked.append(client.post(f"/api/sessions/{SESSION}/viewers/revoke", headers=admin).json()["closed"])
             if revoked != [1]:
                 # The revoke failed to end it: end it another way so the test
                 # fails on its assertions rather than hanging.
-                client.portal.call(app.state.uterm_hub.event_bus.close_worker, _SESSION)
+                client.portal.call(app.state.uterm_hub.event_bus.close_worker, SESSION)
 
         # Started first: the test client hands back a streamed body only once the
         # app has finished it, and only the revoke can finish this one.
         thread = threading.Thread(target=revoke_soon)
         thread.start()
-        with client.stream(
-            "GET", f"/api/sessions/{_SESSION}/events/stream", headers=_bearer(watcher_token)
-        ) as response:
+        with client.stream("GET", f"/api/sessions/{SESSION}/events/stream", headers=bearer(watcher_token)) as response:
             assert response.status_code == 200
             lines = [line for line in response.iter_lines() if line]
         thread.join()
@@ -849,8 +789,8 @@ def test_tunnel_viewers_are_revoked_by_rotation_not_by_the_viewer_cutoff() -> No
     """Revoke, then rotate: the new tunnel share link is admitted, the old one is not."""
     from urllib.parse import urlparse
 
-    app = _app()
-    owner = _bearer(_token("alice", ["operator"]))
+    app = make_app()
+    owner = bearer(mint_token("alice", ["operator"]))
 
     def cookie_for(client: TestClient, share_url: str) -> str:
         parsed = urlparse(share_url)
@@ -883,26 +823,26 @@ def test_tunnel_viewers_are_revoked_by_rotation_not_by_the_viewer_cutoff() -> No
 def test_a_long_poll_in_flight_when_its_viewer_is_revoked_answers_403() -> None:
     import threading
 
-    app = _app()
-    watcher_token = _token(f"share:{_SESSION}:blackbetty:7", ["viewer"])
-    admin = _bearer(_token("ops", ["admin"]))
+    app = make_app()
+    watcher_token = mint_token(f"share:{SESSION}:blackbetty:7", ["viewer"])
+    admin = bearer(mint_token("ops", ["admin"]))
     with TestClient(app) as client:
         polled: list[Any] = []
 
         def poll() -> None:
             polled.append(
-                client.get(f"/api/sessions/{_SESSION}/events/watch?timeout_ms=1500", headers=_bearer(watcher_token))
+                client.get(f"/api/sessions/{SESSION}/events/watch?timeout_ms=1500", headers=bearer(watcher_token))
             )
 
         thread = threading.Thread(target=poll)
         thread.start()
         time.sleep(0.3)
-        assert client.post(f"/api/sessions/{_SESSION}/viewers/revoke", headers=admin).status_code == 200
+        assert client.post(f"/api/sessions/{SESSION}/viewers/revoke", headers=admin).status_code == 200
         thread.join()
         assert polled[0].status_code == 403
         assert polled[0].json() == {"detail": "insufficient privileges"}
         # Anyone else's long-poll is answered as before.
-        plain = client.get(f"/api/sessions/{_SESSION}/events/watch?timeout_ms=100", headers=admin)
+        plain = client.get(f"/api/sessions/{SESSION}/events/watch?timeout_ms=100", headers=admin)
         assert plain.status_code == 200
         assert plain.json()["timed_out"] is True
 

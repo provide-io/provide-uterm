@@ -573,6 +573,25 @@ class MessageRouter:
         to_redact = {**snapshot, "type": "snapshot"}
         return _redact_frame_fields(to_redact, StreamRedactor(rules))
 
+    async def redact_texts_for_recipient(self, worker_id: str, texts: list[str], recipient: Any) -> list[str]:
+        """Return *texts* as the output-redaction policy lets *recipient* read them.
+
+        The policy the live screen is redacted by, applied to text that is not a
+        frame: an ended session's screen and scrollback. The rules are asked
+        for once for all of it. Unchanged when no gate is configured or it
+        yields no rules.
+        """
+        hub = self._hub
+        gate = hub._output_policy_gate
+        if gate is None:
+            return texts
+        context = await hub.prepare_policy_context(recipient, worker_id, action="output")
+        rules = await gate.get_redaction_rules(context)
+        if not rules:
+            return texts
+        redactor = StreamRedactor(rules)
+        return [redactor.redact(text) for text in texts]
+
     async def get_last_snapshot(self, worker_id: str, recipient: Any = None) -> dict[str, Any] | None:
         """Return an owned copy of the latest snapshot, or ``None`` if not registered.
 

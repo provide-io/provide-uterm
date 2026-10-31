@@ -10,6 +10,7 @@ import {
   CAPTURE_HEADER_SIZE,
   CAPTURE_QUEUE_MAXSIZE,
   CAPTURE_SOCKET_MODE,
+  CAPTURE_SOCKET_MODES,
   type CaptureFrame,
   CaptureQueue,
   type CaptureReader,
@@ -39,6 +40,7 @@ interface CaptureGolden {
   queue_maxsize: number;
   socket_mode: number;
   bind_umask: number;
+  socket_modes: number[];
   header_size: number;
   streams: StreamCase[];
   backpressure: { maxsize: number; pushed: number; kept: number; first_kept: string; last_kept: string };
@@ -271,6 +273,11 @@ describe("the socket it listens on", () => {
     expect(CAPTURE_BIND_UMASK).toBe(golden.bind_umask);
     expect(CAPTURE_SOCKET_MODE).toBe(0o600);
     expect(CAPTURE_BIND_UMASK & CAPTURE_SOCKET_MODE).toBe(0);
+  });
+
+  it("may be created owner-only or owner-and-group, as the reference allows, and no wider", () => {
+    expect(CAPTURE_SOCKET_MODES).toEqual(golden.socket_modes);
+    expect(CAPTURE_SOCKET_MODES).toEqual([0o600, 0o660]);
   });
 });
 

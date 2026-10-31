@@ -8,7 +8,10 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/serverconfig"
 )
 
 // decode unmarshals a JSON response body into a map.
@@ -42,7 +45,13 @@ func TestHealthLifecycle(t *testing.T) {
 		t.Fatalf("health ready: %d", rec.Code)
 	}
 	body := decode(t, rec.Body.Bytes())
-	if body["status"] != "ok" || body["version"] != "9.9.9" || body["control_plane_backend"] != "memory" {
+	uptime, active := body["uptime_s"], body["active_sessions"]
+	want := map[string]any{
+		"status": "ok", "ok": true, "ready": true, "service": "uterm-server", "version": "9.9.9",
+		"uptime_s": uptime, "active_sessions": active, "control_plane_backend": "memory",
+		"features": []any{"viewers.revoke.subject"},
+	}
+	if !reflect.DeepEqual(body, want) {
 		t.Fatalf("health body: %v", body)
 	}
 	if rec := ts.do("GET", "/readyz", "", nil); rec.Code != http.StatusOK {
@@ -80,5 +89,26 @@ func TestSecurityPosture(t *testing.T) {
 	}
 	if body["environment"] == nil || body["secure"] == nil {
 		t.Fatalf("viewer posture missing coarse fields: %v", body)
+	}
+}
+
+// "capture.socket_mode" is listed when the capture sockets let the socket
+// directory's group connect, and not for owner-only ones, so a producer running
+// as another user can tell whether it will be able to connect.
+func TestHealthListsTheCaptureSocketModeOnlyWhenItIsOwnerAndGroup(t *testing.T) {
+	for _, tc := range []struct {
+		mode int
+		want []any
+	}{
+		{0o600, []any{"viewers.revoke.subject"}},
+		{0o660, []any{"viewers.revoke.subject", "capture.socket_mode"}},
+	} {
+		ts := newTestServer(t, func(cfg *serverconfig.UtermServerConfig, _ *Deps) {
+			cfg.Pam.CaptureSocketMode = tc.mode
+		})
+		ts.srv.MarkReady()
+		if got := decode(t, ts.do("GET", "/api/health", "", nil).Body.Bytes())["features"]; !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("mode %o: features %v", tc.mode, got)
+		}
 	}
 }

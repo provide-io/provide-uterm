@@ -1,0 +1,99 @@
+name: "🧬 Mutation Gate (per-target shards)"
+
+# The one per-target Python mutation job, shared by both callers:
+#
+#   * ci.yml's mutation-gate, with the perimeter files a change touched, or
+#     the whole perimeter when anything else that is not provably irrelevant
+#     changed;
+#   * mutation-full.yml, with the whole perimeter, weekly.
+#
+# Each caller passes `paths`, a JSON array of [tool.mutmut].source_paths
+# entries, and this fans it out one matrix job per file. One mutmut run per
+# file is the stable batch size: a single run over the whole ~6k-mutant
+# perimeter trips mutmut's fork-loop child-reaping crash on a 2-worker runner
+# and mass-reports "not checked" (observed dying at ~1540/6227), and a single
+# job carrying several files end to end is what left PR #165 at its 90-minute
+# cap with no verdict. Defining the job once means the PR gate and the weekly
+# run cannot drift into running different commands.
+#
+# No `concurrency` block here, deliberately. In a called workflow,
+# github.workflow names the CALLER, so a group keyed on it would be the caller's
+# own group, and the run would queue behind or cancel itself. Each caller keeps
+# its own.
+#
+# A matrix cannot be empty, so a caller with nothing to mutate must skip the
+# call rather than pass "[]" (ci.yml's mutation-shards job has an if: for it).
+#
+# Script policy: run: blocks stay <= 3 lines (each is a single command).
+
+on:
+  workflow_call:
+    inputs:
+      paths:
+        description: "JSON array of [tool.mutmut].source_paths entries, one matrix job each."
+        type: string
+        required: true
+      retries:
+        description: "Single-worker retries after a failed first pass (scripts/run_mutation_gate.py --retries)."
+        type: number
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  target:
+    runs-on: ubuntu-latest
+    # Per file: setup (~5 min) plus one perimeter file (<=~700 mutants, ~10-20
+    # min a pass). That leaves room for a single-worker retry, and still fails a
+    # stuck run while its log is readable rather than at GitHub's 6-hour cap.
+    timeout-minutes: 90
+    strategy:
+      # Run every target so ALL survivors are reported in one pass, not just the
+      # first file's.
+      fail-fast: false
+      # Cap concurrent runners to keep CI cost bounded per run.
+      max-parallel: 8
+      matrix:
+        path: ${{ fromJson(inputs.paths) }}
+    steps:
+      # Full history so mutmut/git operations have the complete tree.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      # uv drives the gate (uv run) and the workspace install.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+      # Pin the gate's interpreter to match scripts/run_mutation_gate.py default.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      # Frontend assets: mutmut's stats run executes the full tests_dir, which
+      # includes full-app integration tests (e.g.
+      # test_loaded_max_sessions_is_enforced_by_app -> create_server_app) that
+      # raise "missing required frontend assets" without a built frontend. Without
+      # them stats collection aborts, every mutant reports "not checked", and the
+      # score is 0.00.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+      - run: npm ci
+      - run: npm run build:frontend
+      # Install the workspace + dev tooling (mutmut, pytest, ...).
+      - run: uv sync --frozen --group dev
+      # Mutate just this one perimeter file. The step name is a contract:
+      # ci/report_mutation_full_failure.sh and ci/report_perimeter_status.sh tell
+      # drift from a setup fault by whether the failing step starts with
+      # "Mutation gate". The gate runs straight into the log, never inside a
+      # $(...) that holds its output until exit, and PYTHONUNBUFFERED keeps its
+      # own lines in step with mutmut's progress counter, so a job that times
+      # out shows which attempt it was on and how far it got.
+      #
+      # The path goes through env, never into the run: line. On a PR it comes
+      # from a changed file name, and git does not quote $ or ( in names, so an
+      # interpolated `routes/$(id).py` would be run by bash. The step name is
+      # not shell, so it can carry the path as it is.
+      - name: "Mutation gate: ${{ matrix.path }}"
+        env:
+          PYTHONUNBUFFERED: "1"
+          TARGET_PATH: ${{ matrix.path }}
+        run: uv run python scripts/run_mutation_gate.py --python-version 3.11 --retries ${{ inputs.retries }} --min-mutation-score 100 --paths "${TARGET_PATH}"

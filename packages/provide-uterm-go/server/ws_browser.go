@@ -81,7 +81,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	// Never default-on; production servers must not set this env.
 	if os.Getenv("UTERM_TEST_MODE") == "1" {
 		principal := &serverauth.Principal{SubjectID: "test-admin", Roles: serverauth.NewSet("admin")}
-		bc := &browserConn{wsBase: wsBase{conn: conn}, principal: principal}
+		bc := &browserConn{wsBase: wsBase{conn: conn}, principal: principal, closeGrace: s.browserCloseGraceOverride}
 		role, canHijack := "admin", true
 		state, err := s.deps.Hub.RegisterBrowser(bg, workerID, bc, role, true)
 		if err != nil {
@@ -108,7 +108,7 @@ func (s *Server) handleBrowserWS(w http.ResponseWriter, r *http.Request) {
 	// Both decided above, before the upgrade.
 	principal := s.resolvePrincipal(r)
 	role := preRole
-	bc := &browserConn{wsBase: wsBase{conn: conn}, principal: principal}
+	bc := &browserConn{wsBase: wsBase{conn: conn}, principal: principal, closeGrace: s.browserCloseGraceOverride}
 	canHijack := role == "admin"
 
 	browserPreRegisterHook(workerID)

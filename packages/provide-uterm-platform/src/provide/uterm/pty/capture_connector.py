@@ -23,15 +23,20 @@ Config keys accepted in connector_config:
   stdin_socket_path str    optional — Unix socket path to forward browser keystrokes
                            to.  When set, handle_input() writes typed bytes there so
                            a listener can pipe them into the captured process's stdin.
+  socket_mode       int    permissions socket_path is bound with: 0o600 (default) or
+                           0o660.  The server sets it from pam.capture_socket_mode on
+                           every capture session, over anything the stored config says.
 """
 
 from __future__ import annotations
 
 import asyncio
+import codecs
 import hashlib
 import re
 import time
-from typing import Any
+from collections import deque
+from typing import TYPE_CHECKING, Any
 
 from provide.uterm.pty.capture import (
     CHANNEL_CONNECT,
@@ -39,9 +44,14 @@ from provide.uterm.pty.capture import (
     CHANNEL_STATS,
     CHANNEL_STDIN,
     CHANNEL_STDOUT,
+    OWNER_ONLY_SOCKET_MODE,
     CaptureSocket,
+    check_socket_mode,
     parse_geometry,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 _VALID_CONFIG_KEYS = frozenset(
     {
@@ -51,6 +61,7 @@ _VALID_CONFIG_KEYS = frozenset(
         "connect_timeout_s",
         "input_mode",
         "stdin_socket_path",
+        "socket_mode",
     }
 )
 
@@ -109,6 +120,7 @@ class CaptureConnector:
         self._session_id = session_id
         self._display_name = display_name
         self._socket_path: str = str(config["socket_path"])
+        self._socket_mode = check_socket_mode(config.get("socket_mode", OWNER_ONLY_SOCKET_MODE))
         self._cols: int = int(config.get("cols", 80))
         self._rows: int = int(config.get("rows", 24))
         # The size the config last named. A PATCH that names it again is not
@@ -131,6 +143,18 @@ class CaptureConnector:
         # Output since the last full clear, replayed into a new emulator when the
         # size changes: see reconfigure.
         self._since_clear = ""
+        # The rows that scrolled off the top of the screen, as plain text, for a
+        # terminal's scrollback. Kept here rather than in the emulator, which a
+        # resize replaces and replays into: a replay scrolls the same rows off
+        # again. Empty until keep_scrollback asks for some.
+        self._scrollback: deque[str] = deque(maxlen=0)
+        self._watch_scrollback()
+        # One decoder for the session's whole output stream: the shim sends each
+        # write() as it happens, so a multibyte character can be split across two
+        # frames. Decoding each frame on its own would turn both halves into
+        # U+FFFD; this decoder holds the first half until the rest arrives, and
+        # still replaces bytes that are genuinely invalid.
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self._buffer = ""
         self._pending = ""  # new bytes not yet streamed to the browser
         self._connect_log: list[str] = []
@@ -139,7 +163,7 @@ class CaptureConnector:
         self._stdin_writer: asyncio.StreamWriter | None = None
 
     async def start(self) -> None:
-        self._capture = CaptureSocket(self._socket_path)
+        self._capture = CaptureSocket(self._socket_path, mode=self._socket_mode)
         await self._capture.start()
         self._connected = True
 
@@ -207,7 +231,8 @@ class CaptureConnector:
         writes to; the keystroke socket and the terminal size arrive later, from
         whoever owns the session. Those apply in place. A different capture
         socket cannot: the program is writing to the one already bound, so that
-        answers False and is left for a restart.
+        answers False and is left for a restart. So does a different mode for
+        it, which only a rebind can give the socket.
         """
 
         # Everything that can reject the config runs before anything changes:
@@ -218,7 +243,8 @@ class CaptureConnector:
         _validate_config(config)
         cols, rows = int(config.get("cols", self._cols)), int(config.get("rows", self._rows))
         float(config.get("connect_timeout_s", self._connect_timeout))
-        if str(config["socket_path"]) != self._socket_path:
+        socket_mode = check_socket_mode(config.get("socket_mode", OWNER_ONLY_SOCKET_MODE))
+        if str(config["socket_path"]) != self._socket_path or socket_mode != self._socket_mode:
             return False
         stdin_socket_path = str(config["stdin_socket_path"]) if config.get("stdin_socket_path") else None
         if stdin_socket_path != self._stdin_socket_path:
@@ -245,11 +271,53 @@ class CaptureConnector:
             # the program never drew for.
             self._emulator = _make_emulator(cols, rows)
             self._emulator.process(self._since_clear.encode("utf-8"))
+            self._watch_scrollback()
+
+    def _watch_scrollback(self) -> None:
+        """Take the rows the live stream scrolls away into the scrollback.
+
+        Called once the emulator holds what it was replayed, never before: the
+        rows a replay scrolls off are in the scrollback already.
+        """
+        if self._emulator is not None:
+            # None when none is kept: a row is not rendered only to be dropped.
+            self._emulator.set_scrollback_sink(self._scrollback.append if self._scrollback.maxlen else None)
+
+    def keep_scrollback(self, lines: int, rows: Iterable[str] = ()) -> None:
+        """Keep up to *lines* rows of scrollback (0 keeps none), starting from *rows*, the newest kept.
+
+        *rows* is the scrollback this session had kept before this connector
+        started: a connector started again, or after a restart, carries it on.
+        """
+        self._scrollback = deque(rows, maxlen=lines)
+        self._watch_scrollback()
+
+    def scrollback(self) -> list[str]:
+        """The rows that scrolled off the top of the screen, oldest first."""
+        return list(self._scrollback)
+
+    def restore_screen(self, screen: str, cols: int, rows: int) -> None:
+        """Start from a screen this session showed before the server restarted.
+
+        *screen* is a snapshot's ``screen`` (``ansi_screen()``), which a fresh
+        emulator of its size paints back exactly; its rows are joined with LF,
+        which a terminal reads as a line feed alone, so they are painted with
+        CRLF. The painted text also stands in for the output since the last
+        clear, so a resize before the program next clears redraws it.
+        """
+        painted = screen.replace("\n", "\r\n")
+        self._cols, self._rows = cols, rows
+        self._buffer = painted[-65536:]
+        self._since_clear = painted[-_REPLAY_MAX:]
+        self._emulator = _make_emulator(cols, rows)
+        if self._emulator is not None:
+            self._emulator.process(painted.encode("utf-8"))
+        self._watch_scrollback()
 
     def _ingest_stdout(self, data: bytes) -> str:
         """Take one chunk of captured output into the screen; return it for streaming."""
 
-        raw = data.decode("utf-8", errors="replace")
+        raw = self._decoder.decode(data)
         # Normalize bare \n → \r\n: DYLD capture bypasses the PTY ONLCR
         # driver, so xterm.js would advance cursor down without a CR.
         text = raw.replace("\r\n", "\n").replace("\n", "\r\n")
@@ -320,6 +388,7 @@ class CaptureConnector:
         self._buffer = ""
         self._pending = ""
         self._since_clear = ""
+        self._scrollback.clear()
         if self._emulator is not None:
             self._emulator.reset()
         return [{"type": "term", "data": ""}]

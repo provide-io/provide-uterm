@@ -17,10 +17,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { penSgr } from "../render/index.ts";
+import { penSgr, renderCellRows } from "../render/index.ts";
 import { encodeCp437 } from "../screen/index.ts";
 import { CONFORMANCE_DIR } from "../testing/golden.ts";
-import { defaultChar } from "../vt/index.ts";
+import { type Char, defaultChar, Screen, Stream } from "../vt/index.ts";
 import { TerminalEmulator } from "./index.ts";
 
 const FIXTURE = readFileSync(join(CONFORMANCE_DIR, "snapshot", "relative_paint_80x24.bin"));
@@ -173,11 +173,106 @@ describe("the deferred wrap at the last column", () => {
   });
 });
 
+describe("wide characters", () => {
+  // conformance/snapshot/wide_resume.json: each stream, and the snapshot the
+  // Python emulator takes of it in a UTF-8 session. Every port writes those
+  // bytes, and resumes from a snapshot at every point exactly.
+  const corpus = JSON.parse(readFileSync(join(CONFORMANCE_DIR, "snapshot", "wide_resume.json"), "utf-8")) as {
+    records: Array<{ name: string; cols: number; rows: number; stream: string; ansi_screen: string }>;
+  };
+  const utf8 = (text: string): Uint8Array => new Uint8Array(Buffer.from(text, "utf-8"));
+  /** Token ends over characters: a snapshot is never taken inside one. */
+  const characterSplits = (text: string): number[] =>
+    [...text.matchAll(/\x1b\[[0-?]*[ -/]*[@-~]|\x1b[()][0-9A-Za-z]|\x1b[\s\S]|[\s\S]/gu)].map(
+      (match) => (match.index as number) + match[0].length,
+    );
+
+  it("has the records every port replays", () => {
+    expect(corpus.records.length).toBeGreaterThan(15);
+  });
+
+  for (const record of corpus.records) {
+    it(`writes the recorded snapshot: ${record.name}`, () => {
+      expect(straight(utf8(record.stream), "utf-8", record.cols, record.rows).ansiScreen()).toBe(record.ansi_screen);
+    });
+
+    it(`resumes exactly from a snapshot at every point: ${record.name}`, () => {
+      const whole = state(straight(utf8(record.stream), "utf-8", record.cols, record.rows));
+      for (const split of [0, ...characterSplits(record.stream)]) {
+        const live = straight(utf8(record.stream.slice(0, split)), "utf-8", record.cols, record.rows);
+        const viewer = emulator("utf-8", record.cols, record.rows);
+        viewer.process(paint(live.ansiScreen(), "utf-8"));
+        viewer.process(utf8(record.stream.slice(split)));
+        expect(state(viewer), `split at character ${split}`).toStrictEqual(whole);
+      }
+    });
+  }
+
+  it("draws an empty cell as a blank when the cursor is deferred over it", () => {
+    // A resize can leave the cursor deferred past the last column over two
+    // empty second halves; the reference draws an empty cell as a blank.
+    const live = straight(utf8("\u4e2d\u4e2d\x1b[1;1H\x1b[P\x1b[1;2H\x1b[P\x1b[1;3H"), "utf-8", 4, 1);
+    live.resize(2, 1);
+    expect(suffix(live)).toContain("\x1b[1;1H\x1b[0m \x1b[20l");
+  });
+
+  it("draws an empty cell as a blank on a one-column screen", () => {
+    // An empty second half with no cell left of it and no neighbouring row.
+    const live = straight(utf8("\u4e2d\x1b[1;1H\x1b[P\x1b[1;2H"), "utf-8", 2, 1);
+    live.resize(1, 1);
+    expect(suffix(live)).toContain("\x1b[1;1H\x1b[0m \x1b[20l");
+  });
+
+  it("draws a wide character once, with nothing for its second cell", () => {
+    const screen = new Screen(6, 1);
+    new Stream(screen).feed("\u4e2da");
+    expect(renderCellRows((y, x) => screen.peek(y, x), 6, 1)).toStrictEqual(["\x1b[0m\u4e2da   \x1b[0m"]);
+  });
+
+  it("leaves blank a lost first half with no cell left of it to recreate it from", () => {
+    // Deleting a wide character's first half leaves its second cell empty. A
+    // second such cell after it in the last column has no cell left of it to
+    // recreate it from: the first is recreated and the second left blank.
+    const cells: Array<Char | undefined> = [
+      { ...defaultChar(), data: "a" },
+      { ...defaultChar(), data: "b" },
+      { ...defaultChar(), data: "" },
+      { ...defaultChar(), data: "" },
+    ];
+    expect(renderCellRows((_y, x) => cells[x], 4, 1)).toStrictEqual(["\x1b[0mab\u3000\x1b[3G\x1b[P\x1b[C\x1b[0m"]);
+    expect(renderCellRows((_y, x) => (x === 0 ? cells[2] : undefined), 1, 1)).toStrictEqual(["\x1b[0m"]);
+  });
+});
+
 describe("modes", () => {
   it("restores insert mode", () => {
     const stream = bytes("abcdef\r\x1b[4hXY");
     expect(suffix(straight(stream.subarray(0, stream.length - 2), "utf-8", 20, 3))).toContain("\x1b[4h");
     expectResumes(stream, stream.length - 2, "utf-8", 20, 3);
+  });
+
+  it("restores origin mode, with the cursor's row counted from the region", () => {
+    const stream = bytes("\x1b[2;3r\x1b[?6h\x1b[2;2Hab");
+    expect(suffix(straight(stream, "utf-8", 20, 3))).toContain(
+      "\x1b[2;3r\x1b[?6h\x1b[?7h\x1b[4l\x1b[2;4H\x1b[20l\x1b[?1l\x1b[0m\x1b[?25h",
+    );
+    expectResumes(bytes("\x1b[2;3r\x1b[?6h\x1b[2;2Hab\x1b[1;1Hx\nyz"), stream.length, "utf-8", 20, 3);
+  });
+
+  it("restores autowrap off after the deferred-wrap redraw", () => {
+    const stream = bytes(`\x1b[?7l${"x".repeat(20)}`);
+    expect(suffix(straight(stream, "utf-8", 20, 3))).toContain(
+      "\x1b[r\x1b[?6l\x1b[?7h\x1b[4l\x1b[1;20H\x1b[0mx\x1b[?7l\x1b[20l\x1b[?1l\x1b[0m\x1b[?25h",
+    );
+    expectResumes(bytes(`\x1b[?7l${"x".repeat(20)}yz`), stream.length, "utf-8", 20, 3);
+  });
+
+  it("restores new line mode", () => {
+    const stream = bytes("\x1b[20h");
+    expect(suffix(straight(stream, "utf-8", 20, 3))).toContain(
+      "\x1b[r\x1b[?6l\x1b[?7h\x1b[4l\x1b[1;1H\x1b[20h\x1b[?1l\x1b[0m\x1b[?25h",
+    );
+    expectResumes(bytes("\x1b[20hab\ncd"), stream.length, "utf-8", 20, 3);
   });
 
   it("sends the reset values of the modes this screen does not model", () => {
@@ -193,6 +288,12 @@ describe("character sets", () => {
     expect(suffix(straight(stream, "utf-8", 20, 3))).toContain("\x1b(0\x1b)0\x0e");
     expectResumes(bytes("\x1b)0\x0eqqq\x1b(0xqq\x0fqq\x1b(Bqq"), stream.length, "utf-8", 20, 3);
     expect(suffix(straight(bytes("\x1b)B"), "utf-8", 20, 3))).toContain("\x1b(B\x1b)B");
+  });
+
+  it("restores codepage 437 and VAX42 designations", () => {
+    const stream = bytes("\x1b(U\x1b)V\x0e\xc3\x8d");
+    expect(suffix(straight(stream, "utf-8", 20, 3))).toContain("\x1b(U\x1b)V\x0e");
+    expectResumes(bytes("\x1b(U\x1b)V\x0e\xc3\x8d\x0f\xc3\x8d"), stream.length, "utf-8", 20, 3);
   });
 
   it("sends nothing for the power-on sets nothing has designated", () => {

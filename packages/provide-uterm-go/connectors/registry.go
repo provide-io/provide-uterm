@@ -39,7 +39,17 @@ var builtin = map[string]Factory{
 	"ssh":         wrap(newSSH),
 	"telnet":      wrap(newTelnet),
 	"shell":       wrap(newShell),
-	"pty_capture": wrap(newCapture),
+	"pty_capture": buildCapture,
+}
+
+// buildCapture is newCapture as a Factory: the capture connector is its own
+// type (it carries a scrollback and a restored screen), so wrap cannot adapt it.
+func buildCapture(sessionID, displayName string, config map[string]any) (Connector, error) {
+	c, err := newCapture(sessionID, displayName, config)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }
 
 var (

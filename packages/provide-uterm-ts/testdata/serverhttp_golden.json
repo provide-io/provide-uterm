@@ -19,7 +19,10 @@
         "version": "<volatile>",
         "uptime_s": "<volatile>",
         "active_sessions": "<volatile>",
-        "control_plane_backend": "memory"
+        "control_plane_backend": "memory",
+        "features": [
+          "viewers.revoke.subject"
+        ]
       }
     },
     {
@@ -39,7 +42,10 @@
         "version": "<volatile>",
         "uptime_s": "<volatile>",
         "active_sessions": "<volatile>",
-        "control_plane_backend": "memory"
+        "control_plane_backend": "memory",
+        "features": [
+          "viewers.revoke.subject"
+        ]
       }
     },
     {
@@ -59,7 +65,10 @@
         "version": "<volatile>",
         "uptime_s": "<volatile>",
         "active_sessions": "<volatile>",
-        "control_plane_backend": "memory"
+        "control_plane_backend": "memory",
+        "features": [
+          "viewers.revoke.subject"
+        ]
       }
     },
     {

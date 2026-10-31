@@ -11,6 +11,8 @@ import (
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 )
 
 // captureBufferCap bounds the CaptureConnector rendered buffer. Port of
@@ -21,7 +23,7 @@ const captureBufferCap = 65536
 // capture_connector.py _VALID_CONFIG_KEYS.
 var captureConnectorKeys = map[string]struct{}{
 	"socket_path": {}, "cols": {}, "rows": {}, "connect_timeout_s": {},
-	"input_mode": {}, "stdin_socket_path": {},
+	"input_mode": {}, "stdin_socket_path": {}, "socket_mode": {},
 }
 
 // CaptureConnector observes an LD_PRELOAD/DYLD-captured shell over a Unix socket
@@ -36,6 +38,7 @@ type CaptureConnector struct {
 	sessionID       string
 	displayName     string
 	socketPath      string
+	socketMode      int
 	cols            int
 	rows            int
 	connectTimeout  float64
@@ -49,6 +52,11 @@ type CaptureConnector struct {
 	connectLog  []string
 	stdinCount  int
 	stdinWriter net.Conn
+	// decoder is the session's one UTF-8 decoder for its output stream. The
+	// shim sends each write() as it happens, so a multibyte character can be
+	// split across two frames; decoding each frame on its own would turn both
+	// halves into U+FFFD. Port of capture_connector.py's _decoder.
+	decoder screen.UTF8Decoder
 }
 
 // NewCaptureConnector validates config and builds a capture connector. Port of
@@ -62,6 +70,17 @@ func NewCaptureConnector(sessionID, displayName string, config map[string]any) (
 	}
 	socketPath := fmt.Sprintf("%v", config["socket_path"])
 	stdinPath, _ := optString(config, "stdin_socket_path")
+	// The permissions the socket is bound with. The server sets it from
+	// pam.capture_socket_mode on every capture session, over anything the
+	// stored config says.
+	socketMode := OwnerOnlySocketMode
+	if v, ok := config["socket_mode"]; ok {
+		m, err := CheckSocketMode(v)
+		if err != nil {
+			return nil, err
+		}
+		socketMode = m
+	}
 
 	timeout := 5.0
 	switch t := config["connect_timeout_s"].(type) {
@@ -75,6 +94,7 @@ func NewCaptureConnector(sessionID, displayName string, config map[string]any) (
 		sessionID:       sessionID,
 		displayName:     displayName,
 		socketPath:      socketPath,
+		socketMode:      socketMode,
 		cols:            coerceIntOr(config["cols"], 80),
 		rows:            coerceIntOr(config["rows"], 24),
 		connectTimeout:  timeout,
@@ -84,7 +104,7 @@ func NewCaptureConnector(sessionID, displayName string, config map[string]any) (
 
 // Start binds the capture socket. Port of CaptureConnector.start.
 func (c *CaptureConnector) Start(ctx context.Context) error {
-	cs, err := NewCaptureSocket(c.socketPath)
+	cs, err := NewCaptureSocketWithMode(c.socketPath, c.socketMode)
 	if err != nil {
 		return err
 	}
@@ -141,7 +161,7 @@ func (c *CaptureConnector) PollMessages() []Frame {
 		case ChannelStdout:
 			// Normalize bare \n → \r\n: capture bypasses the PTY ONLCR driver,
 			// so xterm.js would otherwise advance the cursor without a CR.
-			text := decodeReplace(frame.Data)
+			text := c.decoder.Decode(frame.Data)
 			text = strings.ReplaceAll(text, "\r\n", "\n")
 			text = strings.ReplaceAll(text, "\n", "\r\n")
 			c.buffer += text
@@ -153,7 +173,7 @@ func (c *CaptureConnector) PollMessages() []Frame {
 		case ChannelStdin:
 			c.stdinCount++
 		case ChannelConnect:
-			c.connectLog = append(c.connectLog, decodeReplace(frame.Data))
+			c.connectLog = append(c.connectLog, screen.DecodeUTF8(frame.Data))
 			if len(c.connectLog) > 100 {
 				c.connectLog = c.connectLog[len(c.connectLog)-100:]
 			}
@@ -240,6 +260,14 @@ func (c *CaptureConnector) Size() (cols, rows int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.cols, c.rows
+}
+
+// SetSize puts the terminal at cols x rows, as a geometry frame does, without
+// a snapshot: for a session re-created after a restart at the size it had.
+func (c *CaptureConnector) SetSize(cols, rows int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cols, c.rows = cols, rows
 }
 
 // GetSnapshot returns a fresh snapshot frame. Port of CaptureConnector.get_snapshot.

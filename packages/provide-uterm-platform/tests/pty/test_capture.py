@@ -245,22 +245,23 @@ async def test_socket_umask_constrains_bind_and_is_restored(monkeypatch) -> None
     start() must set a restrictive umask (0o177) *before* the bind and restore
     the caller's umask afterward, so the socket never exists world-accessible.
     """
-    import asyncio as _asyncio
     import os
+    import socket as _socket
     import stat
 
     observed_umask: list[int] = []
-    real_bind = _asyncio.start_unix_server
+    real_bind = _socket.socket.bind
 
-    async def _spy_bind(*args, **kwargs):
-        # Capture the umask in effect at the moment of bind by reading and
-        # immediately restoring it (os.umask has no read-only variant).
+    def _spy_bind(self, *args, **kwargs):
+        # Capture the umask in effect at the moment of the real socket bind by
+        # reading and immediately restoring it (os.umask has no read-only
+        # variant).
         cur = os.umask(0o022)
         os.umask(cur)
         observed_umask.append(cur)
-        return await real_bind(*args, **kwargs)
+        return real_bind(self, *args, **kwargs)
 
-    monkeypatch.setattr(_asyncio, "start_unix_server", _spy_bind)
+    monkeypatch.setattr(_socket.socket, "bind", _spy_bind)
 
     with tempfile.TemporaryDirectory() as td:
         path = str(Path(td) / "cap.sock")

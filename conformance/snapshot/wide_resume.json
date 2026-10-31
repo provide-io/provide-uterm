@@ -1,0 +1,250 @@
+{
+ "generator": "conformance/snapshot/gen_wide_resume.py",
+ "records": [
+  {
+   "name": "wide characters mid row",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中a😀b",
+   "ansi_screen": "\u001b[0m中a😀b    \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;7H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "a wide character in the last column",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxxx中yz",
+   "ansi_screen": "\u001b[0mxxxxxxxxx中\u001b[0m\n\u001b[0myz        \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;3H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "a wide character filling the row",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中yz",
+   "ansi_screen": "\u001b[0mxxxxxxxx中\u001b[0m\n\u001b[0myz        \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;3H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "styled wide characters",
+   "cols": 10,
+   "rows": 3,
+   "stream": "\u001b[1;31m中\u001b[44m中\u001b[0ma",
+   "ansi_screen": "\u001b[0;1;31m中\u001b[0;1;31;44m中\u001b[0ma     \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;6H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "the second half overwritten",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中中\u001b[1;2Ha\u001b[1;4H\u001b[32mb\u001b[0mc",
+   "ansi_screen": "\u001b[0m中\u001b[2Ga中\u001b[4G\u001b[0;32mb\u001b[0mc     \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;6H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "the second half overwritten at the deferred wrap",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中\u001b[1;10Hb",
+   "ansi_screen": "\u001b[0mxxxxxxxx中\u001b[10Gb\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;10H\u001b[0mb\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "a wide character over the second half of another",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中\u001b[1;2H中q",
+   "ansi_screen": "\u001b[0m中\u001b[2G中q      \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;5H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "the first half overwritten",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中中\u001b[1;3Hx",
+   "ansi_screen": "\u001b[0m中x　\u001b[4G\u001b[P\u001b[C      \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;4H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "the first half overwritten in the last column",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中\u001b[1;9Ha",
+   "ansi_screen": "\u001b[0mxxxxxxxxa\u001b[9G　\u001b[9Ga\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;10H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "a styled first half overwritten",
+   "cols": 10,
+   "rows": 3,
+   "stream": "\u001b[44m中\u001b[0m\u001b[1;1Hz",
+   "ansi_screen": "\u001b[0mz\u001b[0;44m　\u001b[2G\u001b[P\u001b[C\u001b[0m        \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;2H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "the first half deleted",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中ab\u001b[1;1H\u001b[P",
+   "ansi_screen": "\u001b[0m　\u001b[1G\u001b[P\u001b[Cab       \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;1H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "marks joined to the second half",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中́x",
+   "ansi_screen": "\u001b[0m中́x       \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;4H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "marks joined to a second half in the last column",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中́̂",
+   "ansi_screen": "\u001b[0mxxxxxxxx中\u001b[?7ĺ̂\u001b[?7h\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;1H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "marks on a second half whose first half is gone",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中́\u001b[1;1Hz",
+   "ansi_screen": "\u001b[0mz　́\u001b[2G\u001b[P\u001b[C        \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;2H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "marks on such a second half in the last column",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中́\u001b[1;9Ha",
+   "ansi_screen": "\u001b[0mxxxxxxxxa\u001b[9G　\u001b[?7ĺ\u001b[?7h\u001b[9Ga\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;10H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "a mark joined to the row above",
+   "cols": 10,
+   "rows": 3,
+   "stream": "abc\r\ńx",
+   "ansi_screen": "\u001b[0mabc      \u001b[?7l ́\u001b[?7h\u001b[0m\n\u001b[0mx         \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;2H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "wide characters wrapping down the screen",
+   "cols": 10,
+   "rows": 3,
+   "stream": "\u001b[7m中中中中中中中中中中中中中\u001b[0m!",
+   "ansi_screen": "\u001b[0;7m中中中中中\u001b[0m\n\u001b[0;7m中中中中中\u001b[0m\n\u001b[0;7m中中中\u001b[0m!   \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[3;8H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "marks on a second half at the deferred wrap, autowrap off",
+   "cols": 10,
+   "rows": 3,
+   "stream": "\u001b[?7lxxxxxxxx中́",
+   "ansi_screen": "\u001b[0mxxxxxxxx中\u001b[?7ĺ\u001b[?7h\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;9H\u001b[0m中\u001b[?7ĺ\u001b[?7h\u001b[?7l\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "the same, autowrap back on",
+   "cols": 10,
+   "rows": 3,
+   "stream": "\u001b[?7lxxxxxxxx中́\u001b[?7h",
+   "ansi_screen": "\u001b[0mxxxxxxxx中\u001b[?7ĺ\u001b[?7h\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;9H\u001b[0m中\u001b[?7ĺ\u001b[?7h\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "marks on a narrow cell at the deferred wrap, autowrap off",
+   "cols": 10,
+   "rows": 3,
+   "stream": "\u001b[?7lxxxxxxxxxq̇",
+   "ansi_screen": "\u001b[0mxxxxxxxxx\u001b[?7lq̇\u001b[?7h\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;10H\u001b[0mq\u001b[?7l̇\u001b[?7h\u001b[?7l\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "the same narrow cell, autowrap back on",
+   "cols": 10,
+   "rows": 3,
+   "stream": "\u001b[?7lxxxxxxxxxq̇\u001b[?7h",
+   "ansi_screen": "\u001b[0mxxxxxxxxx\u001b[?7lq̇\u001b[?7h\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;10H\u001b[0mq\u001b[?7l̇\u001b[?7h\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "marks joined to a wide character clipped at the last column",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxxx中́",
+   "ansi_screen": "\u001b[0mxxxxxxxxx\u001b[?7l中́\u001b[?7h\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;1H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "a wide character with marks of its own",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中\u001b[1;2H́x",
+   "ansi_screen": "\u001b[0m中\u001b[2Ǵx        \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;3H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "a wide character with marks of its own and in its second half",
+   "cols": 10,
+   "rows": 3,
+   "stream": "中̂\u001b[1;2H́",
+   "ansi_screen": "\u001b[0m中̂\u001b[2Ǵ\u001b[3G        \u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[1;2H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "marks of its own in the last two columns",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中̂\u001b[1;10H́\u001b[2;1H",
+   "ansi_screen": "\u001b[0mxxxxxxxx中\u001b[?7l̂\u001b[?7h\u001b[10Ǵ\u001b[0m\n\u001b[0m          \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;1H\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred over a wide character with marks of its own",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中\u001b[1;10H́\u001b[2;1Hyyyyyyyyyy\u001b[A",
+   "ansi_screen": "\u001b[0mxxxxxxxx中\u001b[10Ǵ\u001b[0m\n\u001b[0myyyyyyyyyy\u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;10H\u001b[0my\u001b[A\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred over a lost first half",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中\u001b[1;9Ha\u001b[2;1Hyyyyyyyyyy\u001b[A",
+   "ansi_screen": "\u001b[0mxxxxxxxxa\u001b[9G　\u001b[9Ga\u001b[0m\n\u001b[0myyyyyyyyyy\u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;10H\u001b[0my\u001b[A\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred over a lost first half with marks",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中́\u001b[1;9Ha\u001b[2;1Hyyyyyyyyyy\u001b[A",
+   "ansi_screen": "\u001b[0mxxxxxxxxa\u001b[9G　\u001b[?7ĺ\u001b[?7h\u001b[9Ga\u001b[0m\n\u001b[0myyyyyyyyyy\u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;10H\u001b[0my\u001b[A\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred over a lost first half from the row above",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中\u001b[2;9Ha\u001b[1;1Hzzzzzzzzzz\u001b[B",
+   "ansi_screen": "\u001b[0mzzzzzzzzzz\u001b[0m\n\u001b[0m        a \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;10H\u001b[0m \u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred by an index",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中\u001b[2;9Ha\u001b[1;1Hzzzzzzzzzz\u001bD",
+   "ansi_screen": "\u001b[0mzzzzzzzzzz\u001b[0m\n\u001b[0m        a \u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;10H\u001b[0m \u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred in origin mode at the top of the region",
+   "cols": 10,
+   "rows": 3,
+   "stream": "\u001b[2;3r\u001b[?6hxxxxxxxx中\u001b[1;9Ha\u001b[2;1Hyyyyyyyyyy\u001b[A",
+   "ansi_screen": "\u001b[0m          \u001b[0m\n\u001b[0mxxxxxxxxa\u001b[9G　\u001b[9Ga\u001b[0m\n\u001b[0myyyyyyyyyy\u001b[0m\u001b[2;3r\u001b[?6h\u001b[?7h\u001b[4l\u001b[2;10H\u001b[0my\u001b[A\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred where the row above cannot be drawn either",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中\u001b[1;9Ha\u001b[2;1Hxxxxxxxx中\u001b[2;9Hb\u001b[3;1Hyyyyyyyyyy\u001b[A",
+   "ansi_screen": "\u001b[0mxxxxxxxxa\u001b[9G　\u001b[9Ga\u001b[0m\n\u001b[0mxxxxxxxxb\u001b[9G　\u001b[9Gb\u001b[0m\n\u001b[0myyyyyyyyyy\u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[3;10H\u001b[0my\u001b[A\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred by a reverse index",
+   "cols": 10,
+   "rows": 3,
+   "stream": "xxxxxxxx中\u001b[1;9Ha\u001b[2;1Hyyyyyyyyyy\u001bM",
+   "ansi_screen": "\u001b[0mxxxxxxxxa\u001b[9G　\u001b[9Ga\u001b[0m\n\u001b[0myyyyyyyyyy\u001b[0m\n\u001b[0m          \u001b[0m\u001b[r\u001b[?6l\u001b[?7h\u001b[4l\u001b[2;10H\u001b[0my\u001b[A\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred below the region, where the row above is no use",
+   "cols": 10,
+   "rows": 4,
+   "stream": "\u001b[1;2r\u001b[3;1Hxxxxxxxx中\u001b[3;9Ha\u001b[2;1Hwwwwwwwwww\u001b[4;1Hyyyyyyyyyy\u001b[A",
+   "ansi_screen": "\u001b[0m          \u001b[0m\n\u001b[0mwwwwwwwwww\u001b[0m\n\u001b[0mxxxxxxxxa\u001b[9G　\u001b[9Ga\u001b[0m\n\u001b[0myyyyyyyyyy\u001b[0m\u001b[1;2r\u001b[?6l\u001b[?7h\u001b[4l\u001b[4;10H\u001b[0my\u001b[A\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  },
+  {
+   "name": "deferred in origin mode at the bottom of the region",
+   "cols": 10,
+   "rows": 4,
+   "stream": "\u001b[2;3r\u001b[?6h\u001b[2;1Hxxxxxxxx中\u001b[2;9Ha\u001b[1;1Hzzzzzzzzzz\u001b[B",
+   "ansi_screen": "\u001b[0m          \u001b[0m\n\u001b[0mzzzzzzzzzz\u001b[0m\n\u001b[0mxxxxxxxxa\u001b[9G　\u001b[9Ga\u001b[0m\n\u001b[0m          \u001b[0m\u001b[2;3r\u001b[?6h\u001b[?7h\u001b[4l\u001b[1;10H\u001b[0mz\u001b[B\u001b[20l\u001b[?1l\u001b[0m\u001b[?25h"
+  }
+ ]
+}

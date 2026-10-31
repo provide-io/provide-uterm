@@ -559,52 +559,92 @@ jobs:
       - run: uv sync --frozen --group dev
       - run: uv run pytest packages/provide-uterm-platform/tests/manager/manager/test_process.py -q -k kill_agent_terminates_spawned_child_process_tree --no-cov -vv
 
-  mutation-gate:
+  # Python mutation gate, sharded: compute the targets, run one job per target,
+  # then report one verdict under the name `mutation-gate`.
+  #
+  # It used to be one job that ran every changed perimeter file end to end
+  # under a 90-minute cap. PR #165 touched enough of the perimeter to spend all
+  # 90 minutes and was cancelled with no verdict. Its log showed nothing after
+  # the step started, because the old script ran the gate inside out="$(...)",
+  # which holds every byte until the gate exits, and a cancelled job never
+  # does. Per-target jobs give each file its own budget, and the gate now runs
+  # straight into the log with line-buffered output.
+  #
+  # A support-file change (the allowlist, [tool.mutmut], the gate's scripts
+  # and these three jobs) widens the list to the whole perimeter, on the PR
+  # itself. That used to be deferred to a mutation-full.yml dispatch after
+  # merge, which found a broken perimeter only once it was on main and needed
+  # `actions: write` here to dispatch. With one job per target the PR can
+  # answer the question, so nothing is dispatched and no job needs more than
+  # `contents: read`.
+  #
+  # Every changed path is classified, deny by default
+  # (scripts/mutation_change_scope.py): a perimeter source runs its own target,
+  # a path on the short allowlist of things no Python test can read (the
+  # other-language ports, prose, other workflows) runs nothing, and anything
+  # else -- tests, conftests, test data, off-perimeter source, dependency
+  # changes -- runs the whole perimeter. Narrowing tests and helpers to the
+  # targets they reach is a planned follow-up.
+  #
+  # The list comes from ci/prepare_mutation_args.sh, which only reads git and
+  # pyproject, so this job needs no uv sync, frontend build or mutmut.
+  mutation-targets:
     runs-on: ubuntu-latest
-    # actions: write is scoped to THIS job, not the workflow (which stays
-    # contents: read), and buys exactly one thing: when a support-file change
-    # makes the question perimeter-wide, ci/prepare_mutation_args.sh dispatches
-    # mutation-full.yml on this SHA rather than attempting 38 sequential mutmut
-    # runs against a 90-minute cap.
-    permissions:
-      contents: read
-      actions: write
-    # Without this the job inherits GitHub's 6-hour platform cap, and a run that
-    # widens to the full perimeter burns all of it before reporting anything —
-    # which is exactly what happened when a commit touched root pyproject.toml
-    # (a mutation support file) with no perimeter source change, forcing the
-    # un-chunked full run the changed-only path exists to avoid. A changed-only
-    # run is minutes; anything approaching this budget is the runaway, and
-    # failing at 90 minutes says so while the evidence is still readable.
-    timeout-minutes: 90
+    timeout-minutes: 10
+    outputs:
+      paths: ${{ steps.targets.outputs.paths }}
     steps:
+      # Full history: --changed-only diffs against the PR base or the push base.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+      # tomllib needs Python >= 3.11.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
-      # Build frontend assets: mutmut's stats-collection run executes the full
-      # tests_dir, which includes full-app integration tests (e.g.
-      # test_loaded_max_sessions_is_enforced_by_app -> create_server_app) that
-      # raise "missing required frontend assets" without a built frontend. Without
-      # this, any perimeter-file change aborts stats collection -> every mutant
-      # reports "not checked" -> score 0.00. Mirrors quality/server-quality jobs.
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
-        with:
-          node-version-file: ".nvmrc"
-      - run: npm ci
-      - run: npm run build:frontend
-      - run: uv sync --frozen --group dev
-      # Resolve --changed-only base ref from the trigger event and run the mutation gate.
-      - name: Run mutation gate (changed-only)
+      # Resolve the --changed-only base ref from the trigger event and list the
+      # perimeter targets it touched, as a JSON array.
+      - id: targets
+        name: Compute mutation targets (changed-only)
         env:
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-          # gh workflow run needs a token; the dispatch path uses it, the
-          # ordinary changed-only path never calls gh at all.
-          GH_TOKEN: ${{ github.token }}
         run: ci/prepare_mutation_args.sh
+
+  # One job per target, defined once in mutation-shards.yml and shared with
+  # mutation-full.yml. Skipped when nothing changed, because a matrix cannot be
+  # empty; mutation-gate below reads that skip as a pass only when the list
+  # really was empty. --retries 1: a failure here fails the PR's mutation-gate
+  # check, so a first pass that a flaky stats run spoiled gets one
+  # single-worker retry before it counts.
+  mutation-shards:
+    needs: mutation-targets
+    if: needs.mutation-targets.outputs.paths != '[]'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mutation-shards.yml
+    with:
+      paths: ${{ needs.mutation-targets.outputs.paths }}
+      retries: 1
+
+  # The check people read, under the name it has always had, so nothing that
+  # looks for `mutation-gate` has to move. main has no branch protection today;
+  # if it is made a required check, this is the one to require. always(): it has
+  # to run when a shard failed or was cancelled, in order to fail -- a default
+  # (success-only) job would be skipped then, and a required check that is
+  # skipped counts as passing.
+  mutation-gate:
+    needs: [mutation-targets, mutation-shards]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Mutation gate verdict
+        env:
+          TARGETS_RESULT: ${{ needs.mutation-targets.result }}
+          TARGET_PATHS: ${{ needs.mutation-targets.outputs.paths }}
+          SHARDS_RESULT: ${{ needs.mutation-shards.result }}
+        run: ci/mutation_gate_verdict.sh
 
   # Go-side mutation gate: gremlins over a small, ~100%-covered perimeter
   # (sanitizer/colors/filters/lineeditor). Separate from go-quality because

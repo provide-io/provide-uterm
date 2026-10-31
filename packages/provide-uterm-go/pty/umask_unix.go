@@ -10,9 +10,8 @@ package pty
 import "golang.org/x/sys/unix"
 
 // umaskSet sets the process umask and returns the previous value. It wraps the
-// platform syscall so the capture / notify sockets can be bound 0o600 under a
-// restrictive umask. NOTE: the process umask is global and not goroutine-safe —
-// callers must keep the set→bind→restore window as tight as possible.
-func umaskSet(mask int) int {
-	return unix.Umask(mask)
-}
+// platform syscall so the capture / notify sockets can be bound under the
+// umask their mode needs. The process umask is global: bind through
+// listenUnderUmask, which holds bindUmaskMu around set, bind and restore. A
+// variable so a test can see which umask a bind ran under.
+var umaskSet = unix.Umask

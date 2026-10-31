@@ -110,17 +110,22 @@ public sealed partial class AuthorizationService
                 if (!_revokedBy.TryGetValue(owner, out var list)) _revokedBy[owner] = list = new LinkedList<string>();
                 list.AddLast(sessionId);
             }
+            DropSubsumedSubjectRevocations(sessionId, now);
         }
         if (evicted is not null) onEvict?.Invoke(evicted);
         return now;
     }
 
-    /// <summary>Drop <paramref name="sessionId"/>'s cutoff: the session was deleted.</summary>
+    /// <summary>Drop <paramref name="sessionId"/>'s cutoffs, its subjects' included: the session was deleted.</summary>
     public void ForgetShareViewers(string sessionId)
     {
         lock (_revocationLock)
         {
             DropRevocation(sessionId);
+            if (_subjectsBySession.TryGetValue(sessionId, out var subjects))
+            {
+                foreach (var subject in subjects.ToList()) DropSubjectRevocation(sessionId, subject);
+            }
         }
     }
 
@@ -136,9 +141,9 @@ public sealed partial class AuthorizationService
         if (mine.Count == 0) _revokedBy.Remove(revoker);
     }
 
-    private static void RemoveFromOldest(LinkedList<string> list, string id)
+    private static void RemoveFromOldest<T>(LinkedList<T> list, T id)
     {
-        if (list.First is { } first && first.Value == id) list.RemoveFirst();
+        if (list.First is { } first && EqualityComparer<T>.Default.Equals(first.Value, id)) list.RemoveFirst();
         else list.Remove(id);
     }
 
@@ -152,13 +157,31 @@ public sealed partial class AuthorizationService
     }
 
     /// <summary>
+    /// The later of <paramref name="sessionId"/>'s cutoff and <paramref name="subject"/>'s
+    /// cutoff on it, if either is held. Both are read in one lock: a whole-session
+    /// revoke records its cutoff and drops the subject cutoffs it subsumes in one
+    /// critical section, so reading them separately could fall between the two
+    /// and see neither, admitting a token both states refuse.
+    /// </summary>
+    private double? LatestCutoff(string sessionId, string subject)
+    {
+        lock (_revocationLock)
+        {
+            double? sessionCutoff = _revocations.TryGetValue(sessionId, out var a) ? a : null;
+            double? subjectCutoff = _subjectRevocations.TryGetValue((sessionId, subject), out var b) ? b : null;
+            return sessionCutoff is { } s && subjectCutoff is { } t ? Math.Max(s, t) : sessionCutoff ?? subjectCutoff;
+        }
+    }
+
+    /// <summary>
     /// True when <paramref name="p"/> is a share viewer of <paramref name="sessionId"/>
-    /// whose token predates the cutoff. A token without a numeric iat cannot show
-    /// it postdates the cutoff, so it is refused.
+    /// whose token predates a cutoff: the session's or its own subject's, so the
+    /// later of the two decides. A token without a numeric iat cannot show it
+    /// postdates the cutoff, so it is refused.
     /// </summary>
     public bool ShareViewerRevoked(Principal p, string sessionId)
     {
-        if (ShareViewerRevocation(sessionId) is not { } cutoff || !IsShareViewer(p, sessionId)) return false;
+        if (LatestCutoff(sessionId, p.SubjectId) is not { } cutoff || !IsShareViewer(p, sessionId)) return false;
         double? issued = p.Claims.GetValueOrDefault("iat") switch
         {
             double d => d,
@@ -170,7 +193,7 @@ public sealed partial class AuthorizationService
     }
 }
 
-/// <summary>The cutoff table is full of live cutoffs; a new session cannot be added.</summary>
+/// <summary>A cutoff table is full of live cutoffs; a new session or subject cannot be added.</summary>
 public sealed class ShareViewerRevocationsFullException : InvalidOperationException
 {
     public ShareViewerRevocationsFullException()

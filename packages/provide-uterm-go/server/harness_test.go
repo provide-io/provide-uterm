@@ -47,11 +47,17 @@ func (fakeAuth) Authenticate(_ context.Context, req *serverauth.Request) (*serve
 	if iat, err := strconv.ParseFloat(req.Header("x-iat"), 64); err == nil {
 		claims["iat"] = iat
 	}
+	// X-Scopes stands in for a token's scope claim, comma separated; without
+	// it the token is unnarrowed.
+	scopes := serverauth.NewSet("*")
+	if raw := req.Header("x-scopes"); raw != "" {
+		scopes = serverauth.NewSet(strings.Split(raw, ",")...)
+	}
 	return &serverauth.Principal{
 		SubjectID:         subject,
 		TenantID:          tenant,
 		Roles:             serverauth.NewSet(role),
-		Scopes:            serverauth.NewSet("*"),
+		Scopes:            scopes,
 		Claims:            claims,
 		AdminSessionScope: adminSessionScope,
 	}, nil

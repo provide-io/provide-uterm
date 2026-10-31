@@ -194,36 +194,59 @@ async def test_wait_for_guard_poll_interval_minimum() -> None:
 
 
 async def test_wait_for_guard_matches_during_poll() -> None:
-    """wait_for_guard matches snapshot during polling loop."""
+    """wait_for_guard matches a snapshot that arrives after its first poll missed.
+
+    The update is driven by the hub's own snapshot request, not by a timer. It
+    used to come from a task sleeping 30ms against a 500ms guard window, which
+    holds on an idle machine and nowhere else: on 2026-10-20 the full-perimeter
+    mutation run (stats pass, 5,000+ tests under mutmut's tracing) stalled the
+    event loop for ~880ms before the guard's first poll. The window was spent
+    before the loop body ran once, the background task never got a turn, and
+    the guard returned unmatched. That one failure aborted mutmut's stats
+    collection, so the webhooks.py leg reported all 467 of its mutants as "not
+    checked" -- a red perimeter with nothing wrong in webhooks.py.
+
+    Publishing the update from the re-request makes the ordering certain: the
+    first poll sees the stale screen, asks again, and the next poll sees the
+    match. The generous timeout costs nothing when the test passes, since a
+    match returns at once; it only bounds how long a real regression takes to
+    fail.
+    """
     hub = TermHub()
     await hub._get("bot1")
 
     # Set initial snapshot without prompt_id
     hub.registry._workers["bot1"].last_snapshot = {"screen": "initial"}
 
-    # Simulate snapshot being updated in background
-    async def update_snapshot() -> None:
-        await asyncio.sleep(0.03)
-        hub.registry._workers["bot1"].last_snapshot = {
-            "screen": "updated",
-            "prompt_detected": {"prompt_id": "target"},
-            "ts": time.time(),
-        }
+    requests = 0
+    original_request = hub.request_snapshot
 
-    task = asyncio.create_task(update_snapshot())
-    ok, snap, reason = await hub.wait_for_guard(
-        "bot1",
-        expect_prompt_id="target",
-        expect_regex=None,
-        timeout_ms=500,
-        poll_interval_ms=10,
-    )
-    await task
+    async def worker_answers_the_second_request(worker_id: str) -> None:
+        nonlocal requests
+        requests += 1
+        await original_request(worker_id)
+        if requests == 2:
+            hub.registry._workers["bot1"].last_snapshot = {
+                "screen": "updated",
+                "prompt_detected": {"prompt_id": "target"},
+                "ts": time.time(),
+            }
+
+    with patch.object(hub, "request_snapshot", side_effect=worker_answers_the_second_request):
+        ok, snap, reason = await hub.wait_for_guard(
+            "bot1",
+            expect_prompt_id="target",
+            expect_regex=None,
+            timeout_ms=10_000,
+            poll_interval_ms=10,
+        )
 
     assert ok
     assert snap is not None
     assert snap["screen"] == "updated"
     assert reason is None
+    # Matched during polling: the initial request plus exactly one re-request.
+    assert requests == 2
 
 
 async def test_wait_for_guard_no_new_snapshot_rerequests() -> None:

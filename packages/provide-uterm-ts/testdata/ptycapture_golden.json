@@ -10,6 +10,10 @@
   "queue_maxsize": 4096,
   "socket_mode": 384,
   "bind_umask": 127,
+  "socket_modes": [
+    384,
+    432
+  ],
   "header_size": 5,
   "streams": [
     {

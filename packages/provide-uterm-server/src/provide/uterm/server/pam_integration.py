@@ -147,6 +147,16 @@ def _process_start_ticks(pid: int) -> int | None:
         return None
 
 
+def pam_login_alive(pid: int, start_ticks: int) -> bool:
+    """Whether the process a PAM capture id names still runs: its pid reports the start ticks the id carries.
+
+    A pid since reused by another login reports another start, so it does not
+    pass. The restore of a persisted capture session asks this before it binds
+    anything.
+    """
+    return _process_start_ticks(pid) == start_ticks
+
+
 def _instance_tag(pid: int) -> str:
     """What tells this login's process apart from every other that had its pid."""
     ticks = _process_start_ticks(pid)
@@ -439,40 +449,8 @@ async def _create_capture_session(
     if ev.capture_socket is None:
         return
 
-    # ── capture_socket path confinement ──────────────────────────────────────
-    # Determine the trusted base directory for capture sockets.
-    # Priority: explicit capture_socket_dir > parent of notify_socket > no confinement.
-    base_dir: str | None = None
-    if pam_cfg.capture_socket_dir:
-        base_dir = pam_cfg.capture_socket_dir
-    elif pam_cfg.notify_socket:
-        from pathlib import Path as _Path
-
-        base_dir = str(_Path(pam_cfg.notify_socket).parent)
-
-    if base_dir is not None:
-        from pathlib import Path as _Path
-
-        try:
-            resolved = _Path(ev.capture_socket).resolve()
-            trusted = _Path(base_dir).resolve()
-            # is_relative_to is a proper path-segment containment check (true
-            # for an exact match too), unlike a string-prefix compare — which
-            # both false-matches /run/evil against /run/uterm and assumes "/"
-            # as the separator, breaking on Windows.
-            if not resolved.is_relative_to(trusted):
-                logger.warning(
-                    "pam_capture_socket_confined socket=%r is outside trusted dir=%r — session NOT created",
-                    ev.capture_socket,
-                    base_dir,
-                )
-                return
-        except Exception:
-            logger.warning(
-                "pam_capture_socket_confined failed to resolve socket=%r — session NOT created",
-                ev.capture_socket,
-            )
-            return
+    if not capture_socket_allowed(ev.capture_socket, pam_cfg):
+        return
 
     session_id = session_id if session_id is not None else _session_id(ev)
 
@@ -491,6 +469,45 @@ async def _create_capture_session(
         "visibility": "operator",
     }
     await _safe_create(registry, payload)
+
+
+def capture_socket_allowed(capture_socket: str, pam_cfg: PamConfig) -> bool:
+    """Whether a capture socket path lies inside the directory capture sockets are confined to.
+
+    That is ``pam.capture_socket_dir``, else the notify socket's directory, else
+    nowhere in particular (no confinement). Checked when PAM opens a capture
+    session, and again when one is re-created from its file after a restart: a
+    path read back from disk is trusted no further than one PAM sent.
+    """
+    base_dir: str | None = None
+    if pam_cfg.capture_socket_dir:
+        base_dir = pam_cfg.capture_socket_dir
+    elif pam_cfg.notify_socket:
+        base_dir = str(Path(pam_cfg.notify_socket).parent)
+
+    if base_dir is None:
+        return True
+    try:
+        resolved = Path(capture_socket).resolve()
+        trusted = Path(base_dir).resolve()
+        # is_relative_to is a proper path-segment containment check (true
+        # for an exact match too), unlike a string-prefix compare — which
+        # both false-matches /run/evil against /run/uterm and assumes "/"
+        # as the separator, breaking on Windows.
+        if not resolved.is_relative_to(trusted):
+            logger.warning(
+                "pam_capture_socket_confined socket=%r is outside trusted dir=%r — session NOT created",
+                capture_socket,
+                base_dir,
+            )
+            return False
+    except Exception:
+        logger.warning(
+            "pam_capture_socket_confined failed to resolve socket=%r — session NOT created",
+            capture_socket,
+        )
+        return False
+    return True
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

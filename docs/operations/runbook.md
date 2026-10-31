@@ -18,7 +18,7 @@ This runbook is for incident triage of the hosted terminal server.
 
 1. Confirm service health:
    - `GET /healthz` (public minimal health probe)
-   - `GET /api/health` (unauthenticated rich health probe: 503 until ready, then 200 with version/uptime/active_sessions/control_plane_backend)
+   - `GET /api/health` (unauthenticated rich health probe: 503 until ready, then 200 with version/uptime/active_sessions/control_plane_backend/features)
 2. Confirm durability posture:
    - `GET /api/durability/capabilities` (authenticated)
    - If `ha_safe` is `false`, verify the deployment has only one active FastAPI control-plane instance.

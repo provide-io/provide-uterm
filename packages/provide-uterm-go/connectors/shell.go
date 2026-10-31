@@ -8,6 +8,7 @@ package connectors
 import (
 	"context"
 
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/emulator"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/termsession"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/transports"
 )
@@ -35,10 +36,13 @@ func newShell(sessionID, displayName string, config map[string]any) (*transportC
 		connect := func(ctx context.Context) error {
 			return tr.Connect(ctx, "", 0, transports.ConnectOptions{Cols: cols, Rows: rows})
 		}
+		// UTF-8, as the reference's PTY connector decodes a local program's
+		// output: it is not a BBS drawing in CP437.
 		return termsession.New(tr, connect, termsession.Options{
-			Cols:         cols,
-			Rows:         rows,
-			SendEncoding: termsession.EncodingUTF8,
+			Cols:            cols,
+			Rows:            rows,
+			SendEncoding:    termsession.EncodingUTF8,
+			ReceiveEncoding: emulator.UTF8,
 		})
 	}
 	return newTransportConnector(sessionID, displayName, "shell", "local shell", inputMode, build), nil

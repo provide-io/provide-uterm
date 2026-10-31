@@ -328,6 +328,37 @@ func (r *MessageRouter) RedactSnapshotForRecipient(
 	return hub.redactor(toRedact, rules), nil
 }
 
+// RedactTextsForRecipient returns texts as the output-redaction policy lets
+// recipient read them: the policy the live screen is redacted by, applied to
+// text that is not a frame (an ended session's screen and scrollback). The
+// rules are asked for once for all of it. Unchanged when the gate is
+// inactive, yields no rules, or no [Redactor] is wired. Port of
+// redact_texts_for_recipient.
+func (r *MessageRouter) RedactTextsForRecipient(
+	ctx context.Context, workerID string, texts []string, recipient BrowserConn,
+) ([]string, error) {
+	hub := r.hub
+	if hub.outputPolicyGate == nil {
+		return texts, nil
+	}
+	pc, err := hub.preparePolicyContext(ctx, recipient, workerID, strp("output"))
+	if err != nil {
+		return nil, err
+	}
+	rules, err := hub.outputPolicyGate.GetRedactionRules(ctx, pc)
+	if err != nil {
+		return nil, err
+	}
+	if len(rules) == 0 || hub.redactor == nil {
+		return texts, nil
+	}
+	out := make([]string, len(texts))
+	for i, text := range texts {
+		out[i] = str(hub.redactor(map[string]any{"type": "term", "data": text}, rules)["data"])
+	}
+	return out, nil
+}
+
 // BrowserCount returns the number of browsers connected for workerID. Port of
 // browser_count.
 func (r *MessageRouter) BrowserCount(_ context.Context, workerID string) int {

@@ -71,12 +71,13 @@ describe("the server's default configuration", () => {
 
 describe("what the structural pass covers", () => {
   it("checks fewer sections than the schema has", () => {
-    // A gap in the reference, pinned rather than closed: `audit` and
-    // `governance` are tables in the schema but are not in the loader's list,
-    // so a document writing one as a string gets the schema's complaint about
-    // a field nobody wrote instead of the friendly one naming the section.
+    // A gap in the reference, pinned rather than closed: `audit`,
+    // `governance` and `session_persistence` are tables in the schema but are
+    // not in the loader's list, so a document writing one as a string gets the
+    // schema's complaint about a field nobody wrote instead of the friendly one
+    // naming the section.
     const unchecked = golden.sections.filter((section) => !TABLE_SECTIONS.has(section));
-    expect(unchecked).toEqual(["audit", "governance"]);
+    expect(unchecked).toEqual(["audit", "governance", "session_persistence"]);
   });
 
   it("checks nothing the schema does not have", () => {

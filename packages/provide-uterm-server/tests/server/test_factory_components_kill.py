@@ -409,6 +409,14 @@ def test_the_configured_default_visibility_reaches_the_registry() -> None:
     assert _app(config).state.uterm_registry._default_visibility == "private"
 
 
+def test_the_configured_capture_socket_mode_reaches_the_registry() -> None:
+    """Every capture session's socket is bound with it; dropped, they stay owner-only."""
+    config = default_server_config()
+    config.pam.capture_socket_mode = 0o660
+
+    assert _app(config).state.uterm_registry._capture_socket_mode == 0o660
+
+
 def test_the_webhook_manager_counts_through_this_apps_metrics() -> None:
     """Delivery counters are read from ``app.state.uterm_metrics``.
 

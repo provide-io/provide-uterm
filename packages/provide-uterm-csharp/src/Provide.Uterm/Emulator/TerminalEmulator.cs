@@ -20,6 +20,14 @@ public sealed class TerminalEmulator
     private int _cols;
     private int _rows;
     private readonly string _term;
+
+    /// <summary>
+    /// The decoder for the whole stream in a UTF-8 session, or null in a CP437
+    /// one: a transport hands over whatever its last read returned, which can end
+    /// inside a multibyte character. It holds the first half until the rest
+    /// arrives. Guarded by <see cref="_gate"/> with the screen.
+    /// </summary>
+    private readonly Decoder? _utf8;
     private readonly Vt.Screen _screen;
     private readonly VtStream _stream;
     private bool _dirty = true;
@@ -52,7 +60,7 @@ public sealed class TerminalEmulator
     /// </remarks>
     private readonly object _gate = new();
 
-    public TerminalEmulator(int cols = 0, int rows = 0, string term = "")
+    public TerminalEmulator(int cols = 0, int rows = 0, string term = "", ReceiveEncoding encoding = ReceiveEncoding.Cp437)
     {
         if (cols <= 0)
         {
@@ -72,17 +80,33 @@ public sealed class TerminalEmulator
         _cols = cols;
         _rows = rows;
         _term = term;
+        _utf8 = encoding == ReceiveEncoding.Utf8 ? Encoding.UTF8.GetDecoder() : null;
         _screen = new Vt.Screen(cols, rows);
-        _stream = new VtStream(_screen);
+        // A UTF-8 session honours DEC special graphics (ESC ( 0, SO/SI), as the
+        // reference's does: its decoded text no longer needs the stream's UTF-8
+        // mode. A CP437 session keeps the default, so a stray SO in ANSI art
+        // stays inert.
+        _stream = new VtStream(_screen) { UseUtf8 = encoding != ReceiveEncoding.Utf8 };
     }
 
     public void Process(ReadOnlySpan<byte> data)
     {
-        var text = Cp437.Decode(data);
         lock (_gate)
         {
-            ProcessLocked(text);
+            ProcessLocked(_utf8 is null ? Cp437.Decode(data) : DecodeUtf8(_utf8, data));
         }
+    }
+
+    /// <summary>
+    /// Decode a read with the session's decoder, holding a trailing incomplete
+    /// sequence for the next one. .NET's UTF-8 decoder replaces an ill-formed
+    /// sequence with one U+FFFD per maximal subpart, as Python's does.
+    /// </summary>
+    private static string DecodeUtf8(Decoder decoder, ReadOnlySpan<byte> data)
+    {
+        var chars = new char[decoder.GetCharCount(data, flush: false)];
+        var count = decoder.GetChars(data, chars, flush: false);
+        return new string(chars, 0, count);
     }
 
     private void ProcessLocked(string text)

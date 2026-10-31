@@ -694,6 +694,11 @@ func (r *SessionRegistryImpl) recorderFor(e *sessionEntry) *sessionRecorder {
 	}
 	if e.recorder == nil {
 		e.recorder = newSessionRecorder(e.def.SessionID, r.recording, r.recCfg, r.detector, nil)
+		if keeper := r.keeperFor(e); keeper != nil {
+			// A capture session re-created after a restart is the same
+			// session, and goes on recording under its own instance.
+			e.recorder.instance = keeper.instance
+		}
 	}
 	e.recorder.setEnabled(r.recordingEnabled(e.def))
 	return e.recorder

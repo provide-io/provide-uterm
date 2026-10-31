@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/screen"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/vt"
@@ -212,30 +213,134 @@ func (b *AnsiBuffer) RenderLines(width, height int) []string {
 	return RenderScreenLines(b.screen, width, height)
 }
 
+// placeholder is drawn where a cell holds the empty second half of a wide
+// character whose first half is gone, to recreate that cell: see renderRow.
+// Any wide character would do; this one is blank should a terminal ever show
+// it.
+const placeholder = "\u3000"
+
 // RenderScreenLines walks a vt.Screen's cell buffer and emits SGR escapes
-// whenever the style changes between adjacent cells.
+// whenever the style changes between adjacent cells. Drawn on fresh rows, the
+// rows recreate the cells: see renderRow.
 func RenderScreenLines(s *vt.Screen, width, height int) []string {
 	lines := make([]string, 0, height)
 	for y := range height {
-		var parts strings.Builder
-		haveLast := false
-		var last Style
-		for x := range width {
-			cell := s.At(y, x)
-			style := CellStyle(cell)
-			char := cell.Data
-			if char == "" {
-				char = " "
-			}
-			if !haveLast || style != last {
-				parts.WriteString(StyleToSGR(style))
-				last = style
-				haveLast = true
-			}
-			parts.WriteString(char)
-		}
-		parts.WriteString(ANSIReset)
-		lines = append(lines, parts.String())
+		lines = append(lines, renderRow(s, y, width))
 	}
 	return lines
+}
+
+// isSecondHalf reports whether a cell holds what a wide character's second
+// cell does: nothing, or marks.
+func isSecondHalf(text string) bool {
+	return text == "" || vt.CellWidth(text) == 0
+}
+
+// renderRow renders row y so that drawing it on a fresh row recreates every
+// cell. Port of render/buffer.py _render_row; every port writes the same
+// bytes.
+//
+// A wide character is drawn once and takes two cells; the cell after it is
+// recreated by drawing it, so nothing is written for that cell. Writing a
+// space there, as this once did, made every wide character a column wider on
+// the terminal it was drawn on, and a row holding one overflowed. Combining
+// marks that joined that second cell are written straight after the wide
+// character, which joins them to it again; marks joined to the wide character
+// itself are written with the column set back onto its second cell, which
+// joins them to the wide character instead.
+//
+// Two cells cannot be recreated by drawing left to right, and get a cursor
+// move. A wide character whose second half was overwritten is drawn, and the
+// column is then set back onto that half (CHA, not CUB: from the deferred wrap
+// at the last column CUB steps one further). A second half whose first half is
+// gone (overwritten, or deleted) is recreated the way the stream made it: a
+// placeholder wide character drawn in its style, its marks joined to it, and
+// the placeholder's first half deleted (DCH). In the last column, where a wide
+// character has no second half, the placeholder is drawn one column left
+// instead, and the cell there drawn again over its first half. That needs the
+// cell before it to be drawable, so one arrangement is left blank: such a cell
+// in the last column right after another second half (a wide character's, or
+// another such cell). Any marks in it are lost with it.
+//
+// A cell with marks written into the last column is written with autowrap
+// off: the marks join the cell before the cursor, which then rests past the
+// last column, and with autowrap on they would first wrap to the next row.
+func renderRow(s *vt.Screen, y, cols int) string {
+	var parts strings.Builder
+	haveLast := false
+	var last Style
+	put := func(text string, style Style) {
+		if !haveLast || style != last {
+			parts.WriteString(StyleToSGR(style))
+			last = style
+			haveLast = true
+		}
+		parts.WriteString(text)
+	}
+	putCell := func(text string, style Style, x int) {
+		if text == "" {
+			return
+		}
+		if x == cols-1 && (utf8.RuneCountInString(text) > 1 || vt.CellWidth(text) == 0) {
+			parts.WriteString("\x1b[?7l")
+			put(text, style)
+			parts.WriteString("\x1b[?7h")
+		} else {
+			put(text, style)
+		}
+	}
+
+	for x := 0; x < cols; {
+		cell := s.At(y, x)
+		data, style := cell.Data, CellStyle(cell)
+		if isSecondHalf(data) {
+			if x+1 < cols {
+				put(placeholder, style)
+				putCell(data, style, x+1)
+				fmt.Fprintf(&parts, "\x1b[%dG\x1b[P\x1b[C", x+1)
+			} else if x > 0 {
+				before := s.At(y, x-1)
+				if !isSecondHalf(before.Data) {
+					fmt.Fprintf(&parts, "\x1b[%dG", x)
+					put(placeholder, style)
+					putCell(data, style, x)
+					fmt.Fprintf(&parts, "\x1b[%dG", x)
+					putCell(before.Data, CellStyle(before), x-1)
+				}
+			}
+			x++
+			continue
+		}
+		if x+1 == cols || vt.CellWidth(data) != 2 {
+			putCell(data, style, x)
+			x++
+			continue
+		}
+		// A wide character with a cell after it. Its own marks are written
+		// with the cursor back on that cell, which joins them to the wide
+		// character rather than to it.
+		base, size := utf8.DecodeRuneInString(data)
+		own := data[size:]
+		put(string(base), style)
+		after := s.At(y, x+1)
+		if isSecondHalf(after.Data) {
+			putCell(after.Data, CellStyle(after), x+1)
+			if own != "" {
+				fmt.Fprintf(&parts, "\x1b[%dG", x+2)
+				put(own, style)
+				if x+2 < cols {
+					fmt.Fprintf(&parts, "\x1b[%dG", x+3)
+				}
+			}
+			x += 2
+		} else {
+			fmt.Fprintf(&parts, "\x1b[%dG", x+2)
+			if own != "" {
+				put(own, style)
+			}
+			x++
+		}
+	}
+	parts.WriteString(ANSIReset)
+	return parts.String()
 }

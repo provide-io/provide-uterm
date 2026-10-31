@@ -22,7 +22,7 @@
  *   it to somebody.
  */
 
-import { hijackPath, sanitize, sessionPath, workerPath } from "./hijack-guards.ts";
+import { hijackPath, previousSessionPath, sanitize, sessionPath, workerPath } from "./hijack-guards.ts";
 
 /** What the client got back. */
 export interface HijackAnswer {
@@ -299,6 +299,42 @@ export class HijackClient {
   /** What one session's terminal shows. */
   async sessionSnapshot(sessionId: string): Promise<HijackAnswer> {
     return this.request("GET", `${sessionPath(sessionId)}/snapshot`);
+  }
+
+  /**
+   * The ended capture sessions this caller may read, newest first:
+   * `{"sessions": [...]}`, each with `id`, `display_name`, `owner`,
+   * `ended_at`, `cols` and `rows`. A server lists `sessions.previous` in its
+   * health `features` when it keeps them.
+   */
+  async listPreviousSessions(): Promise<HijackAnswer> {
+    return this.request("GET", "/api/previous-sessions");
+  }
+
+  /** One ended capture session: its listing fields, last `screen` and `scrollback`. */
+  async getPreviousSession(sessionId: string): Promise<HijackAnswer> {
+    return this.request("GET", previousSessionPath(sessionId));
+  }
+
+  /**
+   * Set an ended capture session's `owner` and/or `visibility` (`"public"`,
+   * `"operator"` or `"private"`); admins only.
+   *
+   * Only the fields given are sent, so the other keeps its value. Answers the
+   * session's listing fields, as {@link listPreviousSessions} lists them. A
+   * server lists `sessions.previous.owner` in its health `features` when it
+   * takes this. It answers 404 for a session that is unknown, gone, or pushed
+   * out by the per-owner cap, 403 for a caller who is not an admin, 422 for a
+   * body it cannot read and 500 when it could not save the change.
+   */
+  async updatePreviousSession(
+    sessionId: string,
+    // Spelt with `undefined` so a caller may pass a field explicitly unset.
+    options: { owner?: string | undefined; visibility?: string | undefined } = {},
+  ): Promise<HijackAnswer> {
+    return this.request("PATCH", previousSessionPath(sessionId), {
+      json: present({ owner: options.owner, visibility: options.visibility }),
+    });
   }
 
   /** What has lately happened in one session. */

@@ -416,6 +416,42 @@ class HijackClient:
         """Get terminal snapshot for a session."""
         return await self._request("GET", f"{self._sp(session_id)}/snapshot")
 
+    async def list_previous_sessions(self) -> tuple[bool, Any]:
+        """List the ended capture sessions this caller may read, newest first.
+
+        ``{"sessions": [...]}``, each with ``id``, ``display_name``, ``owner``,
+        ``ended_at``, ``cols`` and ``rows``. A server lists ``sessions.previous``
+        in its health ``features`` when it keeps them.
+        """
+        return await self._request("GET", "/api/previous-sessions")
+
+    async def get_previous_session(self, session_id: str) -> tuple[bool, Any]:
+        """Read one ended capture session: its listing fields, last ``screen`` and ``scrollback``."""
+        return await self._request("GET", f"/api/previous-sessions/{_safe_id(session_id, 'session_id')}")
+
+    async def update_previous_session(
+        self,
+        session_id: str,
+        *,
+        owner: str | None = None,
+        visibility: str | None = None,
+    ) -> tuple[bool, Any]:
+        """Set an ended capture session's ``owner`` and/or ``visibility``; admins only.
+
+        Only the fields given are sent, so the other keeps its value. Answers
+        the session's listing fields, as :meth:`list_previous_sessions` lists
+        them. A server lists ``sessions.previous.owner`` in its health
+        ``features`` when it takes this.
+        """
+        payload: dict[str, Any] = {}
+        if owner is not None:
+            payload["owner"] = owner
+        if visibility is not None:
+            payload["visibility"] = visibility
+        return await self._request(
+            "PATCH", f"/api/previous-sessions/{_safe_id(session_id, 'session_id')}", json=payload
+        )
+
     async def session_events(
         self,
         session_id: str,

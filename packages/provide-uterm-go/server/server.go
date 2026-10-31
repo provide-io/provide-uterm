@@ -21,6 +21,7 @@ import (
 	ptel "github.com/provide-io/provide-telemetry/go"
 
 	uterm "github.com/provide-io/provide-uterm/packages/provide-uterm-go"
+	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/capturestate"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/deckmux"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/fanout"
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/graphical"
@@ -74,6 +75,9 @@ type Deps struct {
 	// Recording backs the /api/sessions/{id}/recording routes (meta, entries,
 	// download). nil → a NullStore (recording reported unavailable/empty).
 	Recording recording.Store
+	// CaptureState backs /api/previous-sessions ([session_persistence]). nil
+	// → none are kept, and the routes list none.
+	CaptureState *capturestate.Store
 	// Metrics is the shared counter map. nil → a fresh one. For hub counters to
 	// appear in /api/metrics, the CLI must pass this same instance as the hub's
 	// OnMetric sink.
@@ -126,6 +130,16 @@ type Server struct {
 	// viewerStreams are the open event streams of share viewers, which a
 	// viewer revoke ends (routes_sse.go, routes_viewers.go).
 	viewerStreams shareViewerStreams
+
+	// browserCloseGraceOverride, when non-zero, replaces the default grace a
+	// browser socket's Close waits on its peer (ws_conn.go).
+	// hijackCleanupInterval, when non-zero, replaces the one-second period of
+	// periodicHijackCleanup.
+	// Both are zero in production. They let a test shorten a real wait on one
+	// server without writing a package variable that handlers of other servers
+	// still read.
+	browserCloseGraceOverride time.Duration
+	hijackCleanupInterval     time.Duration
 
 	ready     atomic.Bool
 	startTime float64

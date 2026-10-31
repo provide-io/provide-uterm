@@ -64,6 +64,7 @@ MODELS: dict[str, type[BaseModel]] = {
     "ServerBindConfig": schema.ServerBindConfig,
     "PamConfig": schema.PamConfig,
     "GovernanceConfig": schema.GovernanceConfig,
+    "SessionPersistenceConfig": schema.SessionPersistenceConfig,
     "GraphicalTargetConfig": schema.GraphicalTargetConfig,
     "SessionDefinition": schema.SessionDefinition,
 }
@@ -264,11 +265,43 @@ CASES: list[tuple[str, str, dict[str, Any]]] = [
     ("PamConfig", "a peer uid list", {"require_peer_uids": [0, 1000]}),
     ("PamConfig", "a peer uid list with a string in it", {"require_peer_uids": ["root"]}),
     ("PamConfig", "no peer uid list at all", {"require_peer_uids": None}),
+    # Who may connect to a capture socket: the owner, or the owner and the
+    # directory's group. Anything wider hands the terminal to more users, and a
+    # string or a bool is refused before it could be read as a number.
+    ("PamConfig", "capture sockets owner-only", {"capture_socket_mode": 0o600}),
+    ("PamConfig", "capture sockets shared with the group", {"capture_socket_mode": 0o660}),
+    ("PamConfig", "capture sockets anyone may connect to", {"capture_socket_mode": 0o666}),
+    ("PamConfig", "capture sockets the group may only read", {"capture_socket_mode": 0o640}),
+    ("PamConfig", "capture sockets with the owner's exec bit", {"capture_socket_mode": 0o700}),
+    ("PamConfig", "capture sockets with no permissions", {"capture_socket_mode": 0}),
+    ("PamConfig", "a negative capture socket mode", {"capture_socket_mode": -0o600}),
+    ("PamConfig", "a capture socket mode written as a string", {"capture_socket_mode": "0o660"}),
+    ("PamConfig", "a capture socket mode written in decimal digits", {"capture_socket_mode": "432"}),
+    ("PamConfig", "a capture socket mode given a bool", {"capture_socket_mode": True}),
+    ("PamConfig", "a capture socket mode given null", {"capture_socket_mode": None}),
     ("GraphicalTargetConfig", "a seeded target", {"target_id": "vm-1", "target_address": "10.0.0.5:5900"}),
     ("GraphicalTargetConfig", "protocol-specific parameters", {"config": {"vm_name": "win11"}}),
     ("GraphicalTargetConfig", "parameters given a list", {"config": []}),
     ("GraphicalTargetConfig", "parameters given null", {"config": None}),
     ("GraphicalTargetConfig", "a size that is not a number", {"width": "wide"}),
+    (
+        "SessionPersistenceConfig",
+        "capture sessions kept",
+        {"persist_capture": True, "previous_keep_days": 7, "state_dir": "/var/lib/uterm/capture-sessions/"},
+    ),
+    ("SessionPersistenceConfig", "capture sessions kept with nowhere to keep them", {"persist_capture": True}),
+    ("SessionPersistenceConfig", "a relative state directory", {"state_dir": "./state"}),
+    ("SessionPersistenceConfig", "a state directory given null", {"state_dir": None}),
+    ("SessionPersistenceConfig", "a state directory given a number", {"state_dir": 5}),
+    ("SessionPersistenceConfig", "previous days below zero", {"previous_keep_days": -1}),
+    ("SessionPersistenceConfig", "scrollback past its bound", {"previous_scrollback_lines": 10001}),
+    (
+        "SessionPersistenceConfig",
+        "both bounds broken at once",
+        {"previous_keep_days": 3651, "previous_scrollback_lines": -1},
+    ),
+    ("SessionPersistenceConfig", "previous days written as a word", {"previous_keep_days": "week"}),
+    ("SessionPersistenceConfig", "a field nobody defined", {"persist_captures": True}),
 ]
 
 TOP_LEVEL_CASES: list[tuple[str, dict[str, Any]]] = [

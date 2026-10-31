@@ -109,6 +109,7 @@ export const SERVER_CONFIG_DEFAULTS: ServerConfigDocument = deepFreeze({
     auto_session: false,
     auto_session_command: "/bin/bash",
     capture_socket_dir: null,
+    capture_socket_mode: 0o600,
     mode: "notify",
     notify_socket: null,
     relay_token: null,
@@ -158,6 +159,12 @@ export const SERVER_CONFIG_DEFAULTS: ServerConfigDocument = deepFreeze({
     title: "provide-uterm-server",
   },
   session_idle_timeout_s: 0,
+  session_persistence: {
+    persist_capture: false,
+    previous_keep_days: 0,
+    previous_scrollback_lines: 1000,
+    state_dir: null,
+  },
   session_retention_s: 0,
   sessions: [
     {
@@ -221,6 +228,7 @@ export const SERVER_CONFIG_SECTIONS: readonly string[] = [
   "recording",
   "security",
   "server",
+  "session_persistence",
   "tunnel",
   "ui",
   "webhooks",

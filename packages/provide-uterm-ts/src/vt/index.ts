@@ -15,5 +15,7 @@
  */
 
 export { type Char, defaultChar, FG_BG_256, isDefaultChar } from "./char.ts";
-export { type Charset, type Charsets, type Cursor, Screen } from "./screen.ts";
+export type { Charset, Charsets } from "./charsets.ts";
+export { type Cursor, Screen } from "./screen.ts";
 export { Stream, type StreamOptions } from "./stream.ts";
+export { charWidth } from "./width.ts";

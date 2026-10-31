@@ -8,6 +8,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"time"
 
 	"github.com/provide-io/provide-uterm/packages/provide-uterm-go/connectors"
@@ -79,6 +80,12 @@ func (r *SessionRegistryImpl) StartSession(ctx context.Context, id string) (*ser
 	e.lastErr = nil
 	e.conn = conn // may be nil for "no live connector" types
 	e.lifecycle = server.LifecycleRunning
+	if keeper := r.keeperFor(e); keeper != nil {
+		keeper.attach(conn)
+		// Painted back by a connector that started; one that failed left it
+		// for the next start.
+		r.capture.RestoreDone(id)
+	}
 	// Attach the session to the hub, the second half of what the reference's
 	// HostedSessionRuntime does on start: without a worker socket the hub has
 	// nothing to pause, and every hijack acquire is refused "no_worker".
@@ -122,7 +129,7 @@ func (r *SessionRegistryImpl) StopSession(ctx context.Context, id string) (*serv
 		r.mu.Unlock()
 		return nil, server.ErrSessionNotFound
 	}
-	conn, rec := e.conn, e.recorder
+	conn, rec, keeper := e.conn, e.recorder, e.keeper
 	br := takeBridge(e)
 	e.conn = nil
 	e.lifecycle = server.LifecycleStopped
@@ -134,6 +141,7 @@ func (r *SessionRegistryImpl) StopSession(ctx context.Context, id string) (*serv
 	// outlived its terminal would still look leasable.
 	stopBridge(br)
 	settleRecording(rec)
+	saveLastScreen(keeper)
 	if conn != nil {
 		_ = conn.Stop(ctx)
 	}
@@ -192,8 +200,12 @@ func (r *SessionRegistryImpl) SetMode(ctx context.Context, id, mode string) (*se
 	if e.conn != nil {
 		_ = e.conn.SetMode(mode) // mode already validated above
 	}
+	flush := r.setDefinitionLocked(e)
 	st := r.snapshotStatus(e)
 	r.mu.Unlock()
+	if flush != nil {
+		flush()
+	}
 	r.syncHubInputMode(ctx, id, mode)
 	return st, nil
 }
@@ -427,9 +439,41 @@ func (r *SessionRegistryImpl) AnnotateSession(_ context.Context, id string, ann 
 // websocket) yields a live connector; a build error (unknown type, bad config)
 // or a dial error surfaces to StartSession as last_error.
 func defaultConnect(ctx context.Context, def serverconfig.SessionDefinition) (connectors.Connector, error) {
+	return connectPrepared(ctx, def, nil)
+}
+
+// withCaptureSocketMode is def with the server's capture socket mode in the
+// config a pty_capture connector is built from, over anything the stored
+// config says: who may connect to a socket this server binds is not a
+// session's to widen. The stored definition is left as it is, so the mode is
+// never written to a kept session's file. Any other connector is given def
+// unchanged. Port of the reference runtime's _effective_connector_config.
+func withCaptureSocketMode(def serverconfig.SessionDefinition, mode int) serverconfig.SessionDefinition {
+	if def.ConnectorType != "pty_capture" {
+		return def
+	}
+	config := maps.Clone(def.ConnectorConfig)
+	if config == nil {
+		config = map[string]any{}
+	}
+	config["socket_mode"] = mode
+	def.ConnectorConfig = config
+	return def
+}
+
+// connectPrepared is defaultConnect with prepare, when given, run on the
+// built connector before it starts: the registry's prepareCapture, which
+// readies a kept capture session (its scrollback, and the screen a restart
+// left) while nothing can yet draw on it.
+func connectPrepared(
+	ctx context.Context, def serverconfig.SessionDefinition, prepare func(string, connectors.Connector),
+) (connectors.Connector, error) {
 	conn, err := connectors.Build(def.SessionID, def.DisplayName, def.ConnectorType, def.ConnectorConfig)
 	if err != nil {
 		return nil, err
+	}
+	if prepare != nil {
+		prepare(def.SessionID, conn)
 	}
 	if err := conn.Start(ctx); err != nil {
 		return nil, err

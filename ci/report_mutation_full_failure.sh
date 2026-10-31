@@ -20,7 +20,9 @@
 set -euo pipefail
 
 # The failing matrix legs name their perimeter file in the job name, e.g.
-# "mutation-gate-full (src/provide/uterm/server/routes/)".
+# "mutation-gate-full / target (src/provide/uterm/server/routes/)" -- the
+# matrix job lives in mutation-shards.yml, which GitHub prefixes with the
+# calling job's name.
 #
 # Split them by WHICH STEP failed. A leg that died in checkout or setup says
 # nothing about the perimeter, and calling it drift is how a reporter starts

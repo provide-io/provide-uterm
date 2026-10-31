@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import { loadGolden } from "../testing/golden.ts";
 import {
   AUTH_DEFAULTS,
+  captureSocketModeComplaint,
   cleanPath,
+  coerceSection,
   derivePublicBaseUrl,
   LOOPBACK_HOSTS,
   pyFloat,
@@ -16,9 +18,11 @@ import {
   validateAuditConfig,
   validateAuthConfig,
   validateControlPlaneConfig,
-  validatePamConfig,
   validateRecordingConfig,
+  validateSection,
+  validateSessionPersistenceConfig,
 } from "./index.ts";
+import { parseTomlDocument } from "./loader.ts";
 
 interface ServerConfigGolden {
   urls: Array<{ name: string; url: string | null; error: string | null }>;
@@ -43,13 +47,36 @@ function refused(call: () => void): string | null {
   return null;
 }
 
+/**
+ * A whole section's checks as one validator: the field rules (where
+ * `capture_socket_mode` is refused, before any coercion, as the reference's
+ * before-validator refuses it) and then the section's own. The corpus records
+ * the reference's message without Pydantic's `Value error, ` prefix.
+ */
+function sectionValidator(section: string): (input: Record<string, unknown>) => void {
+  return (input) => {
+    const [first] = validateSection(section, input);
+    if (first !== undefined) {
+      throw new Error(first.msg.replace(/^Value error, /, ""));
+    }
+  };
+}
+
 /** The validator each recorded model case belongs to. */
 const VALIDATORS: Record<string, (input: Record<string, unknown>) => void> = {
   AuditConfig: validateAuditConfig,
   RecordingConfig: validateRecordingConfig,
   ControlPlaneConfig: validateControlPlaneConfig,
-  PamConfig: validatePamConfig,
+  PamConfig: sectionValidator("PamConfig"),
+  SessionPersistenceConfig: validateSessionPersistenceConfig,
 };
+
+/**
+ * Recorded cases this port cannot replay. JavaScript has one number type, so
+ * the reference's float `432.0` arrives here as the integer 432, and is
+ * accepted; the divergence is documented on `captureSocketModeComplaint`.
+ */
+const UNREPLAYABLE = new Set(["a capture socket mode written as a float"]);
 
 describe("requireSecureUrl", () => {
   it.each(golden.urls)("$name", (record) => {
@@ -261,7 +288,7 @@ describe("the auth configuration", () => {
 });
 
 describe("the other configurations", () => {
-  it.each(golden.models)("$name", (record) => {
+  it.each(golden.models.filter((record) => !UNREPLAYABLE.has(record.name)))("$name", (record) => {
     const validate = VALIDATORS[record.model] as (input: Record<string, unknown>) => void;
     expect(refused(() => validate(record.kwargs))).toBe(record.error);
   });
@@ -348,6 +375,108 @@ describe("the other configurations", () => {
 
   it.each([0, 0.25, 1])("accepts a screen interval of %s", (value) => {
     expect(() => validateRecordingConfig({ screen_interval_s: value })).not.toThrow();
+  });
+
+  it.each([
+    ["previous_keep_days", -1],
+    ["previous_keep_days", 3651],
+  ])("refuses %s of %s in the reference's words", (field, value) => {
+    expect(() => validateSessionPersistenceConfig({ [field]: value })).toThrow(
+      `session_persistence.previous_keep_days must be between 0 (keep no previous sessions) and 3650, got: ${value}`,
+    );
+  });
+
+  it.each([
+    ["previous_scrollback_lines", -1],
+    ["previous_scrollback_lines", 10001],
+  ])("refuses %s of %s in the reference's words", (field, value) => {
+    expect(() => validateSessionPersistenceConfig({ [field]: value })).toThrow(
+      `session_persistence.previous_scrollback_lines must be between 0 and 10000, got: ${value}`,
+    );
+  });
+
+  it.each([
+    { previous_keep_days: 0, previous_scrollback_lines: 0 },
+    { previous_keep_days: 3650, previous_scrollback_lines: 10000, state_dir: "/var/lib/u" },
+    { persist_capture: true, state_dir: "/var/lib/u/" },
+    { previous_keep_days: "7" },
+    // Only a number is bounded here; another type is its field's complaint.
+    { previous_keep_days: "99999", previous_scrollback_lines: "99999" },
+    { persist_capture: "yes" },
+    {},
+  ])("accepts session persistence of %o", (input) => {
+    expect(() => validateSessionPersistenceConfig(input)).not.toThrow();
+  });
+
+  it.each([
+    ["state/", "state"],
+    ["", "."],
+    ["./a//b/", "a/b"],
+  ])("refuses a state directory of %j that is not absolute, quoting it as the reference does", (value, shown) => {
+    expect(() => validateSessionPersistenceConfig({ state_dir: value })).toThrow(
+      `session_persistence.state_dir must be an absolute path, got: ${shown}`,
+    );
+  });
+
+  it.each([{ persist_capture: true }, { previous_keep_days: 1 }, { persist_capture: true, state_dir: 5 }])(
+    "refuses %o, which keeps something with nowhere to keep it",
+    (input) => {
+      expect(() => validateSessionPersistenceConfig(input)).toThrow(
+        "session_persistence.state_dir is required when session_persistence.persist_capture " +
+          "is on or session_persistence.previous_keep_days is above 0",
+      );
+    },
+  );
+
+  it.each([0o600, 0o660])("accepts a capture socket mode of %o", (mode) => {
+    expect(captureSocketModeComplaint(mode)).toBeUndefined();
+  });
+
+  it.each([
+    [0o666, "0o666"],
+    [0o664, "0o664"],
+    [0o640, "0o640"],
+    [0o700, "0o700"],
+    [0o770, "0o770"],
+    [0o2660, "0o2660"],
+    [0, "0o0"],
+    [-1, "-0o1"],
+    [-0o600, "-0o600"],
+  ])("refuses a capture socket mode of %o, quoting it as Python's oct() does: %s", (mode, shown) => {
+    expect(captureSocketModeComplaint(mode)).toBe(`pam.capture_socket_mode must be 0o600 or 0o660, got: ${shown}`);
+  });
+
+  it.each(["0o660", "432", 432.5, true, null, [432], {}])(
+    "refuses a capture socket mode of %o that is not an integer",
+    (mode) => {
+      expect(captureSocketModeComplaint(mode)).toBe("pam.capture_socket_mode must be an integer: 0o600 or 0o660");
+    },
+  );
+
+  it("reads a capture socket mode written in octal in a server.toml", () => {
+    const pam = parseTomlDocument("[pam]\ncapture_socket_mode = 0o660\n").pam as Record<string, unknown>;
+    expect(validateSection("PamConfig", pam)).toEqual([]);
+    expect(coerceSection("PamConfig", pam)).toEqual({ capture_socket_mode: 0o660 });
+  });
+
+  it("refuses a capture socket mode before reading it as an integer", () => {
+    // The field's own coercion would take "432" as 432; the refusal is the
+    // reference's before-validator's, placed on the field.
+    expect(validateSection("PamConfig", { capture_socket_mode: "432" })).toEqual([
+      {
+        type: "value_error",
+        loc: ["capture_socket_mode"],
+        msg: "Value error, pam.capture_socket_mode must be an integer: 0o600 or 0o660",
+      },
+    ]);
+  });
+
+  it("reads the reference's refused float 432.0 as the integer it equals", () => {
+    // The one recorded case this port cannot replay, pinned so the skip above
+    // cannot hide a change in what it does.
+    const float = golden.models.find((record) => UNREPLAYABLE.has(record.name));
+    expect(float?.error).toBe("pam.capture_socket_mode must be an integer: 0o600 or 0o660");
+    expect(captureSocketModeComplaint(float?.kwargs.capture_socket_mode)).toBeUndefined();
   });
 
   it("names the recording webhook url specifically", () => {

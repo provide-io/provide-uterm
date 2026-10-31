@@ -128,6 +128,10 @@ def _resolvable_context(job: dict[str, Any], temp: Path) -> dict[str, str]:
     return context
 
 
+#: (job, step) pairs whose step reads another job's result, which has no local value.
+_NEEDS_READERS = frozenset({("mutation-gate", "Mutation gate verdict")})
+
+
 def test_every_job_in_the_workflow_resolves_on_its_first_matrix_cell() -> None:
     """The regression guard: a new expression form must not go unnoticed.
 
@@ -142,8 +146,16 @@ def test_every_job_in_the_workflow_resolves_on_its_first_matrix_cell() -> None:
     for name, job in jobs.items():
         context = _resolvable_context(job, temp)
         for step in ci_parity._steps_for(job, context):
-            if step["kind"] == "unevaluated" and "github.token" not in step["why"]:
-                unresolved.append(f"{name}: {step['name']} -- {step['why']}")
+            # Two kinds of value are absent locally by nature, not by a gap in
+            # the runner: a token, and another job's result. The second is
+            # allowed for exactly one step, the sharded mutation gate's
+            # verdict, which only means something after the jobs it needs
+            # have run. Any other step reading `needs.*` is still reported.
+            if step["kind"] != "unevaluated" or "github.token" in step["why"]:
+                continue
+            if (name, step["name"]) in _NEEDS_READERS and "'needs." in step["why"]:
+                continue
+            unresolved.append(f"{name}: {step['name']} -- {step['why']}")
 
     assert not unresolved, "the parity runner cannot resolve:\n" + "\n".join(unresolved)
 

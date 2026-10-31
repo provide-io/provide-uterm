@@ -224,6 +224,34 @@ type WebhooksConfig struct {
 	AllowLoopbackDestinations bool `json:"allow_loopback_destinations" toml:"allow_loopback_destinations"`
 }
 
+// SessionPersistenceConfig ports config_schema.SessionPersistenceConfig:
+// PAM capture sessions kept across a restart, and after they end
+// ([session_persistence]). A table of its own rather than [sessions], which
+// is the list of static session definitions.
+type SessionPersistenceConfig struct {
+	// PersistCapture keeps each PAM capture session's definition and screen
+	// in a file, and re-creates it at startup while its login is alive.
+	PersistCapture bool `json:"persist_capture" toml:"persist_capture"`
+	// PreviousKeepDays keeps an ended capture session's last screen,
+	// read-only, for this many days (0 keeps none).
+	PreviousKeepDays int `json:"previous_keep_days" toml:"previous_keep_days"`
+	// PreviousScrollbackLines is the most rows of scrollback a previous
+	// session keeps.
+	PreviousScrollbackLines int `json:"previous_scrollback_lines" toml:"previous_scrollback_lines"`
+	// StateDir is where the files go: an absolute path to a directory this
+	// server's user owns, mode 0700 (created so if it is missing). Named
+	// outright rather than derived from another setting, so two servers never
+	// share one by accident. Required when either feature above is on.
+	StateDir *string `json:"state_dir" toml:"state_dir"`
+}
+
+// MaxPreviousKeepDays and MaxPreviousScrollbackLines bound
+// [session_persistence], as the reference does.
+const (
+	MaxPreviousKeepDays        = 3650
+	MaxPreviousScrollbackLines = 10000
+)
+
 // ProfileStoreConfig ports config_schema.ProfileStoreConfig.
 type ProfileStoreConfig struct {
 	Directory string `json:"directory" toml:"directory"`
@@ -261,10 +289,19 @@ type PamConfig struct {
 	RelayToken         *string `json:"relay_token" toml:"relay_token"`
 	CaptureSocketDir   *string `json:"capture_socket_dir" toml:"capture_socket_dir"`
 	RequirePeerUIDs    *[]int  `json:"require_peer_uids" toml:"require_peer_uids"`
+	// CaptureSocketMode is the permissions of every capture socket this
+	// server binds for a pty_capture session: those PAM asks for, those the
+	// sessions API names, and those re-bound for a session kept across a
+	// restart. 0o600 lets only this server's user connect; 0o660 lets the
+	// socket directory's group in too, for producers (the shim, a session
+	// supervisor) that run as another user. The group comes from the
+	// directory (setgid), so nothing is chowned. Not the notify socket:
+	// pam_uterm writes that one as root.
+	CaptureSocketMode int `json:"capture_socket_mode" toml:"capture_socket_mode"`
 }
 
 func defaultPamConfig() PamConfig {
-	return PamConfig{Mode: "notify", AutoSessionCommand: "/bin/bash"}
+	return PamConfig{Mode: "notify", AutoSessionCommand: "/bin/bash", CaptureSocketMode: OwnerOnlyCaptureSocketMode}
 }
 
 // GovernanceConfig ports config_schema.GovernanceConfig.
@@ -336,9 +373,11 @@ type UtermServerConfig struct {
 	Security     SecurityConfig     `json:"security" toml:"security"`
 	Tunnel       TunnelConfig       `json:"tunnel" toml:"tunnel"`
 	Webhooks     WebhooksConfig     `json:"webhooks" toml:"webhooks"`
-	Pam          PamConfig          `json:"pam" toml:"pam"`
-	Governance   GovernanceConfig   `json:"governance" toml:"governance"`
-	Audit        AuditConfig        `json:"audit" toml:"audit"`
+	// SessionPersistence is [session_persistence].
+	SessionPersistence SessionPersistenceConfig `json:"session_persistence" toml:"session_persistence"`
+	Pam                PamConfig                `json:"pam" toml:"pam"`
+	Governance         GovernanceConfig         `json:"governance" toml:"governance"`
+	Audit              AuditConfig              `json:"audit" toml:"audit"`
 	// FanoutAllowUnknownMembers permits dormant group members at creation.
 	// Send-time session authorization remains mandatory.
 	FanoutAllowUnknownMembers bool                `json:"fanout_allow_unknown_members" toml:"fanout_allow_unknown_members"`
@@ -379,6 +418,7 @@ func DefaultServerConfig() *UtermServerConfig {
 		Security:                   defaultSecurityConfig(),
 		Tunnel:                     defaultTunnelConfig(),
 		Webhooks:                   WebhooksConfig{},
+		SessionPersistence:         SessionPersistenceConfig{PreviousScrollbackLines: 1000},
 		Pam:                        defaultPamConfig(),
 		Governance:                 defaultGovernanceConfig(),
 		Audit:                      AuditConfig{},

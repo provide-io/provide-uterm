@@ -55,6 +55,23 @@ describe("the rich health report", () => {
     expect(typeof body.ok).toBe("boolean");
   });
 
+  it("answers exactly the reference's ready payload, features included", () => {
+    expect(healthReport(state())).toEqual({
+      status: 200,
+      body: {
+        status: "ok",
+        ok: true,
+        ready: true,
+        service: "uterm-server",
+        version: "9.9.9",
+        uptime_s: 2.5,
+        active_sessions: 2,
+        control_plane_backend: "memory",
+        features: ["viewers.revoke.subject"],
+      },
+    });
+  });
+
   it("names the service, so a probe can tell it from whatever else is on the port", () => {
     expect(healthReport(state()).body.service).toBe("uterm-server");
   });

@@ -201,9 +201,14 @@ func (s *Server) handleWorkerHello(ctx context.Context, wc *workerConn, workerID
 }
 
 // periodicHijackCleanup runs CleanupExpiredHijack every second while a WS
-// handler is active. Port of _periodic_hijack_cleanup.
+// handler is active, or every s.hijackCleanupInterval when a test has set one. Port
+// of _periodic_hijack_cleanup.
 func (s *Server) periodicHijackCleanup(ctx context.Context, workerID string) {
-	ticker := time.NewTicker(time.Second)
+	interval := time.Second
+	if s.hijackCleanupInterval > 0 {
+		interval = s.hijackCleanupInterval
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {

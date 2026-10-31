@@ -240,33 +240,42 @@ var (
 )
 
 // captureSocketConfined reports whether the capture socket lives under the
-// trusted base dir (explicit capture_socket_dir, else the notify socket's
-// parent). No configured base → no confinement (returns true), matching Python.
+// trusted base dir. See CaptureSocketConfined.
 func (p *PamIntegration) captureSocketConfined(socket string) bool {
+	return CaptureSocketConfined(p.cfg, socket, p.logger)
+}
+
+// CaptureSocketConfined reports whether a capture socket lives under the
+// trusted base dir (explicit capture_socket_dir, else the notify socket's
+// parent). No configured base → no confinement (returns true), matching
+// Python. Checked when PAM opens a capture session, and again when one is
+// re-created from its file after a restart: a path read back from disk is
+// trusted no further than one PAM sent.
+func CaptureSocketConfined(cfg serverconfig.PamConfig, socket string, logger interface{ Warn(string, ...any) }) bool {
 	base := ""
 	switch {
-	case p.cfg.CaptureSocketDir != nil && *p.cfg.CaptureSocketDir != "":
-		base = *p.cfg.CaptureSocketDir
-	case p.cfg.NotifySocket != nil && *p.cfg.NotifySocket != "":
-		base = filepath.Dir(*p.cfg.NotifySocket)
+	case cfg.CaptureSocketDir != nil && *cfg.CaptureSocketDir != "":
+		base = *cfg.CaptureSocketDir
+	case cfg.NotifySocket != nil && *cfg.NotifySocket != "":
+		base = filepath.Dir(*cfg.NotifySocket)
 	}
 	if base == "" {
 		return true
 	}
 	resolved, err := filepathAbs(socket)
 	if err != nil {
-		p.logger.Warn("pam_capture_socket_confined_resolve_failed", "socket", socket)
+		logger.Warn("pam_capture_socket_confined_resolve_failed", "socket", socket)
 		return false
 	}
 	trusted, err := filepathAbs(base)
 	if err != nil {
-		p.logger.Warn("pam_capture_socket_confined_resolve_failed", "dir", base)
+		logger.Warn("pam_capture_socket_confined_resolve_failed", "dir", base)
 		return false
 	}
 	if resolved == trusted || strings.HasPrefix(resolved, trusted+string(filepath.Separator)) {
 		return true
 	}
-	p.logger.Warn("pam_capture_socket_confined", "socket", socket, "dir", base)
+	logger.Warn("pam_capture_socket_confined", "socket", socket, "dir", base)
 	return false
 }
 
@@ -344,6 +353,15 @@ func statStartTicks(text string) (int64, bool) {
 
 // pamProcessStartTicks is procStartTicks, swappable in tests.
 var pamProcessStartTicks = procStartTicks
+
+// PamLoginAlive reports whether the process a PAM capture id names still
+// runs: its pid reports the start ticks the id carries, so a pid since reused
+// by another login does not pass. The restore of a persisted capture session
+// asks it before it binds anything.
+func PamLoginAlive(pid int, startTicks int64) bool {
+	ticks, ok := pamProcessStartTicks(pid)
+	return ok && ticks == startTicks
+}
 
 // pamInstanceTag returns what tells this login's process apart from every
 // other that had its pid: its start time, or a random r<hex> where that

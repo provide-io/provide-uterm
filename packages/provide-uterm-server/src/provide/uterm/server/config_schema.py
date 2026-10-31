@@ -29,6 +29,17 @@ XTERM_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0"
 FITADDON_CDN_DEFAULT = "https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0"
 FONTS_CDN_DEFAULT = "https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap"
 SERVER_BUILTIN_CONNECTOR_TYPES = frozenset({"shell", "ssh", "telnet", "websocket", "ushell"})
+# Bounds on [session_persistence]: ten years of previous sessions, and ten
+# times a terminal's usual scrollback, which keeps a previous session's file
+# well inside the size it may be read back at.
+MAX_PREVIOUS_KEEP_DAYS = 3650
+MAX_PREVIOUS_SCROLLBACK_LINES = 10000
+# The modes pam.capture_socket_mode may name: owner-only (the default), or
+# owner and group. The platform's CaptureSocket accepts the same two; this
+# package cannot import it, since the platform package is optional.
+OWNER_ONLY_CAPTURE_SOCKET_MODE = 0o600
+OWNER_AND_GROUP_CAPTURE_SOCKET_MODE = 0o660
+CAPTURE_SOCKET_MODES = (OWNER_ONLY_CAPTURE_SOCKET_MODE, OWNER_AND_GROUP_CAPTURE_SOCKET_MODE)
 
 
 def _clean_path(value: str, fallback: str) -> str:
@@ -388,6 +399,64 @@ class TunnelConfig(ServerBaseModel):
         return value
 
 
+class SessionPersistenceConfig(ServerBaseModel):
+    """PAM capture sessions kept across a restart, and after they end (``[session_persistence]``).
+
+    A table of its own rather than ``[sessions]``: ``sessions`` is the list of
+    static session definitions, and TOML cannot make one key both.
+    """
+
+    # Keep each PAM capture session's definition and screen in a file, and
+    # re-create it at startup while its login is still alive.
+    persist_capture: bool = False
+    # Keep an ended capture session's last screen, read-only, for this many
+    # days (0 keeps none).
+    previous_keep_days: int = 0
+    # The most rows of scrollback a previous session keeps.
+    previous_scrollback_lines: int = 1000
+    # Where the files go: an absolute path to a directory this server's user
+    # owns, mode 0700 (created so if it is missing). Named outright rather
+    # than derived from another setting, so two servers never share one by
+    # accident. Required when either feature above is on.
+    state_dir: Path | None = None
+
+    @field_validator("previous_keep_days")
+    @classmethod
+    def _validate_previous_keep_days(cls, value: int) -> int:
+        if not 0 <= value <= MAX_PREVIOUS_KEEP_DAYS:
+            raise ValueError(
+                "session_persistence.previous_keep_days must be between 0 (keep no previous sessions) "
+                f"and {MAX_PREVIOUS_KEEP_DAYS}, got: {value}"
+            )
+        return value
+
+    @field_validator("previous_scrollback_lines")
+    @classmethod
+    def _validate_previous_scrollback_lines(cls, value: int) -> int:
+        if not 0 <= value <= MAX_PREVIOUS_SCROLLBACK_LINES:
+            raise ValueError(
+                "session_persistence.previous_scrollback_lines must be between 0 and "
+                f"{MAX_PREVIOUS_SCROLLBACK_LINES}, got: {value}"
+            )
+        return value
+
+    @field_validator("state_dir")
+    @classmethod
+    def _validate_state_dir(cls, value: Path | None) -> Path | None:
+        if value is not None and not value.is_absolute():
+            raise ValueError(f"session_persistence.state_dir must be an absolute path, got: {value}")
+        return value
+
+    @model_validator(mode="after")
+    def _require_state_dir(self) -> SessionPersistenceConfig:
+        if self.state_dir is None and (self.persist_capture or self.previous_keep_days > 0):
+            raise ValueError(
+                "session_persistence.state_dir is required when session_persistence.persist_capture "
+                "is on or session_persistence.previous_keep_days is above 0"
+            )
+        return self
+
+
 class WebhooksConfig(ServerBaseModel):
     """Webhook delivery safety settings."""
 
@@ -443,6 +512,25 @@ class PamConfig(ServerBaseModel):
     capture_socket_dir: str | None = None
     # Opt-in: only these peer euids may send notify events (None → don't enforce, log only)
     require_peer_uids: list[int] | None = None
+    # The permissions of every capture socket this server binds for a
+    # pty_capture session: those PAM asks for, those the sessions API names,
+    # and those re-bound for a session kept across a restart. 0o600 lets only
+    # this server's user connect; 0o660 lets the socket directory's group in
+    # too, for producers (the shim, a session supervisor) that run as another
+    # user. The group comes from the directory (setgid), so nothing is
+    # chowned. Not the notify socket: pam_uterm writes that one as root.
+    capture_socket_mode: int = OWNER_ONLY_CAPTURE_SOCKET_MODE
+
+    @field_validator("capture_socket_mode", mode="before")
+    @classmethod
+    def _validate_capture_socket_mode(cls, value: object) -> object:
+        # Before Pydantic's own int parsing, which would take "432" or True as
+        # a mode: a string or a bool here is a mistake, not a number.
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError("pam.capture_socket_mode must be an integer: 0o600 or 0o660")
+        if value not in CAPTURE_SOCKET_MODES:
+            raise ValueError(f"pam.capture_socket_mode must be 0o600 or 0o660, got: {oct(value)}")
+        return value
 
     @model_validator(mode="after")
     def _validate_outbound_url_schemes(self) -> PamConfig:
@@ -555,6 +643,7 @@ class UtermServerConfig(ServerBaseModel):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     tunnel: TunnelConfig = Field(default_factory=TunnelConfig)
     webhooks: WebhooksConfig = Field(default_factory=WebhooksConfig)
+    session_persistence: SessionPersistenceConfig = Field(default_factory=SessionPersistenceConfig)
     pam: PamConfig = Field(default_factory=PamConfig)
     governance: GovernanceConfig = Field(default_factory=GovernanceConfig)
     audit: AuditConfig = Field(default_factory=AuditConfig)

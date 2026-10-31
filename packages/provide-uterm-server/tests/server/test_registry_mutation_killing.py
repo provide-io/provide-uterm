@@ -196,6 +196,19 @@ class TestRuntimeFor:
         assert kwargs["worker_bearer_token"] == "bearer-x"
         assert kwargs["hub"] is reg._hub
         assert kwargs["block_private_connector_targets"] is False
+        assert kwargs["capture_socket_mode"] == 0o600
+
+    def test_runtime_for_passes_the_capture_socket_mode(self, _patches: MagicMock) -> None:
+        reg = SessionRegistry(
+            [],
+            hub=_make_hub(),
+            public_base_url="http://h:9999",
+            recording=RecordingConfig(),
+            recording_store=MagicMock(name="recstore"),
+            capture_socket_mode=0o660,
+        )
+        reg._runtime_for(_session("a"))
+        assert _patches.call_args.kwargs["capture_socket_mode"] == 0o660
 
     async def test_require_session_raises_keyerror_for_unknown(self) -> None:
         reg = _make_registry()

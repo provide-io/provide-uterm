@@ -36,7 +36,9 @@ const ShareViewerRevocationsPerPrincipalMax = 100
 const ShareViewerRevocationTTLSeconds = 86400.0
 
 // ErrShareViewerRevocationsFull is returned by RevokeShareViewers when the
-// cutoff table is full of live cutoffs and this session holds none yet.
+// cutoff table is full of live cutoffs and this session holds none yet, and by
+// RevokeShareViewerSubject when the subject table is full and this subject
+// holds none yet.
 var ErrShareViewerRevocationsFull = errors.New("share-viewer revocation table is full")
 
 // shareViewerRevocations is the per-session cutoff table behind
@@ -50,15 +52,22 @@ type shareViewerRevocations struct {
 	// principal's sessions, oldest first.
 	revokers  map[string]string
 	byRevoker map[string][]string
+	// subjectCutoffs holds the cutoffs of single share subjects (see
+	// RevokeShareViewerSubject), subjectOrder their keys oldest first, and
+	// subjectsBySession each session's subjects, so neither a session's count
+	// nor its deletion needs a scan.
+	subjectCutoffs    map[subjectKey]float64
+	subjectOrder      []subjectKey
+	subjectsBySession map[string]map[string]struct{}
 }
 
 // withoutID removes id from an oldest-first list. Ageing out and eviction
 // both take the oldest, so that case is a re-slice rather than a scan.
-func withoutID(ids []string, id string) []string {
+func withoutID[T comparable](ids []T, id T) []T {
 	if len(ids) > 0 && ids[0] == id {
 		return ids[1:]
 	}
-	return slices.DeleteFunc(ids, func(other string) bool { return other == id })
+	return slices.DeleteFunc(ids, func(other T) bool { return other == id })
 }
 
 // dropLocked removes sessionID's cutoff, if any. The caller holds mu.
@@ -170,15 +179,20 @@ func (s *AuthorizationService) revoke(sessionID string, now float64, revoker str
 		r.revokers[sessionID] = owner
 		r.byRevoker[owner] = append(r.byRevoker[owner], sessionID)
 	}
+	r.dropSubsumedSubjectsLocked(sessionID, now)
 	return now, evicted, nil
 }
 
-// ForgetShareViewers drops sessionID's cutoff: the session was deleted.
+// ForgetShareViewers drops sessionID's cutoffs, its subjects' included: the
+// session was deleted.
 func (s *AuthorizationService) ForgetShareViewers(sessionID string) {
 	r := &s.revocations
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.dropLocked(sessionID)
+	for subject := range r.subjectsBySession[sessionID] {
+		r.dropSubjectLocked(subjectKey{sessionID, subject})
+	}
 }
 
 // ShareViewerRevocation returns the cutoff recorded for sessionID, if any.
@@ -190,12 +204,31 @@ func (s *AuthorizationService) ShareViewerRevocation(sessionID string) (float64,
 	return cutoff, ok
 }
 
+// latestCutoff returns the later of sessionID's cutoff and subject's cutoff on
+// it, if either is held. Both are read under one acquisition of mu: a
+// whole-session revoke records its cutoff and drops the subject cutoffs it
+// subsumes in one critical section, so reading them separately could fall
+// between the two and see neither, admitting a token both states refuse.
+func (r *shareViewerRevocations) latestCutoff(sessionID, subject string) (float64, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cutoff, ok := r.cutoffs[sessionID]
+	if subjectCutoff, held := r.subjectCutoffs[subjectKey{sessionID, subject}]; held && (!ok || subjectCutoff > cutoff) {
+		cutoff, ok = subjectCutoff, true
+	}
+	return cutoff, ok
+}
+
 // ShareViewerRevoked reports whether p is a share viewer of sessionID whose
-// token predates the session's cutoff. A token without a numeric iat cannot
-// show it postdates the cutoff, so it is refused.
+// token predates a cutoff: the session's or its own subject's, so the later
+// of the two decides. A token without a numeric iat cannot show it postdates
+// the cutoff, so it is refused.
 func (s *AuthorizationService) ShareViewerRevoked(p *Principal, sessionID string) bool {
-	cutoff, ok := s.ShareViewerRevocation(sessionID)
-	if !ok || !IsShareViewer(p, sessionID) {
+	if !IsShareViewer(p, sessionID) {
+		return false
+	}
+	cutoff, ok := s.revocations.latestCutoff(sessionID, p.SubjectID)
+	if !ok {
 		return false
 	}
 	issued, ok := issuedAt(p)

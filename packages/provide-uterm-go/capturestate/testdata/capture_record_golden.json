@@ -1,0 +1,3001 @@
+{
+  "session_id": "pam-suokki-capture-4242-777",
+  "records": {
+    "live": {
+      "format": 1,
+      "kind": "live",
+      "session": {
+        "session_id": "pam-suokki-capture-4242-777",
+        "display_name": "suokki (pts/3) [live]",
+        "connector_type": "pty_capture",
+        "connector_config": {
+          "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+          "cols": 100
+        },
+        "input_mode": "hijack",
+        "auto_start": true,
+        "tags": [
+          "pam",
+          "capture",
+          "suokki"
+        ],
+        "recording_enabled": null,
+        "created_at": "2026-10-19T12:00:00Z",
+        "owner": "blackbetty:7",
+        "visibility": "private",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "recording_instance": "0123456789abcdef0123456789abcdef",
+      "login": {
+        "pid": 4242,
+        "start_ticks": 777
+      },
+      "screen": {
+        "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+        "cols": 80,
+        "rows": 24
+      },
+      "scrollback": [
+        "older",
+        "old"
+      ],
+      "saved_at": 1760875200.5
+    },
+    "previous": {
+      "format": 1,
+      "kind": "previous",
+      "session": {
+        "session_id": "pam-suokki-capture-4242-777",
+        "display_name": "suokki (pts/3) [live]",
+        "connector_type": "pty_capture",
+        "connector_config": {
+          "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+          "cols": 100
+        },
+        "input_mode": "hijack",
+        "auto_start": true,
+        "tags": [
+          "pam",
+          "capture",
+          "suokki"
+        ],
+        "recording_enabled": null,
+        "created_at": "2026-10-19T12:00:00Z",
+        "owner": "blackbetty:7",
+        "visibility": "private",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "recording_instance": "0123456789abcdef0123456789abcdef",
+      "login": {
+        "pid": 4242,
+        "start_ticks": 777
+      },
+      "screen": {
+        "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+        "cols": 80,
+        "rows": 24
+      },
+      "scrollback": [
+        "older",
+        "old"
+      ],
+      "saved_at": 1760875200.5,
+      "ended_at": 1760875260.25
+    }
+  },
+  "refusals": [
+    {
+      "name": "not an object",
+      "kind": "live",
+      "data": [],
+      "error": "not an object"
+    },
+    {
+      "name": "a format newer than this server reads",
+      "kind": "live",
+      "data": {
+        "format": 2,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "newer format: 2"
+    },
+    {
+      "name": "a format older than any",
+      "kind": "live",
+      "data": {
+        "format": 0,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "unknown format"
+    },
+    {
+      "name": "the other kind",
+      "kind": "previous",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5,
+        "ended_at": 1760875260.25
+      },
+      "error": "not a previous record"
+    },
+    {
+      "name": "no session",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": null,
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session"
+    },
+    {
+      "name": "a session without its visibility",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: visibility"
+    },
+    {
+      "name": "a session without its owner",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: owner"
+    },
+    {
+      "name": "a session without its connector config",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: connector_config"
+    },
+    {
+      "name": "a session without its connector type",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: connector_type"
+    },
+    {
+      "name": "a session without its id",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: session_id"
+    },
+    {
+      "name": "a session key in another case",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "Session_ID": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: session_id"
+    },
+    {
+      "name": "a session whose id is not text",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": 7,
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "session id is not the file's name"
+    },
+    {
+      "name": "a connector config that is a list",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": [],
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: connector_config"
+    },
+    {
+      "name": "an input mode outside its set",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "sideways",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: input_mode"
+    },
+    {
+      "name": "an input mode written as a number",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": 1,
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: input_mode"
+    },
+    {
+      "name": "auto start written as text",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": "true",
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: auto_start"
+    },
+    {
+      "name": "tags written as null",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": null,
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: tags"
+    },
+    {
+      "name": "tags with a number in them",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            1
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: tags"
+    },
+    {
+      "name": "recording written as a number",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": 1,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: recording_enabled"
+    },
+    {
+      "name": "a creation time that is only a date",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: created_at"
+    },
+    {
+      "name": "a creation time on a day that does not exist",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-02-30T00:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: created_at"
+    },
+    {
+      "name": "an owner that is a number",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": 7,
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: owner"
+    },
+    {
+      "name": "a visibility outside its set",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "everyone",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: visibility"
+    },
+    {
+      "name": "ephemeral written as a number",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": 0,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: ephemeral"
+    },
+    {
+      "name": "presence written as null",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": null,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: presence"
+    },
+    {
+      "name": "an idle timeout written as a float",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30.0,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: auto_transfer_idle_s"
+    },
+    {
+      "name": "an idle timeout past 64 bits",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 9223372036854775808,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: auto_transfer_idle_s"
+    },
+    {
+      "name": "a keystroke queue outside its set",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "later"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad session: keystroke_queue"
+    },
+    {
+      "name": "a format written as a float",
+      "kind": "live",
+      "data": {
+        "format": 1.0,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "unknown format"
+    },
+    {
+      "name": "a format written as true",
+      "kind": "live",
+      "data": {
+        "format": true,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "unknown format"
+    },
+    {
+      "name": "a login pid written as a float",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242.0,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "login is not the one the id names"
+    },
+    {
+      "name": "a login with another key",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777,
+          "uid": 0
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "login is not the one the id names"
+    },
+    {
+      "name": "a screen whose text is null",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": null,
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad screen"
+    },
+    {
+      "name": "a screen wider than 64 bits",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "s",
+          "cols": 9223372036854775808,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad screen"
+    },
+    {
+      "name": "scrollback with null in it",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "a",
+          null
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad scrollback"
+    },
+    {
+      "name": "another session's id",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-x-capture-1-2",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "session id is not the file's name"
+    },
+    {
+      "name": "not a capture session",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "not a capture session"
+    },
+    {
+      "name": "a login with another start",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 778
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "login is not the one the id names"
+    },
+    {
+      "name": "no login",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": null,
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "login is not the one the id names"
+    },
+    {
+      "name": "an empty recording instance",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad recording instance"
+    },
+    {
+      "name": "a numeric recording instance",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": 7,
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad recording instance"
+    },
+    {
+      "name": "a screen without rows",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "s",
+          "cols": 80
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad screen"
+    },
+    {
+      "name": "a screen that is not text",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": 1,
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad screen"
+    },
+    {
+      "name": "a screen with a boolean width",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "s",
+          "cols": true,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad screen"
+    },
+    {
+      "name": "a screen with a fractional height",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "s",
+          "cols": 80,
+          "rows": 24.5
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad screen"
+    },
+    {
+      "name": "a screen with no width",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "s",
+          "cols": 0,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad screen"
+    },
+    {
+      "name": "a screen that is a string",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": "s",
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad screen"
+    },
+    {
+      "name": "scrollback that is a string",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": "a",
+        "saved_at": 1760875200.5
+      },
+      "error": "bad scrollback"
+    },
+    {
+      "name": "scrollback with a number in it",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          1
+        ],
+        "saved_at": 1760875200.5
+      },
+      "error": "bad scrollback"
+    },
+    {
+      "name": "no scrollback",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": null,
+        "saved_at": 1760875200.5
+      },
+      "error": "bad scrollback"
+    },
+    {
+      "name": "a negative save time",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": -1
+      },
+      "error": "bad saved_at"
+    },
+    {
+      "name": "a save time written as text",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": "5"
+      },
+      "error": "bad saved_at"
+    },
+    {
+      "name": "a save time past any float",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+      },
+      "error": "bad saved_at"
+    },
+    {
+      "name": "an end time past any float",
+      "kind": "previous",
+      "data": {
+        "format": 1,
+        "kind": "previous",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5,
+        "ended_at": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+      },
+      "error": "bad ended_at"
+    },
+    {
+      "name": "a live record that ended",
+      "kind": "live",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5,
+        "ended_at": 6.0
+      },
+      "error": "bad ended_at"
+    },
+    {
+      "name": "a previous record that never ended",
+      "kind": "previous",
+      "data": {
+        "format": 1,
+        "kind": "previous",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5,
+        "ended_at": null
+      },
+      "error": "bad ended_at"
+    }
+  ],
+  "accepted": [
+    {
+      "name": "a file from before its keystroke queue",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "session": {
+        "session_id": "pam-suokki-capture-4242-777",
+        "display_name": "suokki (pts/3) [live]",
+        "connector_type": "pty_capture",
+        "connector_config": {
+          "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+          "cols": 100
+        },
+        "input_mode": "hijack",
+        "auto_start": true,
+        "tags": [
+          "pam",
+          "capture",
+          "suokki"
+        ],
+        "recording_enabled": null,
+        "created_at": "2026-10-19T12:00:00Z",
+        "owner": "blackbetty:7",
+        "visibility": "private",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "ignored_keys": []
+    },
+    {
+      "name": "a file from before every defaulted key but its creation time",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "session": {
+        "session_id": "pam-suokki-capture-4242-777",
+        "display_name": "pam-suokki-capture-4242-777",
+        "connector_type": "pty_capture",
+        "connector_config": {
+          "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+          "cols": 100
+        },
+        "input_mode": "open",
+        "auto_start": true,
+        "tags": [],
+        "recording_enabled": null,
+        "created_at": "2026-10-19T12:00:00Z",
+        "owner": "blackbetty:7",
+        "visibility": "private",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "ignored_keys": []
+    },
+    {
+      "name": "a file from a build with a key this one does not know",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display",
+          "surprise": {
+            "nested": [
+              1
+            ]
+          }
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "session": {
+        "session_id": "pam-suokki-capture-4242-777",
+        "display_name": "suokki (pts/3) [live]",
+        "connector_type": "pty_capture",
+        "connector_config": {
+          "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+          "cols": 100
+        },
+        "input_mode": "hijack",
+        "auto_start": true,
+        "tags": [
+          "pam",
+          "capture",
+          "suokki"
+        ],
+        "recording_enabled": null,
+        "created_at": "2026-10-19T12:00:00Z",
+        "owner": "blackbetty:7",
+        "visibility": "private",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "ignored_keys": [
+        "surprise"
+      ]
+    },
+    {
+      "name": "a key in another case is not the key",
+      "data": {
+        "format": 1,
+        "kind": "live",
+        "session": {
+          "session_id": "pam-suokki-capture-4242-777",
+          "display_name": "suokki (pts/3) [live]",
+          "connector_type": "pty_capture",
+          "connector_config": {
+            "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+            "cols": 100
+          },
+          "input_mode": "hijack",
+          "auto_start": true,
+          "tags": [
+            "pam",
+            "capture",
+            "suokki"
+          ],
+          "recording_enabled": null,
+          "created_at": "2026-10-19T12:00:00Z",
+          "owner": "blackbetty:7",
+          "visibility": "private",
+          "ephemeral": false,
+          "presence": false,
+          "auto_transfer_idle_s": 30,
+          "keystroke_queue": "display",
+          "Owner": "someone-else"
+        },
+        "recording_instance": "0123456789abcdef0123456789abcdef",
+        "login": {
+          "pid": 4242,
+          "start_ticks": 777
+        },
+        "screen": {
+          "ansi": "\u001b[1mdeck\u001b[0m\nline two",
+          "cols": 80,
+          "rows": 24
+        },
+        "scrollback": [
+          "older",
+          "old"
+        ],
+        "saved_at": 1760875200.5
+      },
+      "session": {
+        "session_id": "pam-suokki-capture-4242-777",
+        "display_name": "suokki (pts/3) [live]",
+        "connector_type": "pty_capture",
+        "connector_config": {
+          "socket_path": "/run/uterm-capture/uterm-cap-4242.sock",
+          "cols": 100
+        },
+        "input_mode": "hijack",
+        "auto_start": true,
+        "tags": [
+          "pam",
+          "capture",
+          "suokki"
+        ],
+        "recording_enabled": null,
+        "created_at": "2026-10-19T12:00:00Z",
+        "owner": "blackbetty:7",
+        "visibility": "private",
+        "ephemeral": false,
+        "presence": false,
+        "auto_transfer_idle_s": 30,
+        "keystroke_queue": "display"
+      },
+      "ignored_keys": [
+        "Owner"
+      ]
+    }
+  ],
+  "bad_files": [
+    {
+      "name": "not JSON",
+      "content_b64": "e25vdCBqc29u",
+      "error": "not an object"
+    },
+    {
+      "name": "not UTF-8",
+      "content_b64": "eyJmb3JtYXQiOiAiwygifQ==",
+      "error": "not an object"
+    },
+    {
+      "name": "a JSON array",
+      "content_b64": "W10=",
+      "error": "not an object"
+    },
+    {
+      "name": "a NaN",
+      "content_b64": "eyJmb3JtYXQiOiBOYU59",
+      "error": "not an object"
+    },
+    {
+      "name": "an Infinity",
+      "content_b64": "eyJzYXZlZF9hdCI6IEluZmluaXR5fQ==",
+      "error": "not an object"
+    },
+    {
+      "name": "nested past any parser's depth",
+      "content_b64": "W1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s=",
+      "error": "not an object"
+    }
+  ]
+}

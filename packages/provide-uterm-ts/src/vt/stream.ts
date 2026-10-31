@@ -21,7 +21,7 @@ import type { Screen } from "./screen.ts";
  * Parser states. A union of literals rather than an enum, because an enum is
  * not erasable syntax and this package compiles under `erasableSyntaxOnly`.
  */
-type State = "ground" | "escape" | "charset" | "csi" | "osc";
+type State = "ground" | "escape" | "charset" | "csi" | "osc-code" | "osc" | "osc-escape";
 
 /** Control characters handled directly in the ground state. */
 const BEL = "\x07";
@@ -36,16 +36,27 @@ const SI = "\x0f";
 const ESC = "\x1b";
 const NUL = "\x00";
 const DEL = "\x7f";
+/** The 8-bit introducers of a CSI and an OSC, and the 8-bit string terminator. */
+const CSI_C1 = "\x9b";
+const ST_C1 = "\x9c";
+const OSC_C1 = "\x9d";
+
+/**
+ * What ends a run of text: every control the ground state acts on, and the
+ * ones it ignores. Anything else is drawn, a control with no handler too.
+ */
+const SPECIAL: ReadonlySet<string> = new Set([BEL, BS, HT, LF, VT, FF, CR, SO, SI, ESC, NUL, DEL, CSI_C1, OSC_C1]);
 
 /** Construction options for {@link Stream}. */
 export interface StreamOptions {
   /**
-   * Honour `ESC ( 0` / `ESC ) 0` (and `ESC ( B` / `ESC ) B`) and SO/SI, so
-   * DEC special graphics draw as line-drawing characters, as pyte does with
-   * `use_utf8` off and as xterm does. Off by default, which keeps the
-   * reference's UTF-8 mode: the designation is not interpreted and SO/SI
-   * are not shifts. A UTF-8 emulator turns it on; a CP437 one leaves it off,
-   * so a stray SO in BBS art never starts drawing lines.
+   * Honour `ESC ( 0` / `ESC ) 0` (and `ESC ( B`, `ESC ( U` for IBM codepage
+   * 437 and `ESC ( V`, into either slot) and SO/SI, so DEC special graphics
+   * draw as line-drawing characters, as pyte does with `use_utf8` off and as
+   * xterm does. Off by default, which keeps the reference's UTF-8 mode: the
+   * designation is consumed but not interpreted, and SO/SI are ignored. A
+   * UTF-8 emulator turns it on; a CP437 one leaves it off, so a stray SO in
+   * BBS art never starts drawing lines.
    */
   decGraphics?: boolean;
 }
@@ -59,6 +70,13 @@ export class Stream {
   #buffer = "";
   /** The slot an `ESC (` or `ESC )` designates into, awaiting its code. */
   #charsetSlot: "(" | ")" = "(";
+  /**
+   * Whether the current run of text met a character with no width. The
+   * reference draws each run of text in one call and stops at such a
+   * character, so the rest of the run is dropped; a run ends at any control,
+   * any sequence, and the end of a `feed`.
+   */
+  #runStopped = false;
 
   constructor(screen: Screen, options: StreamOptions = {}) {
     this.#screen = screen;
@@ -67,6 +85,7 @@ export class Stream {
 
   /** Feed a chunk of terminal output, resuming any sequence in progress. */
   feed(data: string): void {
+    this.#runStopped = false;
     for (const char of data) {
       this.#consume(char);
     }
@@ -74,20 +93,28 @@ export class Stream {
 
   /** Route one character according to the current state. */
   #consume(char: string): void {
+    if (this.#state !== "ground" || SPECIAL.has(char)) {
+      this.#runStopped = false;
+    }
     if (this.#state === "escape") {
       this.#consumeEscape(char);
       return;
     }
     if (this.#state === "charset") {
       this.#state = "ground";
-      this.#screen.defineCharset(char, this.#charsetSlot);
+      // Off, the code is still consumed, as the reference consumes it: the
+      // designation is not interpreted, and the code is not text either.
+      if (this.#decGraphics) {
+        this.#screen.defineCharset(char, this.#charsetSlot);
+      }
       return;
     }
     if (this.#state === "csi") {
       this.#consumeCsi(char);
       return;
     }
-    if (this.#state === "osc") {
+    if (this.#state !== "ground") {
+      // Every state left is one of the three an OSC string passes through.
       this.#consumeOsc(char);
       return;
     }
@@ -100,6 +127,13 @@ export class Stream {
       case ESC:
         this.#state = "escape";
         this.#buffer = "";
+        return;
+      case CSI_C1:
+        this.#state = "csi";
+        this.#buffer = "";
+        return;
+      case OSC_C1:
+        this.#state = "osc-code";
         return;
       case CR:
         this.#screen.carriageReturn();
@@ -121,27 +155,29 @@ export class Stream {
       case DEL:
         // Explicitly ignored, matching the Go port.
         return;
+      // Off, SO and SI are ignored rather than drawn, as the reference
+      // ignores them in UTF-8 mode: they are shifts it chooses not to make,
+      // not controls it has no handler for.
       case SO:
         if (this.#decGraphics) {
           this.#screen.shiftOut();
-          return;
         }
-        break;
+        return;
       case SI:
         if (this.#decGraphics) {
           this.#screen.shiftIn();
-          return;
         }
-        break;
+        return;
       default:
         break;
     }
-    // Any other control has no handler. The reference stalls its parser here
-    // and swallows the rest of the stream, so one stray byte would freeze the
-    // display for good; the Go port draws the character instead and this port
-    // follows Go, because the ports are meant to agree with each other and a
-    // stall is a bug. See the stall_divergences section of the vt corpus.
-    this.#screen.draw(char);
+    // Text, or a control with no handler, which is part of the run of text it
+    // arrived in. Such a control has no width, so the screen does not draw it,
+    // and the rest of its run is dropped, as the reference and the Go and C#
+    // ports drop it. See the stall_divergences section of the vt corpus.
+    if (!this.#runStopped && !this.#screen.draw(char)) {
+      this.#runStopped = true;
+    }
   }
 
   /** Handle the character after an ESC. */
@@ -152,17 +188,20 @@ export class Stream {
       return;
     }
     if (char === "]") {
-      this.#state = "osc";
-      this.#buffer = "";
+      this.#state = "osc-code";
       return;
     }
-    if (this.#decGraphics && (char === "(" || char === ")")) {
+    if (char === "(" || char === ")") {
       this.#state = "charset";
       this.#charsetSlot = char;
       return;
     }
     this.#state = "ground";
     switch (char) {
+      case "c":
+        // RIS, a full reset. It applies whether or not `decGraphics` is on.
+        this.#screen.reset();
+        return;
       case "7":
         this.#screen.saveCursor();
         return;
@@ -173,15 +212,18 @@ export class Stream {
         this.#screen.index();
         return;
       case "E":
-        // pyte's NEL moves down without returning to column zero.
-        this.#screen.index();
+        // NEL is a line feed in the reference: it returns to column zero only
+        // in new line mode.
+        this.#screen.linefeed();
+        return;
+      case "H":
+        this.#screen.setTabStop();
         return;
       case "M":
         this.#screen.reverseIndex();
         return;
       default:
-        // Every other two-character escape is consumed without effect, and so
-        // is charset selection while `decGraphics` is off.
+        // Every other two-character escape is consumed without effect.
         return;
     }
   }
@@ -204,15 +246,26 @@ export class Stream {
     this.#dispatchCsi(char);
   }
 
-  /** Swallow an OSC string up to its terminator. */
+  /**
+   * Swallow an OSC string up to its terminator: BEL, ST (`ESC \`) or the
+   * 8-bit ST. The first character is the command code, whatever it is; `R`
+   * and `P` (the palette) end the sequence there, as the reference has no
+   * string for them. An ESC followed by anything but `\` is part of the
+   * string, not the start of a sequence.
+   */
   #consumeOsc(char: string): void {
-    if (char === BEL) {
-      this.#state = "ground";
+    if (this.#state === "osc-code") {
+      this.#state = char === "R" || char === "P" ? "ground" : "osc";
       return;
     }
-    // ST arrives as ESC \; the backslash is consumed by the escape state.
-    if (char === ESC) {
-      this.#state = "escape";
+    if (this.#state === "osc-escape") {
+      this.#state = char === "\\" ? "ground" : "osc";
+      return;
+    }
+    if (char === BEL || char === ST_C1) {
+      this.#state = "ground";
+    } else if (char === ESC) {
+      this.#state = "osc-escape";
     }
   }
 
@@ -234,6 +287,12 @@ export class Stream {
       case "e":
         screen.cursorDown(first);
         return;
+      case "E":
+        screen.cursorDown1(first);
+        return;
+      case "F":
+        screen.cursorUp1(first);
+        return;
       case "C":
       case "a":
         screen.cursorForward(first);
@@ -243,7 +302,7 @@ export class Stream {
         return;
       case "H":
       case "f":
-        screen.cursorPosition(params[0] ?? 1, params[1] ?? 1);
+        screen.cursorPosition(params[0], params[1]);
         return;
       case "G":
       case "`":
@@ -286,12 +345,11 @@ export class Stream {
           screen.resetMode(mode, isPrivate);
         }
         return;
+      case "g":
+        screen.clearTabStop(first);
+        return;
       case "r":
-        if (params.length < 2) {
-          screen.resetMargins();
-          return;
-        }
-        screen.setMargins(params[0] as number, params[1] as number);
+        screen.setMargins(params[0], params[1]);
         return;
       default:
         // An unimplemented final byte is consumed without effect.

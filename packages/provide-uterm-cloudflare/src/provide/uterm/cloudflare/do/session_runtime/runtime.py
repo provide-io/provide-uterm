@@ -99,7 +99,7 @@ class SessionRuntime(
         self.last_analysis: str | None = None
         self.input_mode: str = "hijack"
         self.lifecycle_state: str = "stopped"
-        self._deleted_at: float | None = None  # type: ignore[assignment]
+        self._deleted_at: float | None = None
         self.meta: dict[str, Any] = {
             "display_name": self.worker_id,
             "connector_type": "unknown",

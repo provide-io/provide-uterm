@@ -16,6 +16,7 @@ import contextlib
 from typing import TYPE_CHECKING, Any, Literal
 
 from provide.uterm.control_channel import encode_control_frame, encode_terminal_data
+from provide.uterm.defaults import TerminalDefaults
 from provide.uterm.server.bridge.hub.redaction import StreamRedactor
 from provide.uterm.server.bridge.hub.redaction_defaults import default_rules
 
@@ -110,3 +111,20 @@ async def _cancel_and_wait(tasks: set[asyncio.Task[object]]) -> None:
 async def _await_task_completion(task: asyncio.Task[None]) -> None:
     with contextlib.suppress(asyncio.CancelledError):
         await task
+
+
+def settled_screen_due(
+    now: float, *, pending_since: float | None, last_output_at: float, last_taken_at: float, interval: float
+) -> bool:
+    """Whether a screen is owed: output is waiting, it has paused or waited an interval, and the last is an interval old.
+
+    The recording's settle trigger, shared by every sink that takes the
+    session's screen as it changes. A repaint arrives as many chunks, and a
+    screen for each would be a record of halves, so a screen is taken once
+    output pauses for ``RECORDED_SCREEN_SETTLE_S``; output that never pauses is
+    taken once an interval.
+    """
+    if pending_since is None or now - last_taken_at < interval:
+        return False
+    quiet = now - last_output_at >= TerminalDefaults.RECORDED_SCREEN_SETTLE_S
+    return quiet or now - pending_since >= interval

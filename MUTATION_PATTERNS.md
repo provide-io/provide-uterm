@@ -16,9 +16,19 @@ proves it was *asserted on*.
 - **Config:** `[tool.mutmut]` in the root `pyproject.toml`
 - **Required score:** **100%** kill rate on the perimeter (`--min-mutation-score`
   defaults to `100.0`), with **zero** mutants in any bad state.
-- **CI invocation:** `scripts/run_mutation_gate.py --changed-only` (via
-  `ci/prepare_mutation_args.sh`), so the gate only fires on perimeter files a PR
-  actually touched.
+- **CI invocation:** `ci/prepare_mutation_args.sh` asks
+  `scripts/run_mutation_gate.py --changed-only --emit-targets` which perimeter
+  files a PR actually touched, and `ci.yml` runs one job per file through
+  `.github/workflows/mutation-shards.yml` (`--paths <file>`), the same per-target
+  job `mutation-full.yml` uses. A mutation support-file change widens the list
+  to the whole perimeter, on the PR itself. Every changed path is classified,
+  deny by default (`scripts/mutation_change_scope.py`): a perimeter source runs
+  its own target, a path on a short commented allowlist (the other-language
+  ports, prose, other workflows) adds nothing, and anything else -- tests,
+  conftests, test data, off-perimeter source, dependency changes -- runs the
+  whole perimeter. Narrowing tests and helpers to the targets they reach is a
+  planned follow-up. The `mutation-gate` check is the verdict over all of
+  those jobs.
 
 ---
 

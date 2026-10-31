@@ -316,13 +316,14 @@ describe("renderCellRows", () => {
     expect(renderCellRows(() => undefined, 3, 2)).toStrictEqual(golden.empty_rows);
   });
 
-  it("treats an empty colour or character as the default", () => {
+  it("treats an empty colour as the default", () => {
     // The reference coalesces with `or "default"`, so a cell carrying an
-    // empty string renders as unstyled rather than as a stray escape. The
+    // empty colour renders as unstyled rather than as a stray escape. The
     // screen model never produces one, but the renderer takes any reader.
+    // (Empty text is a wide character's second cell: see snapshot-resume.)
     const blankish = renderCellRows(
       () => ({
-        data: "",
+        data: " ",
         fg: "",
         bg: "",
         bold: false,
@@ -424,13 +425,21 @@ describe("TerminalEmulator DEC special graphics", () => {
     expect(emulator.getSnapshot().screen.startsWith("┌──┐ café ─│ ── x")).toBe(true);
   });
 
-  it("draws in a CP437 session what it always drew", () => {
-    // A stray SO in CP437 art must not start drawing lines. The leaked `0`
-    // and `B` and the drawn SO/SI are this stream's long-standing CP437
-    // behaviour (pyte and the Go port swallow them), pinned here unchanged.
+  it("draws in a CP437 session what the reference draws", () => {
+    // A stray SO in CP437 art must not start drawing lines. Nor is it drawn,
+    // and a designation's code is not text: the reference and the Go port
+    // swallow both, which this port once did not.
     const emulator = new TerminalEmulator({ cols: 80, rows: 24 });
     emulator.process(cp437("AB\x0eqq\x0fCD \x1b(0lqqk\x1b(B"));
-    expect(emulator.getSnapshot().screen.startsWith("AB\x0eqq\x0fCD 0lqqkB ")).toBe(true);
+    expect(emulator.getSnapshot().screen.startsWith("ABqqCD lqqk ")).toBe(true);
+  });
+
+  it("clears the screen on a full reset in the stream", () => {
+    const emulator = new TerminalEmulator({ cols: 20, rows: 2 });
+    emulator.process(cp437("\x1b[1;31mold\x1b[2;5H\x1bcx"));
+    const snapshot = emulator.getSnapshot();
+    expect(snapshot.screen).toBe(`x${" ".repeat(19)}\n${" ".repeat(20)}`);
+    expect(snapshot.cursor).toStrictEqual({ x: 1, y: 0 });
   });
 
   it("drops DEC special graphics on reset", () => {

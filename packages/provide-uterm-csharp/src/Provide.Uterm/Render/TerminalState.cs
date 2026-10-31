@@ -73,30 +73,101 @@ public static class TerminalState
     }
 
     /// <summary>
+    /// The column and bytes that redraw row <paramref name="y"/>'s last cell,
+    /// leaving the cursor deferred: <c>&lt;column&gt;H&lt;pen&gt;&lt;text&gt;</c>, for a caller to
+    /// prefix with <c>ESC [ &lt;row&gt; ;</c>. Port of <c>_last_cell_redraw</c>.
+    /// </summary>
+    /// <remarks>
+    /// The cell is drawn again, in its own style, from the column before; a wide
+    /// character there occupies the last two cells and is redrawn whole. Marks in
+    /// the cell, or in a wide character's second cell, are written after it with
+    /// autowrap off: they join the cell before the cursor, which rests past the
+    /// last column, and the suffix has already turned autowrap on, so they would
+    /// otherwise wrap to the next row first.
+    ///
+    /// A last cell holding a second half whose first half is gone, or the second
+    /// half of a wide character with marks of its own, cannot be drawn that way:
+    /// with <paramref name="exact"/> this returns null for it, and otherwise the
+    /// nearest thing.
+    /// </remarks>
+    private static string? LastCellRedraw(Vt.Screen screen, int y, bool exact)
+    {
+        var x = screen.Columns - 1;
+        var marks = "";
+        var last = screen.At(y, x).Data;
+        if (x > 0 && RenderBuffer.IsSecondHalf(last))
+        {
+            var before = screen.At(y, x - 1).Data;
+            if (exact && !(before.EnumerateRunes().Count() == 1 && Wcwidth.RuneWidth(char.ConvertToUtf32(before, 0)) == 2))
+            {
+                return null;
+            }
+
+            marks = last;
+            x--;
+        }
+        else if (exact && RenderBuffer.IsSecondHalf(last))
+        {
+            return null;
+        }
+
+        var cell = screen.At(y, x);
+        var text = cell.Data.Length == 0 ? " " : cell.Data;
+        var baseLength = char.IsSurrogatePair(text, 0) ? 2 : 1;
+        var redraw = $"{x + 1}H{RenderBuffer.StyleToSgr(RenderBuffer.CellStyle(cell))}{text[..baseLength]}";
+        var held = text[baseLength..] + marks;
+        return held.Length > 0 ? $"{redraw}\x1b[?7l{held}\x1b[?7h" : redraw;
+    }
+
+    /// <summary>
     /// Move to the cursor, reproducing the deferred wrap at the last column: a
     /// cursor that has just drawn there rests at X == columns, which no CUP can
-    /// address, so the last cell is drawn again in its own style from the column
-    /// before. A wide character there is redrawn whole.
+    /// address, so the row's last cell is drawn again (see
+    /// <see cref="LastCellRedraw"/>), which leaves any terminal in the same state.
+    /// Port of <c>_cursor_placement</c>.
     /// </summary>
+    /// <remarks>
+    /// Some last cells cannot be drawn so: a second half whose first half is
+    /// gone, or one of a wide character with marks of its own. A cursor gets
+    /// there deferred when CUU, CUD, IND or RI move it from another row, all of
+    /// which keep the column. So that is done here too: the cursor is left
+    /// deferred past a neighbouring row's last cell, redrawn as it is, and moved
+    /// onto this row with CUD from the row above or CUU from the row below.
+    /// Either must land on this row despite the scrolling region, and in origin
+    /// mode the neighbour must be inside it. Only with no such neighbour (a
+    /// one-row screen, or neighbours that cannot be drawn either) is the last
+    /// cell drawn as nearly as it can be.
+    /// </remarks>
     private static string CursorPlacement(Vt.Screen screen, int row)
     {
         var cursor = screen.Cursor;
-        var columns = screen.Columns;
-        if (cursor.X < columns)
+        if (cursor.X < screen.Columns)
         {
             return $"\x1b[{row};{cursor.X + 1}H";
         }
 
-        var x = columns - 1;
-        if (screen.At(cursor.Y, x).Data.Length == 0 && x > 0)
+        var y = cursor.Y;
+        if (LastCellRedraw(screen, y, true) is { } own)
         {
-            x--;
+            return $"\x1b[{row};{own}";
         }
 
-        // Never a stub here: a stub only follows a wide character, and one in
-        // the last column has just been stepped back over.
-        var cell = screen.At(cursor.Y, x);
-        return $"\x1b[{row};{x + 1}H{RenderBuffer.StyleToSgr(RenderBuffer.CellStyle(cell))}{cell.Data}";
+        var (top, bottom) = screen.TryGetMargins(out var margins) ? (margins.Top, margins.Bottom) : (0, screen.Lines - 1);
+        var origin = screen.HasMode(ModeCodes.Decom);
+        foreach (var (neighbour, move, lands) in new[] { (y - 1, "\x1b[B", y <= bottom), (y + 1, "\x1b[A", y >= top) })
+        {
+            if (!lands || neighbour < 0 || neighbour >= screen.Lines || (origin && (neighbour < top || neighbour > bottom)))
+            {
+                continue;
+            }
+
+            if (LastCellRedraw(screen, neighbour, true) is { } redraw)
+            {
+                return $"\x1b[{row + neighbour - y};{redraw}{move}";
+            }
+        }
+
+        return $"\x1b[{row};{LastCellRedraw(screen, y, false)}";
     }
 
     /// <summary>

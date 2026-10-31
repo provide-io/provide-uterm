@@ -13,6 +13,7 @@ again. A PAM login owns its session: only the PAM ``close`` event removes it.
 from __future__ import annotations
 
 import asyncio
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -78,7 +79,10 @@ def fast_grace(monkeypatch: pytest.MonkeyPatch) -> list[float]:
 async def _open_capture(env: _Env, cfg: PamConfig) -> None:
     ev = PamEvent(event="open", username="suokki", tty="ssh", pid=4242, mode="capture", capture_socket=env.sock)
     await pam_integration._create_capture_session(ev, cfg, env.registry)
-    for _ in range(100):
+    # A deadline, not a count of sleeps: fast_grace makes asyncio.sleep yield
+    # only, and the socket waits on a probe run on a thread.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
         if Path(env.sock).exists():
             return
         await asyncio.sleep(0.05)
