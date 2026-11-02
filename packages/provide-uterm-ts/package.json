@@ -26,7 +26,7 @@
     "pretest": "node scripts/ensure-pty-helper.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@noble/hashes": "^2.3.0",
     "node-pty": "^1.1.0",
     "react": "^19.3.1",
@@ -36,12 +36,12 @@
     "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
-    "@stryker-mutator/core": "^10.0.0",
-    "@stryker-mutator/vitest-runner": "^10.0.0",
+    "@biomejs/biome": "^2.6.4",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@types/ssh2": "^1.15.6",
